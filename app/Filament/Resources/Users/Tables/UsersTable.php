@@ -16,7 +16,10 @@ final class UsersTable
     {
         return $table
             ->columns([
-                TextColumn::make('name')
+                TextColumn::make('first_name')
+                    ->sortable()
+                    ->searchable(),
+                TextColumn::make('last_name')
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('email')

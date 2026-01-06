@@ -38,7 +38,8 @@ it('can render the edit page', function () {
     ])
         ->assertOk()
         ->assertSchemaStateSet([
-            'name' => $user->name,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
             'email' => $user->email,
         ]);
 });
@@ -46,12 +47,12 @@ it('can render the edit page', function () {
 it('has column', function (string $column) {
     livewire(ListUsers::class)
         ->assertTableColumnExists($column);
-})->with(['name', 'email', 'created_at', 'updated_at']);
+})->with(['first_name', 'last_name', 'email', 'created_at', 'updated_at']);
 
 it('can render column', function (string $column) {
     livewire(ListUsers::class)
         ->assertCanRenderTableColumn($column);
-})->with(['name', 'email', 'created_at', 'updated_at']);
+})->with(['first_name', 'last_name', 'email', 'created_at', 'updated_at']);
 
 it('can sort column', function (string $column) {
     $records = User::factory(5)->create();
@@ -62,7 +63,7 @@ it('can sort column', function (string $column) {
         ->assertCanSeeTableRecords($records->sortBy($column), inOrder: true)
         ->sortTable($column, 'desc')
         ->assertCanSeeTableRecords($records->sortByDesc($column), inOrder: true);
-})->with(['name']);
+})->with(['last_name']);
 
 it('can search column', function (string $column) {
     $records = User::factory(5)->create();
@@ -74,14 +75,15 @@ it('can search column', function (string $column) {
         ->searchTable($value)
         ->assertCanSeeTableRecords($records->where($column, $value))
         ->assertCanNotSeeTableRecords($records->where($column, '!=', $value));
-})->with(['name']);
+})->with(['first_name']);
 
 it('can create a user', function () {
     $user = User::factory()->make();
 
     livewire(CreateUser::class)
         ->fillForm([
-            'name' => $user->name,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
             'email' => $user->email,
             'password' => $user->password,
         ])
@@ -89,7 +91,8 @@ it('can create a user', function () {
         ->assertNotified();
 
     assertDatabaseHas(User::class, [
-        'name' => $user->name,
+        'first_name' => $user->first_name,
+        'last_name' => $user->last_name,
         'email' => $user->email,
     ]);
 });
@@ -102,7 +105,8 @@ it('can update a user', function () {
         'record' => $user->id,
     ])
         ->fillForm([
-            'name' => $newUserData->name,
+            'first_name' => $newUserData->first_name,
+            'last_name' => $newUserData->last_name,
             'email' => $newUserData->email,
         ])
         ->call('save')
@@ -110,7 +114,8 @@ it('can update a user', function () {
 
     assertDatabaseHas(User::class, [
         'id' => $user->id,
-        'name' => $newUserData->name,
+        'first_name' => $newUserData->first_name,
+        'last_name' => $newUserData->last_name,
         'email' => $newUserData->email,
     ]);
 });
@@ -159,7 +164,8 @@ it('validates the form data', function (array $data, array $errors) {
         'record' => $user->id,
     ])
         ->fillForm([
-            'name' => $newUserData->name,
+            'first_name' => $newUserData->first_name,
+            'last_name' => $newUserData->last_name,
             'email' => $newUserData->email,
             ...$data,
         ])
@@ -167,8 +173,10 @@ it('validates the form data', function (array $data, array $errors) {
         ->assertHasFormErrors($errors)
         ->assertNotNotified();
 })->with([
-    '`name` is required' => [['name' => null], ['name' => 'required']],
-    '`name` is max 255 characters' => [['name' => Str::random(256)], ['name' => 'max']],
+    '`first_name` is required' => [['first_name' => null], ['first_name' => 'required']],
+    '`first_name` is max 255 characters' => [['first_name' => Str::random(256)], ['first_name' => 'max']],
+    '`last_name` is required' => [['last_name' => null], ['last_name' => 'required']],
+    '`last_name` is max 255 characters' => [['last_name' => Str::random(256)], ['last_name' => 'max']],
     '`email` is a valid email address' => [['email' => Str::random()], ['email' => 'email']],
     '`email` is required' => [['email' => null], ['email' => 'required']],
     '`email` is max 255 characters' => [['email' => Str::random(256)], ['email' => 'max']],

@@ -17,7 +17,8 @@ return [
     */
 
     'default_user' => [
-        'name' => env('DEFAULT_USER_NAME', 'Admin'),
+        'first_name' => env('DEFAULT_USER_FIRST_NAME', 'Admin'),
+        'last_name' => env('DEFAULT_USER_LAST_NAME', 'User'),
         'email' => env('DEFAULT_USER_EMAIL', 'admin@example.com'),
         'password' => env('DEFAULT_USER_PASSWORD', 'password'),
     ],

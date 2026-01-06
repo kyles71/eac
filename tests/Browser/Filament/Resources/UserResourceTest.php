@@ -13,14 +13,16 @@ it('can create a new user', function () {
     visit('/admin')
         ->click('Users')
         ->click('New user')
-        ->fill('form.name', $user->name)
+        ->fill('form.first_name', $user->first_name)
+        ->fill('form.last_name', $user->last_name)
         ->fill('form.email', $user->email)
         ->fill('form.password', 'password')
         ->press('.fi-ac-btn-action[type=submit]')
         ->assertSee('Created');
 
     assertDatabaseHas('users', [
-        'name' => $user->name,
+        'first_name' => $user->first_name,
+        'last_name' => $user->last_name,
         'email' => $user->email,
     ]);
 });
@@ -31,12 +33,14 @@ it('can edit an existing user', function () {
     visit('/admin')
         ->click('Users')
         ->click('Edit')
-        ->fill('form.name', $newRecord->name)
+        ->fill('form.first_name', $newRecord->first_name)
+        ->fill('form.last_name', $newRecord->last_name)
         ->click('.fi-ac-btn-action[type=submit]')
         ->assertSee('Saved');
 
     assertDatabaseHas('users', [
-        'name' => $newRecord->name,
+        'first_name' => $newRecord->first_name,
+        'last_name' => $newRecord->last_name,
     ]);
 });
 
