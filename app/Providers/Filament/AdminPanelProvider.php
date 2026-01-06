@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\Profile\PersonalInfo;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -23,6 +24,8 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Jeffgreco13\FilamentBreezy\BreezyCore;
+use Livewire\Livewire;
 
 final class AdminPanelProvider extends PanelProvider
 {
@@ -33,8 +36,10 @@ final class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(Login::class)
+            ->bootUsing(function () {
+                Livewire::component('personal_info', PersonalInfo::class);
+            })
             ->spa()
-            ->profile()
             ->multiFactorAuthentication(
                 AppAuthentication::make()
                     ->recoverable(),
@@ -54,6 +59,15 @@ final class AdminPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
+            ])
+            ->plugins([
+                BreezyCore::make()
+                    ->myProfile(userMenuLabel: 'My Profile')
+                    ->myProfileComponents([
+                        'personal_info' => PersonalInfo::class,
+                    ])
+                    ->enableTwoFactorAuthentication(),
+
             ])
             ->middleware([
                 EncryptCookies::class,
