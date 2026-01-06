@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Users\Schemas;
 
-use App\Filament\Resources\Users\Pages\CreateUser;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +28,7 @@ final class UserForm
                     ->required(),
                 TextInput::make('password')
                     ->password()
-                    ->required(fn ($livewire): bool => $livewire instanceof CreateUser)
+                    ->required(fn ($record): bool => $record === null)
                     ->revealable(filament()->arePasswordsRevealable())
                     ->rule(Password::default())
                     ->autocomplete('new-password')
