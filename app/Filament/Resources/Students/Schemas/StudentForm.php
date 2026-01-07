@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources\Students\Schemas;
 
+use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 
 class StudentForm
 {
@@ -22,7 +22,7 @@ class StudentForm
                     ->hidden(fn () => $user_id !== null)
                     ->preload()
                     ->relationship('user', 'id', fn (Builder $query) => $query->orderBy('first_name')->orderBy('last_name'))
-                    ->getOptionLabelFromRecordUsing(fn (Model $record) => "{$record->first_name} {$record->last_name}")
+                    ->getOptionLabelFromRecordUsing(fn (User $record) => "{$record->first_name} {$record->last_name}")
                     ->searchable(['first_name', 'last_name']),
             ]);
     }

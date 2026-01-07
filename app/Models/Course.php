@@ -34,17 +34,17 @@ class Course extends Model
 
     public function activeEvents(): HasMany
     {
-        return $this->event()->where('start_time', '<', now())->where('end_time', '>', now());
+        return $this->events()->where('start_time', '<', now())->where('end_time', '>', now());
     }
 
     public function nextEvents(): HasMany
     {
-        return $this->event()->where('start_time', '>', now());
+        return $this->events()->where('start_time', '>', now());
     }
 
     public function previousEvents(): HasMany
     {
-        return $this->event()->where('end_time', '<', now());
+        return $this->events()->where('end_time', '<', now());
     }
 
     public function nextEvent(): HasOne
