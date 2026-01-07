@@ -40,10 +40,6 @@ final class AdminPanelProvider extends PanelProvider
                 Livewire::component('personal_info', PersonalInfo::class);
             })
             ->spa()
-            ->multiFactorAuthentication(
-                AppAuthentication::make()
-                    ->recoverable(),
-            )
             ->sidebarCollapsibleOnDesktop()
 //            ->topNavigation()
             ->colors([

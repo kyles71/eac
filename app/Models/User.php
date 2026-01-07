@@ -6,21 +6,36 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
-use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
-use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Jeffgreco13\FilamentBreezy\Traits\TwoFactorAuthenticatable;
 
-final class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasName
+final class User extends Authenticatable implements FilamentUser, HasName
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'app_authentication_secret' => 'encrypted',
+            'app_authentication_recovery_codes' => 'encrypted:array',
+        ];
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -56,48 +71,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return true; // str_ends_with($this->email, '@larament.test');
     }
 
-    public function getAppAuthenticationSecret(): ?string
+    public function students(): HasMany
     {
-        return $this->app_authentication_secret;
+        return $this->hasMany(Student::class);
     }
 
-    public function saveAppAuthenticationSecret(?string $secret): void
+    public function enrollments(): HasMany
     {
-        $this->app_authentication_secret = $secret;
-        $this->save();
+        return $this->hasMany(Enrollment::class);
     }
 
-    public function getAppAuthenticationHolderName(): string
+    public function purchasedCourses(): BelongsToMany
     {
-        return $this->email;
-    }
-
-    /** @phpstan-ignore-next-line */
-    public function getAppAuthenticationRecoveryCodes(): ?array
-    {
-        /** @phpstan-ignore-next-line */
-        return $this->app_authentication_recovery_codes;
-    }
-
-    public function saveAppAuthenticationRecoveryCodes(?array $codes): void
-    {
-        /** @phpstan-ignore-next-line  */
-        $this->app_authentication_recovery_codes = $codes;
-        $this->save();
-    }
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'app_authentication_secret' => 'encrypted',
-            'app_authentication_recovery_codes' => 'encrypted:array',
-        ];
+        return $this->belongsToMany(Course::class, 'enrollments');
     }
 }
