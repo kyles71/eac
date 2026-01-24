@@ -17,7 +17,10 @@ class EventInfolist
                     ->dateTime(),
                 TextEntry::make('end_time')
                     ->dateTime(),
-                TextEntry::make('course.name'),
+                TextEntry::make('course.name')
+                    ->label('Course'),
+                TextEntry::make('calendar.name')
+                    ->label('Calendar'),
                 TextEntry::make('created_at')
                     ->dateTime(),
                 TextEntry::make('updated_at')

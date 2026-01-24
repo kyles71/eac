@@ -6,12 +6,31 @@ namespace Database\Seeders;
 
 use App\Models\Course;
 use App\Models\User;
+use Database\Factories\CalendarFactory;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 final class DatabaseSeeder extends Seeder
 {
     public function run(): void
+    {
+        CalendarFactory::new()->createMany([
+            [
+                'name' => 'My Calendar',
+                'background_color' => null,
+            ],
+            [
+                'name' => 'EAC Calendar',
+                'background_color' => '#FF5733',
+            ],
+        ]);
+
+        if (config('app.env') !== 'production') {
+            $this->seedDevData();
+        }
+    }
+
+    private function seedDevData(): void
     {
         User::factory()->create([
             'first_name' => config('app.default_user.first_name'),
@@ -21,5 +40,9 @@ final class DatabaseSeeder extends Seeder
         ]);
 
         Course::factory(10)->create();
+
+        User::factory()
+            ->count(10)
+            ->create();
     }
 }

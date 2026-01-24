@@ -10,9 +10,10 @@ return new class() extends Migration
 {
     public function up(): void
     {
-        Schema::create('event_student', function (Blueprint $table) {
+        Schema::create('event_attendees', function (Blueprint $table) {
+            $table->id();
             $table->foreignId('event_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+            $table->morphs('attendee');
             $table->boolean('attended')->default(0);
             $table->text('notes')->nullable();
             $table->timestamps();

@@ -1,13 +1,18 @@
 <?php
 
-namespace App\Filament\Resources\Events\Tables;
+namespace App\Filament\Resources\Calendars\Tables;
 
+use App\Models\Calendar;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Tables\Columns\ColorColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class EventsTable
+class CalendarsTable
 {
     public static function configure(Table $table): Table
     {
@@ -15,19 +20,7 @@ class EventsTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),
-                TextColumn::make('start_time')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('end_time')
-                    ->dateTime()
-                    ->sortable(),
-                TextColumn::make('course.name')
-                    ->label('Course')
-                    ->searchable(),
-                TextColumn::make('calendar.name')
-                    ->label('Calendar')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                ColorColumn::make('background_color'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -41,7 +34,11 @@ class EventsTable
                 //
             ])
             ->recordActions([
-
+                ActionGroup::make([
+                    EditAction::make(),
+                    DeleteAction::make()
+                        ->visible(fn (Calendar $record) => $record->id > 2),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

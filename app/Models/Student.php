@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+
 // use Illuminate\Database\Eloquent\Relations\HasOne;
 // use Staudenmeir\EloquentHasManyDeep\HasManyDeep;
 // use Staudenmeir\EloquentHasManyDeep\HasRelationships;
@@ -51,6 +53,11 @@ class Student extends Model
         return $this->belongsToMany(Course::class, 'enrollments');
     }
 
+    public function events(): MorphMany
+    {
+        return $this->morphMany(EventAttendee::class, 'attendee');
+    }
+
     // #[Scope]
     // protected function healthInfoNeedsUpdating(Builder $query): void
     // {
@@ -70,15 +77,5 @@ class Student extends Model
     // public function healthInfo(): HasOne
     // {
     //     return $this->hasOne(StudentHealthInfo::class);
-    // }
-
-    // public function events(): HasManyDeep
-    // {
-    //     return $this->hasManyDeepFromRelationsWithConstraints([$this, 'course'], [new Course(), 'events']);
-    // }
-
-    // public function eventsAttended(): BelongsToMany
-    // {
-    //     return $this->belongsToMany(Event::class, 'event_student');
     // }
 }

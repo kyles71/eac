@@ -26,6 +26,7 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Jeffgreco13\FilamentBreezy\BreezyCore;
 use Livewire\Livewire;
+use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 
 final class AdminPanelProvider extends PanelProvider
 {
@@ -63,7 +64,7 @@ final class AdminPanelProvider extends PanelProvider
                         'personal_info' => PersonalInfo::class,
                     ])
                     ->enableTwoFactorAuthentication(),
-
+                FilamentFullCalendarPlugin::make(),
             ])
             ->middleware([
                 EncryptCookies::class,

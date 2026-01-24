@@ -12,23 +12,13 @@ class ListEvents extends ListRecords
 {
     use HasRecurring;
 
-    private $repeat_through;
-
-    private $repeat_frequency;
-
     protected static string $resource = EventResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
             CreateAction::make()
-                ->mutateDataUsing(function(array $data): array {
-                    $new_data = $this->prepRecurringData($data);
-                    $this->repeat_through = $new_data['repeat_through'];
-                    $this->repeat_frequency = $new_data['repeat_frequency'];
-
-                    return $new_data['data'];
-                })
+                ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
                 ->after(function (array $data, CreateAction $action) {
                     $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function(array $data) use ($action) {
                         $model = $action->getModel();

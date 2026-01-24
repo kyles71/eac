@@ -16,10 +16,6 @@ class EventsRelationManager extends RelationManager
 
     protected static string $relationship = 'events';
 
-    private $repeat_through;
-
-    private $repeat_frequency;
-
     public function isReadOnly(): bool
     {
         return false;
@@ -35,13 +31,7 @@ class EventsRelationManager extends RelationManager
         return EventsTable::configure($table)
             ->headerActions([
                 CreateAction::make()
-                    ->mutateDataUsing(function(array $data): array {
-                        $new_data = $this->prepRecurringData($data);
-                        $this->repeat_through = $new_data['repeat_through'];
-                        $this->repeat_frequency = $new_data['repeat_frequency'];
-
-                        return $new_data['data'];
-                    })
+                    ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
                     ->after(function (array $data, CreateAction $action) {
                         $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function(array $data) use ($action) {
                             $table = $this->getTable();

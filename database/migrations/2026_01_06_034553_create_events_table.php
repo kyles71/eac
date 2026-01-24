@@ -18,6 +18,7 @@ return new class() extends Migration
             $table->text('details')->nullable();
             $table->dateTime('start_time')->nullable();
             $table->dateTime('end_time')->nullable();
+            $table->foreignId('calendar_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('course_id')->nullable()->constrained()->cascadeOnDelete();
             $table->timestamps();
         });
