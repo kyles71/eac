@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Events;
 
 use App\Filament\Resources\Events\Pages\ListEvents;
@@ -14,7 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 
-class EventResource extends Resource
+final class EventResource extends Resource
 {
     protected static ?string $model = Event::class;
 

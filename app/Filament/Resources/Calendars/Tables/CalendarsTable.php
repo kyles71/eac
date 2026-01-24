@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Calendars\Tables;
 
 use App\Models\Calendar;
@@ -12,7 +14,7 @@ use Filament\Tables\Columns\ColorColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class CalendarsTable
+final class CalendarsTable
 {
     public static function configure(Table $table): Table
     {
@@ -37,7 +39,7 @@ class CalendarsTable
                 ActionGroup::make([
                     EditAction::make(),
                     DeleteAction::make()
-                        ->visible(fn (Calendar $record) => $record->id > 2),
+                        ->visible(fn (Calendar $record): bool => $record->id > 2),
                 ]),
             ])
             ->toolbarActions([

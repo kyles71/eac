@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Carbon\Carbon;
@@ -8,7 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Enrollment extends Model
+final class Enrollment extends Model
 {
     public function course(): BelongsTo
     {
@@ -34,7 +36,7 @@ class Enrollment extends Model
     #[Scope]
     protected function active(Builder $query, ?Carbon $date = null): void
     {
-        if (!$date) {
+        if (!$date instanceof Carbon) {
             $date = Carbon::now();
         }
 
@@ -49,7 +51,7 @@ class Enrollment extends Model
     #[Scope]
     protected function future(Builder $query, ?Carbon $date = null): void
     {
-        if (!$date) {
+        if (!$date instanceof Carbon) {
             $date = Carbon::now();
         }
 
@@ -60,12 +62,12 @@ class Enrollment extends Model
     #[Scope]
     protected function past(Builder $query, ?Carbon $date = null): void
     {
-        if (!$date) {
+        if (!$date instanceof Carbon) {
             $date = Carbon::now();
         }
 
         $query->join('courses', 'courses.id', '=', 'enrollments.course_id')
-            ->leftJoin('events', function ($join) use ($date) {
+            ->leftJoin('events', function ($join) use ($date): void {
                 $join->on('events.course_id', '=', 'enrollments.id')
                     ->where('events.start_time', '>', $date);
             })

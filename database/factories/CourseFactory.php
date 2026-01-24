@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\User;
@@ -9,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Course>
  */
-class CourseFactory extends Factory
+final class CourseFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -24,7 +26,7 @@ class CourseFactory extends Factory
             ->setSeconds(0);
 
         return [
-            'name' => fake()->randomElement(['Tap', 'Acro', 'Ballet', 'Jazz']) . ' ' . fake()->randomElement([1, 2, 3, 4]),
+            'name' => fake()->randomElement(['Tap', 'Acro', 'Ballet', 'Jazz']).' '.fake()->randomElement([1, 2, 3, 4]),
             'description' => fake()->text(),
             'capacity' => fake()->randomElement([10, 15]),
             'start_time' => $start_time,

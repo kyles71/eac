@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Students;
 
 use App\Filament\Resources\Students\Pages\ListStudents;
@@ -16,7 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 
-class StudentResource extends Resource
+final class StudentResource extends Resource
 {
     protected static ?string $model = Student::class;
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Students\RelationManagers;
 
 use App\Filament\Resources\Courses\Schemas\CourseForm;
@@ -9,7 +11,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 
-class CoursesRelationManager extends RelationManager
+final class CoursesRelationManager extends RelationManager
 {
     protected static string $relationship = 'courses';
 

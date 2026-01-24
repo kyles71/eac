@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\Events\Schemas\EventForm;
@@ -15,54 +17,20 @@ use Illuminate\Support\Collection;
 use Saade\FilamentFullCalendar\Actions\CreateAction;
 use Saade\FilamentFullCalendar\Widgets\FullCalendarWidget;
 
-class CalendarWidget extends FullCalendarWidget
+final class CalendarWidget extends FullCalendarWidget
 {
     use HasRecurring;
 
-    public Model | string | null $model = Event::class;
+    public Model|string|null $model = Event::class;
 
     public Calendar $calendar;
 
     public Collection $calendars;
 
-    public function mount() {
+    public function mount(): void
+    {
         $this->calendars = Calendar::get();
         $this->calendar = $this->calendars->first();
-    }
-
-    protected function headerActions(): array
-    {
-        $calendars = $this->calendars
-            ->map(function ($calendar) {
-                return Action::make('calendar_' . $calendar->id)
-                    ->label($calendar->name)
-                    ->extraAttributes(['x-on:click' => 'close'])
-                    ->action(function () use ($calendar) {
-                        // validate calendar id - maybe use livewire validation?
-                        $this->calendar = $calendar;
-                        $this->refreshRecords();
-                    });
-            })
-            ->all();
-
-        return [
-            CreateAction::make()
-                ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
-                ->after(function (array $data, CreateAction $action) {
-                    $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function(array $data) use ($action) {
-                        $model = $action->getModel();
-                        $record = new $model($data);
-                        $record->save();
-                    });
-                    $this->refreshRecords();
-                }),
-            ActionGroup::make($calendars)
-                ->label(function () {
-                    return $this->calendar->name;
-                })
-                ->button()
-                ->icon(false),
-        ];
     }
 
     public function config(): array
@@ -101,15 +69,15 @@ class CalendarWidget extends FullCalendarWidget
                         User::query()
                             ->select('events.*')
                             ->leftJoin('students', 'users.id', '=', 'students.user_id')
-                            ->join('event_attendees', function ($join) {
-                                $join->on(function ($q) {
+                            ->join('event_attendees', function ($join): void {
+                                $join->on(function ($q): void {
                                     $q->on('students.id', '=', 'event_attendees.attendee_id')
-                                      ->where('event_attendees.attendee_type', Student::class);
+                                        ->where('event_attendees.attendee_type', Student::class);
                                 })
-                                ->orOn(function ($q) {
-                                    $q->on('users.id', '=', 'event_attendees.attendee_id')
-                                      ->where('event_attendees.attendee_type', User::class);
-                                });
+                                    ->orOn(function ($q): void {
+                                        $q->on('users.id', '=', 'event_attendees.attendee_id')
+                                            ->where('event_attendees.attendee_type', User::class);
+                                    });
                             })
                             ->join('events', 'event_attendees.event_id', '=', 'events.id')
                             ->where('users.id', auth()->id())
@@ -117,7 +85,7 @@ class CalendarWidget extends FullCalendarWidget
             )
             ->get()
             ->map(
-                fn (Event $event) => [
+                fn (Event $event): array => [
                     'title' => $event->name,
                     'start' => $event->start_time,
                     'end' => $event->end_time,
@@ -133,5 +101,36 @@ class CalendarWidget extends FullCalendarWidget
     public function onEventClick(array $event): void
     {
         // do nothing
+    }
+
+    protected function headerActions(): array
+    {
+        $calendars = $this->calendars
+            ->map(fn($calendar): Action => Action::make('calendar_'.$calendar->id)
+                ->label($calendar->name)
+                ->extraAttributes(['x-on:click' => 'close'])
+                ->action(function () use ($calendar): void {
+                    // validate calendar id - maybe use livewire validation?
+                    $this->calendar = $calendar;
+                    $this->refreshRecords();
+                }))
+            ->all();
+
+        return [
+            CreateAction::make()
+                ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
+                ->after(function (array $data, CreateAction $action): void {
+                    $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($action): void {
+                        $model = $action->getModel();
+                        $record = new $model($data);
+                        $record->save();
+                    });
+                    $this->refreshRecords();
+                }),
+            ActionGroup::make($calendars)
+                ->label(fn() => $this->calendar->name)
+                ->button()
+                ->icon(false),
+        ];
     }
 }

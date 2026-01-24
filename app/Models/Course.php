@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 // use App\Actions\Common\EnrollInCourse;
@@ -10,10 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+
 // use Illuminate\Support\Facades\Auth;
 // use Spatie\Tags\HasTags;
 
-class Course extends Model
+final class Course extends Model
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
     use HasFactory;
@@ -52,7 +55,7 @@ class Course extends Model
         return $this->events()->one()->ofMany([
             'start_time' => 'max',
             'id' => 'max',
-        ], function (Builder $query) {
+        ], function (Builder $query): void {
             $query->where('start_time', '<', now());
         });
     }
@@ -62,7 +65,7 @@ class Course extends Model
         return $this->events()->one()->ofMany([
             'end_time' => 'max',
             'id' => 'max',
-        ], function (Builder $query) {
+        ], function (Builder $query): void {
             $query->where('end_time', '<', now());
         });
     }

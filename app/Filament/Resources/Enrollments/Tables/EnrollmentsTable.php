@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Enrollments\Tables;
 
 use App\Filament\Resources\Students\Schemas\StudentForm;
@@ -12,13 +14,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class EnrollmentsTable
+final class EnrollmentsTable
 {
     public static function configure(Table $table, bool $only_my_enrollments = false): Table
     {
         return $table
             ->query(fn () => Enrollment::query()
-                ->when($only_my_enrollments, function ($query) {
+                ->when($only_my_enrollments, function ($query): void {
                     $query->where('user_id', auth()->id());
                 })
             )
@@ -50,19 +52,19 @@ class EnrollmentsTable
                     ->schema([
                         Select::make('student_id')
                             ->required()
-                            ->relationship('student', 'id', function(Builder $query, Enrollment $record) {
+                            ->relationship('student', 'id', function (Builder $query, Enrollment $record) {
                                 return $query->where('user_id', $record->user_id);
                                 // return $query->where('user_id', auth()->id());
                             })
                             ->getOptionLabelFromRecordUsing(fn (Student $student) => $student->fullName)
-                            ->createOptionForm(fn (Schema $schema, Enrollment $record) => StudentForm::configure($schema, $record->user_id))
+                            ->createOptionForm(fn (Schema $schema, Enrollment $record): \Filament\Schemas\Schema => StudentForm::configure($schema, $record->user_id))
                             // ->createOptionForm(fn (Schema $schema) => StudentForm::configure($schema, auth()->id()))
                             ->createOptionUsing(function (array $data, Enrollment $record): int {
                                 return $record->user->students()->create($data)->getKey();
                                 // will this assign to the correct user if being impersonated?
                                 // return auth()->user()->students()->create($data)->getKey();
                             }),
-                        ]),
-                ]);
+                    ]),
+            ]);
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 // use Staudenmeir\EloquentHasManyDeep\HasManyDeep;
 // use Staudenmeir\EloquentHasManyDeep\HasRelationships;
 
-class Event extends Model
+final class Event extends Model
 {
     use HasFactory;
     // use HasRelationships;

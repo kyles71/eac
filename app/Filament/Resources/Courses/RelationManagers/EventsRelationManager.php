@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Courses\RelationManagers;
 
 use App\Filament\Resources\Events\Schemas\EventForm;
@@ -10,7 +12,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 
-class EventsRelationManager extends RelationManager
+final class EventsRelationManager extends RelationManager
 {
     use HasRecurring;
 
@@ -32,15 +34,15 @@ class EventsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
-                    ->after(function (array $data, CreateAction $action) {
-                        $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function(array $data) use ($action) {
+                    ->after(function (array $data, CreateAction $action): void {
+                        $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($action): void {
                             $table = $this->getTable();
                             $relationship = $table->getRelationship();
                             $model = $action->getModel();
                             $record = new $model($data);
                             $relationship->save($record);
                         });
-                    })
+                    }),
             ]);
     }
 }

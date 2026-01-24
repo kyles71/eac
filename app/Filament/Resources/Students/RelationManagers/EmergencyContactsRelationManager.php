@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Students\RelationManagers;
 
 use Filament\Actions\AssociateAction;
@@ -18,7 +20,7 @@ use Filament\Tables\Table;
 use Ysfkaya\FilamentPhoneInput\Forms\PhoneInput;
 use Ysfkaya\FilamentPhoneInput\Tables\PhoneColumn;
 
-class EmergencyContactsRelationManager extends RelationManager
+final class EmergencyContactsRelationManager extends RelationManager
 {
     protected static string $relationship = 'emergencyContacts';
 

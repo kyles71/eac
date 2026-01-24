@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Students\Schemas;
 
 use App\Models\User;
@@ -8,7 +10,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
-class StudentForm
+final class StudentForm
 {
     public static function configure(Schema $schema, $user_id = null): Schema
     {
@@ -19,10 +21,10 @@ class StudentForm
                 TextInput::make('last_name')
                     ->required(),
                 Select::make('user_id')
-                    ->hidden(fn () => $user_id !== null)
+                    ->hidden(fn (): bool => $user_id !== null)
                     ->preload()
                     ->relationship('user', 'id', fn (Builder $query) => $query->orderBy('first_name')->orderBy('last_name'))
-                    ->getOptionLabelFromRecordUsing(fn (User $record) => "{$record->first_name} {$record->last_name}")
+                    ->getOptionLabelFromRecordUsing(fn (User $record): string => "{$record->first_name} {$record->last_name}")
                     ->searchable(['first_name', 'last_name']),
             ]);
     }

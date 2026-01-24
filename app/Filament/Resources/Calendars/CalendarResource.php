@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Calendars;
 
 use App\Filament\Resources\Calendars\Pages\ListCalendars;
@@ -12,7 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 
-class CalendarResource extends Resource
+final class CalendarResource extends Resource
 {
     protected static ?string $model = Calendar::class;
 

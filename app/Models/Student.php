@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 // use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -16,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 // use Staudenmeir\EloquentHasManyDeep\HasManyDeep;
 // use Staudenmeir\EloquentHasManyDeep\HasRelationships;
 
-class Student extends Model
+final class Student extends Model
 {
     use HasFactory;
     // use HasRelationships;
@@ -34,7 +36,7 @@ class Student extends Model
     public function fullName(): Attribute
     {
         return Attribute::make(
-            get: fn ($value, $attributes) => $attributes['first_name'] . ' ' . $attributes['last_name']
+            get: fn ($value, $attributes): string => $attributes['first_name'].' '.$attributes['last_name']
         );
     }
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Events\Pages;
 
 use App\Filament\Resources\Events\EventResource;
@@ -8,7 +10,7 @@ use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Model;
 
-class ListEvents extends ListRecords
+final class ListEvents extends ListRecords
 {
     use HasRecurring;
 
@@ -19,8 +21,8 @@ class ListEvents extends ListRecords
         return [
             CreateAction::make()
                 ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
-                ->after(function (array $data, CreateAction $action) {
-                    $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function(array $data) use ($action) {
+                ->after(function (array $data, CreateAction $action): void {
+                    $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($action): void {
                         $model = $action->getModel();
                         $record = new $model($data);
                         $record->save();
@@ -37,7 +39,7 @@ class ListEvents extends ListRecords
         $data['course_id'] = $data['course_id'] ?: null;
         $new_data = $this->prepRecurringData($data);
         $record = parent::handleRecordCreation($new_data['data']);
-        $this->createRecurring($new_data['data'], $new_data['repeat_through'], $new_data['repeat_frequency'], function($data) {
+        $this->createRecurring($new_data['data'], $new_data['repeat_through'], $new_data['repeat_frequency'], function ($data): void {
             parent::handleRecordCreation($data);
         });
 

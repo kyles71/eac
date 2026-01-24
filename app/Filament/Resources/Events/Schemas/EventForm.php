@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Events\Schemas;
 
 use App\Enums\ScheduleFrequency;
@@ -12,14 +14,14 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
-class EventForm
+final class EventForm
 {
     public static function configure(Schema $schema, $course_id = null): Schema
     {
@@ -33,7 +35,7 @@ class EventForm
             TextInput::make('name')
                 ->required(),
             Select::make('course_id')
-                ->hidden(fn () => $course_id !== null)
+                ->hidden(fn (): bool => $course_id !== null)
                 ->relationship('course', 'name'),
             Textarea::make('description')
                 ->columnSpanFull(),
@@ -44,17 +46,17 @@ class EventForm
             DateTimePicker::make('start_time'),
             DateTimePicker::make('end_time'),
             Select::make('calendar_id')
-                ->relationship('calendar', 'name', function ($query) {
+                ->relationship('calendar', 'name', function ($query): void {
                     $query->where('id', '>', 1)->orderBy('id', 'asc');
                 })
                 ->default(2),
             Select::make('repeat_frequency')
                 ->live()
-                ->visible(fn (string $operation) => $operation === 'create')
+                ->visible(fn (string $operation): bool => $operation === 'create')
                 ->enum(ScheduleFrequency::class)
                 ->options(ScheduleFrequency::class),
             DatePicker::make('repeat_through')
-                ->visible(fn (Get $get): bool => !! $get('repeat_frequency')),
+                ->visible(fn (Get $get): bool => (bool) $get('repeat_frequency')),
             Fieldset::make('Attendees')
                 ->columns(3)
                 ->columnSpanFull()
@@ -66,7 +68,7 @@ class EventForm
                         ->options(User::orderBy('first_name')->orderBy('last_name')->get()->pluck('full_name', 'id'))
                         ->dehydrated(false)
                         ->live()
-                        ->afterStateUpdated(function ($state, callable $set, $get) {
+                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                             self::handleAddModel(User::class, 'full_name', 'add_user', $state, $set, $get);
                         }),
                     Select::make('add_student')
@@ -74,7 +76,7 @@ class EventForm
                         ->options(Student::orderBy('first_name')->orderBy('last_name')->get()->pluck('full_name', 'id'))
                         ->dehydrated(false)
                         ->live()
-                        ->afterStateUpdated(function ($state, callable $set, $get) {
+                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                             self::handleAddModel(Student::class, 'full_name', 'add_student', $state, $set, $get);
                         }),
                     Select::make('add_course')
@@ -82,19 +84,19 @@ class EventForm
                         ->options(Course::orderBy('name')->pluck('name', 'id'))
                         ->dehydrated(false)
                         ->live()
-                        ->afterStateUpdated(function ($state, callable $set, $get) {
+                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                             self::handleAddCourse($state, $set, $get, 'add_course');
                         }),
                     Repeater::make('attendees_list')
                         ->grid(3)
                         ->default([])
                         ->relationship('attendees')
-                        ->saveRelationshipsUsing(function (Event $record, $state) {
+                        ->saveRelationshipsUsing(function (Event $record, $state): void {
                             EventAttendee::query()
                                 ->where('event_id', $record->id)
-                                ->whereNot(function ($query) use ($state) {
+                                ->whereNot(function ($query) use ($state): void {
                                     foreach ($state as $item) {
-                                        $query->orWhere(function ($q) use ($item) {
+                                        $query->orWhere(function ($q) use ($item): void {
                                             $q->where('attendee_type', $item['attendee_type'])
                                                 ->where('attendee_id', $item['attendee_id']);
                                         });
@@ -119,12 +121,12 @@ class EventForm
                         ->collapsible(false)
                         ->reorderable(false)
                         ->addable(false)
-                        ->columnSpanFull()
+                        ->columnSpanFull(),
                 ]),
         ];
     }
 
-    private static function handleAddModel(string $modelClass, $labelAccessor, string $fieldName, $state, callable $set, callable $get): void
+    private static function handleAddModel(string $modelClass, string $labelAccessor, string $fieldName, $state, callable $set, callable $get): void
     {
         if (! $state) {
             return;
@@ -133,6 +135,7 @@ class EventForm
         $model = $modelClass::find($state);
         if (! $model) {
             $set($fieldName, null);
+
             return;
         }
 
@@ -154,6 +157,7 @@ class EventForm
         $course = Course::with('students')->find($state);
         if (! $course) {
             $set($fieldName, null);
+
             return;
         }
 
@@ -183,11 +187,7 @@ class EventForm
                 continue;
             }
 
-            if (is_callable($labelAccessor)) {
-                $label = $labelAccessor($model);
-            } else {
-                $label = $model->{$labelAccessor} ?? (string) $id;
-            }
+            $label = is_callable($labelAccessor) ? $labelAccessor($model) : $model->{$labelAccessor} ?? (string) $id;
 
             foreach ($attendees as $existing) {
                 if (($existing['attendee_type'] ?? null) === $modelClass && ((string) ($existing['attendee_id'] ?? '') === (string) $id)) {

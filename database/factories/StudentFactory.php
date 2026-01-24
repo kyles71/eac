@@ -1,13 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 use App\Models\Student;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\Factory;
 
-class StudentFactory extends Factory
+final class StudentFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.

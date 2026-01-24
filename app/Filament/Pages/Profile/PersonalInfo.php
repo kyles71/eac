@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Pages\Profile;
 
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Group;
 use Jeffgreco13\FilamentBreezy\Livewire\PersonalInfo as BreezyPersonalInfo;
 
-class PersonalInfo extends BreezyPersonalInfo
+final class PersonalInfo extends BreezyPersonalInfo
 {
     public array $only = ['first_name', 'last_name', 'email'];
 

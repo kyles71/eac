@@ -24,21 +24,6 @@ final class User extends Authenticatable implements FilamentUser, HasName
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'app_authentication_secret' => 'encrypted',
-            'app_authentication_recovery_codes' => 'encrypted:array',
-        ];
-    }
-
-    /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
@@ -90,5 +75,20 @@ final class User extends Authenticatable implements FilamentUser, HasName
     public function purchasedCourses(): BelongsToMany
     {
         return $this->belongsToMany(Course::class, 'enrollments');
+    }
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'app_authentication_secret' => 'encrypted',
+            'app_authentication_recovery_codes' => 'encrypted:array',
+        ];
     }
 }

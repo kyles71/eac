@@ -1,19 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Traits;
 
 use App\Enums\ScheduleFrequency;
-use App\Models\Event;
-use App\Models\Student;
 use Carbon\Carbon;
 use Closure;
 
-trait HasRecurring {
+trait HasRecurring
+{
     private $repeat_through;
 
     private $repeat_frequency;
 
-    public function prepRecurringData(array $data): array{
+    public function prepRecurringData(array $data): array
+    {
         $this->repeat_frequency = $data['repeat_frequency'] ?? null;
         $this->repeat_through = isset($data['repeat_through']) ? Carbon::create($data['repeat_through']) : null;
         $this->attendees_list = $data['attendees_list'] ?? [];
@@ -27,11 +29,11 @@ trait HasRecurring {
     {
         $return = [];
 
-        if (!$create_method) {
+        if (! $create_method) {
             return $return;
         }
 
-        if (!$repeat_frequency) {
+        if (!$repeat_frequency instanceof \App\Enums\ScheduleFrequency) {
             return $return;
         }
 

@@ -1,13 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\Course;
-use Illuminate\Database\Eloquent\Factories\Factory;
 use App\Models\Event;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\Factory;
 
-class EventFactory extends Factory
+final class EventFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.

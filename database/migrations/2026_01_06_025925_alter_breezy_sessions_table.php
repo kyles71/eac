@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
-        Schema::table('breezy_sessions', function (Blueprint $table) {
+        Schema::table('breezy_sessions', function (Blueprint $table): void {
             $table->dropColumn([
                 'guard',
                 'ip_address',
@@ -19,8 +22,8 @@ return new class extends Migration {
 
     public function down(): void
     {
-        Schema::table('breezy_sessions', function (Blueprint $table) {
-            $table->after('panel_id', function (BluePrint $table) {
+        Schema::table('breezy_sessions', function (Blueprint $table): void {
+            $table->after('panel_id', function (Blueprint $table): void {
                 $table->string('guard')->nullable();
                 $table->string('ip_address', 45)->nullable();
                 $table->text('user_agent')->nullable();
