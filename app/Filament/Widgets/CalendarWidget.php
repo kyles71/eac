@@ -130,7 +130,7 @@ final class CalendarWidget extends FullCalendarWidget
             ActionGroup::make($calendars)
                 ->label(fn() => $this->calendar->name)
                 ->button()
-                ->icon(false),
+                ->icon('heroicon-o-calendar'),
         ];
     }
 }

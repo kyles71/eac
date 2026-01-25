@@ -1,15 +1,4 @@
-@import '../../../../vendor/filament/filament/resources/css/theme.css';
-@import '../../../../vendor/saade/filament-fullcalendar/resources/css/filament-fullcalendar.css';
+@import '../global-theme.css';
 
-@source '../../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
-@source '../../../../vendor/jeffgreco13/filament-breezy/resources/**/*';
-@source '../../../../app/Filament/**/*';
-@source '../../../../resources/views/filament/**/*';
-
-.fi-sidebar-nav {
-    border-right: 1px solid #e4e4e5;
-}
-
-.dark .fi-sidebar-nav {
-    border-right: 1px solid #18181B;
-}
+@source '../../../../app/Filament/Admin/**/*';
+@source '../../../../resources/views/filament/admin/**/*';

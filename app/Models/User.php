@@ -53,7 +53,10 @@ final class User extends Authenticatable implements FilamentUser, HasName
 
     public function canAccessPanel(Panel $panel): bool
     {
-        /* TODO: Please implement your own logic here. */
+        if ($panel->getId() === 'admin') {
+            return true || $this->hasVerifiedEmail();
+        }
+
         return true; // str_ends_with($this->email, '@larament.test');
     }
 
