@@ -2,7 +2,7 @@
 
 namespace App\Filament\User\Pages;
 
-use App\Filament\Resources\Enrollments\Tables\EnrollmentsTable;
+use App\Filament\Admin\Resources\Enrollments\Tables\EnrollmentsTable;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Filament\Resources\Concerns\HasTabs;

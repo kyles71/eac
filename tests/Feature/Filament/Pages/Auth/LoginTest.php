@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Filament\Pages\Auth\Login;
+use App\Filament\Shared\Pages\Auth\Login;
 use Filament\Facades\Filament;
 
 use function Pest\Livewire\livewire;
