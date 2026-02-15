@@ -75,6 +75,11 @@ final class User extends Authenticatable implements FilamentUser, HasName
         return $this->morphMany(EventAttendee::class, 'attendee');
     }
 
+    public function forms(): HasMany
+    {
+        return $this->hasMany(FormUser::class);
+    }
+
     public function purchasedCourses(): BelongsToMany
     {
         return $this->belongsToMany(Course::class, 'enrollments');

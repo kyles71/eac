@@ -75,6 +75,16 @@ final class Course extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function courseForms(): HasMany
+    {
+        return $this->hasMany(CourseForm::class);
+    }
+
+    public function forms(): BelongsToMany
+    {
+        return $this->belongsToMany(Form::class, 'course_forms');
+    }
+
     // public function product(): BelongsTo
     // {
     //     return $this->belongsTo(Product::class);

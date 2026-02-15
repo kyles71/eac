@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
+use App\Enums\FormTypes;
+use App\Models\Form;
 use App\Models\User;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -27,6 +32,7 @@ final class CourseForm
                     ->required()
                     ->numeric()
                     ->default(10),
+                // SpatieTagsInput::make('tags'),
                 DateTimePicker::make('start_time')
                     ->required(),
                 TextInput::make('duration')
@@ -45,7 +51,22 @@ final class CourseForm
                     )
                     ->getOptionLabelFromRecordUsing(fn (User $user) => $user->fullName),
                 TextInput::make('guest_teacher'),
-                // SpatieTagsInput::make('tags'),
+                Select::make('courseForms')
+                    ->label('Forms')
+                    ->multiple()
+                    ->preload()
+                    ->relationship(
+                        name: 'forms',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query) => $query->isActive()->orderBy('name'),
+                    )
+                    ->default(Form::query()
+                        ->isActive()
+                        ->where('form_type', FormTypes::STUDENT_WAIVER)
+                        ->orderBy('valid_until', 'desc')
+                        ->first()
+                        ?->id
+                    ),
             ]);
     }
 }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\FormTypes;
 use App\Models\Course;
+use App\Models\Form;
 use App\Models\User;
 use Database\Factories\CalendarFactory;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -24,6 +26,9 @@ final class DatabaseSeeder extends Seeder
                 'background_color' => '#FF5733',
             ],
         ]);
+
+        Form::factory()
+            ->create(['name' => 'Student Waiver 25-26', 'form_type' => FormTypes::STUDENT_WAIVER->value]);
 
         if (config('app.env') !== 'production') {
             $this->seedDevData();

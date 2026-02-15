@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Shared\Pages\Auth\Login;
 use App\Filament\Shared\Pages\Profile\PersonalInfo;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -28,6 +29,7 @@ abstract class BasePanelProvider extends PanelProvider
     protected function applySharedConfig(Panel $panel): Panel
     {
         return $panel
+            ->login(Login::class)
             ->bootUsing(function (): void {
                 Livewire::component('personal_info', PersonalInfo::class);
             })

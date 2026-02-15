@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
-use App\Filament\Shared\Pages\Auth\Login;
 use Filament\Panel;
 use Filament\Support\Enums\Platform;
 
@@ -20,7 +19,6 @@ final class AdminPanelProvider extends BasePanelProvider
         $panel = $this->applySharedConfig($panel);
 
         return $panel
-            ->login(Login::class)
 //            ->topNavigation()
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')

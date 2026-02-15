@@ -14,7 +14,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-// use Illuminate\Database\Eloquent\Relations\HasOne;
 // use Staudenmeir\EloquentHasManyDeep\HasManyDeep;
 // use Staudenmeir\EloquentHasManyDeep\HasRelationships;
 
@@ -60,6 +59,21 @@ final class Student extends Model
         return $this->morphMany(EventAttendee::class, 'attendee');
     }
 
+    public function forms(): HasMany
+    {
+        return $this->hasMany(FormUser::class);
+    }
+
+    public function showcaseParticipation(): HasMany
+    {
+        return $this->hasMany(ShowcaseParticipation::class);
+    }
+
+    public function studentWaiver(): HasMany
+    {
+        return $this->hasMany(StudentWaiver::class);
+    }
+
     // #[Scope]
     // protected function healthInfoNeedsUpdating(Builder $query): void
     // {
@@ -69,15 +83,5 @@ final class Student extends Model
     //                 $q2->where('updated_at', '<', now()->subYear());
     //             });
     //     });
-    // }
-
-    // public function emergencyContacts(): HasMany
-    // {
-    //     return $this->hasMany(StudentEmergencyContact::class);
-    // }
-
-    // public function healthInfo(): HasOne
-    // {
-    //     return $this->hasOne(StudentHealthInfo::class);
     // }
 }
