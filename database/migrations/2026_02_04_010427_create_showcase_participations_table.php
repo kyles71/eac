@@ -12,8 +12,8 @@ return new class() extends Migration
     {
         Schema::create('showcase_participations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('student_id')->constrained()->onDelete('cascade');
-            $table->foreignId('form_user_id')->constrained()->onDelete('cascade');
+            // $table->foreignId('student_id')->constrained()->onDelete('cascade');
+            // $table->foreignId('form_user_id')->constrained()->onDelete('cascade');
             $table->boolean('is_participating')->default(false);
             $table->timestamps();
         });

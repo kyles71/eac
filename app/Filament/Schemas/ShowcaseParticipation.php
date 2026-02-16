@@ -11,7 +11,7 @@ class ShowcaseParticipation
     {
         return $schema
             ->components([
-                Toggle::make('responseable.is_participating')
+                Toggle::make('is_participating')
                     ->label('Is Participating')
                     ->required(),
             ]);

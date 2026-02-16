@@ -19,6 +19,16 @@ class EditFormUser extends EditRecord
         return static::getResource()::form($schema, $record->form->form_type);
     }
 
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        if ($this->getRecord()->formCanBeUpdated()) {
+            $data['signature'] = null;
+            $data['date_signed'] = null;
+        }
+
+        return $data;
+    }
+
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');

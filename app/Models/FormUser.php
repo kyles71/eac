@@ -38,9 +38,9 @@ class FormUser extends Model
 
     public function formCanBeUpdated(): bool
     {
-        // if (! $this->date_signed || ! $this->signature) {
-        //     return false;
-        // }
+        if (! ($this->date_signed && $this->signature)) {
+            return false;
+        }
 
         if (! $this->form->can_update) {
             return false;
