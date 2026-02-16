@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Http\Middleware\UserBanners;
 use Filament\Panel;
 
 class UserPanelProvider extends BasePanelProvider
@@ -16,6 +17,9 @@ class UserPanelProvider extends BasePanelProvider
 
         return $panel
             ->viteTheme('resources/css/filament/user/theme.css')
+            ->middleware([
+                UserBanners::class,
+            ])
             ->discoverResources(in: app_path('Filament/User/Resources'), for: 'App\Filament\User\Resources')
             ->discoverPages(in: app_path('Filament/User/Pages'), for: 'App\Filament\User\Pages')
             ->discoverWidgets(in: app_path('Filament/User/Widgets'), for: 'App\Filament\User\Widgets');
