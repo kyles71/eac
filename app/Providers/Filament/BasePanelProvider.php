@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers\Filament;
 
 use App\Filament\Shared\Pages\Auth\Login;
@@ -34,6 +36,8 @@ abstract class BasePanelProvider extends PanelProvider
                 Livewire::component('personal_info', PersonalInfo::class);
             })
             ->spa()
+            ->unsavedChangesAlerts()
+            ->databaseTransactions()
             ->sidebarCollapsibleOnDesktop()
             ->colors([
                 'primary' => Color::Blue,
