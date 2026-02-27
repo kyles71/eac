@@ -1,0 +1,4805 @@
+diff --git a/app/Actions/Store/CompleteOrder.php b/app/Actions/Store/CompleteOrder.php
+index fb2ded9..1c7e38d 100644
+--- a/app/Actions/Store/CompleteOrder.php
++++ b/app/Actions/Store/CompleteOrder.php
+@@ -5,6 +5,7 @@
+ namespace App\Actions\Store;
+ 
+ use App\Contracts\StripeServiceContract;
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
+ use App\Models\Course;
+ use App\Models\Enrollment;
+@@ -82,12 +83,15 @@ public function handle(Order $order): bool
+                             'student_id' => null,
+                         ]);
+                     }
++                    $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
+                 } elseif ($product->productable instanceof GiftCardType) {
+                     $fulfillGiftCard = new FulfillGiftCard;
+                     /** @var \App\Models\User $purchaser */
+                     $purchaser = $order->user;
+                     $fulfillGiftCard->handle($orderItem, $purchaser);
++                    $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
+                 }
++                // Costume and standalone products remain Pending for manual fulfillment
+             }
+ 
+             $order->update(['status' => OrderStatus::Completed]);
+diff --git a/app/Actions/Store/CreateCheckoutSession.php b/app/Actions/Store/CreateCheckoutSession.php
+index 40569ad..d6dfdff 100644
+--- a/app/Actions/Store/CreateCheckoutSession.php
++++ b/app/Actions/Store/CreateCheckoutSession.php
+@@ -6,11 +6,14 @@
+ 
+ use App\Contracts\StripeServiceContract;
+ use App\Enums\CreditTransactionType;
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
++use App\Enums\PaymentPlanMethod;
+ use App\Models\Course;
+ use App\Models\DiscountCode;
+ use App\Models\GiftCardType;
+ use App\Models\Order;
++use App\Models\PaymentPlanTemplate;
+ use App\Models\User;
+ use Illuminate\Support\Facades\DB;
+ use InvalidArgumentException;
+@@ -21,9 +24,16 @@ public function __construct(
+         private StripeServiceContract $stripeService,
+     ) {}
+ 
+-    public function handle(User $user, string $successUrl, string $cancelUrl, ?DiscountCode $discountCode = null, int $creditToApply = 0): string
+-    {
+-        return DB::transaction(function () use ($user, $successUrl, $cancelUrl, $discountCode, $creditToApply): string {
++    public function handle(
++        User $user,
++        string $successUrl,
++        string $cancelUrl,
++        ?DiscountCode $discountCode = null,
++        int $creditToApply = 0,
++        ?PaymentPlanTemplate $paymentPlanTemplate = null,
++        ?PaymentPlanMethod $paymentPlanMethod = null,
++    ): string {
++        return DB::transaction(function () use ($user, $successUrl, $cancelUrl, $discountCode, $creditToApply, $paymentPlanTemplate, $paymentPlanMethod): string {
+             $cartItems = $user->cartItems()->with('product.productable')->get();
+ 
+             if ($cartItems->isEmpty()) {
+@@ -136,29 +146,51 @@ public function handle(User $user, string $successUrl, string $cancelUrl, ?Disco
+                 return $successUrl.'?order_id='.$order->id;
+             }
+ 
++            // Determine the checkout amount (first installment if payment plan, otherwise full total)
++            $checkoutAmount = $total;
++            $usePaymentPlan = $paymentPlanTemplate !== null && $paymentPlanMethod !== null;
++
++            if ($usePaymentPlan) {
++                $amounts = $paymentPlanTemplate->installmentAmounts($total);
++                $checkoutAmount = $amounts['first'];
++            }
++
+             // Build consolidated line item for Stripe
+-            if ($total < $subtotal) {
++            if ($checkoutAmount < $subtotal || $usePaymentPlan) {
++                $label = $usePaymentPlan
++                    ? "Order #{$order->id} – Installment 1 of {$paymentPlanTemplate->number_of_installments}"
++                    : "Order #{$order->id}";
++
+                 $lineItems = [[
+                     'price_data' => [
+                         'currency' => 'usd',
+                         'product_data' => [
+-                            'name' => 'Order #'.$order->id,
++                            'name' => $label,
+                         ],
+-                        'unit_amount' => $total,
++                        'unit_amount' => $checkoutAmount,
+                     ],
+                     'quantity' => 1,
+                 ]];
+             }
+ 
++            // Build metadata
++            $metadata = [
++                'order_id' => (string) $order->id,
++            ];
++
++            if ($usePaymentPlan) {
++                $metadata['payment_plan_template_id'] = (string) $paymentPlanTemplate->id;
++                $metadata['payment_plan_method'] = $paymentPlanMethod->value;
++            }
++
+             // Create Stripe Checkout Session
+             $session = $this->stripeService->createCheckoutSession(
+                 user: $user,
+                 lineItems: $lineItems,
+                 successUrl: $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
+                 cancelUrl: $cancelUrl,
+-                metadata: [
+-                    'order_id' => (string) $order->id,
+-                ],
++                metadata: $metadata,
++                setupFutureUsage: $usePaymentPlan,
+             );
+ 
+             $order->update([
+@@ -191,10 +223,13 @@ private function completeZeroTotalOrder(Order $order, User $user): void
+                         'student_id' => null,
+                     ]);
+                 }
++                $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
+             } elseif ($product->productable instanceof GiftCardType) {
+                 $fulfillGiftCard = new FulfillGiftCard;
+                 $fulfillGiftCard->handle($orderItem, $user);
++                $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
+             }
++            // Costume and standalone products remain Pending for manual fulfillment
+         }
+ 
+         $user->cartItems()->delete();
+diff --git a/app/Actions/Store/CreatePaymentPlan.php b/app/Actions/Store/CreatePaymentPlan.php
+new file mode 100644
+index 0000000..119b4e3
+--- /dev/null
++++ b/app/Actions/Store/CreatePaymentPlan.php
+@@ -0,0 +1,64 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Actions\Store;
++
++use App\Enums\InstallmentStatus;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Order;
++use App\Models\PaymentPlan;
++use App\Models\PaymentPlanTemplate;
++use Carbon\Carbon;
++
++final readonly class CreatePaymentPlan
++{
++    /**
++     * Create a payment plan for an order based on a template.
++     * The first installment is marked as Paid (already collected at checkout).
++     */
++    public function handle(
++        Order $order,
++        PaymentPlanTemplate $template,
++        PaymentPlanMethod $method,
++        ?string $stripeCustomerId = null,
++        ?string $stripePaymentMethodId = null,
++    ): PaymentPlan {
++        $total = $order->total;
++        $amounts = $template->installmentAmounts($total);
++
++        /** @var PaymentPlan $paymentPlan */
++        $paymentPlan = $order->paymentPlan()->create([
++            'payment_plan_template_id' => $template->id,
++            'method' => $method,
++            'total_amount' => $total,
++            'number_of_installments' => $template->number_of_installments,
++            'frequency' => $template->frequency,
++            'stripe_customer_id' => $stripeCustomerId,
++            'stripe_payment_method_id' => $stripePaymentMethodId,
++        ]);
++
++        // Create first installment (already paid at checkout)
++        $paymentPlan->installments()->create([
++            'installment_number' => 1,
++            'amount' => $amounts['first'],
++            'due_date' => Carbon::today(),
++            'status' => InstallmentStatus::Paid,
++            'paid_at' => now(),
++        ]);
++
++        // Create remaining installments
++        $intervalDays = $template->frequency->intervalDays();
++
++        for ($i = 2; $i <= $template->number_of_installments; $i++) {
++            $paymentPlan->installments()->create([
++                'installment_number' => $i,
++                'amount' => $amounts['remaining'],
++                'due_date' => Carbon::today()->addDays($intervalDays * ($i - 1)),
++                'status' => InstallmentStatus::Pending,
++            ]);
++        }
++
++        return $paymentPlan;
++    }
++}
+diff --git a/app/Actions/Store/ProcessInstallments.php b/app/Actions/Store/ProcessInstallments.php
+new file mode 100644
+index 0000000..226d02a
+--- /dev/null
++++ b/app/Actions/Store/ProcessInstallments.php
+@@ -0,0 +1,156 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Actions\Store;
++
++use App\Contracts\StripeServiceContract;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Installment;
++use Exception;
++use Illuminate\Support\Facades\Log;
++
++final readonly class ProcessInstallments
++{
++    public function __construct(
++        private StripeServiceContract $stripeService,
++    ) {}
++
++    /**
++     * Process all due and retryable installments.
++     *
++     * @return array{processed: int, succeeded: int, failed: int}
++     */
++    public function handle(): array
++    {
++        $processed = 0;
++        $succeeded = 0;
++        $failed = 0;
++
++        // Get due installments (pending + due date <= today)
++        $dueInstallments = Installment::query()
++            ->due()
++            ->with('paymentPlan')
++            ->get();
++
++        // Get retryable installments (failed + retry_count < 3)
++        $retryableInstallments = Installment::query()
++            ->retryable()
++            ->with('paymentPlan')
++            ->get();
++
++        $allInstallments = $dueInstallments->merge($retryableInstallments);
++
++        /** @var Installment $installment */
++        foreach ($allInstallments as $installment) {
++            $processed++;
++            $result = $this->processInstallment($installment);
++
++            if ($result) {
++                $succeeded++;
++            } else {
++                $failed++;
++            }
++        }
++
++        return [
++            'processed' => $processed,
++            'succeeded' => $succeeded,
++            'failed' => $failed,
++        ];
++    }
++
++    private function processInstallment(Installment $installment): bool
++    {
++        $paymentPlan = $installment->paymentPlan;
++
++        if ($paymentPlan === null) {
++            Log::warning("Installment #{$installment->id} has no payment plan.");
++
++            return false;
++        }
++
++        try {
++            if ($paymentPlan->method === PaymentPlanMethod::AutoCharge) {
++                return $this->processAutoCharge($installment, $paymentPlan);
++            }
++
++            return $this->processManualInvoice($installment, $paymentPlan);
++        } catch (Exception $e) {
++            Log::error("Failed to process installment #{$installment->id}: {$e->getMessage()}");
++            $installment->markFailed();
++
++            return false;
++        }
++    }
++
++    private function processAutoCharge(Installment $installment, \App\Models\PaymentPlan $paymentPlan): bool
++    {
++        if ($paymentPlan->stripe_customer_id === null || $paymentPlan->stripe_payment_method_id === null) {
++            Log::warning("Payment plan #{$paymentPlan->id} missing Stripe credentials for auto-charge.");
++            $installment->markFailed();
++
++            return false;
++        }
++
++        $paymentIntent = $this->stripeService->chargePaymentMethod(
++            customerId: $paymentPlan->stripe_customer_id,
++            paymentMethodId: $paymentPlan->stripe_payment_method_id,
++            amount: $installment->amount,
++            description: "Installment #{$installment->installment_number} for Order #{$paymentPlan->order_id}",
++            metadata: [
++                'installment_id' => (string) $installment->id,
++                'payment_plan_id' => (string) $paymentPlan->id,
++                'order_id' => (string) $paymentPlan->order_id,
++            ],
++        );
++
++        if ($paymentIntent->status === 'succeeded') {
++            $installment->markPaid(stripePaymentIntentId: $paymentIntent->id);
++            Log::info("Installment #{$installment->id} paid via auto-charge.", [
++                'payment_intent_id' => $paymentIntent->id,
++            ]);
++
++            return true;
++        }
++
++        Log::warning("Auto-charge for installment #{$installment->id} did not succeed immediately.", [
++            'status' => $paymentIntent->status,
++        ]);
++        $installment->markFailed();
++
++        return false;
++    }
++
++    private function processManualInvoice(Installment $installment, \App\Models\PaymentPlan $paymentPlan): bool
++    {
++        if ($paymentPlan->stripe_customer_id === null) {
++            Log::warning("Payment plan #{$paymentPlan->id} missing Stripe customer ID for invoice.");
++            $installment->markFailed();
++
++            return false;
++        }
++
++        $invoice = $this->stripeService->createAndSendInvoice(
++            customerId: $paymentPlan->stripe_customer_id,
++            amount: $installment->amount,
++            description: "Installment #{$installment->installment_number} for Order #{$paymentPlan->order_id}",
++            metadata: [
++                'installment_id' => (string) $installment->id,
++                'payment_plan_id' => (string) $paymentPlan->id,
++                'order_id' => (string) $paymentPlan->order_id,
++            ],
++        );
++
++        $installment->update([
++            'stripe_invoice_id' => $invoice->id,
++        ]);
++
++        Log::info("Invoice sent for installment #{$installment->id}.", [
++            'invoice_id' => $invoice->id,
++        ]);
++
++        // Invoice is sent but not yet paid — webhook will confirm payment
++        return true;
++    }
++}
+diff --git a/app/Actions/Store/SwitchPaymentPlanMethod.php b/app/Actions/Store/SwitchPaymentPlanMethod.php
+new file mode 100644
+index 0000000..ba0dc78
+--- /dev/null
++++ b/app/Actions/Store/SwitchPaymentPlanMethod.php
+@@ -0,0 +1,28 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Actions\Store;
++
++use App\Enums\PaymentPlanMethod;
++use App\Models\PaymentPlan;
++use InvalidArgumentException;
++
++final readonly class SwitchPaymentPlanMethod
++{
++    /**
++     * Switch the payment method for a payment plan.
++     */
++    public function handle(PaymentPlan $paymentPlan, PaymentPlanMethod $newMethod): void
++    {
++        if ($paymentPlan->method === $newMethod) {
++            throw new InvalidArgumentException('Payment plan is already using this method.');
++        }
++
++        if ($newMethod === PaymentPlanMethod::AutoCharge && $paymentPlan->stripe_payment_method_id === null) {
++            throw new InvalidArgumentException('Cannot switch to auto-charge without a saved payment method.');
++        }
++
++        $paymentPlan->update(['method' => $newMethod]);
++    }
++}
+diff --git a/app/Contracts/StripeServiceContract.php b/app/Contracts/StripeServiceContract.php
+index eb52c23..bac3694 100644
+--- a/app/Contracts/StripeServiceContract.php
++++ b/app/Contracts/StripeServiceContract.php
+@@ -8,6 +8,8 @@
+ use Stripe\Checkout\Session as StripeSession;
+ use Stripe\Customer;
+ use Stripe\Event;
++use Stripe\Invoice;
++use Stripe\PaymentIntent;
+ use Stripe\Refund;
+ 
+ interface StripeServiceContract
+@@ -24,9 +26,35 @@ public function createCheckoutSession(
+         string $successUrl,
+         string $cancelUrl,
+         array $metadata = [],
++        bool $setupFutureUsage = false,
+     ): StripeSession;
+ 
+     public function constructWebhookEvent(string $payload, string $signature): Event;
+ 
+     public function refundPaymentIntent(string $paymentIntentId, ?int $amount = null): Refund;
++
++    /**
++     * Charge a saved payment method off-session.
++     *
++     * @param  array<string, string>  $metadata
++     */
++    public function chargePaymentMethod(
++        string $customerId,
++        string $paymentMethodId,
++        int $amount,
++        string $description = '',
++        array $metadata = [],
++    ): PaymentIntent;
++
++    /**
++     * Create and send a Stripe invoice to the customer.
++     *
++     * @param  array<string, string>  $metadata
++     */
++    public function createAndSendInvoice(
++        string $customerId,
++        int $amount,
++        string $description = '',
++        array $metadata = [],
++    ): Invoice;
+ }
+diff --git a/app/Enums/InstallmentStatus.php b/app/Enums/InstallmentStatus.php
+new file mode 100644
+index 0000000..9e03fd4
+--- /dev/null
++++ b/app/Enums/InstallmentStatus.php
+@@ -0,0 +1,20 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Enums;
++
++use Filament\Support\Contracts\HasLabel;
++
++enum InstallmentStatus: string implements HasLabel
++{
++    case Pending = 'Pending';
++    case Paid = 'Paid';
++    case Failed = 'Failed';
++    case Overdue = 'Overdue';
++
++    public function getLabel(): string
++    {
++        return $this->value;
++    }
++}
+diff --git a/app/Enums/OrderItemStatus.php b/app/Enums/OrderItemStatus.php
+new file mode 100644
+index 0000000..53edd88
+--- /dev/null
++++ b/app/Enums/OrderItemStatus.php
+@@ -0,0 +1,18 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Enums;
++
++use Filament\Support\Contracts\HasLabel;
++
++enum OrderItemStatus: string implements HasLabel
++{
++    case Pending = 'Pending';
++    case Fulfilled = 'Fulfilled';
++
++    public function getLabel(): string
++    {
++        return $this->value;
++    }
++}
+diff --git a/app/Enums/PaymentPlanFrequency.php b/app/Enums/PaymentPlanFrequency.php
+new file mode 100644
+index 0000000..618e1c0
+--- /dev/null
++++ b/app/Enums/PaymentPlanFrequency.php
+@@ -0,0 +1,31 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Enums;
++
++use Filament\Support\Contracts\HasLabel;
++
++enum PaymentPlanFrequency: string implements HasLabel
++{
++    case Weekly = 'Weekly';
++    case Biweekly = 'Biweekly';
++    case Monthly = 'Monthly';
++
++    public function getLabel(): string
++    {
++        return $this->value;
++    }
++
++    /**
++     * Get the number of days between installments for this frequency.
++     */
++    public function intervalDays(): int
++    {
++        return match ($this) {
++            self::Weekly => 7,
++            self::Biweekly => 14,
++            self::Monthly => 30,
++        };
++    }
++}
+diff --git a/app/Enums/PaymentPlanMethod.php b/app/Enums/PaymentPlanMethod.php
+new file mode 100644
+index 0000000..d1c0b2c
+--- /dev/null
++++ b/app/Enums/PaymentPlanMethod.php
+@@ -0,0 +1,18 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Enums;
++
++use Filament\Support\Contracts\HasLabel;
++
++enum PaymentPlanMethod: string implements HasLabel
++{
++    case AutoCharge = 'Auto Charge';
++    case ManualInvoice = 'Manual Invoice';
++
++    public function getLabel(): string
++    {
++        return $this->value;
++    }
++}
+diff --git a/app/Enums/ProductType.php b/app/Enums/ProductType.php
+new file mode 100644
+index 0000000..eb2bd0c
+--- /dev/null
++++ b/app/Enums/ProductType.php
+@@ -0,0 +1,61 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Enums;
++
++use App\Models\Costume;
++use App\Models\Course;
++use App\Models\GiftCardType;
++use Filament\Support\Contracts\HasLabel;
++use InvalidArgumentException;
++
++enum ProductType: string implements HasLabel
++{
++    case Any = 'Any';
++    case Course = 'Course';
++    case GiftCardType = 'Gift Card';
++    case Costume = 'Costume';
++    case Standalone = 'Standalone';
++
++    /**
++     * Map a product's productable_type morph class (or null) to the corresponding enum case.
++     *
++     * @throws InvalidArgumentException if the morph class is unrecognized
++     */
++    public static function fromProductableType(?string $morphClass): self
++    {
++        if ($morphClass === null) {
++            return self::Standalone;
++        }
++
++        return match ($morphClass) {
++            Course::class => self::Course,
++            GiftCardType::class => self::GiftCardType,
++            Costume::class => self::Costume,
++            default => throw new InvalidArgumentException("Unrecognized productable type: {$morphClass}"),
++        };
++    }
++
++    public function getLabel(): string
++    {
++        return $this->value;
++    }
++
++    /**
++     * Map this enum case to the productable morph class string.
++     * Returns null for Standalone (no morph). Throws for Any (not valid on a product).
++     *
++     * @throws InvalidArgumentException if called on Any
++     */
++    public function toProductableClass(): ?string
++    {
++        return match ($this) {
++            self::Any => throw new InvalidArgumentException('ProductType::Any cannot be mapped to a productable class.'),
++            self::Course => Course::class,
++            self::GiftCardType => GiftCardType::class,
++            self::Costume => Costume::class,
++            self::Standalone => null,
++        };
++    }
++}
+diff --git a/app/Filament/Admin/Resources/Costumes/CostumeResource.php b/app/Filament/Admin/Resources/Costumes/CostumeResource.php
+new file mode 100644
+index 0000000..13aa6f3
+--- /dev/null
++++ b/app/Filament/Admin/Resources/Costumes/CostumeResource.php
+@@ -0,0 +1,60 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\Costumes;
++
++use App\Filament\Admin\Resources\Costumes\Pages\CreateCostume;
++use App\Filament\Admin\Resources\Costumes\Pages\EditCostume;
++use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
++use App\Filament\Admin\Resources\Costumes\Schemas\CostumeForm;
++use App\Filament\Admin\Resources\Costumes\Tables\CostumesTable;
++use App\Models\Costume;
++use BackedEnum;
++use Filament\Resources\Resource;
++use Filament\Schemas\Schema;
++use Filament\Support\Icons\Heroicon;
++use Filament\Tables\Table;
++use UnitEnum;
++
++final class CostumeResource extends Resource
++{
++    protected static ?string $model = Costume::class;
++
++    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
++
++    protected static UnitEnum|string|null $navigationGroup = 'Store';
++
++    protected static ?string $recordTitleAttribute = 'name';
++
++    public static function getGloballySearchableAttributes(): array
++    {
++        return [
++            'name',
++        ];
++    }
++
++    public static function form(Schema $schema): Schema
++    {
++        return CostumeForm::configure($schema);
++    }
++
++    public static function table(Table $table): Table
++    {
++        return CostumesTable::configure($table);
++    }
++
++    public static function getRelations(): array
++    {
++        return [];
++    }
++
++    public static function getPages(): array
++    {
++        return [
++            'index' => ListCostumes::route('/'),
++            'create' => CreateCostume::route('/create'),
++            'edit' => EditCostume::route('/{record}/edit'),
++        ];
++    }
++}
+diff --git a/app/Filament/Admin/Resources/Costumes/Pages/CreateCostume.php b/app/Filament/Admin/Resources/Costumes/Pages/CreateCostume.php
+new file mode 100644
+index 0000000..606775b
+--- /dev/null
++++ b/app/Filament/Admin/Resources/Costumes/Pages/CreateCostume.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\Costumes\Pages;
++
++use App\Filament\Admin\Resources\Costumes\CostumeResource;
++use Filament\Resources\Pages\CreateRecord;
++
++final class CreateCostume extends CreateRecord
++{
++    protected static string $resource = CostumeResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/Costumes/Pages/EditCostume.php b/app/Filament/Admin/Resources/Costumes/Pages/EditCostume.php
+new file mode 100644
+index 0000000..a78c949
+--- /dev/null
++++ b/app/Filament/Admin/Resources/Costumes/Pages/EditCostume.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\Costumes\Pages;
++
++use App\Filament\Admin\Resources\Costumes\CostumeResource;
++use Filament\Resources\Pages\EditRecord;
++
++final class EditCostume extends EditRecord
++{
++    protected static string $resource = CostumeResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/Costumes/Pages/ListCostumes.php b/app/Filament/Admin/Resources/Costumes/Pages/ListCostumes.php
+new file mode 100644
+index 0000000..64cd4c7
+--- /dev/null
++++ b/app/Filament/Admin/Resources/Costumes/Pages/ListCostumes.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\Costumes\Pages;
++
++use App\Filament\Admin\Resources\Costumes\CostumeResource;
++use Filament\Resources\Pages\ListRecords;
++
++final class ListCostumes extends ListRecords
++{
++    protected static string $resource = CostumeResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/Costumes/Schemas/CostumeForm.php b/app/Filament/Admin/Resources/Costumes/Schemas/CostumeForm.php
+new file mode 100644
+index 0000000..4b93a4e
+--- /dev/null
++++ b/app/Filament/Admin/Resources/Costumes/Schemas/CostumeForm.php
+@@ -0,0 +1,21 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\Costumes\Schemas;
++
++use Filament\Forms\Components\TextInput;
++use Filament\Schemas\Schema;
++
++final class CostumeForm
++{
++    public static function configure(Schema $schema): Schema
++    {
++        return $schema
++            ->components([
++                TextInput::make('name')
++                    ->required()
++                    ->maxLength(255),
++            ]);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/Costumes/Tables/CostumesTable.php b/app/Filament/Admin/Resources/Costumes/Tables/CostumesTable.php
+new file mode 100644
+index 0000000..63eb0c4
+--- /dev/null
++++ b/app/Filament/Admin/Resources/Costumes/Tables/CostumesTable.php
+@@ -0,0 +1,35 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\Costumes\Tables;
++
++use Filament\Tables\Columns\TextColumn;
++use Filament\Tables\Table;
++
++final class CostumesTable
++{
++    public static function configure(Table $table): Table
++    {
++        return $table
++            ->columns([
++                TextColumn::make('id')
++                    ->label('ID')
++                    ->sortable(),
++                TextColumn::make('name')
++                    ->searchable()
++                    ->sortable(),
++                TextColumn::make('created_at')
++                    ->dateTime()
++                    ->sortable()
++                    ->toggleable(isToggledHiddenByDefault: true),
++                TextColumn::make('updated_at')
++                    ->dateTime()
++                    ->sortable()
++                    ->toggleable(isToggledHiddenByDefault: true),
++            ])
++            ->defaultSort('name')
++            ->recordActions([])
++            ->toolbarActions([]);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/Orders/Pages/ViewOrder.php b/app/Filament/Admin/Resources/Orders/Pages/ViewOrder.php
+index 2e32308..b4ef281 100644
+--- a/app/Filament/Admin/Resources/Orders/Pages/ViewOrder.php
++++ b/app/Filament/Admin/Resources/Orders/Pages/ViewOrder.php
+@@ -4,11 +4,14 @@
+ 
+ namespace App\Filament\Admin\Resources\Orders\Pages;
+ 
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
+ use App\Filament\Admin\Resources\Orders\OrderResource;
++use App\Models\OrderItem;
+ use App\Services\StripeService;
+ use Exception;
+ use Filament\Actions\Action;
++use Filament\Forms\Components\CheckboxList;
+ use Filament\Notifications\Notification;
+ use Filament\Resources\Pages\ViewRecord;
+ use Filament\Support\Icons\Heroicon;
+@@ -23,6 +26,47 @@ protected function getHeaderActions(): array
+         $record = $this->getRecord();
+ 
+         return [
++            Action::make('markFulfilled')
++                ->label('Mark Items Fulfilled')
++                ->icon(Heroicon::OutlinedCheckCircle)
++                ->color('success')
++                ->visible(fn (): bool => $record->status === OrderStatus::Completed
++                    && $record->orderItems()->where('status', OrderItemStatus::Pending)->exists())
++                ->form([
++                    CheckboxList::make('order_item_ids')
++                        ->label('Select items to mark as fulfilled')
++                        ->options(function () use ($record): array {
++                            /** @var \Illuminate\Database\Eloquent\Collection<int, OrderItem> $items */
++                            $items = $record->orderItems()
++                                ->where('status', OrderItemStatus::Pending)
++                                ->with('product')
++                                ->get();
++
++                            return $items
++                                ->mapWithKeys(fn (OrderItem $item): array => [
++                                    $item->id => "{$item->product->name} (x{$item->quantity})",
++                                ])
++                                ->all();
++                        })
++                        ->required(),
++                ])
++                ->action(function (array $data) use ($record): void {
++                    $items = $record->orderItems()
++                        ->whereIn('id', $data['order_item_ids'])
++                        ->where('status', OrderItemStatus::Pending)
++                        ->get();
++
++                    /** @var OrderItem $item */
++                    foreach ($items as $item) {
++                        $item->markFulfilled();
++                    }
++
++                    Notification::make()
++                        ->title('Items marked as fulfilled')
++                        ->body($items->count().' item(s) marked as fulfilled.')
++                        ->success()
++                        ->send();
++                }),
+             Action::make('refund')
+                 ->label('Refund')
+                 ->icon(Heroicon::OutlinedArrowUturnLeft)
+diff --git a/app/Filament/Admin/Resources/Orders/Schemas/OrderInfolist.php b/app/Filament/Admin/Resources/Orders/Schemas/OrderInfolist.php
+index ba5bb44..8b99fb4 100644
+--- a/app/Filament/Admin/Resources/Orders/Schemas/OrderInfolist.php
++++ b/app/Filament/Admin/Resources/Orders/Schemas/OrderInfolist.php
+@@ -4,6 +4,7 @@
+ 
+ namespace App\Filament\Admin\Resources\Orders\Schemas;
+ 
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
+ use Filament\Infolists\Components\RepeatableEntry;
+ use Filament\Infolists\Components\TextEntry;
+@@ -62,6 +63,13 @@ public static function configure(Schema $schema): Schema
+                                 TextEntry::make('total_price')
+                                     ->label('Total')
+                                     ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
++                                TextEntry::make('status')
++                                    ->label('Fulfillment')
++                                    ->badge()
++                                    ->color(fn (OrderItemStatus $state): string => match ($state) {
++                                        OrderItemStatus::Fulfilled => 'success',
++                                        OrderItemStatus::Pending => 'warning',
++                                    }),
+                             ]),
+                     ]),
+             ]);
+diff --git a/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/CreatePaymentPlanTemplate.php b/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/CreatePaymentPlanTemplate.php
+new file mode 100644
+index 0000000..695d9cd
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/CreatePaymentPlanTemplate.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlanTemplates\Pages;
++
++use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
++use Filament\Resources\Pages\CreateRecord;
++
++final class CreatePaymentPlanTemplate extends CreateRecord
++{
++    protected static string $resource = PaymentPlanTemplateResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/EditPaymentPlanTemplate.php b/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/EditPaymentPlanTemplate.php
+new file mode 100644
+index 0000000..f1cacee
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/EditPaymentPlanTemplate.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlanTemplates\Pages;
++
++use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
++use Filament\Resources\Pages\EditRecord;
++
++final class EditPaymentPlanTemplate extends EditRecord
++{
++    protected static string $resource = PaymentPlanTemplateResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/ListPaymentPlanTemplates.php b/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/ListPaymentPlanTemplates.php
+new file mode 100644
+index 0000000..1286f74
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlanTemplates/Pages/ListPaymentPlanTemplates.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlanTemplates\Pages;
++
++use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
++use Filament\Resources\Pages\ListRecords;
++
++final class ListPaymentPlanTemplates extends ListRecords
++{
++    protected static string $resource = PaymentPlanTemplateResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlanTemplates/PaymentPlanTemplateResource.php b/app/Filament/Admin/Resources/PaymentPlanTemplates/PaymentPlanTemplateResource.php
+new file mode 100644
+index 0000000..a7eb7da
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlanTemplates/PaymentPlanTemplateResource.php
+@@ -0,0 +1,62 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlanTemplates;
++
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\CreatePaymentPlanTemplate;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\EditPaymentPlanTemplate;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\ListPaymentPlanTemplates;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Schemas\PaymentPlanTemplateForm;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Tables\PaymentPlanTemplatesTable;
++use App\Models\PaymentPlanTemplate;
++use BackedEnum;
++use Filament\Resources\Resource;
++use Filament\Schemas\Schema;
++use Filament\Support\Icons\Heroicon;
++use Filament\Tables\Table;
++use UnitEnum;
++
++final class PaymentPlanTemplateResource extends Resource
++{
++    protected static ?string $model = PaymentPlanTemplate::class;
++
++    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
++
++    protected static UnitEnum|string|null $navigationGroup = 'Store';
++
++    protected static ?string $navigationLabel = 'Plan Templates';
++
++    protected static ?string $recordTitleAttribute = 'name';
++
++    public static function getGloballySearchableAttributes(): array
++    {
++        return [
++            'name',
++        ];
++    }
++
++    public static function form(Schema $schema): Schema
++    {
++        return PaymentPlanTemplateForm::configure($schema);
++    }
++
++    public static function table(Table $table): Table
++    {
++        return PaymentPlanTemplatesTable::configure($table);
++    }
++
++    public static function getRelations(): array
++    {
++        return [];
++    }
++
++    public static function getPages(): array
++    {
++        return [
++            'index' => ListPaymentPlanTemplates::route('/'),
++            'create' => CreatePaymentPlanTemplate::route('/create'),
++            'edit' => EditPaymentPlanTemplate::route('/{record}/edit'),
++        ];
++    }
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlanTemplates/Schemas/PaymentPlanTemplateForm.php b/app/Filament/Admin/Resources/PaymentPlanTemplates/Schemas/PaymentPlanTemplateForm.php
+new file mode 100644
+index 0000000..23cef2a
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlanTemplates/Schemas/PaymentPlanTemplateForm.php
+@@ -0,0 +1,51 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlanTemplates\Schemas;
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\ProductType;
++use Filament\Forms\Components\Select;
++use Filament\Forms\Components\TextInput;
++use Filament\Forms\Components\Toggle;
++use Filament\Schemas\Schema;
++
++final class PaymentPlanTemplateForm
++{
++    public static function configure(Schema $schema): Schema
++    {
++        return $schema
++            ->components([
++                TextInput::make('name')
++                    ->required()
++                    ->maxLength(255),
++                Select::make('product_type')
++                    ->label('Product Type')
++                    ->options(ProductType::class)
++                    ->required(),
++                TextInput::make('min_price')
++                    ->label('Min Price (cents)')
++                    ->numeric()
++                    ->required()
++                    ->minValue(0),
++                TextInput::make('max_price')
++                    ->label('Max Price (cents)')
++                    ->numeric()
++                    ->required()
++                    ->minValue(0),
++                TextInput::make('number_of_installments')
++                    ->label('Number of Installments')
++                    ->numeric()
++                    ->required()
++                    ->minValue(2)
++                    ->maxValue(24),
++                Select::make('frequency')
++                    ->options(PaymentPlanFrequency::class)
++                    ->required(),
++                Toggle::make('is_active')
++                    ->label('Active')
++                    ->default(true),
++            ]);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlanTemplates/Tables/PaymentPlanTemplatesTable.php b/app/Filament/Admin/Resources/PaymentPlanTemplates/Tables/PaymentPlanTemplatesTable.php
+new file mode 100644
+index 0000000..3cd78ad
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlanTemplates/Tables/PaymentPlanTemplatesTable.php
+@@ -0,0 +1,47 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlanTemplates\Tables;
++
++use Filament\Tables\Columns\IconColumn;
++use Filament\Tables\Columns\TextColumn;
++use Filament\Tables\Table;
++
++final class PaymentPlanTemplatesTable
++{
++    public static function configure(Table $table): Table
++    {
++        return $table
++            ->columns([
++                TextColumn::make('id')
++                    ->sortable(),
++                TextColumn::make('name')
++                    ->searchable()
++                    ->sortable(),
++                TextColumn::make('product_type')
++                    ->label('Product Type')
++                    ->badge(),
++                TextColumn::make('min_price')
++                    ->label('Min Price')
++                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
++                    ->sortable(),
++                TextColumn::make('max_price')
++                    ->label('Max Price')
++                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
++                    ->sortable(),
++                TextColumn::make('number_of_installments')
++                    ->label('Installments')
++                    ->sortable(),
++                TextColumn::make('frequency')
++                    ->badge(),
++                IconColumn::make('is_active')
++                    ->label('Active')
++                    ->boolean(),
++                TextColumn::make('created_at')
++                    ->dateTime()
++                    ->sortable()
++                    ->toggleable(isToggledHiddenByDefault: true),
++            ]);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlans/Pages/ListPaymentPlans.php b/app/Filament/Admin/Resources/PaymentPlans/Pages/ListPaymentPlans.php
+new file mode 100644
+index 0000000..96e5cd7
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlans/Pages/ListPaymentPlans.php
+@@ -0,0 +1,13 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlans\Pages;
++
++use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
++use Filament\Resources\Pages\ListRecords;
++
++final class ListPaymentPlans extends ListRecords
++{
++    protected static string $resource = PaymentPlanResource::class;
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlans/Pages/ViewPaymentPlan.php b/app/Filament/Admin/Resources/PaymentPlans/Pages/ViewPaymentPlan.php
+new file mode 100644
+index 0000000..399d7e9
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlans/Pages/ViewPaymentPlan.php
+@@ -0,0 +1,73 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlans\Pages;
++
++use App\Enums\InstallmentStatus;
++use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
++use App\Models\Installment;
++use Filament\Actions\Action;
++use Filament\Forms\Components\CheckboxList;
++use Filament\Notifications\Notification;
++use Filament\Resources\Pages\ViewRecord;
++use Filament\Support\Icons\Heroicon;
++
++final class ViewPaymentPlan extends ViewRecord
++{
++    protected static string $resource = PaymentPlanResource::class;
++
++    protected function getHeaderActions(): array
++    {
++        /** @var \App\Models\PaymentPlan $record */
++        $record = $this->getRecord();
++
++        return [
++            Action::make('markInstallmentPaid')
++                ->label('Mark Installment Paid')
++                ->icon(Heroicon::OutlinedCheckCircle)
++                ->color('success')
++                ->visible(fn (): bool => $record->installments()
++                    ->whereIn('status', [InstallmentStatus::Pending, InstallmentStatus::Failed, InstallmentStatus::Overdue])
++                    ->exists())
++                ->form([
++                    CheckboxList::make('installment_ids')
++                        ->label('Select installments to mark as paid')
++                        ->options(function () use ($record): array {
++                            /** @var \Illuminate\Database\Eloquent\Collection<int, Installment> $installments */
++                            $installments = $record->installments()
++                                ->whereIn('status', [InstallmentStatus::Pending, InstallmentStatus::Failed, InstallmentStatus::Overdue])
++                                ->get();
++
++                            return $installments
++                                ->mapWithKeys(fn (Installment $installment): array => [
++                                    $installment->id => "#{$installment->installment_number} — \${$this->formatCents($installment->amount)} (due {$installment->due_date->format('M j, Y')})",
++                                ])
++                                ->all();
++                        })
++                        ->required(),
++                ])
++                ->action(function (array $data) use ($record): void {
++                    $installments = $record->installments()
++                        ->whereIn('id', $data['installment_ids'])
++                        ->get();
++
++                    /** @var Installment $installment */
++                    foreach ($installments as $installment) {
++                        $installment->markPaid();
++                    }
++
++                    Notification::make()
++                        ->title('Installments marked as paid')
++                        ->body($installments->count().' installment(s) marked as paid.')
++                        ->success()
++                        ->send();
++                }),
++        ];
++    }
++
++    private function formatCents(int $cents): string
++    {
++        return number_format($cents / 100, 2);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlans/PaymentPlanResource.php b/app/Filament/Admin/Resources/PaymentPlans/PaymentPlanResource.php
+new file mode 100644
+index 0000000..55adb10
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlans/PaymentPlanResource.php
+@@ -0,0 +1,51 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlans;
++
++use App\Filament\Admin\Resources\PaymentPlans\Pages\ListPaymentPlans;
++use App\Filament\Admin\Resources\PaymentPlans\Pages\ViewPaymentPlan;
++use App\Filament\Admin\Resources\PaymentPlans\Schemas\PaymentPlanInfolist;
++use App\Filament\Admin\Resources\PaymentPlans\Tables\PaymentPlansTable;
++use App\Models\PaymentPlan;
++use BackedEnum;
++use Filament\Resources\Resource;
++use Filament\Schemas\Schema;
++use Filament\Support\Icons\Heroicon;
++use Filament\Tables\Table;
++use UnitEnum;
++
++final class PaymentPlanResource extends Resource
++{
++    protected static ?string $model = PaymentPlan::class;
++
++    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
++
++    protected static UnitEnum|string|null $navigationGroup = 'Store';
++
++    protected static ?string $navigationLabel = 'Payment Plans';
++
++    public static function infolist(Schema $schema): Schema
++    {
++        return PaymentPlanInfolist::configure($schema);
++    }
++
++    public static function table(Table $table): Table
++    {
++        return PaymentPlansTable::configure($table);
++    }
++
++    public static function getRelations(): array
++    {
++        return [];
++    }
++
++    public static function getPages(): array
++    {
++        return [
++            'index' => ListPaymentPlans::route('/'),
++            'view' => ViewPaymentPlan::route('/{record}'),
++        ];
++    }
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlans/Schemas/PaymentPlanInfolist.php b/app/Filament/Admin/Resources/PaymentPlans/Schemas/PaymentPlanInfolist.php
+new file mode 100644
+index 0000000..203bc4a
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlans/Schemas/PaymentPlanInfolist.php
+@@ -0,0 +1,82 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlans\Schemas;
++
++use App\Enums\InstallmentStatus;
++use Filament\Infolists\Components\RepeatableEntry;
++use Filament\Infolists\Components\TextEntry;
++use Filament\Schemas\Components\Section;
++use Filament\Schemas\Schema;
++
++final class PaymentPlanInfolist
++{
++    public static function configure(Schema $schema): Schema
++    {
++        return $schema
++            ->components([
++                Section::make('Payment Plan Details')
++                    ->schema([
++                        TextEntry::make('id')
++                            ->label('Plan #'),
++                        TextEntry::make('order.id')
++                            ->label('Order #')
++                            ->formatStateUsing(fn (int $state): string => "#{$state}"),
++                        TextEntry::make('order.user.full_name')
++                            ->label('Customer'),
++                        TextEntry::make('template.name')
++                            ->label('Template')
++                            ->placeholder('Deleted template'),
++                        TextEntry::make('method')
++                            ->badge(),
++                        TextEntry::make('frequency')
++                            ->badge(),
++                        TextEntry::make('total_amount')
++                            ->label('Total')
++                            ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
++                        TextEntry::make('number_of_installments')
++                            ->label('Installments'),
++                        TextEntry::make('stripe_customer_id')
++                            ->label('Stripe Customer')
++                            ->placeholder('N/A')
++                            ->copyable(),
++                        TextEntry::make('stripe_payment_method_id')
++                            ->label('Stripe Payment Method')
++                            ->placeholder('N/A')
++                            ->copyable(),
++                        TextEntry::make('created_at')
++                            ->label('Created')
++                            ->dateTime(),
++                    ]),
++                Section::make('Installments')
++                    ->schema([
++                        RepeatableEntry::make('installments')
++                            ->hiddenLabel()
++                            ->schema([
++                                TextEntry::make('installment_number')
++                                    ->label('#'),
++                                TextEntry::make('amount')
++                                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
++                                TextEntry::make('due_date')
++                                    ->label('Due Date')
++                                    ->date(),
++                                TextEntry::make('status')
++                                    ->badge()
++                                    ->color(fn (InstallmentStatus $state): string => match ($state) {
++                                        InstallmentStatus::Paid => 'success',
++                                        InstallmentStatus::Pending => 'warning',
++                                        InstallmentStatus::Failed => 'danger',
++                                        InstallmentStatus::Overdue => 'danger',
++                                    }),
++                                TextEntry::make('paid_at')
++                                    ->label('Paid At')
++                                    ->dateTime()
++                                    ->placeholder('—'),
++                                TextEntry::make('retry_count')
++                                    ->label('Retries'),
++                            ]),
++                    ]),
++            ]);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/PaymentPlans/Tables/PaymentPlansTable.php b/app/Filament/Admin/Resources/PaymentPlans/Tables/PaymentPlansTable.php
+new file mode 100644
+index 0000000..d9d4409
+--- /dev/null
++++ b/app/Filament/Admin/Resources/PaymentPlans/Tables/PaymentPlansTable.php
+@@ -0,0 +1,49 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\Admin\Resources\PaymentPlans\Tables;
++
++use App\Models\PaymentPlan;
++use Filament\Tables\Columns\TextColumn;
++use Filament\Tables\Table;
++
++final class PaymentPlansTable
++{
++    public static function configure(Table $table): Table
++    {
++        return $table
++            ->columns([
++                TextColumn::make('id')
++                    ->sortable(),
++                TextColumn::make('order.id')
++                    ->label('Order')
++                    ->formatStateUsing(fn (int $state): string => "#{$state}")
++                    ->sortable(),
++                TextColumn::make('order.user.full_name')
++                    ->label('Customer')
++                    ->searchable(['first_name', 'last_name']),
++                TextColumn::make('total_amount')
++                    ->label('Total')
++                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
++                    ->sortable(),
++                TextColumn::make('number_of_installments')
++                    ->label('Installments')
++                    ->sortable(),
++                TextColumn::make('frequency')
++                    ->badge(),
++                TextColumn::make('method')
++                    ->badge(),
++                TextColumn::make('paid_amount')
++                    ->label('Paid')
++                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->amountPaid() / 100, 2)),
++                TextColumn::make('remaining')
++                    ->label('Remaining')
++                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->remainingBalance() / 100, 2)),
++                TextColumn::make('created_at')
++                    ->dateTime()
++                    ->sortable()
++                    ->toggleable(isToggledHiddenByDefault: true),
++            ]);
++    }
++}
+diff --git a/app/Filament/Admin/Resources/Products/Schemas/ProductForm.php b/app/Filament/Admin/Resources/Products/Schemas/ProductForm.php
+index 2fe6dae..5172b36 100644
+--- a/app/Filament/Admin/Resources/Products/Schemas/ProductForm.php
++++ b/app/Filament/Admin/Resources/Products/Schemas/ProductForm.php
+@@ -4,7 +4,9 @@
+ 
+ namespace App\Filament\Admin\Resources\Products\Schemas;
+ 
++use App\Models\Costume;
+ use App\Models\Course;
++use App\Models\GiftCardType;
+ use Filament\Forms\Components\Select;
+ use Filament\Forms\Components\Textarea;
+ use Filament\Forms\Components\TextInput;
+@@ -37,13 +39,44 @@ public static function configure(Schema $schema): Schema
+                     ->label('Product Type')
+                     ->options([
+                         Course::class => 'Course',
++                        GiftCardType::class => 'Gift Card',
++                        Costume::class => 'Costume',
+                     ])
++                    ->placeholder('Standalone (no linked type)')
+                     ->reactive(),
+                 Select::make('productable_id')
+                     ->label('Linked Course')
+                     ->options(fn () => Course::query()->orderBy('name')->pluck('name', 'id'))
+                     ->searchable()
+                     ->visible(fn (callable $get): bool => $get('productable_type') === Course::class),
++                Select::make('costume_id')
++                    ->label('Linked Costume')
++                    ->options(fn () => Costume::query()->orderBy('name')->pluck('name', 'id'))
++                    ->searchable()
++                    ->visible(fn (callable $get): bool => $get('productable_type') === Costume::class)
++                    ->dehydrated(false)
++                    ->afterStateHydrated(function (Select $component, ?string $state, callable $get): void {
++                        if ($get('productable_type') === Costume::class) {
++                            $component->state($get('productable_id'));
++                        }
++                    })
++                    ->afterStateUpdated(function (callable $set, ?string $state): void {
++                        $set('productable_id', $state);
++                    }),
++                Select::make('gift_card_type_id')
++                    ->label('Linked Gift Card Type')
++                    ->options(fn () => GiftCardType::query()->orderBy('name')->pluck('name', 'id'))
++                    ->searchable()
++                    ->visible(fn (callable $get): bool => $get('productable_type') === GiftCardType::class)
++                    ->dehydrated(false)
++                    ->afterStateHydrated(function (Select $component, ?string $state, callable $get): void {
++                        if ($get('productable_type') === GiftCardType::class) {
++                            $component->state($get('productable_id'));
++                        }
++                    })
++                    ->afterStateUpdated(function (callable $set, ?string $state): void {
++                        $set('productable_id', $state);
++                    }),
+                 Select::make('requires_course_id')
+                     ->label('Requires Enrollment In')
+                     ->helperText('Only visible to users enrolled in this course.')
+@@ -54,7 +87,8 @@ public static function configure(Schema $schema): Schema
+                     )
+                     ->nullable()
+                     ->searchable()
+-                    ->preload(),
++                    ->preload()
++                    ->visible(fn (callable $get): bool => in_array($get('productable_type'), [Course::class, Costume::class], true)),
+             ]);
+     }
+ }
+diff --git a/app/Filament/User/Pages/Cart.php b/app/Filament/User/Pages/Cart.php
+index 1696e22..a8e3901 100644
+--- a/app/Filament/User/Pages/Cart.php
++++ b/app/Filament/User/Pages/Cart.php
+@@ -9,10 +9,13 @@
+ use App\Actions\Store\RedeemGiftCard;
+ use App\Actions\Store\RemoveFromCart;
+ use App\Actions\Store\UpdateCartQuantity;
++use App\Enums\PaymentPlanMethod;
+ use App\Models\CartItem;
+ use App\Models\DiscountCode;
++use App\Models\PaymentPlanTemplate;
+ use BackedEnum;
+ use Filament\Actions\Action;
++use Filament\Forms\Components\Select;
+ use Filament\Forms\Components\TextInput;
+ use Filament\Forms\Components\Toggle;
+ use Filament\Notifications\Notification;
+@@ -232,6 +235,40 @@ protected function getHeaderActions(): array
+ 
+                             return ($user->credit_balance ?? 0) > 0;
+                         }),
++                    Select::make('payment_plan_template_id')
++                        ->label('Payment Plan')
++                        ->placeholder('Pay in full')
++                        ->options(function (): array {
++                            $cartItems = CartItem::query()
++                                ->where('user_id', auth()->id())
++                                ->with('product')
++                                ->get();
++
++                            if ($cartItems->isEmpty()) {
++                                return [];
++                            }
++
++                            // Find templates that match any product in the cart
++                            $templates = PaymentPlanTemplate::query()
++                                ->active()
++                                ->get();
++
++                            $options = [];
++                            /** @var PaymentPlanTemplate $template */
++                            foreach ($templates as $template) {
++                                $options[$template->id] = "{$template->name} ({$template->number_of_installments} x {$template->frequency->getLabel()})";
++                            }
++
++                            return $options;
++                        })
++                        ->visible(fn (): bool => PaymentPlanTemplate::query()->active()->exists())
++                        ->reactive(),
++                    Select::make('payment_plan_method')
++                        ->label('Payment Plan Method')
++                        ->options(PaymentPlanMethod::class)
++                        ->default(PaymentPlanMethod::AutoCharge->value)
++                        ->visible(fn (callable $get): bool => $get('payment_plan_template_id') !== null)
++                        ->required(fn (callable $get): bool => $get('payment_plan_template_id') !== null),
+                 ])
+                 ->action(function (array $data): void {
+                     try {
+@@ -248,12 +285,22 @@ protected function getHeaderActions(): array
+                         $user = auth()->user();
+                         $creditToApply = ! empty($data['use_credit']) ? ($user->credit_balance ?? 0) : 0;
+ 
++                        $paymentPlanTemplate = ! empty($data['payment_plan_template_id'])
++                            ? PaymentPlanTemplate::query()->find($data['payment_plan_template_id'])
++                            : null;
++
++                        $paymentPlanMethod = ! empty($data['payment_plan_method'])
++                            ? PaymentPlanMethod::from($data['payment_plan_method'])
++                            : null;
++
+                         $checkoutUrl = $createCheckout->handle(
+                             $user,
+                             $successUrl,
+                             $cancelUrl,
+                             $discountCode,
+                             $creditToApply,
++                            $paymentPlanTemplate,
++                            $paymentPlanMethod,
+                         );
+ 
+                         $this->redirect($checkoutUrl);
+diff --git a/app/Filament/User/Pages/MyPaymentPlans.php b/app/Filament/User/Pages/MyPaymentPlans.php
+new file mode 100644
+index 0000000..02c22cd
+--- /dev/null
++++ b/app/Filament/User/Pages/MyPaymentPlans.php
+@@ -0,0 +1,177 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Filament\User\Pages;
++
++use App\Actions\Store\SwitchPaymentPlanMethod;
++use App\Enums\InstallmentStatus;
++use App\Enums\PaymentPlanMethod;
++use App\Models\PaymentPlan;
++use BackedEnum;
++use Filament\Actions\Action;
++use Filament\Forms\Components\Select;
++use Filament\Notifications\Notification;
++use Filament\Pages\Page;
++use Filament\Schemas\Components\EmbeddedTable;
++use Filament\Schemas\Schema;
++use Filament\Support\Icons\Heroicon;
++use Filament\Tables\Columns\TextColumn;
++use Filament\Tables\Concerns\InteractsWithTable;
++use Filament\Tables\Contracts\HasTable;
++use Filament\Tables\Table;
++use InvalidArgumentException;
++use Livewire\Attributes\Url;
++
++final class MyPaymentPlans extends Page implements HasTable
++{
++    use InteractsWithTable {
++        makeTable as makeBaseTable;
++    }
++
++    #[Url(as: 'reordering')]
++    public bool $isTableReordering = false;
++
++    /**
++     * @var array<string, mixed> | null
++     */
++    #[Url(as: 'filters')]
++    public ?array $tableFilters = null;
++
++    #[Url(as: 'grouping')]
++    public ?string $tableGrouping = null;
++
++    /**
++     * @var ?string
++     */
++    #[Url(as: 'search')]
++    public $tableSearch = '';
++
++    #[Url(as: 'sort')]
++    public ?string $tableSort = null;
++
++    protected static ?string $title = 'My Payment Plans';
++
++    protected static ?string $slug = 'payment-plans';
++
++    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
++
++    protected static ?int $navigationSort = 4;
++
++    public static function getNavigationBadge(): ?string
++    {
++        $count = PaymentPlan::query()
++            ->whereHas('order', fn ($q) => $q->where('user_id', auth()->id()))
++            ->whereHas('installments', fn ($q) => $q->where('status', InstallmentStatus::Pending))
++            ->count();
++
++        return $count > 0 ? (string) $count : null;
++    }
++
++    public static function getNavigationBadgeColor(): string
++    {
++        return 'warning';
++    }
++
++    public function content(Schema $schema): Schema
++    {
++        return $schema
++            ->components([
++                EmbeddedTable::make(),
++            ]);
++    }
++
++    protected function makeTable(): Table
++    {
++        return $this->makeBaseTable()
++            ->query(
++                PaymentPlan::query()
++                    ->whereHas('order', fn ($q) => $q->where('user_id', auth()->id()))
++                    ->with(['order', 'template', 'installments'])
++            )
++            ->columns([
++                TextColumn::make('order.id')
++                    ->label('Order')
++                    ->formatStateUsing(fn (int $state): string => "#{$state}")
++                    ->sortable(),
++                TextColumn::make('total_amount')
++                    ->label('Total')
++                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
++                    ->sortable(),
++                TextColumn::make('number_of_installments')
++                    ->label('Installments')
++                    ->sortable(),
++                TextColumn::make('frequency')
++                    ->label('Frequency')
++                    ->badge(),
++                TextColumn::make('method')
++                    ->label('Method')
++                    ->badge(),
++                TextColumn::make('amount_paid')
++                    ->label('Paid')
++                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->amountPaid() / 100, 2)),
++                TextColumn::make('remaining_balance')
++                    ->label('Remaining')
++                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->remainingBalance() / 100, 2)),
++                TextColumn::make('next_due')
++                    ->label('Next Due')
++                    ->state(function (PaymentPlan $record): string {
++                        /** @var \App\Models\Installment|null $nextInstallment */
++                        $nextInstallment = $record->installments
++                            ->where('status', InstallmentStatus::Pending)
++                            ->sortBy('due_date')
++                            ->first();
++
++                        if ($nextInstallment === null) {
++                            return $record->isFullyPaid() ? 'Fully Paid' : 'N/A';
++                        }
++
++                        return $nextInstallment->due_date->format('M j, Y');
++                    }),
++            ])
++            ->recordActions([
++                Action::make('switchMethod')
++                    ->label('Switch Method')
++                    ->icon(Heroicon::OutlinedArrowPath)
++                    ->visible(fn (PaymentPlan $record): bool => ! $record->isFullyPaid())
++                    ->form([
++                        Select::make('method')
++                            ->label('Payment Method')
++                            ->options(PaymentPlanMethod::class)
++                            ->required(),
++                    ])
++                    ->action(function (PaymentPlan $record, array $data): void {
++                        try {
++                            $switchMethod = new SwitchPaymentPlanMethod;
++                            $switchMethod->handle($record, PaymentPlanMethod::from($data['method']));
++
++                            Notification::make()
++                                ->title('Payment method updated')
++                                ->success()
++                                ->send();
++                        } catch (InvalidArgumentException $e) {
++                            Notification::make()
++                                ->title('Could not switch method')
++                                ->body($e->getMessage())
++                                ->danger()
++                                ->send();
++                        }
++                    }),
++                Action::make('viewInstallments')
++                    ->label('View Installments')
++                    ->icon(Heroicon::OutlinedEye)
++                    ->modalHeading(fn (PaymentPlan $record): string => "Installments for Order #{$record->order_id}")
++                    ->modalContent(function (PaymentPlan $record): \Illuminate\Contracts\View\View {
++                        $record->loadMissing('installments');
++
++                        return view('filament.user.pages.installments-modal', [
++                            'installments' => $record->installments->sortBy('installment_number'),
++                        ]);
++                    })
++                    ->modalSubmitAction(false)
++                    ->modalCancelActionLabel('Close'),
++            ])
++            ->emptyStateHeading('No payment plans')
++            ->emptyStateDescription('You don\'t have any active payment plans.');
++    }
++}
+diff --git a/app/Filament/User/Pages/Store.php b/app/Filament/User/Pages/Store.php
+index d196b1e..8641718 100644
+--- a/app/Filament/User/Pages/Store.php
++++ b/app/Filament/User/Pages/Store.php
+@@ -56,9 +56,9 @@ final class Store extends Page implements HasTable
+ 
+     protected static ?int $navigationSort = 1;
+ 
+-    protected ?string $heading = 'Course Store';
++    protected ?string $heading = 'Store';
+ 
+-    protected ?string $subheading = 'Browse available courses and add them to your cart.';
++    protected ?string $subheading = 'Browse available products and add them to your cart.';
+ 
+     public function content(Schema $schema): Schema
+     {
+diff --git a/app/Http/Controllers/StripeWebhookController.php b/app/Http/Controllers/StripeWebhookController.php
+index 3fd0ee7..8e154a9 100644
+--- a/app/Http/Controllers/StripeWebhookController.php
++++ b/app/Http/Controllers/StripeWebhookController.php
+@@ -5,12 +5,19 @@
+ namespace App\Http\Controllers;
+ 
+ use App\Actions\Store\CompleteOrder;
++use App\Actions\Store\CreatePaymentPlan;
+ use App\Contracts\StripeServiceContract;
++use App\Enums\InstallmentStatus;
+ use App\Enums\OrderStatus;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Installment;
+ use App\Models\Order;
++use App\Models\PaymentPlanTemplate;
++use Exception;
+ use Illuminate\Http\JsonResponse;
+ use Illuminate\Http\Request;
+ use Illuminate\Support\Facades\Log;
++use ReflectionProperty;
+ use Stripe\Exception\SignatureVerificationException;
+ 
+ final class StripeWebhookController
+@@ -38,6 +45,9 @@ public function __invoke(Request $request): JsonResponse
+         return match ($event->type) {
+             'checkout.session.completed' => $this->handleCheckoutSessionCompleted($event),
+             'payment_intent.payment_failed' => $this->handlePaymentIntentFailed($event),
++            'payment_intent.succeeded' => $this->handlePaymentIntentSucceeded($event),
++            'invoice.paid' => $this->handleInvoicePaid($event),
++            'invoice.payment_failed' => $this->handleInvoicePaymentFailed($event),
+             default => response()->json(['message' => 'Unhandled event type']),
+         };
+     }
+@@ -71,6 +81,55 @@ private function handleCheckoutSessionCompleted(\Stripe\Event $event): JsonRespo
+ 
+         $this->completeOrder->handle($order);
+ 
++        // Create payment plan if template metadata is present
++        $templateId = $session->metadata->payment_plan_template_id ?? null;
++        $methodValue = $session->metadata->payment_plan_method ?? null;
++
++        if ($templateId !== null && $methodValue !== null) {
++            $template = PaymentPlanTemplate::query()->find($templateId);
++            $method = PaymentPlanMethod::from($methodValue);
++
++            if ($template !== null) {
++                // Extract customer and payment method from the session
++                $stripeCustomerId = $session->customer ?? null;
++                $stripePaymentMethodId = null;
++
++                // Try to get the payment method from the payment intent
++                if ($session->payment_intent !== null) { // @phpstan-ignore property.notFound
++                    try {
++                        $stripeService = app(StripeServiceContract::class);
++                        /** @var \Stripe\StripeClient $client */
++                        $client = (new ReflectionProperty($stripeService, 'client'))->getValue($stripeService);
++                        $paymentIntent = $client->paymentIntents->retrieve($session->payment_intent);
++                        $stripePaymentMethodId = $paymentIntent->payment_method;
++                    } catch (Exception $e) {
++                        Log::warning("Could not retrieve payment method from payment intent: {$e->getMessage()}");
++                    }
++                }
++
++                // Save payment method to user
++                if ($stripePaymentMethodId !== null) {
++                    /** @var \App\Models\User $user */
++                    $user = $order->user;
++                    $user->update(['stripe_payment_method_id' => $stripePaymentMethodId]);
++                }
++
++                $createPaymentPlan = new CreatePaymentPlan;
++                $createPaymentPlan->handle(
++                    order: $order,
++                    template: $template,
++                    method: $method,
++                    stripeCustomerId: $stripeCustomerId,
++                    stripePaymentMethodId: $stripePaymentMethodId,
++                );
++
++                Log::info("Payment plan created for order #{$order->id}.", [
++                    'template_id' => $templateId,
++                    'method' => $methodValue,
++                ]);
++            }
++        }
++
+         return response()->json(['message' => 'Order processed']);
+     }
+ 
+@@ -92,4 +151,89 @@ private function handlePaymentIntentFailed(\Stripe\Event $event): JsonResponse
+ 
+         return response()->json(['message' => 'Payment failure handled']);
+     }
++
++    private function handlePaymentIntentSucceeded(\Stripe\Event $event): JsonResponse
++    {
++        $paymentIntent = $event->data->object;
++        $installmentId = $paymentIntent->metadata->installment_id ?? null;
++
++        if ($installmentId === null) {
++            return response()->json(['message' => 'No installment metadata, skipping']);
++        }
++
++        $installment = Installment::query()->find($installmentId);
++
++        if ($installment === null) {
++            Log::warning("Installment #{$installmentId} not found for payment_intent.succeeded.", [
++                'payment_intent_id' => $paymentIntent->id,
++            ]);
++
++            return response()->json(['error' => 'Installment not found'], 404);
++        }
++
++        if ($installment->status !== InstallmentStatus::Paid) {
++            $installment->markPaid(stripePaymentIntentId: $paymentIntent->id);
++            Log::info("Installment #{$installmentId} marked as paid via webhook.", [
++                'payment_intent_id' => $paymentIntent->id,
++            ]);
++        }
++
++        return response()->json(['message' => 'Installment payment processed']);
++    }
++
++    private function handleInvoicePaid(\Stripe\Event $event): JsonResponse
++    {
++        $invoice = $event->data->object;
++        $installmentId = $invoice->metadata->installment_id ?? null;
++
++        if ($installmentId === null) {
++            return response()->json(['message' => 'No installment metadata, skipping']);
++        }
++
++        $installment = Installment::query()->find($installmentId);
++
++        if ($installment === null) {
++            Log::warning("Installment #{$installmentId} not found for invoice.paid.", [
++                'invoice_id' => $invoice->id,
++            ]);
++
++            return response()->json(['error' => 'Installment not found'], 404);
++        }
++
++        if ($installment->status !== InstallmentStatus::Paid) {
++            $installment->markPaid(stripeInvoiceId: $invoice->id);
++            Log::info("Installment #{$installmentId} marked as paid via invoice.", [
++                'invoice_id' => $invoice->id,
++            ]);
++        }
++
++        return response()->json(['message' => 'Invoice payment processed']);
++    }
++
++    private function handleInvoicePaymentFailed(\Stripe\Event $event): JsonResponse
++    {
++        $invoice = $event->data->object;
++        $installmentId = $invoice->metadata->installment_id ?? null;
++
++        if ($installmentId === null) {
++            return response()->json(['message' => 'No installment metadata, skipping']);
++        }
++
++        $installment = Installment::query()->find($installmentId);
++
++        if ($installment === null) {
++            Log::warning("Installment #{$installmentId} not found for invoice.payment_failed.", [
++                'invoice_id' => $invoice->id,
++            ]);
++
++            return response()->json(['error' => 'Installment not found'], 404);
++        }
++
++        $installment->markFailed();
++        Log::info("Installment #{$installmentId} marked as failed via invoice payment failure.", [
++            'invoice_id' => $invoice->id,
++        ]);
++
++        return response()->json(['message' => 'Invoice payment failure handled']);
++    }
+ }
+diff --git a/app/Models/Costume.php b/app/Models/Costume.php
+new file mode 100644
+index 0000000..4e69d19
+--- /dev/null
++++ b/app/Models/Costume.php
+@@ -0,0 +1,24 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Models;
++
++use Illuminate\Database\Eloquent\Factories\HasFactory;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\MorphOne;
++
++final class Costume extends Model
++{
++    /** @use HasFactory<\Database\Factories\CostumeFactory> */
++    use HasFactory;
++
++    protected $casts = [
++        'id' => 'integer',
++    ];
++
++    public function product(): MorphOne
++    {
++        return $this->morphOne(Product::class, 'productable');
++    }
++}
+diff --git a/app/Models/Installment.php b/app/Models/Installment.php
+new file mode 100644
+index 0000000..7a792fd
+--- /dev/null
++++ b/app/Models/Installment.php
+@@ -0,0 +1,102 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Models;
++
++use App\Enums\InstallmentStatus;
++use Illuminate\Database\Eloquent\Builder;
++use Illuminate\Database\Eloquent\Factories\HasFactory;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsTo;
++
++final class Installment extends Model
++{
++    /** @use HasFactory<\Database\Factories\InstallmentFactory> */
++    use HasFactory;
++
++    protected $casts = [
++        'id' => 'integer',
++        'payment_plan_id' => 'integer',
++        'installment_number' => 'integer',
++        'amount' => 'integer',
++        'due_date' => 'date',
++        'status' => InstallmentStatus::class,
++        'paid_at' => 'datetime',
++        'retry_count' => 'integer',
++    ];
++
++    /** @return BelongsTo<PaymentPlan, $this> */
++    public function paymentPlan(): BelongsTo
++    {
++        return $this->belongsTo(PaymentPlan::class);
++    }
++
++    /**
++     * Scope to installments that are due (due date <= today and still pending).
++     */
++    public function scopeDue(Builder $query): void
++    {
++        $query->where('status', InstallmentStatus::Pending)
++            ->whereDate('due_date', '<=', now());
++    }
++
++    /**
++     * Scope to overdue installments.
++     */
++    public function scopeOverdue(Builder $query): void
++    {
++        $query->where('status', InstallmentStatus::Overdue);
++    }
++
++    /**
++     * Scope to installments that can be retried (failed with retry_count < 3).
++     */
++    public function scopeRetryable(Builder $query): void
++    {
++        $query->where('status', InstallmentStatus::Failed)
++            ->where('retry_count', '<', 3);
++    }
++
++    /**
++     * Mark this installment as paid.
++     */
++    public function markPaid(?string $stripePaymentIntentId = null, ?string $stripeInvoiceId = null): void
++    {
++        $data = [
++            'status' => InstallmentStatus::Paid,
++            'paid_at' => now(),
++        ];
++
++        if ($stripePaymentIntentId !== null) {
++            $data['stripe_payment_intent_id'] = $stripePaymentIntentId;
++        }
++
++        if ($stripeInvoiceId !== null) {
++            $data['stripe_invoice_id'] = $stripeInvoiceId;
++        }
++
++        $this->update($data);
++    }
++
++    /**
++     * Mark this installment as failed, incrementing the retry count.
++     * If retry count reaches 3, mark as overdue instead.
++     */
++    public function markFailed(): void
++    {
++        $newRetryCount = $this->retry_count + 1;
++
++        if ($newRetryCount >= 3) {
++            $this->update([
++                'status' => InstallmentStatus::Overdue,
++                'retry_count' => $newRetryCount,
++            ]);
++        } else {
++            $this->update([
++                'status' => InstallmentStatus::Failed,
++                'retry_count' => $newRetryCount,
++            ]);
++        }
++    }
++}
+diff --git a/app/Models/Order.php b/app/Models/Order.php
+index 9c19fae..07c878a 100644
+--- a/app/Models/Order.php
++++ b/app/Models/Order.php
+@@ -9,6 +9,7 @@
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Database\Eloquent\Relations\BelongsTo;
+ use Illuminate\Database\Eloquent\Relations\HasMany;
++use Illuminate\Database\Eloquent\Relations\HasOne;
+ 
+ final class Order extends Model
+ {
+@@ -41,6 +42,11 @@ public function orderItems(): HasMany
+         return $this->hasMany(OrderItem::class);
+     }
+ 
++    public function paymentPlan(): HasOne
++    {
++        return $this->hasOne(PaymentPlan::class);
++    }
++
+     /**
+      * Get the formatted subtotal in dollars.
+      */
+diff --git a/app/Models/OrderItem.php b/app/Models/OrderItem.php
+index ff827a8..a7fe134 100644
+--- a/app/Models/OrderItem.php
++++ b/app/Models/OrderItem.php
+@@ -4,6 +4,7 @@
+ 
+ namespace App\Models;
+ 
++use App\Enums\OrderItemStatus;
+ use Illuminate\Database\Eloquent\Factories\HasFactory;
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Database\Eloquent\Relations\BelongsTo;
+@@ -20,6 +21,7 @@ final class OrderItem extends Model
+         'quantity' => 'integer',
+         'unit_price' => 'integer',
+         'total_price' => 'integer',
++        'status' => OrderItemStatus::class,
+     ];
+ 
+     public function order(): BelongsTo
+@@ -27,6 +29,7 @@ public function order(): BelongsTo
+         return $this->belongsTo(Order::class);
+     }
+ 
++    /** @return BelongsTo<Product, $this> */
+     public function product(): BelongsTo
+     {
+         return $this->belongsTo(Product::class);
+@@ -47,4 +50,12 @@ public function formattedTotalPrice(): string
+     {
+         return '$'.number_format($this->total_price / 100, 2);
+     }
++
++    /**
++     * Mark this order item as fulfilled.
++     */
++    public function markFulfilled(): void
++    {
++        $this->update(['status' => OrderItemStatus::Fulfilled]);
++    }
+ }
+diff --git a/app/Models/PaymentPlan.php b/app/Models/PaymentPlan.php
+new file mode 100644
+index 0000000..94f6f77
+--- /dev/null
++++ b/app/Models/PaymentPlan.php
+@@ -0,0 +1,73 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Models;
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\PaymentPlanMethod;
++use Illuminate\Database\Eloquent\Factories\HasFactory;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\BelongsTo;
++use Illuminate\Database\Eloquent\Relations\HasMany;
++
++final class PaymentPlan extends Model
++{
++    /** @use HasFactory<\Database\Factories\PaymentPlanFactory> */
++    use HasFactory;
++
++    protected $casts = [
++        'id' => 'integer',
++        'order_id' => 'integer',
++        'payment_plan_template_id' => 'integer',
++        'method' => PaymentPlanMethod::class,
++        'total_amount' => 'integer',
++        'number_of_installments' => 'integer',
++        'frequency' => PaymentPlanFrequency::class,
++    ];
++
++    /** @return BelongsTo<Order, $this> */
++    public function order(): BelongsTo
++    {
++        return $this->belongsTo(Order::class);
++    }
++
++    /** @return BelongsTo<PaymentPlanTemplate, $this> */
++    public function template(): BelongsTo
++    {
++        return $this->belongsTo(PaymentPlanTemplate::class, 'payment_plan_template_id');
++    }
++
++    public function installments(): HasMany
++    {
++        return $this->hasMany(Installment::class);
++    }
++
++    /**
++     * Check if all installments have been paid.
++     */
++    public function isFullyPaid(): bool
++    {
++        return $this->installments()
++            ->where('status', '!=', \App\Enums\InstallmentStatus::Paid->value)
++            ->doesntExist();
++    }
++
++    /**
++     * Get the total amount paid so far.
++     */
++    public function amountPaid(): int
++    {
++        return (int) $this->installments()
++            ->where('status', \App\Enums\InstallmentStatus::Paid->value)
++            ->sum('amount');
++    }
++
++    /**
++     * Get the remaining balance.
++     */
++    public function remainingBalance(): int
++    {
++        return $this->total_amount - $this->amountPaid();
++    }
++}
+diff --git a/app/Models/PaymentPlanTemplate.php b/app/Models/PaymentPlanTemplate.php
+new file mode 100644
+index 0000000..fd6e9d1
+--- /dev/null
++++ b/app/Models/PaymentPlanTemplate.php
+@@ -0,0 +1,73 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Models;
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\ProductType;
++use Illuminate\Database\Eloquent\Builder;
++use Illuminate\Database\Eloquent\Factories\HasFactory;
++use Illuminate\Database\Eloquent\Model;
++use Illuminate\Database\Eloquent\Relations\HasMany;
++
++final class PaymentPlanTemplate extends Model
++{
++    /** @use HasFactory<\Database\Factories\PaymentPlanTemplateFactory> */
++    use HasFactory;
++
++    protected $casts = [
++        'id' => 'integer',
++        'product_type' => ProductType::class,
++        'min_price' => 'integer',
++        'max_price' => 'integer',
++        'number_of_installments' => 'integer',
++        'frequency' => PaymentPlanFrequency::class,
++        'is_active' => 'boolean',
++    ];
++
++    public function paymentPlans(): HasMany
++    {
++        return $this->hasMany(PaymentPlan::class);
++    }
++
++    /**
++     * Scope to only include active templates.
++     */
++    public function scopeActive(Builder $query): void
++    {
++        $query->where('is_active', true);
++    }
++
++    /**
++     * Scope to templates matching a given product (by morph type and price).
++     */
++    public function scopeForProduct(Builder $query, ?string $productableType, int $price): void
++    {
++        $productType = ProductType::fromProductableType($productableType);
++
++        $query->where(function (Builder $q) use ($productType): void {
++            $q->where('product_type', ProductType::Any)
++                ->orWhere('product_type', $productType);
++        })
++            ->where('min_price', '<=', $price)
++            ->where('max_price', '>=', $price);
++    }
++
++    /**
++     * Calculate the installment amount (in cents) for a given total.
++     * First installment absorbs the rounding remainder.
++     *
++     * @return array{first: int, remaining: int}
++     */
++    public function installmentAmounts(int $total): array
++    {
++        $baseAmount = intdiv($total, $this->number_of_installments);
++        $remainder = $total - ($baseAmount * $this->number_of_installments);
++
++        return [
++            'first' => $baseAmount + $remainder,
++            'remaining' => $baseAmount,
++        ];
++    }
++}
+diff --git a/app/Models/User.php b/app/Models/User.php
+index cdb3484..568f851 100644
+--- a/app/Models/User.php
++++ b/app/Models/User.php
+@@ -15,6 +15,7 @@
+ use Illuminate\Database\Eloquent\Model;
+ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+ use Illuminate\Database\Eloquent\Relations\HasMany;
++use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+ use Illuminate\Database\Eloquent\Relations\MorphMany;
+ use Illuminate\Foundation\Auth\User as Authenticatable;
+ use Illuminate\Notifications\Notifiable;
+@@ -92,6 +93,11 @@ public function orders(): HasMany
+         return $this->hasMany(Order::class);
+     }
+ 
++    public function paymentPlans(): HasManyThrough
++    {
++        return $this->hasManyThrough(PaymentPlan::class, Order::class);
++    }
++
+     public function cartItems(): HasMany
+     {
+         return $this->hasMany(CartItem::class);
+diff --git a/app/Services/StripeService.php b/app/Services/StripeService.php
+index 3faa7be..ebc8b55 100644
+--- a/app/Services/StripeService.php
++++ b/app/Services/StripeService.php
+@@ -10,6 +10,8 @@
+ use Stripe\Customer;
+ use Stripe\Event;
+ use Stripe\Exception\SignatureVerificationException;
++use Stripe\Invoice;
++use Stripe\PaymentIntent;
+ use Stripe\Refund;
+ use Stripe\StripeClient;
+ use Stripe\Webhook;
+@@ -49,17 +51,26 @@ public function createCheckoutSession(
+         string $successUrl,
+         string $cancelUrl,
+         array $metadata = [],
++        bool $setupFutureUsage = false,
+     ): CheckoutSession {
+         $customer = $this->createOrGetCustomer($user);
+ 
+-        return $this->client->checkout->sessions->create([
++        $params = [
+             'customer' => $customer->id,
+             'line_items' => $lineItems,
+             'mode' => 'payment',
+             'success_url' => $successUrl,
+             'cancel_url' => $cancelUrl,
+             'metadata' => $metadata,
+-        ]);
++        ];
++
++        if ($setupFutureUsage) {
++            $params['payment_intent_data'] = [
++                'setup_future_usage' => 'off_session',
++            ];
++        }
++
++        return $this->client->checkout->sessions->create($params);
+     }
+ 
+     /**
+@@ -84,4 +95,55 @@ public function refundPaymentIntent(string $paymentIntentId, ?int $amount = null
+ 
+         return $this->client->refunds->create($params);
+     }
++
++    /**
++     * @param  array<string, string>  $metadata
++     */
++    public function chargePaymentMethod(
++        string $customerId,
++        string $paymentMethodId,
++        int $amount,
++        string $description = '',
++        array $metadata = [],
++    ): PaymentIntent {
++        return $this->client->paymentIntents->create([
++            'customer' => $customerId,
++            'payment_method' => $paymentMethodId,
++            'amount' => $amount,
++            'currency' => 'usd',
++            'description' => $description,
++            'metadata' => $metadata,
++            'off_session' => true,
++            'confirm' => true,
++        ]);
++    }
++
++    /**
++     * @param  array<string, string>  $metadata
++     */
++    public function createAndSendInvoice(
++        string $customerId,
++        int $amount,
++        string $description = '',
++        array $metadata = [],
++    ): Invoice {
++        // Create an invoice item
++        $this->client->invoiceItems->create([
++            'customer' => $customerId,
++            'amount' => $amount,
++            'currency' => 'usd',
++            'description' => $description,
++        ]);
++
++        // Create and send the invoice
++        $invoice = $this->client->invoices->create([
++            'customer' => $customerId,
++            'auto_advance' => true,
++            'collection_method' => 'send_invoice',
++            'days_until_due' => 7,
++            'metadata' => $metadata,
++        ]);
++
++        return $this->client->invoices->sendInvoice($invoice->id);
++    }
+ }
+diff --git a/database/factories/CostumeFactory.php b/database/factories/CostumeFactory.php
+new file mode 100644
+index 0000000..ef1b743
+--- /dev/null
++++ b/database/factories/CostumeFactory.php
+@@ -0,0 +1,25 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Database\Factories;
++
++use Illuminate\Database\Eloquent\Factories\Factory;
++
++/**
++ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Costume>
++ */
++final class CostumeFactory extends Factory
++{
++    /**
++     * Define the model's default state.
++     *
++     * @return array<string, mixed>
++     */
++    public function definition(): array
++    {
++        return [
++            'name' => fake()->words(2, true).' costume',
++        ];
++    }
++}
+diff --git a/database/factories/InstallmentFactory.php b/database/factories/InstallmentFactory.php
+new file mode 100644
+index 0000000..19a603a
+--- /dev/null
++++ b/database/factories/InstallmentFactory.php
+@@ -0,0 +1,90 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Database\Factories;
++
++use App\Enums\InstallmentStatus;
++use App\Models\Installment;
++use App\Models\PaymentPlan;
++use Illuminate\Database\Eloquent\Factories\Factory;
++
++/**
++ * @extends Factory<Installment>
++ */
++final class InstallmentFactory extends Factory
++{
++    /**
++     * Define the model's default state.
++     *
++     * @return array<string, mixed>
++     */
++    public function definition(): array
++    {
++        return [
++            'payment_plan_id' => PaymentPlan::factory(),
++            'installment_number' => 1,
++            'amount' => 3334,
++            'due_date' => now()->addMonth(),
++            'status' => InstallmentStatus::Pending,
++            'paid_at' => null,
++            'stripe_payment_intent_id' => null,
++            'stripe_invoice_id' => null,
++            'retry_count' => 0,
++        ];
++    }
++
++    /**
++     * Mark as paid.
++     */
++    public function paid(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'status' => InstallmentStatus::Paid,
++            'paid_at' => now(),
++            'stripe_payment_intent_id' => 'pi_test_'.fake()->uuid(),
++        ]);
++    }
++
++    /**
++     * Mark as failed.
++     */
++    public function failed(int $retryCount = 1): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'status' => InstallmentStatus::Failed,
++            'retry_count' => $retryCount,
++        ]);
++    }
++
++    /**
++     * Mark as overdue.
++     */
++    public function overdue(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'status' => InstallmentStatus::Overdue,
++            'retry_count' => 3,
++        ]);
++    }
++
++    /**
++     * Make due today.
++     */
++    public function dueToday(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'due_date' => now()->toDateString(),
++        ]);
++    }
++
++    /**
++     * Make due in the past.
++     */
++    public function pastDue(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'due_date' => now()->subDays(5)->toDateString(),
++        ]);
++    }
++}
+diff --git a/database/factories/OrderItemFactory.php b/database/factories/OrderItemFactory.php
+index 211d783..94ec7c3 100644
+--- a/database/factories/OrderItemFactory.php
++++ b/database/factories/OrderItemFactory.php
+@@ -4,6 +4,7 @@
+ 
+ namespace Database\Factories;
+ 
++use App\Enums\OrderItemStatus;
+ use App\Models\Order;
+ use App\Models\OrderItem;
+ use App\Models\Product;
+@@ -30,6 +31,17 @@ public function definition(): array
+             'quantity' => $quantity,
+             'unit_price' => $unitPrice,
+             'total_price' => $unitPrice * $quantity,
++            'status' => OrderItemStatus::Pending,
+         ];
+     }
++
++    /**
++     * Mark the order item as fulfilled.
++     */
++    public function fulfilled(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'status' => OrderItemStatus::Fulfilled,
++        ]);
++    }
+ }
+diff --git a/database/factories/PaymentPlanFactory.php b/database/factories/PaymentPlanFactory.php
+new file mode 100644
+index 0000000..6ca02b9
+--- /dev/null
++++ b/database/factories/PaymentPlanFactory.php
+@@ -0,0 +1,48 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Database\Factories;
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Order;
++use App\Models\PaymentPlan;
++use App\Models\PaymentPlanTemplate;
++use Illuminate\Database\Eloquent\Factories\Factory;
++
++/**
++ * @extends Factory<PaymentPlan>
++ */
++final class PaymentPlanFactory extends Factory
++{
++    /**
++     * Define the model's default state.
++     *
++     * @return array<string, mixed>
++     */
++    public function definition(): array
++    {
++        return [
++            'order_id' => Order::factory(),
++            'payment_plan_template_id' => PaymentPlanTemplate::factory(),
++            'method' => PaymentPlanMethod::AutoCharge,
++            'total_amount' => 10000,
++            'number_of_installments' => 3,
++            'frequency' => PaymentPlanFrequency::Monthly,
++            'stripe_customer_id' => 'cus_test_'.fake()->uuid(),
++            'stripe_payment_method_id' => 'pm_test_'.fake()->uuid(),
++        ];
++    }
++
++    /**
++     * Use manual invoice method.
++     */
++    public function manualInvoice(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'method' => PaymentPlanMethod::ManualInvoice,
++            'stripe_payment_method_id' => null,
++        ]);
++    }
++}
+diff --git a/database/factories/PaymentPlanTemplateFactory.php b/database/factories/PaymentPlanTemplateFactory.php
+new file mode 100644
+index 0000000..0625066
+--- /dev/null
++++ b/database/factories/PaymentPlanTemplateFactory.php
+@@ -0,0 +1,64 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Database\Factories;
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\ProductType;
++use App\Models\PaymentPlanTemplate;
++use Illuminate\Database\Eloquent\Factories\Factory;
++
++/**
++ * @extends Factory<PaymentPlanTemplate>
++ */
++final class PaymentPlanTemplateFactory extends Factory
++{
++    /**
++     * Define the model's default state.
++     *
++     * @return array<string, mixed>
++     */
++    public function definition(): array
++    {
++        return [
++            'name' => fake()->words(3, true).' Plan',
++            'product_type' => ProductType::Any,
++            'min_price' => 5000,
++            'max_price' => 50000,
++            'number_of_installments' => 3,
++            'frequency' => PaymentPlanFrequency::Monthly,
++            'is_active' => true,
++        ];
++    }
++
++    /**
++     * Mark the template as inactive.
++     */
++    public function inactive(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'is_active' => false,
++        ]);
++    }
++
++    /**
++     * Set the template for a specific product type.
++     */
++    public function forProductType(ProductType $type): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'product_type' => $type,
++        ]);
++    }
++
++    /**
++     * Set the frequency.
++     */
++    public function frequency(PaymentPlanFrequency $frequency): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'frequency' => $frequency,
++        ]);
++    }
++}
+diff --git a/database/factories/ProductFactory.php b/database/factories/ProductFactory.php
+index 40e20d7..10576ae 100644
+--- a/database/factories/ProductFactory.php
++++ b/database/factories/ProductFactory.php
+@@ -4,6 +4,7 @@
+ 
+ namespace Database\Factories;
+ 
++use App\Models\Costume;
+ use App\Models\Course;
+ use App\Models\GiftCardType;
+ use App\Models\Product;
+@@ -74,4 +75,31 @@ public function inactive(): static
+             'is_active' => false,
+         ]);
+     }
++
++    /**
++     * Create a product linked to a Costume.
++     */
++    public function forCostume(?Costume $costume = null): static
++    {
++        return $this->state(function (array $attributes) use ($costume): array {
++            $costume ??= Costume::factory()->create();
++
++            return [
++                'name' => $costume->name,
++                'productable_type' => Costume::class,
++                'productable_id' => $costume->id,
++            ];
++        });
++    }
++
++    /**
++     * Create a standalone product (no productable morph).
++     */
++    public function standalone(): static
++    {
++        return $this->state(fn (array $attributes): array => [
++            'productable_type' => null,
++            'productable_id' => null,
++        ]);
++    }
+ }
+diff --git a/database/migrations/2026_02_26_210954_create_costumes_table.php b/database/migrations/2026_02_26_210954_create_costumes_table.php
+new file mode 100644
+index 0000000..e9220c8
+--- /dev/null
++++ b/database/migrations/2026_02_26_210954_create_costumes_table.php
+@@ -0,0 +1,19 @@
++<?php
++
++declare(strict_types=1);
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class() extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('costumes', function (Blueprint $table) {
++            $table->id();
++            $table->string('name');
++            $table->timestamps();
++        });
++    }
++};
+diff --git a/database/migrations/2026_02_26_211132_add_status_to_order_items_table.php b/database/migrations/2026_02_26_211132_add_status_to_order_items_table.php
+new file mode 100644
+index 0000000..eec6ed2
+--- /dev/null
++++ b/database/migrations/2026_02_26_211132_add_status_to_order_items_table.php
+@@ -0,0 +1,17 @@
++<?php
++
++declare(strict_types=1);
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class() extends Migration
++{
++    public function up(): void
++    {
++        Schema::table('order_items', function (Blueprint $table) {
++            $table->string('status')->default('Pending')->after('total_price');
++        });
++    }
++};
+diff --git a/database/migrations/2026_02_27_000001_create_payment_plan_templates_table.php b/database/migrations/2026_02_27_000001_create_payment_plan_templates_table.php
+new file mode 100644
+index 0000000..546c390
+--- /dev/null
++++ b/database/migrations/2026_02_27_000001_create_payment_plan_templates_table.php
+@@ -0,0 +1,25 @@
++<?php
++
++declare(strict_types=1);
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class() extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('payment_plan_templates', function (Blueprint $table) {
++            $table->id();
++            $table->string('name');
++            $table->string('product_type');
++            $table->unsignedInteger('min_price');
++            $table->unsignedInteger('max_price');
++            $table->unsignedSmallInteger('number_of_installments');
++            $table->string('frequency');
++            $table->boolean('is_active')->default(true);
++            $table->timestamps();
++        });
++    }
++};
+diff --git a/database/migrations/2026_02_27_000002_create_payment_plans_table.php b/database/migrations/2026_02_27_000002_create_payment_plans_table.php
+new file mode 100644
+index 0000000..33b93fd
+--- /dev/null
++++ b/database/migrations/2026_02_27_000002_create_payment_plans_table.php
+@@ -0,0 +1,26 @@
++<?php
++
++declare(strict_types=1);
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class() extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('payment_plans', function (Blueprint $table) {
++            $table->id();
++            $table->foreignId('order_id')->constrained()->cascadeOnDelete();
++            $table->foreignId('payment_plan_template_id')->nullable()->constrained()->nullOnDelete();
++            $table->string('method');
++            $table->unsignedInteger('total_amount');
++            $table->unsignedSmallInteger('number_of_installments');
++            $table->string('frequency');
++            $table->string('stripe_customer_id')->nullable();
++            $table->string('stripe_payment_method_id')->nullable();
++            $table->timestamps();
++        });
++    }
++};
+diff --git a/database/migrations/2026_02_27_000003_create_installments_table.php b/database/migrations/2026_02_27_000003_create_installments_table.php
+new file mode 100644
+index 0000000..83a0782
+--- /dev/null
++++ b/database/migrations/2026_02_27_000003_create_installments_table.php
+@@ -0,0 +1,27 @@
++<?php
++
++declare(strict_types=1);
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class() extends Migration
++{
++    public function up(): void
++    {
++        Schema::create('installments', function (Blueprint $table) {
++            $table->id();
++            $table->foreignId('payment_plan_id')->constrained()->cascadeOnDelete();
++            $table->unsignedSmallInteger('installment_number');
++            $table->unsignedInteger('amount');
++            $table->date('due_date');
++            $table->string('status')->default('Pending');
++            $table->timestamp('paid_at')->nullable();
++            $table->string('stripe_payment_intent_id')->nullable();
++            $table->string('stripe_invoice_id')->nullable();
++            $table->unsignedSmallInteger('retry_count')->default(0);
++            $table->timestamps();
++        });
++    }
++};
+diff --git a/database/migrations/2026_02_27_000004_add_stripe_payment_method_id_to_users_table.php b/database/migrations/2026_02_27_000004_add_stripe_payment_method_id_to_users_table.php
+new file mode 100644
+index 0000000..9c92093
+--- /dev/null
++++ b/database/migrations/2026_02_27_000004_add_stripe_payment_method_id_to_users_table.php
+@@ -0,0 +1,17 @@
++<?php
++
++declare(strict_types=1);
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class() extends Migration
++{
++    public function up(): void
++    {
++        Schema::table('users', function (Blueprint $table) {
++            $table->string('stripe_payment_method_id')->nullable()->after('stripe_id');
++        });
++    }
++};
+diff --git a/resources/views/filament/user/pages/installments-modal.blade.php b/resources/views/filament/user/pages/installments-modal.blade.php
+new file mode 100644
+index 0000000..6f85cc4
+--- /dev/null
++++ b/resources/views/filament/user/pages/installments-modal.blade.php
+@@ -0,0 +1,34 @@
++<div class="space-y-2">
++    <table class="w-full text-sm">
++        <thead>
++            <tr class="border-b">
++                <th class="text-left py-2 px-1">#</th>
++                <th class="text-left py-2 px-1">Amount</th>
++                <th class="text-left py-2 px-1">Due Date</th>
++                <th class="text-left py-2 px-1">Status</th>
++                <th class="text-left py-2 px-1">Paid At</th>
++            </tr>
++        </thead>
++        <tbody>
++            @foreach ($installments as $installment)
++                <tr class="border-b">
++                    <td class="py-2 px-1">{{ $installment->installment_number }}</td>
++                    <td class="py-2 px-1">${{ number_format($installment->amount / 100, 2) }}</td>
++                    <td class="py-2 px-1">{{ $installment->due_date->format('M j, Y') }}</td>
++                    <td class="py-2 px-1">
++                        <span @class([
++                            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset',
++                            'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-400/10 dark:text-green-400 dark:ring-green-400/20' => $installment->status === \App\Enums\InstallmentStatus::Paid,
++                            'bg-yellow-50 text-yellow-700 ring-yellow-600/20 dark:bg-yellow-400/10 dark:text-yellow-500 dark:ring-yellow-400/20' => $installment->status === \App\Enums\InstallmentStatus::Pending,
++                            'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-400/10 dark:text-red-400 dark:ring-red-400/20' => $installment->status === \App\Enums\InstallmentStatus::Failed,
++                            'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-400/10 dark:text-orange-400 dark:ring-orange-400/20' => $installment->status === \App\Enums\InstallmentStatus::Overdue,
++                        ])>
++                            {{ $installment->status->getLabel() }}
++                        </span>
++                    </td>
++                    <td class="py-2 px-1">{{ $installment->paid_at?->format('M j, Y') ?? '—' }}</td>
++                </tr>
++            @endforeach
++        </tbody>
++    </table>
++</div>
+diff --git a/routes/console.php b/routes/console.php
+index c428e20..411e9b3 100644
+--- a/routes/console.php
++++ b/routes/console.php
+@@ -2,9 +2,18 @@
+ 
+ declare(strict_types=1);
+ 
++use App\Actions\Store\ProcessInstallments;
+ use Illuminate\Foundation\Inspiring;
+ use Illuminate\Support\Facades\Artisan;
++use Illuminate\Support\Facades\Schedule;
+ 
+ Artisan::command('inspire', function () {
+     $this->comment(Inspiring::quote());
+ })->purpose('Display an inspiring quote');
++
++Schedule::call(function (): void {
++    $processInstallments = app(ProcessInstallments::class);
++    $result = $processInstallments->handle();
++
++    info('ProcessInstallments completed.', $result);
++})->daily()->name('process-installments')->description('Process due and retryable payment plan installments');
+diff --git a/tests/Feature/Actions/Store/CheckoutTest.php b/tests/Feature/Actions/Store/CheckoutTest.php
+index 57d1532..8a4d770 100644
+--- a/tests/Feature/Actions/Store/CheckoutTest.php
++++ b/tests/Feature/Actions/Store/CheckoutTest.php
+@@ -5,8 +5,11 @@
+ use App\Actions\Store\CreateCheckoutSession;
+ use App\Contracts\StripeServiceContract;
+ use App\Enums\CreditTransactionType;
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
++use App\Enums\PaymentPlanMethod;
+ use App\Models\CartItem;
++use App\Models\Costume;
+ use App\Models\Course;
+ use App\Models\CreditTransaction;
+ use App\Models\DiscountCode;
+@@ -15,6 +18,7 @@
+ use App\Models\GiftCardType;
+ use App\Models\Order;
+ use App\Models\OrderItem;
++use App\Models\PaymentPlanTemplate;
+ use App\Models\Product;
+ use App\Models\User;
+ use Stripe\Checkout\Session as StripeSession;
+@@ -386,3 +390,200 @@
+         ->and($giftCard->remaining_amount)->toBe(5000)
+         ->and($giftCard->is_active)->toBeTrue();
+ });
++
++it('leaves costume order items as pending in zero total order', function () {
++    $costume = Costume::factory()->create();
++    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
++
++    CartItem::factory()->create([
++        'user_id' => $this->user->id,
++        'product_id' => $costumeProduct->id,
++        'quantity' => 1,
++    ]);
++
++    $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldNotReceive('createCheckoutSession');
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CreateCheckoutSession::class);
++    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
++
++    $order = Order::query()->where('user_id', $this->user->id)->first();
++    expect($order->status)->toBe(OrderStatus::Completed);
++
++    $orderItem = OrderItem::query()->where('order_id', $order->id)->first();
++    expect($orderItem->status)->toBe(OrderItemStatus::Pending);
++});
++
++it('leaves standalone order items as pending in zero total order', function () {
++    $standaloneProduct = Product::factory()->standalone()->create(['price' => 2000]);
++
++    CartItem::factory()->create([
++        'user_id' => $this->user->id,
++        'product_id' => $standaloneProduct->id,
++        'quantity' => 1,
++    ]);
++
++    $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldNotReceive('createCheckoutSession');
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CreateCheckoutSession::class);
++    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
++
++    $order = Order::query()->where('user_id', $this->user->id)->first();
++    expect($order->status)->toBe(OrderStatus::Completed);
++
++    $orderItem = OrderItem::query()->where('order_id', $order->id)->first();
++    expect($orderItem->status)->toBe(OrderItemStatus::Pending);
++});
++
++it('marks course items fulfilled and leaves costume items pending in mixed zero total order', function () {
++    $costume = Costume::factory()->create();
++    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
++
++    CartItem::factory()->create([
++        'user_id' => $this->user->id,
++        'product_id' => $this->product->id,
++        'quantity' => 1,
++    ]);
++
++    CartItem::factory()->create([
++        'user_id' => $this->user->id,
++        'product_id' => $costumeProduct->id,
++        'quantity' => 1,
++    ]);
++
++    $discountCode = DiscountCode::factory()->fixedAmount(20000)->create();
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldNotReceive('createCheckoutSession');
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CreateCheckoutSession::class);
++    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
++
++    $order = Order::query()->where('user_id', $this->user->id)->first();
++    expect($order->status)->toBe(OrderStatus::Completed);
++
++    $courseOrderItem = OrderItem::query()
++        ->where('order_id', $order->id)
++        ->where('product_id', $this->product->id)
++        ->first();
++    expect($courseOrderItem->status)->toBe(OrderItemStatus::Fulfilled);
++
++    $costumeOrderItem = OrderItem::query()
++        ->where('order_id', $order->id)
++        ->where('product_id', $costumeProduct->id)
++        ->first();
++    expect($costumeOrderItem->status)->toBe(OrderItemStatus::Pending);
++
++    // Course enrollment should exist
++    expect(Enrollment::query()->where('course_id', $this->course->id)->count())->toBe(1);
++});
++
++it('creates checkout session with payment plan charging first installment only', function () {
++    CartItem::factory()->create([
++        'user_id' => $this->user->id,
++        'product_id' => $this->product->id,
++        'quantity' => 2,
++    ]);
++
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++        'min_price' => 1000,
++        'max_price' => 50000,
++    ]);
++
++    $mockSession = StripeSession::constructFrom([
++        'id' => 'cs_test_plan',
++        'url' => 'https://checkout.stripe.com/plan',
++    ]);
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('createCheckoutSession')
++        ->once()
++        ->withArgs(function ($user, $lineItems, $successUrl, $cancelUrl, $metadata, $setupFutureUsage) use ($template) {
++            // First installment of 10000 split 3 ways: 3334 + 3333 + 3333
++            expect($lineItems)->toHaveCount(1)
++                ->and($lineItems[0]['price_data']['unit_amount'])->toBe(3334)
++                ->and($lineItems[0]['quantity'])->toBe(1)
++                ->and($lineItems[0]['price_data']['product_data']['name'])->toContain('Installment 1 of 3')
++                ->and($metadata['payment_plan_template_id'])->toBe((string) $template->id)
++                ->and($metadata['payment_plan_method'])->toBe(PaymentPlanMethod::AutoCharge->value)
++                ->and($setupFutureUsage)->toBeTrue();
++
++            return true;
++        })
++        ->andReturn($mockSession);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CreateCheckoutSession::class);
++    $url = $action->handle(
++        $this->user,
++        'https://example.com/success',
++        'https://example.com/cancel',
++        paymentPlanTemplate: $template,
++        paymentPlanMethod: PaymentPlanMethod::AutoCharge,
++    );
++
++    expect($url)->toBe('https://checkout.stripe.com/plan');
++
++    // Full order total should still be 10000
++    $order = Order::query()->where('user_id', $this->user->id)->first();
++    expect($order->total)->toBe(10000);
++});
++
++it('combines discount code with payment plan', function () {
++    CartItem::factory()->create([
++        'user_id' => $this->user->id,
++        'product_id' => $this->product->id,
++        'quantity' => 2,
++    ]);
++
++    $discountCode = DiscountCode::factory()->percentage(20)->create(); // 20% of 10000 = 2000 off
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 4,
++        'min_price' => 1000,
++        'max_price' => 50000,
++    ]);
++
++    $mockSession = StripeSession::constructFrom([
++        'id' => 'cs_test_plan_disc',
++        'url' => 'https://checkout.stripe.com/plan_disc',
++    ]);
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('createCheckoutSession')
++        ->once()
++        ->withArgs(function ($user, $lineItems, $successUrl, $cancelUrl, $metadata, $setupFutureUsage) {
++            // Total after discount: 8000. First installment of 4: 2000 each, no remainder
++            expect($lineItems[0]['price_data']['unit_amount'])->toBe(2000)
++                ->and($setupFutureUsage)->toBeTrue();
++
++            return true;
++        })
++        ->andReturn($mockSession);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CreateCheckoutSession::class);
++    $action->handle(
++        $this->user,
++        'https://example.com/success',
++        'https://example.com/cancel',
++        $discountCode,
++        paymentPlanTemplate: $template,
++        paymentPlanMethod: PaymentPlanMethod::ManualInvoice,
++    );
++
++    $order = Order::query()->where('user_id', $this->user->id)->first();
++    expect($order->subtotal)->toBe(10000)
++        ->and($order->discount_amount)->toBe(2000)
++        ->and($order->total)->toBe(8000);
++});
+diff --git a/tests/Feature/Actions/Store/CompleteOrderTest.php b/tests/Feature/Actions/Store/CompleteOrderTest.php
+index cdd9367..854ba2d 100644
+--- a/tests/Feature/Actions/Store/CompleteOrderTest.php
++++ b/tests/Feature/Actions/Store/CompleteOrderTest.php
+@@ -4,7 +4,9 @@
+ 
+ use App\Actions\Store\CompleteOrder;
+ use App\Contracts\StripeServiceContract;
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
++use App\Models\Costume;
+ use App\Models\Course;
+ use App\Models\Enrollment;
+ use App\Models\GiftCard;
+@@ -229,3 +231,144 @@
+             ->and($gc->order_id)->toBe($order->id);
+     }
+ });
++
++it('marks course order items as fulfilled after completion', function () {
++    $order = Order::factory()->create([
++        'user_id' => $this->user->id,
++        'status' => OrderStatus::Pending,
++        'subtotal' => 5000,
++        'total' => 5000,
++    ]);
++
++    $orderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $this->product->id,
++        'quantity' => 1,
++        'unit_price' => 5000,
++        'total_price' => 5000,
++    ]);
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CompleteOrder::class);
++    $action->handle($order);
++
++    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
++});
++
++it('leaves costume order items as pending for manual fulfillment', function () {
++    $costume = Costume::factory()->create();
++    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
++
++    $order = Order::factory()->create([
++        'user_id' => $this->user->id,
++        'status' => OrderStatus::Pending,
++        'subtotal' => 3000,
++        'total' => 3000,
++    ]);
++
++    $orderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $costumeProduct->id,
++        'quantity' => 1,
++        'unit_price' => 3000,
++        'total_price' => 3000,
++    ]);
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CompleteOrder::class);
++    $result = $action->handle($order);
++
++    expect($result)->toBeTrue();
++    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
++    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
++
++    // No enrollments should be created
++    expect(Enrollment::query()->count())->toBe(0);
++});
++
++it('leaves standalone order items as pending for manual fulfillment', function () {
++    $standaloneProduct = Product::factory()->standalone()->create(['price' => 2000]);
++
++    $order = Order::factory()->create([
++        'user_id' => $this->user->id,
++        'status' => OrderStatus::Pending,
++        'subtotal' => 2000,
++        'total' => 2000,
++    ]);
++
++    $orderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $standaloneProduct->id,
++        'quantity' => 1,
++        'unit_price' => 2000,
++        'total_price' => 2000,
++    ]);
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CompleteOrder::class);
++    $result = $action->handle($order);
++
++    expect($result)->toBeTrue();
++    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
++    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
++});
++
++it('handles mixed cart with course costume and standalone products', function () {
++    $costume = Costume::factory()->create();
++    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
++    $standaloneProduct = Product::factory()->standalone()->create(['price' => 2000]);
++
++    $order = Order::factory()->create([
++        'user_id' => $this->user->id,
++        'status' => OrderStatus::Pending,
++        'subtotal' => 10000,
++        'total' => 10000,
++    ]);
++
++    $courseOrderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $this->product->id,
++        'quantity' => 1,
++        'unit_price' => 5000,
++        'total_price' => 5000,
++    ]);
++
++    $costumeOrderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $costumeProduct->id,
++        'quantity' => 1,
++        'unit_price' => 3000,
++        'total_price' => 3000,
++    ]);
++
++    $standaloneOrderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $standaloneProduct->id,
++        'quantity' => 1,
++        'unit_price' => 2000,
++        'total_price' => 2000,
++    ]);
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $action = app(CompleteOrder::class);
++    $result = $action->handle($order);
++
++    expect($result)->toBeTrue();
++    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
++
++    // Course item should be fulfilled with enrollment
++    expect($courseOrderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
++    expect(Enrollment::query()->where('course_id', $this->course->id)->count())->toBe(1);
++
++    // Costume and standalone items should remain pending
++    expect($costumeOrderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
++    expect($standaloneOrderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
++});
+diff --git a/tests/Feature/Actions/Store/CreatePaymentPlanTest.php b/tests/Feature/Actions/Store/CreatePaymentPlanTest.php
+new file mode 100644
+index 0000000..d1512b7
+--- /dev/null
++++ b/tests/Feature/Actions/Store/CreatePaymentPlanTest.php
+@@ -0,0 +1,104 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Actions\Store\CreatePaymentPlan;
++use App\Enums\InstallmentStatus;
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Order;
++use App\Models\PaymentPlanTemplate;
++
++it('creates a payment plan with correct installments', function () {
++    $order = Order::factory()->create(['total' => 10000]);
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++        'frequency' => PaymentPlanFrequency::Monthly,
++    ]);
++
++    $action = new CreatePaymentPlan;
++    $plan = $action->handle(
++        order: $order,
++        template: $template,
++        method: PaymentPlanMethod::AutoCharge,
++        stripeCustomerId: 'cus_test_123',
++        stripePaymentMethodId: 'pm_test_123',
++    );
++
++    expect($plan->total_amount)->toBe(10000)
++        ->and($plan->number_of_installments)->toBe(3)
++        ->and($plan->frequency)->toBe(PaymentPlanFrequency::Monthly)
++        ->and($plan->method)->toBe(PaymentPlanMethod::AutoCharge)
++        ->and($plan->stripe_customer_id)->toBe('cus_test_123')
++        ->and($plan->stripe_payment_method_id)->toBe('pm_test_123')
++        ->and($plan->installments)->toHaveCount(3);
++});
++
++it('marks first installment as paid', function () {
++    $order = Order::factory()->create(['total' => 10000]);
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++    ]);
++
++    $action = new CreatePaymentPlan;
++    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
++
++    $first = $plan->installments->where('installment_number', 1)->first();
++    $second = $plan->installments->where('installment_number', 2)->first();
++
++    expect($first->status)->toBe(InstallmentStatus::Paid)
++        ->and($first->paid_at)->not->toBeNull()
++        ->and($second->status)->toBe(InstallmentStatus::Pending);
++});
++
++it('first installment absorbs remainder', function () {
++    $order = Order::factory()->create(['total' => 10000]);
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++    ]);
++
++    $action = new CreatePaymentPlan;
++    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
++
++    $installments = $plan->installments->sortBy('installment_number');
++
++    expect($installments->first()->amount)->toBe(3334)
++        ->and($installments->skip(1)->first()->amount)->toBe(3333)
++        ->and($installments->sum('amount'))->toBe(10000);
++});
++
++it('sets correct due dates for weekly frequency', function () {
++    $order = Order::factory()->create(['total' => 9000]);
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++        'frequency' => PaymentPlanFrequency::Weekly,
++    ]);
++
++    $action = new CreatePaymentPlan;
++    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
++
++    $installments = $plan->installments->sortBy('installment_number');
++    $today = now()->startOfDay();
++
++    expect($installments->get(0)->due_date->startOfDay()->equalTo($today))->toBeTrue()
++        ->and($installments->get(1)->due_date->startOfDay()->equalTo($today->copy()->addDays(7)))->toBeTrue()
++        ->and($installments->get(2)->due_date->startOfDay()->equalTo($today->copy()->addDays(14)))->toBeTrue();
++});
++
++it('sets correct due dates for monthly frequency', function () {
++    $order = Order::factory()->create(['total' => 9000]);
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++        'frequency' => PaymentPlanFrequency::Monthly,
++    ]);
++
++    $action = new CreatePaymentPlan;
++    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
++
++    $installments = $plan->installments->sortBy('installment_number');
++    $today = now()->startOfDay();
++
++    expect($installments->get(0)->due_date->startOfDay()->equalTo($today))->toBeTrue()
++        ->and($installments->get(1)->due_date->startOfDay()->equalTo($today->copy()->addDays(30)))->toBeTrue()
++        ->and($installments->get(2)->due_date->startOfDay()->equalTo($today->copy()->addDays(60)))->toBeTrue();
++});
+diff --git a/tests/Feature/Actions/Store/ProcessInstallmentsTest.php b/tests/Feature/Actions/Store/ProcessInstallmentsTest.php
+new file mode 100644
+index 0000000..36553c9
+--- /dev/null
++++ b/tests/Feature/Actions/Store/ProcessInstallmentsTest.php
+@@ -0,0 +1,176 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Actions\Store\ProcessInstallments;
++use App\Contracts\StripeServiceContract;
++use App\Enums\InstallmentStatus;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Installment;
++use App\Models\PaymentPlan;
++use Stripe\Invoice;
++use Stripe\PaymentIntent;
++
++beforeEach(function () {
++    $this->mockStripe = Mockery::mock(StripeServiceContract::class);
++    $this->app->instance(StripeServiceContract::class, $this->mockStripe);
++});
++
++it('processes due auto-charge installments successfully', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::AutoCharge,
++        'stripe_customer_id' => 'cus_test_123',
++        'stripe_payment_method_id' => 'pm_test_123',
++    ]);
++
++    $installment = Installment::factory()->dueToday()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3333,
++    ]);
++
++    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_result_123', 'status' => 'succeeded']);
++
++    $this->mockStripe
++        ->shouldReceive('chargePaymentMethod')
++        ->once()
++        ->andReturn($paymentIntent);
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['processed'])->toBe(1)
++        ->and($result['succeeded'])->toBe(1)
++        ->and($result['failed'])->toBe(0);
++
++    $installment->refresh();
++    expect($installment->status)->toBe(InstallmentStatus::Paid)
++        ->and($installment->stripe_payment_intent_id)->toBe('pi_result_123');
++});
++
++it('marks installment as failed when auto-charge fails', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::AutoCharge,
++        'stripe_customer_id' => 'cus_test_123',
++        'stripe_payment_method_id' => 'pm_test_123',
++    ]);
++
++    $installment = Installment::factory()->dueToday()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3333,
++    ]);
++
++    $this->mockStripe
++        ->shouldReceive('chargePaymentMethod')
++        ->once()
++        ->andThrow(new Exception('Card declined'));
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['processed'])->toBe(1)
++        ->and($result['succeeded'])->toBe(0)
++        ->and($result['failed'])->toBe(1);
++
++    $installment->refresh();
++    expect($installment->status)->toBe(InstallmentStatus::Failed)
++        ->and($installment->retry_count)->toBe(1);
++});
++
++it('processes manual invoice installments', function () {
++    $plan = PaymentPlan::factory()->manualInvoice()->create([
++        'stripe_customer_id' => 'cus_test_123',
++    ]);
++
++    $installment = Installment::factory()->dueToday()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3333,
++    ]);
++
++    $invoice = Invoice::constructFrom(['id' => 'inv_test_123']);
++
++    $this->mockStripe
++        ->shouldReceive('createAndSendInvoice')
++        ->once()
++        ->andReturn($invoice);
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['processed'])->toBe(1)
++        ->and($result['succeeded'])->toBe(1);
++
++    $installment->refresh();
++    expect($installment->stripe_invoice_id)->toBe('inv_test_123');
++});
++
++it('retries failed installments', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::AutoCharge,
++        'stripe_customer_id' => 'cus_test_123',
++        'stripe_payment_method_id' => 'pm_test_123',
++    ]);
++
++    $installment = Installment::factory()->failed(1)->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3333,
++    ]);
++
++    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_retry_123', 'status' => 'succeeded']);
++
++    $this->mockStripe
++        ->shouldReceive('chargePaymentMethod')
++        ->once()
++        ->andReturn($paymentIntent);
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['succeeded'])->toBe(1);
++
++    $installment->refresh();
++    expect($installment->status)->toBe(InstallmentStatus::Paid);
++});
++
++it('does not process overdue installments', function () {
++    PaymentPlan::factory()->create();
++
++    Installment::factory()->overdue()->create();
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['processed'])->toBe(0);
++});
++
++it('does not process future installments', function () {
++    Installment::factory()->create([
++        'due_date' => now()->addMonth(),
++        'status' => InstallmentStatus::Pending,
++    ]);
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['processed'])->toBe(0);
++});
++
++it('marks as failed when missing stripe credentials for auto-charge', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::AutoCharge,
++        'stripe_customer_id' => null,
++        'stripe_payment_method_id' => null,
++    ]);
++
++    $installment = Installment::factory()->dueToday()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3333,
++    ]);
++
++    $action = app(ProcessInstallments::class);
++    $result = $action->handle();
++
++    expect($result['failed'])->toBe(1);
++
++    $installment->refresh();
++    expect($installment->status)->toBe(InstallmentStatus::Failed);
++});
+diff --git a/tests/Feature/Actions/Store/SwitchPaymentPlanMethodTest.php b/tests/Feature/Actions/Store/SwitchPaymentPlanMethodTest.php
+new file mode 100644
+index 0000000..6a8345c
+--- /dev/null
++++ b/tests/Feature/Actions/Store/SwitchPaymentPlanMethodTest.php
+@@ -0,0 +1,46 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Actions\Store\SwitchPaymentPlanMethod;
++use App\Enums\PaymentPlanMethod;
++use App\Models\PaymentPlan;
++
++it('switches from auto-charge to manual invoice', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::AutoCharge,
++    ]);
++
++    $action = new SwitchPaymentPlanMethod;
++    $action->handle($plan, PaymentPlanMethod::ManualInvoice);
++
++    expect($plan->refresh()->method)->toBe(PaymentPlanMethod::ManualInvoice);
++});
++
++it('switches from manual invoice to auto-charge when payment method exists', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::ManualInvoice,
++        'stripe_payment_method_id' => 'pm_test_123',
++    ]);
++
++    $action = new SwitchPaymentPlanMethod;
++    $action->handle($plan, PaymentPlanMethod::AutoCharge);
++
++    expect($plan->refresh()->method)->toBe(PaymentPlanMethod::AutoCharge);
++});
++
++it('throws when switching to same method', function () {
++    $plan = PaymentPlan::factory()->create([
++        'method' => PaymentPlanMethod::AutoCharge,
++    ]);
++
++    $action = new SwitchPaymentPlanMethod;
++    $action->handle($plan, PaymentPlanMethod::AutoCharge);
++})->throws(InvalidArgumentException::class, 'already using this method');
++
++it('throws when switching to auto-charge without payment method', function () {
++    $plan = PaymentPlan::factory()->manualInvoice()->create();
++
++    $action = new SwitchPaymentPlanMethod;
++    $action->handle($plan, PaymentPlanMethod::AutoCharge);
++})->throws(InvalidArgumentException::class, 'without a saved payment method');
+diff --git a/tests/Feature/Filament/Admin/Resources/CostumeResourceTest.php b/tests/Feature/Filament/Admin/Resources/CostumeResourceTest.php
+new file mode 100644
+index 0000000..bbb510b
+--- /dev/null
++++ b/tests/Feature/Filament/Admin/Resources/CostumeResourceTest.php
+@@ -0,0 +1,81 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Filament\Admin\Resources\Costumes\Pages\CreateCostume;
++use App\Filament\Admin\Resources\Costumes\Pages\EditCostume;
++use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
++use App\Models\Costume;
++use Filament\Facades\Filament;
++
++use function Pest\Livewire\livewire;
++
++beforeEach(function () {
++    Filament::setCurrentPanel('admin');
++});
++
++it('can render the costumes index page', function () {
++    livewire(ListCostumes::class)
++        ->assertOk();
++});
++
++it('can list costumes', function () {
++    $costumes = Costume::factory(3)->create();
++
++    livewire(ListCostumes::class)
++        ->loadTable()
++        ->assertCanSeeTableRecords($costumes);
++});
++
++it('can search costumes by name', function () {
++    $costume1 = Costume::factory()->create(['name' => 'Swan Lake Tutu']);
++    $costume2 = Costume::factory()->create(['name' => 'Nutcracker Soldier']);
++
++    livewire(ListCostumes::class)
++        ->loadTable()
++        ->searchTable('Swan Lake')
++        ->assertCanSeeTableRecords([$costume1])
++        ->assertCanNotSeeTableRecords([$costume2]);
++});
++
++it('can create a costume', function () {
++    livewire(CreateCostume::class)
++        ->fillForm([
++            'name' => 'New Costume',
++        ])
++        ->call('create')
++        ->assertHasNoFormErrors();
++
++    $this->assertDatabaseHas('costumes', [
++        'name' => 'New Costume',
++    ]);
++});
++
++it('can edit a costume', function () {
++    $costume = Costume::factory()->create(['name' => 'Old Name']);
++
++    livewire(EditCostume::class, [
++        'record' => $costume->id,
++    ])
++        ->fillForm([
++            'name' => 'Updated Name',
++        ])
++        ->call('save')
++        ->assertHasNoFormErrors();
++
++    expect($costume->refresh()->name)->toBe('Updated Name');
++});
++
++it('requires name to create a costume', function () {
++    livewire(CreateCostume::class)
++        ->fillForm([
++            'name' => '',
++        ])
++        ->call('create')
++        ->assertHasFormErrors(['name' => 'required']);
++});
++
++it('has required columns', function (string $column) {
++    livewire(ListCostumes::class)
++        ->assertTableColumnExists($column);
++})->with(['id', 'name']);
+diff --git a/tests/Feature/Filament/Admin/Resources/OrderResourceTest.php b/tests/Feature/Filament/Admin/Resources/OrderResourceTest.php
+index 165b310..71a4bc9 100644
+--- a/tests/Feature/Filament/Admin/Resources/OrderResourceTest.php
++++ b/tests/Feature/Filament/Admin/Resources/OrderResourceTest.php
+@@ -2,9 +2,11 @@
+ 
+ declare(strict_types=1);
+ 
++use App\Enums\OrderItemStatus;
+ use App\Enums\OrderStatus;
+ use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
+ use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
++use App\Models\Costume;
+ use App\Models\Order;
+ use App\Models\OrderItem;
+ use App\Models\Product;
+@@ -74,3 +76,43 @@
+         ->assertCanSeeTableRecords([$order1])
+         ->assertCanNotSeeTableRecords([$order2]);
+ });
++
++it('can mark order items as fulfilled via ViewOrder action', function () {
++    $costume = Costume::factory()->create();
++    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
++
++    $order = Order::factory()->completed()->create();
++
++    $orderItem = OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $costumeProduct->id,
++        'quantity' => 1,
++        'unit_price' => 3000,
++        'total_price' => 3000,
++        'status' => OrderItemStatus::Pending,
++    ]);
++
++    livewire(ViewOrder::class, [
++        'record' => $order->id,
++    ])
++        ->callAction('markFulfilled', data: [
++            'order_item_ids' => [$orderItem->id],
++        ])
++        ->assertNotified();
++
++    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
++});
++
++it('does not show mark fulfilled action when no pending items exist', function () {
++    $order = Order::factory()->completed()->create();
++
++    OrderItem::factory()->fulfilled()->create([
++        'order_id' => $order->id,
++        'product_id' => $this->product->id,
++    ]);
++
++    livewire(ViewOrder::class, [
++        'record' => $order->id,
++    ])
++        ->assertActionHidden('markFulfilled');
++});
+diff --git a/tests/Feature/Filament/Admin/Resources/PaymentPlanResourceTest.php b/tests/Feature/Filament/Admin/Resources/PaymentPlanResourceTest.php
+new file mode 100644
+index 0000000..c4a9b67
+--- /dev/null
++++ b/tests/Feature/Filament/Admin/Resources/PaymentPlanResourceTest.php
+@@ -0,0 +1,61 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\InstallmentStatus;
++use App\Filament\Admin\Resources\PaymentPlans\Pages\ListPaymentPlans;
++use App\Filament\Admin\Resources\PaymentPlans\Pages\ViewPaymentPlan;
++use App\Models\Installment;
++use App\Models\PaymentPlan;
++use Filament\Facades\Filament;
++
++use function Pest\Livewire\livewire;
++
++beforeEach(function () {
++    Filament::setCurrentPanel('admin');
++});
++
++it('can render the payment plans index page', function () {
++    livewire(ListPaymentPlans::class)
++        ->assertOk();
++});
++
++it('can list payment plans', function () {
++    $plans = PaymentPlan::factory(3)->create();
++
++    livewire(ListPaymentPlans::class)
++        ->loadTable()
++        ->assertCanSeeTableRecords($plans);
++});
++
++it('can view a payment plan', function () {
++    $plan = PaymentPlan::factory()->create();
++    Installment::factory(3)->create(['payment_plan_id' => $plan->id]);
++
++    livewire(ViewPaymentPlan::class, [
++        'record' => $plan->id,
++    ])
++        ->assertOk();
++});
++
++it('can mark an installment as paid via header action', function () {
++    $plan = PaymentPlan::factory()->create();
++    $installment = Installment::factory()->create([
++        'payment_plan_id' => $plan->id,
++        'status' => InstallmentStatus::Pending,
++    ]);
++
++    livewire(ViewPaymentPlan::class, [
++        'record' => $plan->id,
++    ])
++        ->callAction('markInstallmentPaid', data: [
++            'installment_ids' => [$installment->id],
++        ]);
++
++    expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
++});
++
++it('has required table columns', function (string $column) {
++    livewire(ListPaymentPlans::class)
++        ->assertTableColumnExists($column);
++})->with(['order.id', 'total_amount', 'number_of_installments', 'frequency', 'method']);
+diff --git a/tests/Feature/Filament/Admin/Resources/PaymentPlanTemplateResourceTest.php b/tests/Feature/Filament/Admin/Resources/PaymentPlanTemplateResourceTest.php
+new file mode 100644
+index 0000000..14668f8
+--- /dev/null
++++ b/tests/Feature/Filament/Admin/Resources/PaymentPlanTemplateResourceTest.php
+@@ -0,0 +1,109 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\ProductType;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\CreatePaymentPlanTemplate;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\EditPaymentPlanTemplate;
++use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\ListPaymentPlanTemplates;
++use App\Models\PaymentPlanTemplate;
++use Filament\Facades\Filament;
++
++use function Pest\Livewire\livewire;
++
++beforeEach(function () {
++    Filament::setCurrentPanel('admin');
++});
++
++it('can render the payment plan templates index page', function () {
++    livewire(ListPaymentPlanTemplates::class)
++        ->assertOk();
++});
++
++it('can list payment plan templates', function () {
++    $templates = PaymentPlanTemplate::factory(3)->create();
++
++    livewire(ListPaymentPlanTemplates::class)
++        ->loadTable()
++        ->assertCanSeeTableRecords($templates);
++});
++
++it('can search templates by name', function () {
++    $template1 = PaymentPlanTemplate::factory()->create(['name' => 'Monthly 3-Pay']);
++    $template2 = PaymentPlanTemplate::factory()->create(['name' => 'Weekly 6-Pay']);
++
++    livewire(ListPaymentPlanTemplates::class)
++        ->loadTable()
++        ->searchTable('Monthly')
++        ->assertCanSeeTableRecords([$template1])
++        ->assertCanNotSeeTableRecords([$template2]);
++});
++
++it('can create a payment plan template', function () {
++    livewire(CreatePaymentPlanTemplate::class)
++        ->fillForm([
++            'name' => 'Test Template',
++            'product_type' => ProductType::Any->value,
++            'min_price' => 5000,
++            'max_price' => 50000,
++            'number_of_installments' => 3,
++            'frequency' => PaymentPlanFrequency::Monthly->value,
++            'is_active' => true,
++        ])
++        ->call('create')
++        ->assertHasNoFormErrors();
++
++    $this->assertDatabaseHas('payment_plan_templates', [
++        'name' => 'Test Template',
++        'number_of_installments' => 3,
++    ]);
++});
++
++it('can edit a payment plan template', function () {
++    $template = PaymentPlanTemplate::factory()->create(['name' => 'Old Name']);
++
++    livewire(EditPaymentPlanTemplate::class, [
++        'record' => $template->id,
++    ])
++        ->fillForm([
++            'name' => 'Updated Name',
++        ])
++        ->call('save')
++        ->assertHasNoFormErrors();
++
++    expect($template->refresh()->name)->toBe('Updated Name');
++});
++
++it('requires name to create a template', function () {
++    livewire(CreatePaymentPlanTemplate::class)
++        ->fillForm([
++            'name' => '',
++            'product_type' => ProductType::Any->value,
++            'min_price' => 5000,
++            'max_price' => 50000,
++            'number_of_installments' => 3,
++            'frequency' => PaymentPlanFrequency::Monthly->value,
++        ])
++        ->call('create')
++        ->assertHasFormErrors(['name' => 'required']);
++});
++
++it('requires number of installments between 2 and 24', function () {
++    livewire(CreatePaymentPlanTemplate::class)
++        ->fillForm([
++            'name' => 'Test',
++            'product_type' => ProductType::Any->value,
++            'min_price' => 5000,
++            'max_price' => 50000,
++            'number_of_installments' => 1,
++            'frequency' => PaymentPlanFrequency::Monthly->value,
++        ])
++        ->call('create')
++        ->assertHasFormErrors(['number_of_installments']);
++});
++
++it('has required columns', function (string $column) {
++    livewire(ListPaymentPlanTemplates::class)
++        ->assertTableColumnExists($column);
++})->with(['id', 'name', 'product_type', 'min_price', 'max_price', 'number_of_installments', 'frequency', 'is_active']);
+diff --git a/tests/Feature/Http/Controllers/StripeWebhookControllerTest.php b/tests/Feature/Http/Controllers/StripeWebhookControllerTest.php
+index bf704f0..af1787a 100644
+--- a/tests/Feature/Http/Controllers/StripeWebhookControllerTest.php
++++ b/tests/Feature/Http/Controllers/StripeWebhookControllerTest.php
+@@ -3,10 +3,16 @@
+ declare(strict_types=1);
+ 
+ use App\Contracts\StripeServiceContract;
++use App\Enums\InstallmentStatus;
+ use App\Enums\OrderStatus;
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\PaymentPlanMethod;
+ use App\Http\Controllers\StripeWebhookController;
++use App\Models\Installment;
+ use App\Models\Order;
+ use App\Models\OrderItem;
++use App\Models\PaymentPlan;
++use App\Models\PaymentPlanTemplate;
+ use App\Models\Product;
+ use App\Models\User;
+ use Illuminate\Http\Request;
+@@ -172,3 +178,211 @@
+     expect($response->getStatusCode())->toBe(400);
+     expect($response->getData(true))->toBe(['error' => 'Missing order_id']);
+ });
++
++it('creates a payment plan when checkout session has template metadata', function () {
++    $user = User::factory()->create(['stripe_id' => 'cus_test_123']);
++
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++        'frequency' => PaymentPlanFrequency::Monthly,
++    ]);
++
++    $order = Order::factory()->create([
++        'user_id' => $user->id,
++        'status' => OrderStatus::Pending,
++        'subtotal' => 9000,
++        'total' => 9000,
++        'stripe_checkout_session_id' => 'cs_test_plan',
++    ]);
++
++    OrderItem::factory()->create([
++        'order_id' => $order->id,
++        'product_id' => $this->product->id,
++        'quantity' => 1,
++        'unit_price' => 9000,
++        'total_price' => 9000,
++    ]);
++
++    $event = new Stripe\Event;
++    $event->type = 'checkout.session.completed';
++    $event->data = (object) [
++        'object' => (object) [
++            'id' => 'cs_test_plan',
++            'payment_intent' => 'pi_test_plan',
++            'customer' => 'cus_test_123',
++            'metadata' => (object) [
++                'order_id' => (string) $order->id,
++                'payment_plan_template_id' => (string) $template->id,
++                'payment_plan_method' => PaymentPlanMethod::AutoCharge->value,
++            ],
++        ],
++    ];
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('constructWebhookEvent')
++        ->once()
++        ->andReturn($event);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
++        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
++    ]);
++
++    $controller = app(StripeWebhookController::class);
++    $response = $controller($request);
++
++    expect($response->getStatusCode())->toBe(200);
++    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
++
++    // Verify payment plan was created
++    $paymentPlan = PaymentPlan::query()->where('order_id', $order->id)->first();
++    expect($paymentPlan)->not->toBeNull()
++        ->and($paymentPlan->method)->toBe(PaymentPlanMethod::AutoCharge)
++        ->and($paymentPlan->total_amount)->toBe(9000)
++        ->and($paymentPlan->number_of_installments)->toBe(3)
++        ->and($paymentPlan->stripe_customer_id)->toBe('cus_test_123');
++
++    // Verify installments were created
++    expect($paymentPlan->installments)->toHaveCount(3);
++});
++
++it('handles payment_intent.succeeded webhook for installment', function () {
++    $plan = PaymentPlan::factory()->create();
++    $installment = Installment::factory()->create([
++        'payment_plan_id' => $plan->id,
++        'status' => InstallmentStatus::Pending,
++    ]);
++
++    $event = new Stripe\Event;
++    $event->type = 'payment_intent.succeeded';
++    $event->data = (object) [
++        'object' => (object) [
++            'id' => 'pi_test_inst_success',
++            'metadata' => (object) [
++                'installment_id' => (string) $installment->id,
++            ],
++        ],
++    ];
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('constructWebhookEvent')
++        ->once()
++        ->andReturn($event);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
++        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
++    ]);
++
++    $controller = app(StripeWebhookController::class);
++    $response = $controller($request);
++
++    expect($response->getStatusCode())->toBe(200);
++    expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
++    expect($installment->stripe_payment_intent_id)->toBe('pi_test_inst_success');
++});
++
++it('handles payment_intent.succeeded without installment metadata gracefully', function () {
++    $event = new Stripe\Event;
++    $event->type = 'payment_intent.succeeded';
++    $event->data = (object) [
++        'object' => (object) [
++            'id' => 'pi_test_no_meta',
++            'metadata' => (object) [],
++        ],
++    ];
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('constructWebhookEvent')
++        ->once()
++        ->andReturn($event);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
++        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
++    ]);
++
++    $controller = app(StripeWebhookController::class);
++    $response = $controller($request);
++
++    expect($response->getStatusCode())->toBe(200);
++    expect($response->getData(true))->toBe(['message' => 'No installment metadata, skipping']);
++});
++
++it('handles invoice.paid webhook for installment', function () {
++    $plan = PaymentPlan::factory()->manualInvoice()->create();
++    $installment = Installment::factory()->create([
++        'payment_plan_id' => $plan->id,
++        'status' => InstallmentStatus::Pending,
++    ]);
++
++    $event = new Stripe\Event;
++    $event->type = 'invoice.paid';
++    $event->data = (object) [
++        'object' => (object) [
++            'id' => 'inv_test_paid',
++            'metadata' => (object) [
++                'installment_id' => (string) $installment->id,
++            ],
++        ],
++    ];
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('constructWebhookEvent')
++        ->once()
++        ->andReturn($event);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
++        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
++    ]);
++
++    $controller = app(StripeWebhookController::class);
++    $response = $controller($request);
++
++    expect($response->getStatusCode())->toBe(200);
++    expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
++    expect($installment->stripe_invoice_id)->toBe('inv_test_paid');
++});
++
++it('handles invoice.payment_failed webhook for installment', function () {
++    $plan = PaymentPlan::factory()->manualInvoice()->create();
++    $installment = Installment::factory()->create([
++        'payment_plan_id' => $plan->id,
++        'status' => InstallmentStatus::Pending,
++        'retry_count' => 0,
++    ]);
++
++    $event = new Stripe\Event;
++    $event->type = 'invoice.payment_failed';
++    $event->data = (object) [
++        'object' => (object) [
++            'id' => 'inv_test_failed',
++            'metadata' => (object) [
++                'installment_id' => (string) $installment->id,
++            ],
++        ],
++    ];
++
++    $mockStripeService = Mockery::mock(StripeServiceContract::class);
++    $mockStripeService->shouldReceive('constructWebhookEvent')
++        ->once()
++        ->andReturn($event);
++
++    $this->app->instance(StripeServiceContract::class, $mockStripeService);
++
++    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
++        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
++    ]);
++
++    $controller = app(StripeWebhookController::class);
++    $response = $controller($request);
++
++    expect($response->getStatusCode())->toBe(200);
++    expect($installment->refresh()->status)->toBe(InstallmentStatus::Failed);
++    expect($installment->retry_count)->toBe(1);
++});
+diff --git a/tests/Feature/Models/CostumeTest.php b/tests/Feature/Models/CostumeTest.php
+new file mode 100644
+index 0000000..471fd83
+--- /dev/null
++++ b/tests/Feature/Models/CostumeTest.php
+@@ -0,0 +1,19 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Models\Costume;
++use App\Models\Product;
++
++it('can create a costume', function () {
++    $costume = Costume::factory()->create(['name' => 'Swan Lake Tutu']);
++
++    expect($costume->name)->toBe('Swan Lake Tutu');
++});
++
++it('has a morphOne product relationship', function () {
++    $costume = Costume::factory()->create();
++    $product = Product::factory()->forCostume($costume)->create();
++
++    expect($costume->product->id)->toBe($product->id);
++});
+diff --git a/tests/Feature/Models/InstallmentTest.php b/tests/Feature/Models/InstallmentTest.php
+new file mode 100644
+index 0000000..8bb3505
+--- /dev/null
++++ b/tests/Feature/Models/InstallmentTest.php
+@@ -0,0 +1,93 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\InstallmentStatus;
++use App\Models\Installment;
++use App\Models\PaymentPlan;
++
++it('can be created with factory', function () {
++    $installment = Installment::factory()->create();
++
++    expect($installment)->toBeInstanceOf(Installment::class)
++        ->and($installment->status)->toBe(InstallmentStatus::Pending)
++        ->and($installment->retry_count)->toBe(0);
++});
++
++it('belongs to a payment plan', function () {
++    $plan = PaymentPlan::factory()->create();
++    $installment = Installment::factory()->create(['payment_plan_id' => $plan->id]);
++
++    expect($installment->paymentPlan->id)->toBe($plan->id);
++});
++
++it('can be marked as paid', function () {
++    $installment = Installment::factory()->create();
++
++    $installment->markPaid(stripePaymentIntentId: 'pi_test_123');
++    $installment->refresh();
++
++    expect($installment->status)->toBe(InstallmentStatus::Paid)
++        ->and($installment->paid_at)->not->toBeNull()
++        ->and($installment->stripe_payment_intent_id)->toBe('pi_test_123');
++});
++
++it('can be marked as paid with invoice id', function () {
++    $installment = Installment::factory()->create();
++
++    $installment->markPaid(stripeInvoiceId: 'inv_test_123');
++    $installment->refresh();
++
++    expect($installment->status)->toBe(InstallmentStatus::Paid)
++        ->and($installment->stripe_invoice_id)->toBe('inv_test_123');
++});
++
++it('increments retry count on failure', function () {
++    $installment = Installment::factory()->create(['retry_count' => 0]);
++
++    $installment->markFailed();
++    $installment->refresh();
++
++    expect($installment->status)->toBe(InstallmentStatus::Failed)
++        ->and($installment->retry_count)->toBe(1);
++});
++
++it('marks as overdue after 3 retries', function () {
++    $installment = Installment::factory()->create(['retry_count' => 2]);
++
++    $installment->markFailed();
++    $installment->refresh();
++
++    expect($installment->status)->toBe(InstallmentStatus::Overdue)
++        ->and($installment->retry_count)->toBe(3);
++});
++
++it('scopes due installments', function () {
++    Installment::factory()->create([
++        'status' => InstallmentStatus::Pending,
++        'due_date' => now()->subDay(),
++    ]);
++    Installment::factory()->create([
++        'status' => InstallmentStatus::Pending,
++        'due_date' => now()->addWeek(),
++    ]);
++    Installment::factory()->paid()->create();
++
++    expect(Installment::query()->due()->count())->toBe(1);
++});
++
++it('scopes retryable installments', function () {
++    Installment::factory()->failed(1)->create();
++    Installment::factory()->failed(2)->create();
++    Installment::factory()->overdue()->create(); // retry_count = 3, should not be retryable
++
++    expect(Installment::query()->retryable()->count())->toBe(2);
++});
++
++it('scopes overdue installments', function () {
++    Installment::factory()->overdue()->create();
++    Installment::factory()->failed(1)->create();
++    Installment::factory()->create();
++
++    expect(Installment::query()->overdue()->count())->toBe(1);
++});
+diff --git a/tests/Feature/Models/OrderItemTest.php b/tests/Feature/Models/OrderItemTest.php
+new file mode 100644
+index 0000000..8a3e705
+--- /dev/null
++++ b/tests/Feature/Models/OrderItemTest.php
+@@ -0,0 +1,22 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\OrderItemStatus;
++use App\Models\OrderItem;
++
++it('can mark an order item as fulfilled', function () {
++    $orderItem = OrderItem::factory()->create();
++
++    expect($orderItem->status)->toBe(OrderItemStatus::Pending);
++
++    $orderItem->markFulfilled();
++
++    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
++});
++
++it('defaults to pending status', function () {
++    $orderItem = OrderItem::factory()->create();
++
++    expect($orderItem->status)->toBe(OrderItemStatus::Pending);
++});
+diff --git a/tests/Feature/Models/PaymentPlanTemplateTest.php b/tests/Feature/Models/PaymentPlanTemplateTest.php
+new file mode 100644
+index 0000000..fe00043
+--- /dev/null
++++ b/tests/Feature/Models/PaymentPlanTemplateTest.php
+@@ -0,0 +1,89 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\ProductType;
++use App\Models\PaymentPlanTemplate;
++
++it('can be created with factory', function () {
++    $template = PaymentPlanTemplate::factory()->create();
++
++    expect($template)->toBeInstanceOf(PaymentPlanTemplate::class)
++        ->and($template->id)->toBeInt()
++        ->and($template->name)->toBeString()
++        ->and($template->product_type)->toBe(ProductType::Any)
++        ->and($template->frequency)->toBe(PaymentPlanFrequency::Monthly)
++        ->and($template->is_active)->toBeTrue();
++});
++
++it('scopes active templates', function () {
++    PaymentPlanTemplate::factory()->create(['is_active' => true]);
++    PaymentPlanTemplate::factory()->create(['is_active' => false]);
++
++    expect(PaymentPlanTemplate::query()->active()->count())->toBe(1);
++});
++
++it('scopes for product by type and price', function () {
++    PaymentPlanTemplate::factory()->create([
++        'product_type' => ProductType::Any,
++        'min_price' => 1000,
++        'max_price' => 20000,
++    ]);
++    PaymentPlanTemplate::factory()->create([
++        'product_type' => ProductType::Course,
++        'min_price' => 5000,
++        'max_price' => 10000,
++    ]);
++    PaymentPlanTemplate::factory()->create([
++        'product_type' => ProductType::Costume,
++        'min_price' => 1000,
++        'max_price' => 5000,
++    ]);
++
++    // Course at $75 should match Any + Course templates
++    $templates = PaymentPlanTemplate::query()
++        ->active()
++        ->forProduct(App\Models\Course::class, 7500)
++        ->get();
++
++    expect($templates)->toHaveCount(2);
++});
++
++it('scopes for product excludes out-of-range templates', function () {
++    PaymentPlanTemplate::factory()->create([
++        'product_type' => ProductType::Any,
++        'min_price' => 10000,
++        'max_price' => 20000,
++    ]);
++
++    $templates = PaymentPlanTemplate::query()
++        ->active()
++        ->forProduct(null, 5000)
++        ->get();
++
++    expect($templates)->toHaveCount(0);
++});
++
++it('calculates installment amounts correctly', function () {
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 3,
++    ]);
++
++    $amounts = $template->installmentAmounts(10000);
++
++    expect($amounts['first'])->toBe(3334)
++        ->and($amounts['remaining'])->toBe(3333)
++        ->and($amounts['first'] + ($amounts['remaining'] * 2))->toBe(10000);
++});
++
++it('calculates installment amounts with no remainder', function () {
++    $template = PaymentPlanTemplate::factory()->create([
++        'number_of_installments' => 4,
++    ]);
++
++    $amounts = $template->installmentAmounts(10000);
++
++    expect($amounts['first'])->toBe(2500)
++        ->and($amounts['remaining'])->toBe(2500);
++});
+diff --git a/tests/Feature/Models/PaymentPlanTest.php b/tests/Feature/Models/PaymentPlanTest.php
+new file mode 100644
+index 0000000..bcf19a0
+--- /dev/null
++++ b/tests/Feature/Models/PaymentPlanTest.php
+@@ -0,0 +1,98 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\InstallmentStatus;
++use App\Enums\PaymentPlanFrequency;
++use App\Enums\PaymentPlanMethod;
++use App\Models\Installment;
++use App\Models\Order;
++use App\Models\PaymentPlan;
++use App\Models\PaymentPlanTemplate;
++
++it('can be created with factory', function () {
++    $plan = PaymentPlan::factory()->create();
++
++    expect($plan)->toBeInstanceOf(PaymentPlan::class)
++        ->and($plan->method)->toBe(PaymentPlanMethod::AutoCharge)
++        ->and($plan->frequency)->toBe(PaymentPlanFrequency::Monthly);
++});
++
++it('belongs to an order', function () {
++    $order = Order::factory()->create();
++    $plan = PaymentPlan::factory()->create(['order_id' => $order->id]);
++
++    expect($plan->order->id)->toBe($order->id);
++});
++
++it('belongs to a template', function () {
++    $template = PaymentPlanTemplate::factory()->create();
++    $plan = PaymentPlan::factory()->create(['payment_plan_template_id' => $template->id]);
++
++    expect($plan->template->id)->toBe($template->id);
++});
++
++it('has many installments', function () {
++    $plan = PaymentPlan::factory()->create();
++    Installment::factory()->count(3)->create(['payment_plan_id' => $plan->id]);
++
++    expect($plan->installments)->toHaveCount(3);
++});
++
++it('calculates amount paid', function () {
++    $plan = PaymentPlan::factory()->create(['total_amount' => 10000]);
++
++    Installment::factory()->paid()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3334,
++    ]);
++    Installment::factory()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3333,
++        'status' => InstallmentStatus::Pending,
++    ]);
++
++    expect($plan->amountPaid())->toBe(3334);
++});
++
++it('calculates remaining balance', function () {
++    $plan = PaymentPlan::factory()->create(['total_amount' => 10000]);
++
++    Installment::factory()->paid()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 3334,
++    ]);
++
++    expect($plan->remainingBalance())->toBe(6666);
++});
++
++it('detects fully paid status', function () {
++    $plan = PaymentPlan::factory()->create(['total_amount' => 10000]);
++
++    Installment::factory()->paid()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 5000,
++    ]);
++    Installment::factory()->paid()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 5000,
++    ]);
++
++    expect($plan->isFullyPaid())->toBeTrue();
++});
++
++it('is not fully paid when installments remain', function () {
++    $plan = PaymentPlan::factory()->create(['total_amount' => 10000]);
++
++    Installment::factory()->paid()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 5000,
++    ]);
++    Installment::factory()->create([
++        'payment_plan_id' => $plan->id,
++        'amount' => 5000,
++        'status' => InstallmentStatus::Pending,
++    ]);
++
++    expect($plan->isFullyPaid())->toBeFalse();
++});
+diff --git a/tests/Unit/InstallmentStatusTest.php b/tests/Unit/InstallmentStatusTest.php
+new file mode 100644
+index 0000000..21c500e
+--- /dev/null
++++ b/tests/Unit/InstallmentStatusTest.php
+@@ -0,0 +1,14 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\InstallmentStatus;
++
++it('has correct labels', function (InstallmentStatus $status, string $label) {
++    expect($status->getLabel())->toBe($label);
++})->with([
++    [InstallmentStatus::Pending, 'Pending'],
++    [InstallmentStatus::Paid, 'Paid'],
++    [InstallmentStatus::Failed, 'Failed'],
++    [InstallmentStatus::Overdue, 'Overdue'],
++]);
+diff --git a/tests/Unit/OrderItemStatusTest.php b/tests/Unit/OrderItemStatusTest.php
+new file mode 100644
+index 0000000..83daf1f
+--- /dev/null
++++ b/tests/Unit/OrderItemStatusTest.php
+@@ -0,0 +1,12 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\OrderItemStatus;
++
++it('has correct labels', function (OrderItemStatus $status, string $label) {
++    expect($status->getLabel())->toBe($label);
++})->with([
++    [OrderItemStatus::Pending, 'Pending'],
++    [OrderItemStatus::Fulfilled, 'Fulfilled'],
++]);
+diff --git a/tests/Unit/PaymentPlanFrequencyTest.php b/tests/Unit/PaymentPlanFrequencyTest.php
+new file mode 100644
+index 0000000..b39bda8
+--- /dev/null
++++ b/tests/Unit/PaymentPlanFrequencyTest.php
+@@ -0,0 +1,21 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\PaymentPlanFrequency;
++
++it('has correct labels', function (PaymentPlanFrequency $frequency, string $label) {
++    expect($frequency->getLabel())->toBe($label);
++})->with([
++    [PaymentPlanFrequency::Weekly, 'Weekly'],
++    [PaymentPlanFrequency::Biweekly, 'Biweekly'],
++    [PaymentPlanFrequency::Monthly, 'Monthly'],
++]);
++
++it('has correct interval days', function (PaymentPlanFrequency $frequency, int $days) {
++    expect($frequency->intervalDays())->toBe($days);
++})->with([
++    [PaymentPlanFrequency::Weekly, 7],
++    [PaymentPlanFrequency::Biweekly, 14],
++    [PaymentPlanFrequency::Monthly, 30],
++]);
+diff --git a/tests/Unit/PaymentPlanMethodTest.php b/tests/Unit/PaymentPlanMethodTest.php
+new file mode 100644
+index 0000000..7c4e411
+--- /dev/null
++++ b/tests/Unit/PaymentPlanMethodTest.php
+@@ -0,0 +1,12 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\PaymentPlanMethod;
++
++it('has correct labels', function (PaymentPlanMethod $method, string $label) {
++    expect($method->getLabel())->toBe($label);
++})->with([
++    [PaymentPlanMethod::AutoCharge, 'Auto Charge'],
++    [PaymentPlanMethod::ManualInvoice, 'Manual Invoice'],
++]);
+diff --git a/tests/Unit/ProductTypeTest.php b/tests/Unit/ProductTypeTest.php
+new file mode 100644
+index 0000000..46d291a
+--- /dev/null
++++ b/tests/Unit/ProductTypeTest.php
+@@ -0,0 +1,58 @@
++<?php
++
++declare(strict_types=1);
++
++use App\Enums\ProductType;
++use App\Models\Costume;
++use App\Models\Course;
++use App\Models\GiftCardType;
++
++it('maps Course productable_type to Course case', function () {
++    expect(ProductType::fromProductableType(Course::class))->toBe(ProductType::Course);
++});
++
++it('maps GiftCardType productable_type to GiftCardType case', function () {
++    expect(ProductType::fromProductableType(GiftCardType::class))->toBe(ProductType::GiftCardType);
++});
++
++it('maps Costume productable_type to Costume case', function () {
++    expect(ProductType::fromProductableType(Costume::class))->toBe(ProductType::Costume);
++});
++
++it('maps null productable_type to Standalone case', function () {
++    expect(ProductType::fromProductableType(null))->toBe(ProductType::Standalone);
++});
++
++it('throws for unrecognized productable_type', function () {
++    ProductType::fromProductableType('App\\Models\\Unknown');
++})->throws(InvalidArgumentException::class, 'Unrecognized productable type');
++
++it('maps Course case to Course class', function () {
++    expect(ProductType::Course->toProductableClass())->toBe(Course::class);
++});
++
++it('maps GiftCardType case to GiftCardType class', function () {
++    expect(ProductType::GiftCardType->toProductableClass())->toBe(GiftCardType::class);
++});
++
++it('maps Costume case to Costume class', function () {
++    expect(ProductType::Costume->toProductableClass())->toBe(Costume::class);
++});
++
++it('maps Standalone case to null', function () {
++    expect(ProductType::Standalone->toProductableClass())->toBeNull();
++});
++
++it('throws when calling toProductableClass on Any', function () {
++    ProductType::Any->toProductableClass();
++})->throws(InvalidArgumentException::class, 'ProductType::Any cannot be mapped');
++
++it('has correct labels', function (ProductType $type, string $label) {
++    expect($type->getLabel())->toBe($label);
++})->with([
++    [ProductType::Any, 'Any'],
++    [ProductType::Course, 'Course'],
++    [ProductType::GiftCardType, 'Gift Card'],
++    [ProductType::Costume, 'Costume'],
++    [ProductType::Standalone, 'Standalone'],
++]);

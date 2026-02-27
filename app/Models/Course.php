@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-// use App\Actions\Common\EnrollInCourse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,15 +11,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-
-// use Illuminate\Support\Facades\Auth;
-// use Spatie\Tags\HasTags;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 final class Course extends Model
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
     use HasFactory;
-    // use HasTags;
 
     protected $casts = [
         'id' => 'integer',
@@ -85,10 +81,10 @@ final class Course extends Model
         return $this->belongsToMany(Form::class, 'course_forms');
     }
 
-    // public function product(): BelongsTo
-    // {
-    //     return $this->belongsTo(Product::class);
-    // }
+    public function product(): MorphOne
+    {
+        return $this->morphOne(Product::class, 'productable');
+    }
 
     public function enrollments(): HasMany
     {
@@ -105,17 +101,24 @@ final class Course extends Model
         return $this->belongsToMany(Student::class, 'enrollments');
     }
 
-    // public function completeItemSale(OrderItem $item): void
-    // {
-    //     $enroll = new EnrollInCourse();
-    //     for($i = 0; $i < $item->quantity; $i++) {
-    //         // $enroll->handle($item->product->sellable, Auth::id());
-    //         $enroll->handle($this, Auth::id());
-    //     }
-    // }
+    /**
+     * Get the number of available enrollment spots remaining.
+     */
+    public function availableCapacity(): int
+    {
+        return $this->capacity - $this->enrollments()->count();
+    }
 
-    // public function saleTypeGroupAction(Order $order): void
-    // {
-    //     // send email detailing assigning a student to classes and completing medical waivers
-    // }
+    /**
+     * Scope to only include courses with available capacity.
+     */
+    public function scopeAvailable(Builder $query): void
+    {
+        $query->where(
+            'capacity',
+            '>',
+            Enrollment::selectRaw('count(*)')
+                ->whereColumn('enrollments.course_id', 'courses.id')
+        );
+    }
 }

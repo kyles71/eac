@@ -19,7 +19,8 @@
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "nunomaduro/essentials": "^0.1",
-        "saade/filament-fullcalendar": "^4.0"
+        "saade/filament-fullcalendar": "^4.0",
+        "stripe/stripe-php": "^19.4"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.15",

@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Enums\FormTypes;
 use App\Models\Course;
 use App\Models\Form;
+use App\Models\Product;
 use App\Models\User;
 use Database\Factories\CalendarFactory;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -44,7 +45,12 @@ final class DatabaseSeeder extends Seeder
             'password' => bcrypt(config('app.default_user.password')),
         ]);
 
-        Course::factory(10)->create();
+        $courses = Course::factory(10)->create();
+
+        // Create a Product for each Course
+        $courses->each(function (Course $course): void {
+            Product::factory()->forCourse($course)->create();
+        });
 
         User::factory()
             ->count(10)

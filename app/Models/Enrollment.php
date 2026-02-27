@@ -7,11 +7,15 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class Enrollment extends Model
 {
+    /** @use HasFactory<\Database\Factories\EnrollmentFactory> */
+    use HasFactory;
+
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
@@ -36,7 +40,7 @@ final class Enrollment extends Model
     #[Scope]
     protected function active(Builder $query, ?Carbon $date = null): void
     {
-        if (!$date instanceof Carbon) {
+        if (! $date instanceof Carbon) {
             $date = Carbon::now();
         }
 
@@ -51,7 +55,7 @@ final class Enrollment extends Model
     #[Scope]
     protected function future(Builder $query, ?Carbon $date = null): void
     {
-        if (!$date instanceof Carbon) {
+        if (! $date instanceof Carbon) {
             $date = Carbon::now();
         }
 
@@ -62,7 +66,7 @@ final class Enrollment extends Model
     #[Scope]
     protected function past(Builder $query, ?Carbon $date = null): void
     {
-        if (!$date instanceof Carbon) {
+        if (! $date instanceof Carbon) {
             $date = Carbon::now();
         }
 
