@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
+use App\Models\Costume;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -73,4 +75,44 @@ it('can search orders by customer name', function () {
         ->searchTable('John')
         ->assertCanSeeTableRecords([$order1])
         ->assertCanNotSeeTableRecords([$order2]);
+});
+
+it('can mark order items as fulfilled via ViewOrder action', function () {
+    $costume = Costume::factory()->create();
+    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+
+    $order = Order::factory()->completed()->create();
+
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $costumeProduct->id,
+        'quantity' => 1,
+        'unit_price' => 3000,
+        'total_price' => 3000,
+        'status' => OrderItemStatus::Pending,
+    ]);
+
+    livewire(ViewOrder::class, [
+        'record' => $order->id,
+    ])
+        ->callAction('markFulfilled', data: [
+            'order_item_ids' => [$orderItem->id],
+        ])
+        ->assertNotified();
+
+    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
+});
+
+it('does not show mark fulfilled action when no pending items exist', function () {
+    $order = Order::factory()->completed()->create();
+
+    OrderItem::factory()->fulfilled()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+    ]);
+
+    livewire(ViewOrder::class, [
+        'record' => $order->id,
+    ])
+        ->assertActionHidden('markFulfilled');
 });

@@ -56,9 +56,9 @@ final class Store extends Page implements HasTable
 
     protected static ?int $navigationSort = 1;
 
-    protected ?string $heading = 'Course Store';
+    protected ?string $heading = 'Store';
 
-    protected ?string $subheading = 'Browse available courses and add them to your cart.';
+    protected ?string $subheading = 'Browse available products and add them to your cart.';
 
     public function content(Schema $schema): Schema
     {

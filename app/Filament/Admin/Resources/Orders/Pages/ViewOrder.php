@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Orders\Pages;
 
+use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Filament\Admin\Resources\Orders\OrderResource;
+use App\Models\OrderItem;
 use App\Services\StripeService;
 use Exception;
 use Filament\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Icons\Heroicon;
@@ -23,6 +26,47 @@ final class ViewOrder extends ViewRecord
         $record = $this->getRecord();
 
         return [
+            Action::make('markFulfilled')
+                ->label('Mark Items Fulfilled')
+                ->icon(Heroicon::OutlinedCheckCircle)
+                ->color('success')
+                ->visible(fn (): bool => $record->status === OrderStatus::Completed
+                    && $record->orderItems()->where('status', OrderItemStatus::Pending)->exists())
+                ->form([
+                    CheckboxList::make('order_item_ids')
+                        ->label('Select items to mark as fulfilled')
+                        ->options(function () use ($record): array {
+                            /** @var \Illuminate\Database\Eloquent\Collection<int, OrderItem> $items */
+                            $items = $record->orderItems()
+                                ->where('status', OrderItemStatus::Pending)
+                                ->with('product')
+                                ->get();
+
+                            return $items
+                                ->mapWithKeys(fn (OrderItem $item): array => [
+                                    $item->id => "{$item->product->name} (x{$item->quantity})",
+                                ])
+                                ->all();
+                        })
+                        ->required(),
+                ])
+                ->action(function (array $data) use ($record): void {
+                    $items = $record->orderItems()
+                        ->whereIn('id', $data['order_item_ids'])
+                        ->where('status', OrderItemStatus::Pending)
+                        ->get();
+
+                    /** @var OrderItem $item */
+                    foreach ($items as $item) {
+                        $item->markFulfilled();
+                    }
+
+                    Notification::make()
+                        ->title('Items marked as fulfilled')
+                        ->body($items->count().' item(s) marked as fulfilled.')
+                        ->success()
+                        ->send();
+                }),
             Action::make('refund')
                 ->label('Refund')
                 ->icon(Heroicon::OutlinedArrowUturnLeft)

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\OrderItemStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,7 @@ final class OrderItem extends Model
         'quantity' => 'integer',
         'unit_price' => 'integer',
         'total_price' => 'integer',
+        'status' => OrderItemStatus::class,
     ];
 
     public function order(): BelongsTo
@@ -27,6 +29,7 @@ final class OrderItem extends Model
         return $this->belongsTo(Order::class);
     }
 
+    /** @return BelongsTo<Product, $this> */
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
@@ -46,5 +49,13 @@ final class OrderItem extends Model
     public function formattedTotalPrice(): string
     {
         return '$'.number_format($this->total_price / 100, 2);
+    }
+
+    /**
+     * Mark this order item as fulfilled.
+     */
+    public function markFulfilled(): void
+    {
+        $this->update(['status' => OrderItemStatus::Fulfilled]);
     }
 }

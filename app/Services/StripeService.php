@@ -10,6 +10,8 @@ use Stripe\Checkout\Session as CheckoutSession;
 use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
+use Stripe\Invoice;
+use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Stripe\StripeClient;
 use Stripe\Webhook;
@@ -49,17 +51,26 @@ final readonly class StripeService implements StripeServiceContract
         string $successUrl,
         string $cancelUrl,
         array $metadata = [],
+        bool $setupFutureUsage = false,
     ): CheckoutSession {
         $customer = $this->createOrGetCustomer($user);
 
-        return $this->client->checkout->sessions->create([
+        $params = [
             'customer' => $customer->id,
             'line_items' => $lineItems,
             'mode' => 'payment',
             'success_url' => $successUrl,
             'cancel_url' => $cancelUrl,
             'metadata' => $metadata,
-        ]);
+        ];
+
+        if ($setupFutureUsage) {
+            $params['payment_intent_data'] = [
+                'setup_future_usage' => 'off_session',
+            ];
+        }
+
+        return $this->client->checkout->sessions->create($params);
     }
 
     /**
@@ -83,5 +94,56 @@ final readonly class StripeService implements StripeServiceContract
         }
 
         return $this->client->refunds->create($params);
+    }
+
+    /**
+     * @param  array<string, string>  $metadata
+     */
+    public function chargePaymentMethod(
+        string $customerId,
+        string $paymentMethodId,
+        int $amount,
+        string $description = '',
+        array $metadata = [],
+    ): PaymentIntent {
+        return $this->client->paymentIntents->create([
+            'customer' => $customerId,
+            'payment_method' => $paymentMethodId,
+            'amount' => $amount,
+            'currency' => 'usd',
+            'description' => $description,
+            'metadata' => $metadata,
+            'off_session' => true,
+            'confirm' => true,
+        ]);
+    }
+
+    /**
+     * @param  array<string, string>  $metadata
+     */
+    public function createAndSendInvoice(
+        string $customerId,
+        int $amount,
+        string $description = '',
+        array $metadata = [],
+    ): Invoice {
+        // Create an invoice item
+        $this->client->invoiceItems->create([
+            'customer' => $customerId,
+            'amount' => $amount,
+            'currency' => 'usd',
+            'description' => $description,
+        ]);
+
+        // Create and send the invoice
+        $invoice = $this->client->invoices->create([
+            'customer' => $customerId,
+            'auto_advance' => true,
+            'collection_method' => 'send_invoice',
+            'days_until_due' => 7,
+            'metadata' => $metadata,
+        ]);
+
+        return $this->client->invoices->sendInvoice($invoice->id);
     }
 }

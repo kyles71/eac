@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
 use App\Models\Product;
@@ -72,6 +73,33 @@ final class ProductFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'is_active' => false,
+        ]);
+    }
+
+    /**
+     * Create a product linked to a Costume.
+     */
+    public function forCostume(?Costume $costume = null): static
+    {
+        return $this->state(function (array $attributes) use ($costume): array {
+            $costume ??= Costume::factory()->create();
+
+            return [
+                'name' => $costume->name,
+                'productable_type' => Costume::class,
+                'productable_id' => $costume->id,
+            ];
+        });
+    }
+
+    /**
+     * Create a standalone product (no productable morph).
+     */
+    public function standalone(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'productable_type' => null,
+            'productable_id' => null,
         ]);
     }
 }

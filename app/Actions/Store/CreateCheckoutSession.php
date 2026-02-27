@@ -6,11 +6,14 @@ namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
 use App\Enums\CreditTransactionType;
+use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentPlanMethod;
 use App\Models\Course;
 use App\Models\DiscountCode;
 use App\Models\GiftCardType;
 use App\Models\Order;
+use App\Models\PaymentPlanTemplate;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -21,9 +24,16 @@ final readonly class CreateCheckoutSession
         private StripeServiceContract $stripeService,
     ) {}
 
-    public function handle(User $user, string $successUrl, string $cancelUrl, ?DiscountCode $discountCode = null, int $creditToApply = 0): string
-    {
-        return DB::transaction(function () use ($user, $successUrl, $cancelUrl, $discountCode, $creditToApply): string {
+    public function handle(
+        User $user,
+        string $successUrl,
+        string $cancelUrl,
+        ?DiscountCode $discountCode = null,
+        int $creditToApply = 0,
+        ?PaymentPlanTemplate $paymentPlanTemplate = null,
+        ?PaymentPlanMethod $paymentPlanMethod = null,
+    ): string {
+        return DB::transaction(function () use ($user, $successUrl, $cancelUrl, $discountCode, $creditToApply, $paymentPlanTemplate, $paymentPlanMethod): string {
             $cartItems = $user->cartItems()->with('product.productable')->get();
 
             if ($cartItems->isEmpty()) {
@@ -136,18 +146,41 @@ final readonly class CreateCheckoutSession
                 return $successUrl.'?order_id='.$order->id;
             }
 
+            // Determine the checkout amount (first installment if payment plan, otherwise full total)
+            $checkoutAmount = $total;
+            $usePaymentPlan = $paymentPlanTemplate !== null && $paymentPlanMethod !== null;
+
+            if ($usePaymentPlan) {
+                $amounts = $paymentPlanTemplate->installmentAmounts($total);
+                $checkoutAmount = $amounts['first'];
+            }
+
             // Build consolidated line item for Stripe
-            if ($total < $subtotal) {
+            if ($checkoutAmount < $subtotal || $usePaymentPlan) {
+                $label = $usePaymentPlan
+                    ? "Order #{$order->id} – Installment 1 of {$paymentPlanTemplate->number_of_installments}"
+                    : "Order #{$order->id}";
+
                 $lineItems = [[
                     'price_data' => [
                         'currency' => 'usd',
                         'product_data' => [
-                            'name' => 'Order #'.$order->id,
+                            'name' => $label,
                         ],
-                        'unit_amount' => $total,
+                        'unit_amount' => $checkoutAmount,
                     ],
                     'quantity' => 1,
                 ]];
+            }
+
+            // Build metadata
+            $metadata = [
+                'order_id' => (string) $order->id,
+            ];
+
+            if ($usePaymentPlan) {
+                $metadata['payment_plan_template_id'] = (string) $paymentPlanTemplate->id;
+                $metadata['payment_plan_method'] = $paymentPlanMethod->value;
             }
 
             // Create Stripe Checkout Session
@@ -156,9 +189,8 @@ final readonly class CreateCheckoutSession
                 lineItems: $lineItems,
                 successUrl: $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
                 cancelUrl: $cancelUrl,
-                metadata: [
-                    'order_id' => (string) $order->id,
-                ],
+                metadata: $metadata,
+                setupFutureUsage: $usePaymentPlan,
             );
 
             $order->update([
@@ -191,10 +223,13 @@ final readonly class CreateCheckoutSession
                         'student_id' => null,
                     ]);
                 }
+                $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
             } elseif ($product->productable instanceof GiftCardType) {
                 $fulfillGiftCard = new FulfillGiftCard;
                 $fulfillGiftCard->handle($orderItem, $user);
+                $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
             }
+            // Costume and standalone products remain Pending for manual fulfillment
         }
 
         $user->cartItems()->delete();

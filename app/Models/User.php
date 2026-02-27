@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -90,6 +91,11 @@ final class User extends Authenticatable implements FilamentUser, HasName
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function paymentPlans(): HasManyThrough
+    {
+        return $this->hasManyThrough(PaymentPlan::class, Order::class);
     }
 
     public function cartItems(): HasMany

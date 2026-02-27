@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Orders\Schemas;
 
+use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -62,6 +63,13 @@ final class OrderInfolist
                                 TextEntry::make('total_price')
                                     ->label('Total')
                                     ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                                TextEntry::make('status')
+                                    ->label('Fulfillment')
+                                    ->badge()
+                                    ->color(fn (OrderItemStatus $state): string => match ($state) {
+                                        OrderItemStatus::Fulfilled => 'success',
+                                        OrderItemStatus::Pending => 'warning',
+                                    }),
                             ]),
                     ]),
             ]);

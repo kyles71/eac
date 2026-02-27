@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
+use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -82,12 +83,15 @@ final readonly class CompleteOrder
                             'student_id' => null,
                         ]);
                     }
+                    $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
                 } elseif ($product->productable instanceof GiftCardType) {
                     $fulfillGiftCard = new FulfillGiftCard;
                     /** @var \App\Models\User $purchaser */
                     $purchaser = $order->user;
                     $fulfillGiftCard->handle($orderItem, $purchaser);
+                    $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
                 }
+                // Costume and standalone products remain Pending for manual fulfillment
             }
 
             $order->update(['status' => OrderStatus::Completed]);

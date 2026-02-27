@@ -9,10 +9,13 @@ use App\Actions\Store\CreateCheckoutSession;
 use App\Actions\Store\RedeemGiftCard;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
+use App\Enums\PaymentPlanMethod;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
+use App\Models\PaymentPlanTemplate;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -232,6 +235,40 @@ final class Cart extends Page implements HasTable
 
                             return ($user->credit_balance ?? 0) > 0;
                         }),
+                    Select::make('payment_plan_template_id')
+                        ->label('Payment Plan')
+                        ->placeholder('Pay in full')
+                        ->options(function (): array {
+                            $cartItems = CartItem::query()
+                                ->where('user_id', auth()->id())
+                                ->with('product')
+                                ->get();
+
+                            if ($cartItems->isEmpty()) {
+                                return [];
+                            }
+
+                            // Find templates that match any product in the cart
+                            $templates = PaymentPlanTemplate::query()
+                                ->active()
+                                ->get();
+
+                            $options = [];
+                            /** @var PaymentPlanTemplate $template */
+                            foreach ($templates as $template) {
+                                $options[$template->id] = "{$template->name} ({$template->number_of_installments} x {$template->frequency->getLabel()})";
+                            }
+
+                            return $options;
+                        })
+                        ->visible(fn (): bool => PaymentPlanTemplate::query()->active()->exists())
+                        ->reactive(),
+                    Select::make('payment_plan_method')
+                        ->label('Payment Plan Method')
+                        ->options(PaymentPlanMethod::class)
+                        ->default(PaymentPlanMethod::AutoCharge->value)
+                        ->visible(fn (callable $get): bool => $get('payment_plan_template_id') !== null)
+                        ->required(fn (callable $get): bool => $get('payment_plan_template_id') !== null),
                 ])
                 ->action(function (array $data): void {
                     try {
@@ -248,12 +285,22 @@ final class Cart extends Page implements HasTable
                         $user = auth()->user();
                         $creditToApply = ! empty($data['use_credit']) ? ($user->credit_balance ?? 0) : 0;
 
+                        $paymentPlanTemplate = ! empty($data['payment_plan_template_id'])
+                            ? PaymentPlanTemplate::query()->find($data['payment_plan_template_id'])
+                            : null;
+
+                        $paymentPlanMethod = ! empty($data['payment_plan_method'])
+                            ? PaymentPlanMethod::from($data['payment_plan_method'])
+                            : null;
+
                         $checkoutUrl = $createCheckout->handle(
                             $user,
                             $successUrl,
                             $cancelUrl,
                             $discountCode,
                             $creditToApply,
+                            $paymentPlanTemplate,
+                            $paymentPlanMethod,
                         );
 
                         $this->redirect($checkoutUrl);

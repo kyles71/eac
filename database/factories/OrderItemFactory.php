@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\OrderItemStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -30,6 +31,17 @@ final class OrderItemFactory extends Factory
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total_price' => $unitPrice * $quantity,
+            'status' => OrderItemStatus::Pending,
         ];
+    }
+
+    /**
+     * Mark the order item as fulfilled.
+     */
+    public function fulfilled(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'status' => OrderItemStatus::Fulfilled,
+        ]);
     }
 }
