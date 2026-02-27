@@ -21,11 +21,19 @@ final class Order extends Model
         'status' => OrderStatus::class,
         'subtotal' => 'integer',
         'total' => 'integer',
+        'discount_code_id' => 'integer',
+        'discount_amount' => 'integer',
+        'credit_applied' => 'integer',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function discountCode(): BelongsTo
+    {
+        return $this->belongsTo(DiscountCode::class);
     }
 
     public function orderItems(): HasMany

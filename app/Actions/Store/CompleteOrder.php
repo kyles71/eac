@@ -8,6 +8,7 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\GiftCardType;
 use App\Models\Order;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -67,22 +68,25 @@ final readonly class CompleteOrder
                 }
             }
 
-            // Create enrollments for course products
+            // Create enrollments for course products and fulfill gift cards
             /** @var \App\Models\OrderItem $orderItem */
             foreach ($order->orderItems as $orderItem) {
                 /** @var \App\Models\Product $product */
                 $product = $orderItem->product;
 
-                if (! ($product->productable instanceof Course)) {
-                    continue;
-                }
-
-                for ($i = 0; $i < $orderItem->quantity; $i++) {
-                    Enrollment::query()->create([
-                        'course_id' => $product->productable->id,
-                        'user_id' => $order->user_id,
-                        'student_id' => null,
-                    ]);
+                if ($product->productable instanceof Course) {
+                    for ($i = 0; $i < $orderItem->quantity; $i++) {
+                        Enrollment::query()->create([
+                            'course_id' => $product->productable->id,
+                            'user_id' => $order->user_id,
+                            'student_id' => null,
+                        ]);
+                    }
+                } elseif ($product->productable instanceof GiftCardType) {
+                    $fulfillGiftCard = new FulfillGiftCard;
+                    /** @var \App\Models\User $purchaser */
+                    $purchaser = $order->user;
+                    $fulfillGiftCard->handle($orderItem, $purchaser);
                 }
             }
 

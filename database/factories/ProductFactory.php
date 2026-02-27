@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Models\Course;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -43,6 +44,23 @@ final class ProductFactory extends Factory
                 'name' => $course->name,
                 'productable_type' => Course::class,
                 'productable_id' => $course->id,
+            ];
+        });
+    }
+
+    /**
+     * Create a product linked to a GiftCardType.
+     */
+    public function forGiftCardType(?GiftCardType $giftCardType = null): static
+    {
+        return $this->state(function (array $attributes) use ($giftCardType): array {
+            $giftCardType ??= GiftCardType::factory()->create();
+
+            return [
+                'name' => $giftCardType->name,
+                'productable_type' => GiftCardType::class,
+                'productable_id' => $giftCardType->id,
+                'price' => $giftCardType->denomination > 0 ? $giftCardType->denomination : ($attributes['price'] ?? 5000),
             ];
         });
     }

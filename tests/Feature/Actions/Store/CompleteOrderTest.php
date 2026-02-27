@@ -7,6 +7,8 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\GiftCard;
+use App\Models\GiftCardType;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -185,4 +187,45 @@ it('handles multiple order items for different courses', function () {
 
     // 1 enrollment for course 2
     expect(Enrollment::query()->where('course_id', $course2->id)->count())->toBe(1);
+});
+
+it('fulfills gift cards when completing an order with gift card type products', function () {
+    $giftCardType = GiftCardType::factory()->denomination(5000)->create();
+    $gcProduct = Product::factory()->forGiftCardType($giftCardType)->create(['price' => 5000]);
+
+    $order = Order::factory()->create([
+        'user_id' => $this->user->id,
+        'status' => OrderStatus::Pending,
+        'subtotal' => 10000,
+        'total' => 10000,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $gcProduct->id,
+        'quantity' => 2,
+        'unit_price' => 5000,
+        'total_price' => 10000,
+    ]);
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $action = app(CompleteOrder::class);
+    $result = $action->handle($order);
+
+    expect($result)->toBeTrue();
+    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
+
+    // Should have created 2 gift cards
+    $giftCards = GiftCard::query()->where('purchased_by_user_id', $this->user->id)->get();
+    expect($giftCards)->toHaveCount(2);
+
+    /** @var GiftCard $gc */
+    foreach ($giftCards as $gc) {
+        expect($gc->initial_amount)->toBe(5000)
+            ->and($gc->remaining_amount)->toBe(5000)
+            ->and($gc->is_active)->toBeTrue()
+            ->and($gc->order_id)->toBe($order->id);
+    }
 });

@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Actions\Store\ApplyDiscountCode;
 use App\Actions\Store\CreateCheckoutSession;
+use App\Actions\Store\RedeemGiftCard;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Models\CartItem;
+use App\Models\DiscountCode;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -51,6 +55,12 @@ final class Cart extends Page implements HasTable
     #[Url(as: 'sort')]
     public ?string $tableSort = null;
 
+    public ?int $appliedDiscountCodeId = null;
+
+    public string $appliedDiscountDisplay = '';
+
+    public bool $useCredit = false;
+
     protected static ?string $title = 'Cart';
 
     protected static ?string $slug = 'cart';
@@ -84,6 +94,102 @@ final class Cart extends Page implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('redeemGiftCard')
+                ->label('Redeem Gift Card')
+                ->icon(Heroicon::OutlinedGift)
+                ->color('gray')
+                ->form([
+                    TextInput::make('gift_card_code')
+                        ->label('Gift Card Code')
+                        ->required()
+                        ->placeholder('Enter your gift card code'),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $redeemGiftCard = new RedeemGiftCard;
+                        $giftCard = $redeemGiftCard->handle(
+                            (string) $data['gift_card_code'],
+                            auth()->user(),
+                        );
+
+                        Notification::make()
+                            ->title('Gift card redeemed!')
+                            ->body("Added {$giftCard->formattedInitialAmount()} to your store credit.")
+                            ->success()
+                            ->send();
+                    } catch (InvalidArgumentException $e) {
+                        Notification::make()
+                            ->title('Invalid gift card')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+            Action::make('applyDiscount')
+                ->label($this->appliedDiscountCodeId !== null ? 'Change Discount Code' : 'Apply Discount Code')
+                ->icon(Heroicon::OutlinedTag)
+                ->color('gray')
+                ->form([
+                    TextInput::make('discount_code')
+                        ->label('Discount Code')
+                        ->required()
+                        ->placeholder('Enter your code'),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $applyDiscount = new ApplyDiscountCode;
+
+                        $subtotal = (int) CartItem::query()
+                            ->where('user_id', auth()->id())
+                            ->join('products', 'products.id', '=', 'cart_items.product_id')
+                            ->selectRaw('SUM(cart_items.quantity * products.price) as total')
+                            ->value('total');
+
+                        $productIds = CartItem::query()
+                            ->where('user_id', auth()->id())
+                            ->pluck('product_id')
+                            ->all();
+
+                        $discountCode = $applyDiscount->handle(
+                            (string) $data['discount_code'],
+                            auth()->user(),
+                            $subtotal,
+                            $productIds,
+                        );
+
+                        $this->appliedDiscountCodeId = $discountCode->id;
+                        $this->appliedDiscountDisplay = "{$discountCode->code} ({$discountCode->formattedValue()} off)";
+
+                        Notification::make()
+                            ->title('Discount applied')
+                            ->body("Code {$discountCode->code} applied: {$discountCode->formattedValue()} off")
+                            ->success()
+                            ->send();
+                    } catch (InvalidArgumentException $e) {
+                        $this->appliedDiscountCodeId = null;
+                        $this->appliedDiscountDisplay = '';
+
+                        Notification::make()
+                            ->title('Invalid discount code')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+            Action::make('removeDiscount')
+                ->label('Remove Discount')
+                ->icon(Heroicon::OutlinedXMark)
+                ->color('danger')
+                ->visible(fn (): bool => $this->appliedDiscountCodeId !== null)
+                ->action(function (): void {
+                    $this->appliedDiscountCodeId = null;
+                    $this->appliedDiscountDisplay = '';
+
+                    Notification::make()
+                        ->title('Discount removed')
+                        ->success()
+                        ->send();
+                }),
             Action::make('checkout')
                 ->label('Proceed to Checkout')
                 ->icon(Heroicon::OutlinedCreditCard)
@@ -91,18 +197,63 @@ final class Cart extends Page implements HasTable
                 ->disabled(fn (): bool => CartItem::query()->where('user_id', auth()->id())->doesntExist())
                 ->requiresConfirmation()
                 ->modalHeading('Proceed to Checkout')
-                ->modalDescription('You will be redirected to Stripe to complete your payment.')
-                ->action(function (): void {
+                ->modalDescription(function (): string {
+                    $parts = [];
+
+                    if ($this->appliedDiscountCodeId !== null) {
+                        $parts[] = "Discount: {$this->appliedDiscountDisplay}";
+                    }
+
+                    /** @var \App\Models\User $user */
+                    $user = auth()->user();
+                    $creditBalance = $user->credit_balance ?? 0;
+
+                    if ($creditBalance > 0) {
+                        $parts[] = 'Store credit available: $'.number_format($creditBalance / 100, 2);
+                    }
+
+                    $parts[] = 'You will be redirected to Stripe to complete your payment (unless fully covered by discount/credit).';
+
+                    return implode("\n", $parts);
+                })
+                ->form([
+                    Toggle::make('use_credit')
+                        ->label(function (): string {
+                            /** @var \App\Models\User $user */
+                            $user = auth()->user();
+                            $creditBalance = $user->credit_balance ?? 0;
+
+                            return 'Apply store credit ($'.number_format($creditBalance / 100, 2).')';
+                        })
+                        ->default($this->useCredit)
+                        ->visible(function (): bool {
+                            /** @var \App\Models\User $user */
+                            $user = auth()->user();
+
+                            return ($user->credit_balance ?? 0) > 0;
+                        }),
+                ])
+                ->action(function (array $data): void {
                     try {
                         $createCheckout = app(CreateCheckoutSession::class);
 
                         $successUrl = CheckoutSuccess::getUrl();
                         $cancelUrl = self::getUrl();
 
+                        $discountCode = $this->appliedDiscountCodeId !== null
+                            ? DiscountCode::query()->find($this->appliedDiscountCodeId)
+                            : null;
+
+                        /** @var \App\Models\User $user */
+                        $user = auth()->user();
+                        $creditToApply = ! empty($data['use_credit']) ? ($user->credit_balance ?? 0) : 0;
+
                         $checkoutUrl = $createCheckout->handle(
-                            auth()->user(),
+                            $user,
                             $successUrl,
                             $cancelUrl,
+                            $discountCode,
+                            $creditToApply,
                         );
 
                         $this->redirect($checkoutUrl);

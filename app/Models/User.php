@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\CreditTransactionType;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -95,6 +97,40 @@ final class User extends Authenticatable implements FilamentUser, HasName
         return $this->hasMany(CartItem::class);
     }
 
+    public function giftCardsPurchased(): HasMany
+    {
+        return $this->hasMany(GiftCard::class, 'purchased_by_user_id');
+    }
+
+    public function giftCardsRedeemed(): HasMany
+    {
+        return $this->hasMany(GiftCard::class, 'redeemed_by_user_id');
+    }
+
+    public function creditTransactions(): HasMany
+    {
+        return $this->hasMany(CreditTransaction::class);
+    }
+
+    /**
+     * Adjust the user's credit balance and record a transaction.
+     *
+     * @param  int  $amount  Positive to add credit, negative to debit
+     */
+    public function adjustCredit(int $amount, CreditTransactionType $type, ?Model $reference = null, ?string $description = null): CreditTransaction
+    {
+        $this->increment('credit_balance', $amount);
+
+        /** @var CreditTransaction */
+        return $this->creditTransactions()->create([
+            'amount' => $amount,
+            'type' => $type,
+            'reference_type' => $reference !== null ? $reference->getMorphClass() : null,
+            'reference_id' => $reference?->getKey(),
+            'description' => $description,
+        ]);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -105,6 +141,7 @@ final class User extends Authenticatable implements FilamentUser, HasName
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'credit_balance' => 'integer',
             'app_authentication_secret' => 'encrypted',
             'app_authentication_recovery_codes' => 'encrypted:array',
         ];

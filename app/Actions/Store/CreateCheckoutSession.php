@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
+use App\Enums\CreditTransactionType;
 use App\Enums\OrderStatus;
 use App\Models\Course;
+use App\Models\DiscountCode;
+use App\Models\GiftCardType;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -18,9 +21,9 @@ final readonly class CreateCheckoutSession
         private StripeServiceContract $stripeService,
     ) {}
 
-    public function handle(User $user, string $successUrl, string $cancelUrl): string
+    public function handle(User $user, string $successUrl, string $cancelUrl, ?DiscountCode $discountCode = null, int $creditToApply = 0): string
     {
-        return DB::transaction(function () use ($user, $successUrl, $cancelUrl): string {
+        return DB::transaction(function () use ($user, $successUrl, $cancelUrl, $discountCode, $creditToApply): string {
             $cartItems = $user->cartItems()->with('product.productable')->get();
 
             if ($cartItems->isEmpty()) {
@@ -79,10 +82,72 @@ final readonly class CreateCheckoutSession
                 'status' => OrderStatus::Pending,
                 'subtotal' => $subtotal,
                 'total' => $subtotal,
+                'discount_code_id' => null,
+                'discount_amount' => 0,
+                'credit_applied' => 0,
             ]);
 
             foreach ($orderItems as $item) {
                 $order->orderItems()->create($item);
+            }
+
+            $total = $subtotal;
+
+            // Apply discount code if provided
+            if ($discountCode !== null) {
+                $discountAmount = $discountCode->calculateDiscount($subtotal);
+                $total = max(0, $subtotal - $discountAmount);
+
+                $order->update([
+                    'discount_code_id' => $discountCode->id,
+                    'discount_amount' => $discountAmount,
+                    'total' => $total,
+                ]);
+
+                $discountCode->increment('times_used');
+            }
+
+            // Apply store credit if requested
+            if ($creditToApply > 0 && $total > 0) {
+                $user->refresh();
+                $actualCredit = min($creditToApply, $total, $user->credit_balance);
+
+                if ($actualCredit > 0) {
+                    $total = max(0, $total - $actualCredit);
+
+                    $order->update([
+                        'credit_applied' => $actualCredit,
+                        'total' => $total,
+                    ]);
+
+                    $user->adjustCredit(
+                        -$actualCredit,
+                        CreditTransactionType::CheckoutDebit,
+                        $order,
+                        'Applied to order #'.$order->id,
+                    );
+                }
+            }
+
+            // If fully covered by discount + credit, complete immediately
+            if ($total === 0) {
+                $this->completeZeroTotalOrder($order, $user);
+
+                return $successUrl.'?order_id='.$order->id;
+            }
+
+            // Build consolidated line item for Stripe
+            if ($total < $subtotal) {
+                $lineItems = [[
+                    'price_data' => [
+                        'currency' => 'usd',
+                        'product_data' => [
+                            'name' => 'Order #'.$order->id,
+                        ],
+                        'unit_amount' => $total,
+                    ],
+                    'quantity' => 1,
+                ]];
             }
 
             // Create Stripe Checkout Session
@@ -102,5 +167,36 @@ final readonly class CreateCheckoutSession
 
             return $session->url;
         });
+    }
+
+    /**
+     * Complete a zero-total order immediately (no Stripe needed).
+     */
+    private function completeZeroTotalOrder(Order $order, User $user): void
+    {
+        $order->update(['status' => OrderStatus::Completed]);
+
+        $order->loadMissing('orderItems.product.productable');
+
+        /** @var \App\Models\OrderItem $orderItem */
+        foreach ($order->orderItems as $orderItem) {
+            /** @var \App\Models\Product $product */
+            $product = $orderItem->product;
+
+            if ($product->productable instanceof Course) {
+                for ($i = 0; $i < $orderItem->quantity; $i++) {
+                    \App\Models\Enrollment::query()->create([
+                        'course_id' => $product->productable->id,
+                        'user_id' => $user->id,
+                        'student_id' => null,
+                    ]);
+                }
+            } elseif ($product->productable instanceof GiftCardType) {
+                $fulfillGiftCard = new FulfillGiftCard;
+                $fulfillGiftCard->handle($orderItem, $user);
+            }
+        }
+
+        $user->cartItems()->delete();
     }
 }

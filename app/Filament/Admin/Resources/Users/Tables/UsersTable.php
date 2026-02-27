@@ -23,6 +23,11 @@ final class UsersTable
                     ->searchable(),
                 TextColumn::make('email')
                     ->searchable(),
+                TextColumn::make('credit_balance')
+                    ->label('Store Credit')
+                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('email_verified_at')
                     ->dateTime()
                     ->sortable()
