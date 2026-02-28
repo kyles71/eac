@@ -77,7 +77,7 @@
                     }
                 }
 
-                $wire.setPaymentMethod(pm?.id || pm || '', brand, last4)
+                $wire.setPaymentMethod((typeof pm === 'string' ? pm : pm?.id) || '', brand, last4)
                 $wire.paymentConfirmed()
             } else {
                 this.errorMessage = 'Payment was not completed. Please try again.'
