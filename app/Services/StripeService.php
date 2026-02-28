@@ -146,4 +146,35 @@ final readonly class StripeService implements StripeServiceContract
 
         return $this->client->invoices->sendInvoice($invoice->id);
     }
+
+    /**
+     * @param  array<string, string>  $metadata
+     */
+    public function createPaymentIntent(
+        User $user,
+        int $amount,
+        array $metadata = [],
+        bool $setupFutureUsage = false,
+    ): PaymentIntent {
+        $customer = $this->createOrGetCustomer($user);
+
+        $params = [
+            'customer' => $customer->id,
+            'amount' => $amount,
+            'currency' => 'usd',
+            'metadata' => $metadata,
+            'automatic_payment_methods' => ['enabled' => true],
+        ];
+
+        if ($setupFutureUsage) {
+            $params['setup_future_usage'] = 'off_session';
+        }
+
+        return $this->client->paymentIntents->create($params);
+    }
+
+    public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent
+    {
+        return $this->client->paymentIntents->retrieve($paymentIntentId);
+    }
 }

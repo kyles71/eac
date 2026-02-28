@@ -155,30 +155,85 @@ final class StripeWebhookController
     private function handlePaymentIntentSucceeded(\Stripe\Event $event): JsonResponse
     {
         $paymentIntent = $event->data->object;
+
+        // Handle installment payments
         $installmentId = $paymentIntent->metadata->installment_id ?? null;
 
-        if ($installmentId === null) {
-            return response()->json(['message' => 'No installment metadata, skipping']);
+        if ($installmentId !== null) {
+            $installment = Installment::query()->find($installmentId);
+
+            if ($installment === null) {
+                Log::warning("Installment #{$installmentId} not found for payment_intent.succeeded.", [
+                    'payment_intent_id' => $paymentIntent->id,
+                ]);
+
+                return response()->json(['error' => 'Installment not found'], 404);
+            }
+
+            if ($installment->status !== InstallmentStatus::Paid) {
+                $installment->markPaid(stripePaymentIntentId: $paymentIntent->id);
+                Log::info("Installment #{$installmentId} marked as paid via webhook.", [
+                    'payment_intent_id' => $paymentIntent->id,
+                ]);
+            }
+
+            return response()->json(['message' => 'Installment payment processed']);
         }
 
-        $installment = Installment::query()->find($installmentId);
+        // Handle order payments (custom checkout via Stripe Elements)
+        $orderId = $paymentIntent->metadata->order_id ?? null;
 
-        if ($installment === null) {
-            Log::warning("Installment #{$installmentId} not found for payment_intent.succeeded.", [
-                'payment_intent_id' => $paymentIntent->id,
-            ]);
+        if ($orderId !== null) {
+            $order = Order::query()->find($orderId);
 
-            return response()->json(['error' => 'Installment not found'], 404);
+            if ($order !== null && $order->status === OrderStatus::Pending) {
+                $order->update([
+                    'stripe_payment_intent_id' => $paymentIntent->id,
+                ]);
+
+                $this->completeOrder->handle($order);
+
+                // Create payment plan if template metadata is present
+                $templateId = $paymentIntent->metadata->payment_plan_template_id ?? null;
+                $methodValue = $paymentIntent->metadata->payment_plan_method ?? null;
+
+                if ($templateId !== null && $methodValue !== null) {
+                    $template = PaymentPlanTemplate::query()->find($templateId);
+                    $method = PaymentPlanMethod::from($methodValue);
+
+                    if ($template !== null) {
+                        $stripeCustomerId = $paymentIntent->customer ?? null;
+                        $stripePaymentMethodId = $paymentIntent->payment_method ?? null;
+
+                        if ($stripePaymentMethodId !== null) {
+                            /** @var \App\Models\User $user */
+                            $user = $order->user;
+                            $user->update(['stripe_payment_method_id' => $stripePaymentMethodId]);
+                        }
+
+                        $createPaymentPlan = new CreatePaymentPlan;
+                        $createPaymentPlan->handle(
+                            order: $order,
+                            template: $template,
+                            method: $method,
+                            stripeCustomerId: $stripeCustomerId,
+                            stripePaymentMethodId: $stripePaymentMethodId,
+                        );
+
+                        Log::info("Payment plan created for order #{$order->id} via webhook.", [
+                            'template_id' => $templateId,
+                            'method' => $methodValue,
+                        ]);
+                    }
+                }
+
+                Log::info("Order #{$order->id} completed via payment_intent.succeeded webhook.");
+            }
+
+            return response()->json(['message' => 'Order payment processed']);
         }
 
-        if ($installment->status !== InstallmentStatus::Paid) {
-            $installment->markPaid(stripePaymentIntentId: $paymentIntent->id);
-            Log::info("Installment #{$installmentId} marked as paid via webhook.", [
-                'payment_intent_id' => $paymentIntent->id,
-            ]);
-        }
-
-        return response()->json(['message' => 'Installment payment processed']);
+        return response()->json(['message' => 'No relevant metadata, skipping']);
     }
 
     private function handleInvoicePaid(\Stripe\Event $event): JsonResponse

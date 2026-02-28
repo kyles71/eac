@@ -309,7 +309,7 @@ it('handles payment_intent.succeeded without installment metadata gracefully', f
     $response = $controller($request);
 
     expect($response->getStatusCode())->toBe(200);
-    expect($response->getData(true))->toBe(['message' => 'No installment metadata, skipping']);
+    expect($response->getData(true))->toBe(['message' => 'No relevant metadata, skipping']);
 });
 
 it('handles invoice.paid webhook for installment', function () {

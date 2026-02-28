@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages;
 
 use App\Actions\Store\ApplyDiscountCode;
-use App\Actions\Store\CreateCheckoutSession;
 use App\Actions\Store\RedeemGiftCard;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
@@ -215,7 +214,7 @@ final class Cart extends Page implements HasTable
                         $parts[] = 'Store credit available: $'.number_format($creditBalance / 100, 2);
                     }
 
-                    $parts[] = 'You will be redirected to Stripe to complete your payment (unless fully covered by discount/credit).';
+                    $parts[] = 'You will proceed to our secure checkout to enter your payment details.';
 
                     return implode("\n", $parts);
                 })
@@ -271,46 +270,30 @@ final class Cart extends Page implements HasTable
                         ->required(fn (callable $get): bool => $get('payment_plan_template_id') !== null),
                 ])
                 ->action(function (array $data): void {
-                    try {
-                        $createCheckout = app(CreateCheckoutSession::class);
+                    $params = [];
 
-                        $successUrl = CheckoutSuccess::getUrl();
-                        $cancelUrl = self::getUrl();
-
-                        $discountCode = $this->appliedDiscountCodeId !== null
-                            ? DiscountCode::query()->find($this->appliedDiscountCodeId)
-                            : null;
-
-                        /** @var \App\Models\User $user */
-                        $user = auth()->user();
-                        $creditToApply = ! empty($data['use_credit']) ? ($user->credit_balance ?? 0) : 0;
-
-                        $paymentPlanTemplate = ! empty($data['payment_plan_template_id'])
-                            ? PaymentPlanTemplate::query()->find($data['payment_plan_template_id'])
-                            : null;
-
-                        $paymentPlanMethod = ! empty($data['payment_plan_method'])
-                            ? PaymentPlanMethod::from($data['payment_plan_method'])
-                            : null;
-
-                        $checkoutUrl = $createCheckout->handle(
-                            $user,
-                            $successUrl,
-                            $cancelUrl,
-                            $discountCode,
-                            $creditToApply,
-                            $paymentPlanTemplate,
-                            $paymentPlanMethod,
-                        );
-
-                        $this->redirect($checkoutUrl);
-                    } catch (InvalidArgumentException $e) {
-                        Notification::make()
-                            ->title('Checkout failed')
-                            ->body($e->getMessage())
-                            ->danger()
-                            ->send();
+                    if ($this->appliedDiscountCodeId !== null) {
+                        $params['discountCodeId'] = $this->appliedDiscountCodeId;
                     }
+
+                    if (! empty($data['use_credit'])) {
+                        $params['use_credit'] = 1;
+                    }
+
+                    if (! empty($data['payment_plan_template_id'])) {
+                        $params['payment_plan_template_id'] = $data['payment_plan_template_id'];
+                    }
+
+                    if (! empty($data['payment_plan_method'])) {
+                        $params['payment_plan_method'] = $data['payment_plan_method'];
+                    }
+
+                    $url = Checkout::getUrl();
+                    if (! empty($params)) {
+                        $url .= '?'.http_build_query($params);
+                    }
+
+                    $this->redirect($url);
                 }),
         ];
     }
