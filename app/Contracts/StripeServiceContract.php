@@ -57,4 +57,21 @@ interface StripeServiceContract
         string $description = '',
         array $metadata = [],
     ): Invoice;
+
+    /**
+     * Create a PaymentIntent for custom checkout using Stripe Elements.
+     *
+     * @param  array<string, string>  $metadata
+     */
+    public function createPaymentIntent(
+        User $user,
+        int $amount,
+        array $metadata = [],
+        bool $setupFutureUsage = false,
+    ): PaymentIntent;
+
+    /**
+     * Retrieve an existing PaymentIntent by ID.
+     */
+    public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent;
 }
