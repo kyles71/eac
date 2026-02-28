@@ -63,14 +63,23 @@
                     let brand = 'Card'
                     let last4 = '****'
 
-                    try {
-                        const piDetails = await this.stripe.retrievePaymentIntent(this.clientSecret)
-                        if (piDetails.paymentIntent && piDetails.paymentIntent.payment_method_types) {
-                            brand = piDetails.paymentIntent.payment_method_types[0] || 'Card'
+                    if (typeof pm === 'object' && pm !== null) {
+                        brand = pm.card?.brand || pm.type || 'Card'
+                        last4 = pm.card?.last4 || '****'
+                    } else if (typeof pm === 'string') {
+                        try {
+                            const pmResult = await this.stripe.retrievePaymentMethod(pm)
+                            if (pmResult.paymentMethod) {
+                                brand = pmResult.paymentMethod.card?.brand || pmResult.paymentMethod.type || 'Card'
+                                last4 = pmResult.paymentMethod.card?.last4 || '****'
+                            }
+                        } catch (e) {
+                            // Payment method details are non-critical; defaults are used for display only
+                            console.warn('Could not retrieve payment method details:', e.message)
                         }
-                    } catch (e) {}
+                    }
 
-                    $wire.setPaymentMethod(pm || '', brand, last4)
+                    $wire.setPaymentMethod(pm?.id || pm || '', brand, last4)
                     $wire.paymentConfirmed()
                 } else {
                     this.errorMessage = 'Payment was not completed. Please try again.'
