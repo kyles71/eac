@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages;
 
 use App\Actions\Store\ApplyDiscountCode;
+use App\Actions\Store\CreateCheckoutSession;
 use App\Actions\Store\RedeemGiftCard;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
@@ -14,21 +15,29 @@ use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Flex;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Livewire\Attributes\Url;
+use Livewire\Component;
 
 final class Cart extends Page implements HasTable
 {
@@ -36,32 +45,19 @@ final class Cart extends Page implements HasTable
         makeTable as makeBaseTable;
     }
 
-    #[Url(as: 'reordering')]
-    public bool $isTableReordering = false;
-
-    /**
-     * @var array<string, mixed> | null
-     */
-    #[Url(as: 'filters')]
-    public ?array $tableFilters = null;
-
-    #[Url(as: 'grouping')]
-    public ?string $tableGrouping = null;
-
-    /**
-     * @var ?string
-     */
-    #[Url(as: 'search')]
-    public $tableSearch = '';
-
-    #[Url(as: 'sort')]
-    public ?string $tableSort = null;
-
     public ?int $appliedDiscountCodeId = null;
 
     public string $appliedDiscountDisplay = '';
 
     public bool $useCredit = false;
+
+    public string $promoCode = '';
+
+    public string $giftCardCode = '';
+
+    public ?int $selectedPaymentPlanTemplateId = null;
+
+    public ?string $selectedPaymentPlanMethod = null;
 
     protected static ?string $title = 'Cart';
 
@@ -90,212 +86,525 @@ final class Cart extends Page implements HasTable
         return $schema
             ->components([
                 EmbeddedTable::make(),
+                Flex::make([
+                    Section::make('Promo Codes & Gift Cards')
+                        ->schema([
+                            TextInput::make('promoCode')
+                                ->label('Promo Code')
+                                ->placeholder('Enter promo code')
+                                ->afterContent(
+                                    Action::make('applyPromoCode')
+                                        ->label('Apply')
+                                        ->button()
+                                        ->color('warning')
+                                        ->size('sm')
+                                        ->action(function (Component $livewire): void {
+                                            $livewire->applyPromoCode();
+                                        }),
+                                ),
+                            Flex::make([
+                                Text::make(fn (): string => "✓ {$this->appliedDiscountDisplay}")
+                                    ->color('success'),
+                                Action::make('removeDiscount')
+                                    ->label('Remove')
+                                    ->icon(Heroicon::OutlinedXMark)
+                                    ->color('danger')
+                                    ->size('sm')
+                                    ->link()
+                                    ->action(function (Component $livewire): void {
+                                        $livewire->removeDiscount();
+                                    }),
+                            ])
+                                ->visible(fn (): bool => $this->appliedDiscountCodeId !== null),
+                            TextInput::make('giftCardCode')
+                                ->label('Gift Card')
+                                ->placeholder('Enter gift card code')
+                                ->afterContent(
+                                    Action::make('redeemGiftCard')
+                                        ->label('Redeem')
+                                        ->button()
+                                        ->color('warning')
+                                        ->size('sm')
+                                        ->action(function (Component $livewire): void {
+                                            $livewire->redeemGiftCard();
+                                        }),
+                                ),
+                            Checkbox::make('useCredit')
+                                ->label(function (): string {
+                                    /** @var \App\Models\User $user */
+                                    $user = auth()->user();
+                                    $creditBalance = $user->credit_balance ?? 0;
+
+                                    return "Apply store credit ({$this->formatMoney($creditBalance)})";
+                                })
+                                ->live()
+                                ->visible(function (): bool {
+                                    /** @var \App\Models\User $user */
+                                    $user = auth()->user();
+
+                                    return ($user->credit_balance ?? 0) > 0;
+                                }),
+                        ])
+                        ->grow(false)
+                        ->columnSpanFull(),
+                    Text::make('')
+                        ->columnSpanFull(),
+                    Section::make('Order Summary')
+                        ->schema($this->getOrderSummarySchema())
+                        ->grow(false)
+                        ->columnSpanFull(),
+                ])
+                    ->from('lg')
+                    ->visible(fn (): bool => $this->cartItems->isNotEmpty()),
             ]);
     }
 
-    protected function getHeaderActions(): array
+    /**
+     * Get cart items for the authenticated user.
+     *
+     * @return Collection<int, CartItem>
+     */
+    public function getCartItemsProperty(): Collection
     {
-        return [
-            Action::make('redeemGiftCard')
-                ->label('Redeem Gift Card')
-                ->icon(Heroicon::OutlinedGift)
-                ->color('gray')
-                ->form([
-                    TextInput::make('gift_card_code')
-                        ->label('Gift Card Code')
-                        ->required()
-                        ->placeholder('Enter your gift card code'),
-                ])
-                ->action(function (array $data): void {
-                    try {
-                        $redeemGiftCard = new RedeemGiftCard;
-                        $giftCard = $redeemGiftCard->handle(
-                            (string) $data['gift_card_code'],
-                            auth()->user(),
-                        );
+        return CartItem::query()
+            ->where('user_id', auth()->id())
+            ->with('product')
+            ->get();
+    }
 
-                        Notification::make()
-                            ->title('Gift card redeemed!')
-                            ->body("Added {$giftCard->formattedInitialAmount()} to your store credit.")
-                            ->success()
-                            ->send();
-                    } catch (InvalidArgumentException $e) {
-                        Notification::make()
-                            ->title('Invalid gift card')
-                            ->body($e->getMessage())
-                            ->danger()
-                            ->send();
-                    }
-                }),
-            Action::make('applyDiscount')
-                ->label($this->appliedDiscountCodeId !== null ? 'Change Discount Code' : 'Apply Discount Code')
-                ->icon(Heroicon::OutlinedTag)
-                ->color('gray')
-                ->form([
-                    TextInput::make('discount_code')
-                        ->label('Discount Code')
-                        ->required()
-                        ->placeholder('Enter your code'),
-                ])
-                ->action(function (array $data): void {
-                    try {
-                        $applyDiscount = new ApplyDiscountCode;
+    /**
+     * Get the subtotal in cents (before discounts/credits).
+     */
+    public function getSubtotalProperty(): int
+    {
+        return $this->cartItems->sum(fn (CartItem $item): int => $item->product->price * $item->quantity);
+    }
 
-                        $subtotal = (int) CartItem::query()
-                            ->where('user_id', auth()->id())
-                            ->join('products', 'products.id', '=', 'cart_items.product_id')
-                            ->selectRaw('SUM(cart_items.quantity * products.price) as total')
-                            ->value('total');
+    /**
+     * Get the discount amount in cents.
+     */
+    public function getDiscountAmountProperty(): int
+    {
+        if ($this->appliedDiscountCodeId === null) {
+            return 0;
+        }
 
-                        $productIds = CartItem::query()
-                            ->where('user_id', auth()->id())
-                            ->pluck('product_id')
-                            ->all();
+        $discountCode = DiscountCode::query()->find($this->appliedDiscountCodeId);
 
-                        $discountCode = $applyDiscount->handle(
-                            (string) $data['discount_code'],
-                            auth()->user(),
-                            $subtotal,
-                            $productIds,
-                        );
+        if ($discountCode === null) {
+            return 0;
+        }
 
-                        $this->appliedDiscountCodeId = $discountCode->id;
-                        $this->appliedDiscountDisplay = "{$discountCode->code} ({$discountCode->formattedValue()} off)";
+        return $discountCode->calculateDiscount($this->subtotal);
+    }
 
-                        Notification::make()
-                            ->title('Discount applied')
-                            ->body("Code {$discountCode->code} applied: {$discountCode->formattedValue()} off")
-                            ->success()
-                            ->send();
-                    } catch (InvalidArgumentException $e) {
-                        $this->appliedDiscountCodeId = null;
-                        $this->appliedDiscountDisplay = '';
+    /**
+     * Get the credit amount to apply in cents.
+     */
+    public function getCreditAmountProperty(): int
+    {
+        if (! $this->useCredit) {
+            return 0;
+        }
 
-                        Notification::make()
-                            ->title('Invalid discount code')
-                            ->body($e->getMessage())
-                            ->danger()
-                            ->send();
-                    }
-                }),
-            Action::make('removeDiscount')
-                ->label('Remove Discount')
-                ->icon(Heroicon::OutlinedXMark)
-                ->color('danger')
-                ->visible(fn (): bool => $this->appliedDiscountCodeId !== null)
-                ->action(function (): void {
-                    $this->appliedDiscountCodeId = null;
-                    $this->appliedDiscountDisplay = '';
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        $creditBalance = $user->credit_balance ?? 0;
 
-                    Notification::make()
-                        ->title('Discount removed')
-                        ->success()
-                        ->send();
-                }),
-            Action::make('checkout')
-                ->label('Proceed to Checkout')
-                ->icon(Heroicon::OutlinedCreditCard)
-                ->color('success')
-                ->disabled(fn (): bool => CartItem::query()->where('user_id', auth()->id())->doesntExist())
-                ->requiresConfirmation()
-                ->modalHeading('Proceed to Checkout')
-                ->modalDescription(function (): string {
-                    $parts = [];
+        return min($creditBalance, $this->subtotal - $this->discountAmount);
+    }
 
-                    if ($this->appliedDiscountCodeId !== null) {
-                        $parts[] = "Discount: {$this->appliedDiscountDisplay}";
-                    }
+    /**
+     * Get the grand total in cents (after discounts/credits).
+     */
+    public function getGrandTotalProperty(): int
+    {
+        return max(0, $this->subtotal - $this->discountAmount - $this->creditAmount);
+    }
+
+    /**
+     * Get available payment plan templates.
+     *
+     * @return Collection<int, PaymentPlanTemplate>
+     */
+    public function getPaymentPlanTemplatesProperty(): Collection
+    {
+        return PaymentPlanTemplate::query()->active()->get();
+    }
+
+    /**
+     * Get the selected payment plan template.
+     */
+    public function getSelectedTemplateProperty(): ?PaymentPlanTemplate
+    {
+        if ($this->selectedPaymentPlanTemplateId === null) {
+            return null;
+        }
+
+        return $this->paymentPlanTemplates->firstWhere('id', $this->selectedPaymentPlanTemplateId);
+    }
+
+    /**
+     * Get the amount due today based on payment plan selection.
+     */
+    public function getAmountDueTodayProperty(): int
+    {
+        if ($this->selectedTemplate === null) {
+            return $this->grandTotal;
+        }
+
+        $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
+
+        return $amounts['first'];
+    }
+
+    /**
+     * Format cents as dollars.
+     */
+    public function formatMoney(int $cents): string
+    {
+        return '$'.number_format($cents / 100, 2);
+    }
+
+    public function incrementQuantity(int $cartItemId): void
+    {
+        try {
+            $cartItem = CartItem::query()
+                ->where('id', $cartItemId)
+                ->where('user_id', auth()->id())
+                ->first();
+
+            if ($cartItem === null) {
+                return;
+            }
+
+            $updateQuantity = new UpdateCartQuantity;
+            $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity + 1);
+        } catch (InvalidArgumentException $e) {
+            Notification::make()
+                ->title('Could not update quantity')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function decrementQuantity(int $cartItemId): void
+    {
+        try {
+            $cartItem = CartItem::query()
+                ->where('id', $cartItemId)
+                ->where('user_id', auth()->id())
+                ->first();
+
+            if ($cartItem === null) {
+                return;
+            }
+
+            if ($cartItem->quantity <= 1) {
+                return;
+            }
+
+            $updateQuantity = new UpdateCartQuantity;
+            $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity - 1);
+        } catch (InvalidArgumentException $e) {
+            Notification::make()
+                ->title('Could not update quantity')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function removeItem(int $cartItemId): void
+    {
+        try {
+            $removeFromCart = new RemoveFromCart;
+            $removeFromCart->handle(auth()->user(), $cartItemId);
+
+            Notification::make()
+                ->title('Item removed from cart')
+                ->success()
+                ->send();
+        } catch (InvalidArgumentException $e) {
+            Notification::make()
+                ->title('Could not remove item')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function applyPromoCode(): void
+    {
+        try {
+            $applyDiscount = new ApplyDiscountCode;
+
+            $productIds = CartItem::query()
+                ->where('user_id', auth()->id())
+                ->pluck('product_id')
+                ->all();
+
+            $discountCode = $applyDiscount->handle(
+                $this->promoCode,
+                auth()->user(),
+                $this->subtotal,
+                $productIds,
+            );
+
+            $this->appliedDiscountCodeId = $discountCode->id;
+            $this->appliedDiscountDisplay = "{$discountCode->code} ({$discountCode->formattedValue()} off)";
+            $this->promoCode = '';
+
+            Notification::make()
+                ->title('Discount applied')
+                ->body("Code {$discountCode->code} applied: {$discountCode->formattedValue()} off")
+                ->success()
+                ->send();
+        } catch (InvalidArgumentException $e) {
+            Notification::make()
+                ->title('Invalid promo code')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function removeDiscount(): void
+    {
+        $this->appliedDiscountCodeId = null;
+        $this->appliedDiscountDisplay = '';
+
+        Notification::make()
+            ->title('Discount removed')
+            ->success()
+            ->send();
+    }
+
+    public function redeemGiftCard(): void
+    {
+        try {
+            $redeemGiftCard = new RedeemGiftCard;
+            $giftCard = $redeemGiftCard->handle(
+                $this->giftCardCode,
+                auth()->user(),
+            );
+
+            $this->giftCardCode = '';
+
+            Notification::make()
+                ->title('Gift card redeemed!')
+                ->body("Added {$giftCard->formattedInitialAmount()} to your store credit.")
+                ->success()
+                ->send();
+        } catch (InvalidArgumentException $e) {
+            Notification::make()
+                ->title('Invalid gift card')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function updatedSelectedPaymentPlanTemplateId(): void
+    {
+        if ($this->selectedPaymentPlanTemplateId === null) {
+            $this->selectedPaymentPlanMethod = null;
+        } elseif ($this->selectedPaymentPlanMethod === null) {
+            $this->selectedPaymentPlanMethod = PaymentPlanMethod::AutoCharge->value;
+        }
+    }
+
+    public function checkoutAction(): Action
+    {
+        return Action::make('checkout')
+            ->label('Review Order')
+            ->icon(Heroicon::OutlinedCreditCard)
+            ->color('warning')
+            ->size('lg')
+            ->disabled(fn (): bool => $this->cartItems->isEmpty())
+            ->requiresConfirmation()
+            ->modalHeading('Review Your Order')
+            ->modalDescription(function (): string {
+                $parts = [];
+
+                if ($this->appliedDiscountCodeId !== null) {
+                    $parts[] = "Discount: {$this->appliedDiscountDisplay}";
+                }
+
+                if ($this->creditAmount > 0) {
+                    $parts[] = 'Store credit: -'.$this->formatMoney($this->creditAmount);
+                }
+
+                if ($this->selectedTemplate !== null) {
+                    $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
+                    $parts[] = "Payment plan: {$this->selectedTemplate->number_of_installments} payments of {$this->formatMoney($amounts['remaining'])}";
+                    $parts[] = "Amount due today: {$this->formatMoney($amounts['first'])}";
+                }
+
+                $parts[] = "Total: {$this->formatMoney($this->grandTotal)}";
+                $parts[] = '';
+                $parts[] = 'You will be redirected to Stripe to complete your payment (unless fully covered by discount/credit).';
+
+                return implode("\n", $parts);
+            })
+            ->form([
+                Toggle::make('use_credit')
+                    ->label(function (): string {
+                        /** @var \App\Models\User $user */
+                        $user = auth()->user();
+                        $creditBalance = $user->credit_balance ?? 0;
+
+                        return 'Apply store credit ('.$this->formatMoney($creditBalance).')';
+                    })
+                    ->default($this->useCredit)
+                    ->visible(function (): bool {
+                        /** @var \App\Models\User $user */
+                        $user = auth()->user();
+
+                        return ($user->credit_balance ?? 0) > 0;
+                    }),
+                Select::make('payment_plan_method')
+                    ->label('Payment Plan Method')
+                    ->options(PaymentPlanMethod::class)
+                    ->default($this->selectedPaymentPlanMethod ?? PaymentPlanMethod::AutoCharge->value)
+                    ->visible(fn (): bool => $this->selectedTemplate !== null)
+                    ->required(fn (): bool => $this->selectedTemplate !== null),
+            ])
+            ->action(function (array $data): void {
+                try {
+                    $createCheckout = app(CreateCheckoutSession::class);
+
+                    $successUrl = CheckoutSuccess::getUrl();
+                    $cancelUrl = self::getUrl();
+
+                    $discountCode = $this->appliedDiscountCodeId !== null
+                        ? DiscountCode::query()->find($this->appliedDiscountCodeId)
+                        : null;
 
                     /** @var \App\Models\User $user */
                     $user = auth()->user();
-                    $creditBalance = $user->credit_balance ?? 0;
+                    $creditToApply = ! empty($data['use_credit']) ? ($user->credit_balance ?? 0) : 0;
 
-                    if ($creditBalance > 0) {
-                        $parts[] = 'Store credit available: $'.number_format($creditBalance / 100, 2);
-                    }
+                    $paymentPlanTemplate = $this->selectedTemplate;
 
-                    $parts[] = 'You will proceed to our secure checkout to enter your payment details.';
+                    $paymentPlanMethod = ! empty($data['payment_plan_method'])
+                        ? PaymentPlanMethod::from($data['payment_plan_method'])
+                        : ($this->selectedPaymentPlanMethod !== null
+                            ? PaymentPlanMethod::from($this->selectedPaymentPlanMethod)
+                            : null);
 
-                    return implode("\n", $parts);
-                })
-                ->form([
-                    Toggle::make('use_credit')
-                        ->label(function (): string {
-                            /** @var \App\Models\User $user */
-                            $user = auth()->user();
-                            $creditBalance = $user->credit_balance ?? 0;
+                    $checkoutUrl = $createCheckout->handle(
+                        $user,
+                        $successUrl,
+                        $cancelUrl,
+                        $discountCode,
+                        $creditToApply,
+                        $paymentPlanTemplate,
+                        $paymentPlanMethod,
+                    );
 
-                            return 'Apply store credit ($'.number_format($creditBalance / 100, 2).')';
-                        })
-                        ->default($this->useCredit)
-                        ->visible(function (): bool {
-                            /** @var \App\Models\User $user */
-                            $user = auth()->user();
+                    $this->redirect($checkoutUrl);
+                } catch (InvalidArgumentException $e) {
+                    Notification::make()
+                        ->title('Checkout failed')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->send();
+                }
+            });
+    }
 
-                            return ($user->credit_balance ?? 0) > 0;
-                        }),
-                    Select::make('payment_plan_template_id')
-                        ->label('Payment Plan')
-                        ->placeholder('Pay in full')
-                        ->options(function (): array {
-                            $cartItems = CartItem::query()
-                                ->where('user_id', auth()->id())
-                                ->with('product')
-                                ->get();
+    /**
+     * Get the order summary schema components.
+     *
+     * @return array<\Filament\Schemas\Components\Component>
+     */
+    protected function getOrderSummarySchema(): array
+    {
+        $components = [];
 
-                            if ($cartItems->isEmpty()) {
-                                return [];
-                            }
+        if ($this->paymentPlanTemplates->isNotEmpty()) {
+            $components[] = Select::make('selectedPaymentPlanTemplateId')
+                ->label('Payment Option')
+                ->options(
+                    $this->paymentPlanTemplates
+                        ->mapWithKeys(fn (PaymentPlanTemplate $template): array => [
+                            $template->id => 'Payment Plan',
+                        ])
+                        ->prepend('Pay in Full', '')
+                        ->all()
+                )
+                ->live();
+        }
 
-                            // Find templates that match any product in the cart
-                            $templates = PaymentPlanTemplate::query()
-                                ->active()
-                                ->get();
+        $totalComponents[] = Flex::make([
+            Text::make("Subtotal")
+                ->color('neutral')
+                ->columnSpanFull(),
+            Text::make(fn (): string => $this->formatMoney($this->subtotal))
+                ->color('neutral')
+                ->grow(false),
+        ]);
 
-                            $options = [];
-                            /** @var PaymentPlanTemplate $template */
-                            foreach ($templates as $template) {
-                                $options[$template->id] = "{$template->name} ({$template->number_of_installments} x {$template->frequency->getLabel()})";
-                            }
+        if ($this->discountAmount > 0) {
+            $totalComponents[] = Flex::make([
+                Text::make("Discount ({$this->appliedDiscountDisplay})")
+                    ->color('danger')
+                    ->columnSpanFull(),
+                Text::make(fn (): string => "-{$this->formatMoney($this->discountAmount)}")
+                    ->color('danger')
+                    ->grow(false),
+            ]);
+        }
 
-                            return $options;
-                        })
-                        ->visible(fn (): bool => PaymentPlanTemplate::query()->active()->exists())
-                        ->reactive(),
-                    Select::make('payment_plan_method')
-                        ->label('Payment Plan Method')
-                        ->options(PaymentPlanMethod::class)
-                        ->default(PaymentPlanMethod::AutoCharge->value)
-                        ->visible(fn (callable $get): bool => $get('payment_plan_template_id') !== null)
-                        ->required(fn (callable $get): bool => $get('payment_plan_template_id') !== null),
-                ])
-                ->action(function (array $data): void {
-                    $params = [];
+        if ($this->creditAmount > 0) {
+            $totalComponents[] = Flex::make([
+                Text::make("Store Credit")
+                    ->color('danger')
+                    ->columnSpanFull(),
+                Text::make(fn (): string => "-{$this->formatMoney($this->creditAmount)}")
+                    ->color('danger')
+                    ->grow(false),
+            ]);
+        }
 
-                    if ($this->appliedDiscountCodeId !== null) {
-                        $params['discountCodeId'] = $this->appliedDiscountCodeId;
-                    }
+        $totalComponents[] = Flex::make([
+            Text::make("Total")
+                ->size('md')
+                ->weight(FontWeight::Bold)
+                ->columnSpanFull(),
+            Text::make(fn (): string => $this->formatMoney($this->grandTotal))
+                ->size('md')
+                ->weight(FontWeight::Bold)
+                ->grow(false),
+        ])
+            ->extraAttributes(['class' => 'border-t border-gray-300 pt-2']);
 
-                    if (! empty($data['use_credit'])) {
-                        $params['use_credit'] = 1;
-                    }
+        if ($this->selectedTemplate !== null) {
+            $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
 
-                    if (! empty($data['payment_plan_template_id'])) {
-                        $params['payment_plan_template_id'] = $data['payment_plan_template_id'];
-                    }
+            $totalComponents[] =
+                Text::make(fn () => "{$this->selectedTemplate->number_of_installments} payments of {$this->formatMoney($amounts['remaining'])}")
+                    ->color('neutral')
+                    ->extraAttributes(['class' => 'border-t border-gray-300 pt-2 w-full']);
 
-                    if (! empty($data['payment_plan_method'])) {
-                        $params['payment_plan_method'] = $data['payment_plan_method'];
-                    }
+            $totalComponents[] = Flex::make([
+                Text::make("Amount Due Today")
+                    ->weight(FontWeight::Bold)
+                    ->columnSpanFull(),
+                Text::make(fn (): string => $this->formatMoney($this->amountDueToday))
+                    ->weight(FontWeight::Bold)
+                    ->grow(false),
+            ]);
+        }
 
-                    $url = Checkout::getUrl();
-                    if (! empty($params)) {
-                        $url .= '?'.http_build_query($params);
-                    }
+        $components[] = Grid::make(1)
+            ->schema($totalComponents)
+            ->gap(false);
+        $components[] = $this->checkoutAction;
 
-                    $this->redirect($url);
-                }),
-        ];
+        return $components;
     }
 
     protected function makeTable(): Table
@@ -308,83 +617,63 @@ final class Cart extends Page implements HasTable
             )
             ->columns([
                 TextColumn::make('product.name')
-                    ->label('Product'),
+                    ->label('Name')
+                    ->toggleable(false)
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('product.price')
-                    ->label('Unit Price')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                    ->label('Price')
+                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->toggleable(false)
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('quantity')
-                    ->label('Qty'),
+                    ->label('Quantity')
+                    ->alignCenter()
+                    ->toggleable(false)
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('line_total')
                     ->label('Total')
-                    ->state(function (CartItem $record): int {
-                        /** @var \App\Models\Product $product */
-                        $product = $record->product;
-
-                        return $product->price * $record->quantity;
-                    })
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
-                    ->summarize(
-                        Sum::make()
-                            ->query(fn (\Illuminate\Database\Query\Builder $query): \Illuminate\Database\Query\Builder => $query->selectRaw('SUM(cart_items.quantity * products.price) as aggregate')
-                                ->join('products', 'products.id', '=', 'cart_items.product_id'))
-                            ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
-                            ->label('Total'),
-                    ),
+                    ->state(fn (CartItem $record): string => '$'.number_format(($record->product->price * $record->quantity) / 100, 2))
+                    ->toggleable(false)
+                    ->searchable(false)
+                    ->sortable(false),
             ])
             ->recordActions([
-                Action::make('updateQuantity')
-                    ->label('Update Qty')
-                    ->icon(Heroicon::OutlinedPencilSquare)
-                    ->form([
-                        TextInput::make('quantity')
-                            ->label('Quantity')
-                            ->numeric()
-                            ->minValue(1)
-                            ->required()
-                            ->default(fn (CartItem $record): int => $record->quantity),
-                    ])
-                    ->action(function (CartItem $record, array $data): void {
-                        try {
-                            $updateQuantity = new UpdateCartQuantity;
-                            $updateQuantity->handle(auth()->user(), $record->id, (int) $data['quantity']);
-
-                            Notification::make()
-                                ->title('Quantity updated')
-                                ->success()
-                                ->send();
-                        } catch (InvalidArgumentException $e) {
-                            Notification::make()
-                                ->title('Could not update quantity')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
+                Action::make('increment')
+                    ->label('Add')
+                    ->icon(Heroicon::OutlinedPlusCircle)
+                    ->color('primary')
+                    ->iconButton()
+                    ->action(function (CartItem $record): void {
+                        $this->incrementQuantity($record->id);
+                    }),
+                Action::make('decrement')
+                    ->label('Remove one')
+                    ->icon(Heroicon::OutlinedMinusCircle)
+                    ->color('primary')
+                    ->iconButton()
+                    ->disabled(fn (CartItem $record): bool => $record->quantity <= 1)
+                    ->action(function (CartItem $record): void {
+                        $this->decrementQuantity($record->id);
                     }),
                 Action::make('remove')
                     ->label('Remove')
                     ->icon(Heroicon::OutlinedTrash)
                     ->color('danger')
+                    ->iconButton()
                     ->requiresConfirmation()
                     ->action(function (CartItem $record): void {
-                        try {
-                            $removeFromCart = new RemoveFromCart;
-                            $removeFromCart->handle(auth()->user(), $record->id);
-
-                            Notification::make()
-                                ->title('Item removed from cart')
-                                ->success()
-                                ->send();
-                        } catch (InvalidArgumentException $e) {
-                            Notification::make()
-                                ->title('Could not remove item')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
+                        $this->removeItem($record->id);
                     }),
             ])
+            ->deferLoading(false)
+            ->reorderableColumns(false)
+            ->paginated(false)
             ->emptyStateHeading('Your cart is empty')
             ->emptyStateDescription('Browse the store to add products to your cart.')
+            ->emptyStateIcon(Heroicon::OutlinedShoppingCart)
             ->emptyStateActions([
                 Action::make('browseStore')
                     ->label('Browse Store')
