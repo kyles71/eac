@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\DiscountCodes;
 
-use App\Filament\Admin\Resources\DiscountCodes\Pages\CreateDiscountCode;
-use App\Filament\Admin\Resources\DiscountCodes\Pages\EditDiscountCode;
 use App\Filament\Admin\Resources\DiscountCodes\Pages\ListDiscountCodes;
 use App\Filament\Admin\Resources\DiscountCodes\Schemas\DiscountCodeForm;
 use App\Filament\Admin\Resources\DiscountCodes\Tables\DiscountCodesTable;
@@ -53,8 +51,6 @@ final class DiscountCodeResource extends Resource
     {
         return [
             'index' => ListDiscountCodes::route('/'),
-            'create' => CreateDiscountCode::route('/create'),
-            'edit' => EditDiscountCode::route('/{record}/edit'),
         ];
     }
 }
