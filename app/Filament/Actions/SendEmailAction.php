@@ -33,7 +33,8 @@ class SendEmailAction extends Action
         $this
             ->label('Send Email')
             ->icon(Heroicon::OutlinedEnvelope)
-            ->form(fn (): array => [
+            ->slideOver(false)
+            ->schema(fn (): array => [
                 TagsInput::make('to')
                     ->label('To')
                     ->default($this->getDefaultTo())
@@ -80,8 +81,6 @@ class SendEmailAction extends Action
      */
     protected function getDefaultTo(): array
     {
-        return $this->defaultTo instanceof Closure
-            ? ($this->defaultTo)()
-            : $this->defaultTo;
+        return $this->evaluate($this->defaultTo);
     }
 }
