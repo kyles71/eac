@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Tables;
 
+use App\Filament\Actions\SendEmailAction;
 use App\Models\Course;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -53,7 +54,8 @@ final class CoursesTable
                 //
             ])
             ->recordActions([
-
+                SendEmailAction::make()
+                    ->to(fn ($record) => $record->purchasers->pluck('email')->all())
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
