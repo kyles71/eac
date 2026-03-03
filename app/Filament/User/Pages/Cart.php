@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
-use App\Actions\Store\ApplyDiscountCode;
+use App\Actions\Store\ApplyCode;
 use App\Actions\Store\CreateCheckoutSession;
-use App\Actions\Store\RedeemGiftCard;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Enums\PaymentPlanMethod;
@@ -49,9 +48,7 @@ final class Cart extends Page implements HasTable
 
     public bool $useCredit = false;
 
-    public string $promoCode = '';
-
-    public string $giftCardCode = '';
+    public string $code = '';
 
     public ?int $selectedPaymentPlanTemplateId = null;
 
@@ -87,17 +84,17 @@ final class Cart extends Page implements HasTable
                 Flex::make([
                     Section::make('Promo Codes & Gift Cards')
                         ->schema([
-                            TextInput::make('promoCode')
-                                ->label('Promo Code')
-                                ->placeholder('Enter promo code')
+                            TextInput::make('code')
+                                ->label('Promo Code or Gift Card')
+                                ->placeholder('Enter code')
                                 ->afterContent(
-                                    Action::make('applyPromoCode')
+                                    Action::make('applyCode')
                                         ->label('Apply')
                                         ->button()
                                         ->color('warning')
                                         ->size('sm')
                                         ->action(function (Component $livewire): void {
-                                            $livewire->applyPromoCode();
+                                            $livewire->applyCode();
                                         }),
                                 ),
                             Flex::make([
@@ -114,19 +111,6 @@ final class Cart extends Page implements HasTable
                                     }),
                             ])
                                 ->visible(fn (): bool => $this->appliedDiscountCodeId !== null),
-                            TextInput::make('giftCardCode')
-                                ->label('Gift Card')
-                                ->placeholder('Enter gift card code')
-                                ->afterContent(
-                                    Action::make('redeemGiftCard')
-                                        ->label('Redeem')
-                                        ->button()
-                                        ->color('warning')
-                                        ->size('sm')
-                                        ->action(function (Component $livewire): void {
-                                            $livewire->redeemGiftCard();
-                                        }),
-                                ),
                             Checkbox::make('useCredit')
                                 ->label(function (): string {
                                     /** @var \App\Models\User $user */
@@ -363,35 +347,47 @@ final class Cart extends Page implements HasTable
         }
     }
 
-    public function applyPromoCode(): void
+    public function applyCode(): void
     {
         try {
-            $applyDiscount = new ApplyDiscountCode;
+            $applyCode = new ApplyCode;
 
             $productIds = CartItem::query()
                 ->where('user_id', auth()->id())
                 ->pluck('product_id')
                 ->all();
 
-            $discountCode = $applyDiscount->handle(
-                $this->promoCode,
+            $result = $applyCode->handle(
+                $this->code,
                 auth()->user(),
                 $this->subtotal,
                 $productIds,
             );
 
-            $this->appliedDiscountCodeId = $discountCode->id;
-            $this->appliedDiscountDisplay = "{$discountCode->code} ({$discountCode->formattedValue()} off)";
-            $this->promoCode = '';
+            $this->code = '';
 
-            Notification::make()
-                ->title('Discount applied')
-                ->body("Code {$discountCode->code} applied: {$discountCode->formattedValue()} off")
-                ->success()
-                ->send();
+            if ($result['type'] === 'discount') {
+                $discountCode = $result['discountCode'];
+                $this->appliedDiscountCodeId = $discountCode->id;
+                $this->appliedDiscountDisplay = "{$discountCode->code} ({$discountCode->formattedValue()} off)";
+
+                Notification::make()
+                    ->title('Discount applied')
+                    ->body("Code {$discountCode->code} applied: {$discountCode->formattedValue()} off")
+                    ->success()
+                    ->send();
+            } else {
+                $giftCard = $result['giftCard'];
+
+                Notification::make()
+                    ->title('Gift card redeemed!')
+                    ->body("Added {$giftCard->formattedInitialAmount()} to your store credit.")
+                    ->success()
+                    ->send();
+            }
         } catch (InvalidArgumentException $e) {
             Notification::make()
-                ->title('Invalid promo code')
+                ->title('Invalid code')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();
@@ -407,31 +403,6 @@ final class Cart extends Page implements HasTable
             ->title('Discount removed')
             ->success()
             ->send();
-    }
-
-    public function redeemGiftCard(): void
-    {
-        try {
-            $redeemGiftCard = new RedeemGiftCard;
-            $giftCard = $redeemGiftCard->handle(
-                $this->giftCardCode,
-                auth()->user(),
-            );
-
-            $this->giftCardCode = '';
-
-            Notification::make()
-                ->title('Gift card redeemed!')
-                ->body("Added {$giftCard->formattedInitialAmount()} to your store credit.")
-                ->success()
-                ->send();
-        } catch (InvalidArgumentException $e) {
-            Notification::make()
-                ->title('Invalid gift card')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
     }
 
     public function updatedSelectedPaymentPlanTemplateId(): void

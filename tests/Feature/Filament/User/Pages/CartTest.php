@@ -118,8 +118,8 @@ it('can apply a valid promo code', function () {
     $discountCode = DiscountCode::factory()->percentage(20)->create();
 
     livewire(Cart::class)
-        ->set('promoCode', $discountCode->code)
-        ->call('applyPromoCode')
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
         ->assertSet('appliedDiscountCodeId', $discountCode->id)
         ->assertNotified('Discount applied');
 });
@@ -132,10 +132,10 @@ it('shows error for invalid promo code', function () {
     ]);
 
     livewire(Cart::class)
-        ->set('promoCode', 'INVALID_CODE')
-        ->call('applyPromoCode')
+        ->set('code', 'INVALID_CODE')
+        ->call('applyCode')
         ->assertSet('appliedDiscountCodeId', null)
-        ->assertNotified('Invalid promo code');
+        ->assertNotified('Invalid code');
 });
 
 it('can remove an applied discount', function () {
@@ -148,8 +148,8 @@ it('can remove an applied discount', function () {
     $discountCode = DiscountCode::factory()->percentage(20)->create();
 
     livewire(Cart::class)
-        ->set('promoCode', $discountCode->code)
-        ->call('applyPromoCode')
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
         ->assertSet('appliedDiscountCodeId', $discountCode->id)
         ->call('removeDiscount')
         ->assertSet('appliedDiscountCodeId', null)
@@ -164,8 +164,8 @@ it('can redeem a gift card', function () {
     $user->refresh();
 
     livewire(Cart::class)
-        ->set('giftCardCode', $giftCard->code)
-        ->call('redeemGiftCard')
+        ->set('code', $giftCard->code)
+        ->call('applyCode')
         ->assertNotified('Gift card redeemed!');
 
     expect($user->refresh()->credit_balance)->toBe(5000);
@@ -173,9 +173,9 @@ it('can redeem a gift card', function () {
 
 it('shows error for invalid gift card', function () {
     livewire(Cart::class)
-        ->set('giftCardCode', 'INVALID_CODE')
-        ->call('redeemGiftCard')
-        ->assertNotified('Invalid gift card');
+        ->set('code', 'INVALID_CODE')
+        ->call('applyCode')
+        ->assertNotified('Invalid code');
 });
 
 it('shows payment plan options when templates exist', function () {
@@ -221,8 +221,8 @@ it('calculates discount correctly in grand total', function () {
     $discountCode = DiscountCode::factory()->fixedAmount(2000)->create();
 
     $component = livewire(Cart::class)
-        ->set('promoCode', $discountCode->code)
-        ->call('applyPromoCode');
+        ->set('code', $discountCode->code)
+        ->call('applyCode');
 
     // Subtotal = 2 x 5000 = 10000, Discount = 2000, Grand Total = 8000
     expect($component->get('subtotal'))->toBe(10000);
