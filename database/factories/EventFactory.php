@@ -23,8 +23,6 @@ final class EventFactory extends Factory
      */
     public function definition(): array
     {
-        $type = fake()->randomElement([Course::class]);
-
         $start_time = Carbon::create(fake()->dateTimeThisMonth('last day of this month'))
             ->setHours(fake()->numberBetween(17, 20))
             ->setMinutes(0)
@@ -37,8 +35,7 @@ final class EventFactory extends Factory
             'description' => fake()->text(),
             'start_time' => $start_time,
             'end_time' => $end_time,
-            'eventable_id' => $type::factory(),
-            'eventable_type' => $type,
+            'course_id' => Course::factory(),
         ];
     }
 }

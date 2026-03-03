@@ -60,7 +60,7 @@ final class User extends Authenticatable implements FilamentUser, HasName
             return true || $this->hasVerifiedEmail();
         }
 
-        return true; // str_ends_with($this->email, '@larament.test');
+        return true;
     }
 
     public function students(): HasMany

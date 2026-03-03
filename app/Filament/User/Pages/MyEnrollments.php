@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Pages;
 
 use App\Filament\Admin\Resources\Enrollments\Tables\EnrollmentsTable;
@@ -15,14 +17,12 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
 
-class MyEnrollments extends Page implements HasTable
+final class MyEnrollments extends Page implements HasTable
 {
     use HasTabs;
     use InteractsWithTable {
         makeTable as makeBaseTable;
     }
-
-    protected static ?string $title = 'My Classes';
 
     #[Url(as: 'reordering')]
     public bool $isTableReordering = false;
@@ -48,6 +48,8 @@ class MyEnrollments extends Page implements HasTable
     #[Url(as: 'tab')]
     public ?string $activeTab = null;
 
+    protected static ?string $title = 'My Classes';
+
     public function mount(): void
     {
         $this->loadDefaultActiveTab();
@@ -61,14 +63,6 @@ class MyEnrollments extends Page implements HasTable
                     ->activeTab(1),
                 EmbeddedTable::make(),
             ]);
-    }
-
-    protected function makeTable(): Table
-    {
-        $table = $this->makeBaseTable();
-
-        return EnrollmentsTable::configure($table, true)
-            ->modifyQueryUsing($this->modifyQueryWithActiveTab(...));
     }
 
     public function getTabs(): array
@@ -86,5 +80,13 @@ class MyEnrollments extends Page implements HasTable
                 ->modifyQueryUsing(fn (Builder $query) => $query->select('enrollments.*')->past($now)),
             'all' => Tab::make(),
         ];
+    }
+
+    protected function makeTable(): Table
+    {
+        $table = $this->makeBaseTable();
+
+        return EnrollmentsTable::configure($table, true)
+            ->modifyQueryUsing($this->modifyQueryWithActiveTab(...));
     }
 }

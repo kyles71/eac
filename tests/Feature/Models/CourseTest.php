@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Product;
+use Carbon\Carbon;
 
 it('calculates available capacity correctly', function () {
     $course = Course::factory()->create(['capacity' => 5]);
@@ -42,4 +44,66 @@ it('scopes available courses', function () {
 
     expect($results->pluck('id')->toArray())->toContain($available->id)
         ->and($results->pluck('id')->toArray())->not->toContain($full->id);
+});
+
+it('returns the soonest future event as nextEvent', function () {
+    $course = Course::factory()->create();
+
+    $farFuture = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->addMonth(),
+        'end_time' => Carbon::now()->addMonth()->addHour(),
+    ]);
+
+    $nearFuture = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->addDay(),
+        'end_time' => Carbon::now()->addDay()->addHour(),
+    ]);
+
+    // Past event should be ignored
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
+    ]);
+
+    expect($course->nextEvent->id)->toBe($nearFuture->id);
+});
+
+it('returns null for nextEvent when no future events exist', function () {
+    $course = Course::factory()->create();
+
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
+    ]);
+
+    expect($course->nextEvent)->toBeNull();
+});
+
+it('returns the most recent past event as previousEvent', function () {
+    $course = Course::factory()->create();
+
+    $recentPast = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->subDay(),
+        'end_time' => Carbon::now()->subDay()->addHour(),
+    ]);
+
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->subMonth(),
+        'end_time' => Carbon::now()->subMonth()->addHour(),
+    ]);
+
+    // Future event should be ignored
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->addWeek(),
+        'end_time' => Carbon::now()->addWeek()->addHour(),
+    ]);
+
+    expect($course->previousEvent->id)->toBe($recentPast->id);
 });

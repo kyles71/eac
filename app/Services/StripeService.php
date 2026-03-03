@@ -155,4 +155,11 @@ final readonly class StripeService implements StripeServiceContract
 
         return $this->client->invoices->sendInvoice($invoice->id);
     }
+
+    public function confirmPaymentIntent(string $paymentIntentId, string $paymentMethodId): PaymentIntent
+    {
+        return $this->client->paymentIntents->confirm($paymentIntentId, [
+            'payment_method' => $paymentMethodId,
+        ]);
+    }
 }

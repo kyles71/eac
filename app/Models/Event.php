@@ -9,14 +9,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-// use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-// use Staudenmeir\EloquentHasManyDeep\HasManyDeep;
-// use Staudenmeir\EloquentHasManyDeep\HasRelationships;
-
 final class Event extends Model
 {
     use HasFactory;
-    // use HasRelationships;
 
     /**
      * The attributes that should be cast to native types.
@@ -44,9 +39,4 @@ final class Event extends Model
     {
         return $this->hasMany(EventAttendee::class);
     }
-
-    // public function students(): HasManyDeep
-    // {
-    //     return $this->hasManyDeepFromRelationsWithConstraints([$this, 'course'], [new Course(), 'students']);
-    // }
 }

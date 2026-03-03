@@ -12,22 +12,22 @@ use Filament\Support\Contracts\HasLabel;
 
 enum FormTypes: string implements HasLabel
 {
-    case STUDENT_WAIVER = ModelsStudentWaiver::class;
-    case SHOWCASE_PARTICIPATIONS = ModelsShowcaseParticipation::class;
+    case StudentWaiver = ModelsStudentWaiver::class;
+    case ShowcaseParticipation = ModelsShowcaseParticipation::class;
 
     public function getLabel(): string
     {
         return match ($this) {
-            self::STUDENT_WAIVER => 'Student Waiver',
-            self::SHOWCASE_PARTICIPATIONS => 'Showcase Participations',
+            self::StudentWaiver => 'Student Waiver',
+            self::ShowcaseParticipation => 'Showcase Participations',
         };
     }
 
     public function getFormSchemaClass(): string
     {
         return match ($this) {
-            self::STUDENT_WAIVER => StudentWaiver::class,
-            self::SHOWCASE_PARTICIPATIONS => ShowcaseParticipation::class,
+            self::StudentWaiver => StudentWaiver::class,
+            self::ShowcaseParticipation => ShowcaseParticipation::class,
         };
     }
 }

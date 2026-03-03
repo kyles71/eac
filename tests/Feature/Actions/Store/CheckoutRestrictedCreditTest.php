@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Actions\Store\CreateOrder;
+use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Enums\ProductType;
 use App\Models\CartItem;
@@ -18,6 +19,8 @@ beforeEach(function () {
     $this->course = Course::factory()->create(['capacity' => 10]);
     $this->courseProduct = Product::factory()->forCourse($this->course)->create(['price' => 5000]);
     $this->standaloneProduct = Product::factory()->standalone()->create(['price' => 3000]);
+
+    $this->app->instance(StripeServiceContract::class, Mockery::mock(StripeServiceContract::class));
 });
 
 it('applies restricted credit to eligible items during checkout', function () {
@@ -41,7 +44,7 @@ it('applies restricted credit to eligible items during checkout', function () {
         'quantity' => 1,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user);
 
     expect($order->status)->toBe(OrderStatus::Completed)
@@ -79,7 +82,7 @@ it('does not apply restricted credit to ineligible items', function () {
         'quantity' => 1,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user);
 
     expect($order->restricted_credit_applied)->toBe(0)
@@ -122,7 +125,7 @@ it('combines restricted credit and unrestricted credit', function () {
         'quantity' => 1,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, creditToApply: 3000);
 
     // Restricted credit (3000) applied to the course product
@@ -160,7 +163,7 @@ it('partially applies restricted credit when item is cheaper than credit', funct
         'quantity' => 1,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user);
 
     expect($order->status)->toBe(OrderStatus::Completed)

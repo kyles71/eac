@@ -14,6 +14,8 @@ use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -161,13 +163,38 @@ final class MyPaymentPlans extends Page implements HasTable
                     ->label('View Installments')
                     ->icon(Heroicon::OutlinedEye)
                     ->modalHeading(fn (PaymentPlan $record): string => "Installments for Order #{$record->order_id}")
-                    ->modalContent(function (PaymentPlan $record): \Illuminate\Contracts\View\View {
-                        $record->loadMissing('installments');
-
-                        return view('filament.user.pages.installments-modal', [
-                            'installments' => $record->installments->sortBy('installment_number'),
-                        ]);
-                    })
+                    ->infolist(fn (PaymentPlan $record): array => $record->loadMissing('installments')
+                        ->installments
+                        ->sortBy('installment_number')
+                        ->map(fn (\App\Models\Installment $installment): Section => Section::make("#{$installment->installment_number}")
+                            ->schema([
+                                Grid::make(4)
+                                    ->schema([
+                                        \Filament\Infolists\Components\TextEntry::make('')
+                                            ->label('Amount')
+                                            ->state('$' . number_format($installment->amount / 100, 2)),
+                                        \Filament\Infolists\Components\TextEntry::make('')
+                                            ->label('Due Date')
+                                            ->state($installment->due_date->format('M j, Y')),
+                                        \Filament\Infolists\Components\TextEntry::make('')
+                                            ->label('Status')
+                                            ->state($installment->status->getLabel())
+                                            ->badge()
+                                            ->color(match ($installment->status) {
+                                                InstallmentStatus::Paid => 'success',
+                                                InstallmentStatus::Pending => 'warning',
+                                                InstallmentStatus::Failed => 'danger',
+                                                InstallmentStatus::Overdue => 'danger',
+                                            }),
+                                        \Filament\Infolists\Components\TextEntry::make('')
+                                            ->label('Paid At')
+                                            ->state($installment->paid_at?->format('M j, Y') ?? '—'),
+                                    ]),
+                            ])
+                            ->compact()
+                        )
+                        ->all()
+                    )
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
             ])

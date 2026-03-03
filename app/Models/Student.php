@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-// use Illuminate\Database\Eloquent\Attributes\Scope;
-// use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,13 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-// use Staudenmeir\EloquentHasManyDeep\HasManyDeep;
-// use Staudenmeir\EloquentHasManyDeep\HasRelationships;
-
 final class Student extends Model
 {
     use HasFactory;
-    // use HasRelationships;
 
     /**
      * The attributes that should be cast to native types.
@@ -73,15 +67,4 @@ final class Student extends Model
     {
         return $this->hasMany(StudentWaiver::class);
     }
-
-    // #[Scope]
-    // protected function healthInfoNeedsUpdating(Builder $query): void
-    // {
-    //     $query->where(function ($q) {
-    //         $q->doesntHave('healthInfo')
-    //             ->orWhereHas('healthInfo', function (Builder $q2) {
-    //                 $q2->where('updated_at', '<', now()->subYear());
-    //             });
-    //     });
-    // }
 }

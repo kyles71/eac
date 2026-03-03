@@ -22,7 +22,6 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
-use ReflectionProperty;
 
 final class Checkout extends Page
 {
@@ -129,12 +128,10 @@ final class Checkout extends Page
             /** @var StripeServiceContract $stripeService */
             $stripeService = app(StripeServiceContract::class);
 
-            /** @var \Stripe\StripeClient $client */
-            $client = (new ReflectionProperty($stripeService, 'client'))->getValue($stripeService);
-
-            $client->paymentIntents->confirm($this->order->stripe_payment_intent_id, [
-                'payment_method' => $this->selectedSavedPaymentMethod,
-            ]);
+            $stripeService->confirmPaymentIntent(
+                $this->order->stripe_payment_intent_id,
+                $this->selectedSavedPaymentMethod,
+            );
 
             if ($this->savePaymentMethod) {
                 /** @var \App\Models\User $user */

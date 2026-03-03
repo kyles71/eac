@@ -8,13 +8,10 @@ use App\Enums\FormTypes;
 use App\Models\Form;
 use App\Models\User;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -62,7 +59,7 @@ final class CourseForm
                     )
                     ->default(Form::query()
                         ->isActive()
-                        ->where('form_type', FormTypes::STUDENT_WAIVER)
+                        ->where('form_type', FormTypes::StudentWaiver)
                         ->orderBy('valid_until', 'desc')
                         ->first()
                         ?->id

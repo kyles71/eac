@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Actions\Store\CreateOrder;
+use App\Contracts\StripeServiceContract;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
@@ -25,6 +26,8 @@ beforeEach(function () {
     $this->user = User::factory()->create();
     $this->course = Course::factory()->create(['capacity' => 5]);
     $this->product = Product::factory()->forCourse($this->course)->create(['price' => 5000]);
+
+    $this->app->instance(StripeServiceContract::class, Mockery::mock(StripeServiceContract::class));
 });
 
 it('creates an order and returns the order model', function () {
@@ -34,7 +37,7 @@ it('creates an order and returns the order model', function () {
         'quantity' => 2,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user);
 
     expect($order)->toBeInstanceOf(Order::class)
@@ -52,7 +55,7 @@ it('creates an order and returns the order model', function () {
 });
 
 it('fails when cart is empty', function () {
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $action->handle($this->user);
 })->throws(InvalidArgumentException::class, 'Your cart is empty.');
 
@@ -68,7 +71,7 @@ it('fails when course capacity is insufficient at checkout', function () {
         Enrollment::factory()->create(['course_id' => $this->course->id]);
     }
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $action->handle($this->user);
 })->throws(InvalidArgumentException::class);
 
@@ -88,7 +91,7 @@ it('creates an order with multiple cart items', function () {
         'quantity' => 2,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user);
 
     expect($order->subtotal)->toBe(20000) // 5000 + (7500 * 2)
@@ -104,7 +107,7 @@ it('applies a percentage discount code to the order', function () {
 
     $discountCode = DiscountCode::factory()->percentage(20)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, $discountCode);
 
     expect($order->subtotal)->toBe(10000)
@@ -125,7 +128,7 @@ it('applies a fixed amount discount code to the order', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(3000)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, $discountCode);
 
     expect($order->subtotal)->toBe(10000)
@@ -142,7 +145,7 @@ it('completes order immediately when discount covers full amount', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, $discountCode);
 
     expect($order->status)->toBe(OrderStatus::Completed)
@@ -165,7 +168,7 @@ it('applies store credit to reduce the order total', function () {
         'quantity' => 2,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, creditToApply: 3000);
 
     expect($order->subtotal)->toBe(10000)
@@ -190,7 +193,7 @@ it('completes order immediately when credit covers full amount', function () {
         'quantity' => 1,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, creditToApply: 15000);
 
     expect($order->status)->toBe(OrderStatus::Completed)
@@ -216,7 +219,7 @@ it('combines discount code and credit to cover the full amount', function () {
     // 50% discount on 10000 = 5000 remaining, then 5000 credit covers it
     $discountCode = DiscountCode::factory()->percentage(50)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, $discountCode, 5000);
 
     expect($order->status)->toBe(OrderStatus::Completed)
@@ -237,7 +240,7 @@ it('does not apply more credit than the user has', function () {
         'quantity' => 2,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle($this->user, creditToApply: 5000);
 
     // Should only apply 2000 (user's actual balance), not 5000
@@ -259,7 +262,7 @@ it('fulfills gift cards when order completes at zero total', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $action->handle($this->user, $discountCode);
 
     // Gift card should have been created
@@ -283,7 +286,7 @@ it('leaves costume order items as pending in zero total order', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $action->handle($this->user, $discountCode);
 
     $order = Order::query()->where('user_id', $this->user->id)->first();
@@ -304,7 +307,7 @@ it('leaves standalone order items as pending in zero total order', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $action->handle($this->user, $discountCode);
 
     $order = Order::query()->where('user_id', $this->user->id)->first();
@@ -332,7 +335,7 @@ it('marks course items fulfilled and leaves costume items pending in mixed zero 
 
     $discountCode = DiscountCode::factory()->fixedAmount(20000)->create();
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $action->handle($this->user, $discountCode);
 
     $order = Order::query()->where('user_id', $this->user->id)->first();
@@ -367,7 +370,7 @@ it('stores payment plan template and method on the order', function () {
         'max_price' => 50000,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle(
         $this->user,
         paymentPlanTemplate: $template,
@@ -394,7 +397,7 @@ it('combines discount code with payment plan', function () {
         'max_price' => 50000,
     ]);
 
-    $action = new CreateOrder;
+    $action = app(CreateOrder::class);
     $order = $action->handle(
         $this->user,
         $discountCode,

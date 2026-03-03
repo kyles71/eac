@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -8,29 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
-class FormUser extends Model
+final class FormUser extends Model
 {
-    #[Scope]
-    protected function formIsActive(Builder $query): void
-    {
-        $query->join('forms', function ($join) {
-            $join->on('form_users.form_id', '=', 'forms.id')
-                ->where(function ($q) {
-                    $q->whereNull('forms.valid_until')
-                        ->orWhere('forms.valid_until', '>', now());
-                });
-        });
-    }
-
-    #[Scope]
-    protected function formIsExpired(Builder $query): void
-    {
-        $query->join('forms', function ($join) {
-            $join->on('form_users.form_id', '=', 'forms.id')
-                ->where('forms.valid_until', '<=', now());
-        });
-    }
-
     public function form(): BelongsTo
     {
         return $this->belongsTo(Form::class);
@@ -66,5 +47,26 @@ class FormUser extends Model
     public function responseable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    #[Scope]
+    protected function formIsActive(Builder $query): void
+    {
+        $query->join('forms', function ($join) {
+            $join->on('form_users.form_id', '=', 'forms.id')
+                ->where(function ($q) {
+                    $q->whereNull('forms.valid_until')
+                        ->orWhere('forms.valid_until', '>', now());
+                });
+        });
+    }
+
+    #[Scope]
+    protected function formIsExpired(Builder $query): void
+    {
+        $query->join('forms', function ($join) {
+            $join->on('form_users.form_id', '=', 'forms.id')
+                ->where('forms.valid_until', '<=', now());
+        });
     }
 }

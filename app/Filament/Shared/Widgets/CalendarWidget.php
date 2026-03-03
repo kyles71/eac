@@ -12,6 +12,7 @@ use App\Models\Student;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Saade\FilamentFullCalendar\Actions\CreateAction;
@@ -106,7 +107,7 @@ final class CalendarWidget extends FullCalendarWidget
     protected function headerActions(): array
     {
         $calendars = $this->calendars
-            ->map(fn($calendar): Action => Action::make('calendar_'.$calendar->id)
+            ->map(fn ($calendar): Action => Action::make('calendar_'.$calendar->id)
                 ->label($calendar->name)
                 ->extraAttributes(['x-on:click' => 'close'])
                 ->action(function () use ($calendar): void {
@@ -128,9 +129,9 @@ final class CalendarWidget extends FullCalendarWidget
                     $this->refreshRecords();
                 }),
             ActionGroup::make($calendars)
-                ->label(fn() => $this->calendar->name)
+                ->label(fn () => $this->calendar->name)
                 ->button()
-                ->icon('heroicon-o-calendar'),
+                ->icon(Heroicon::OutlinedCalendar),
         ];
     }
 }

@@ -63,4 +63,9 @@ interface StripeServiceContract
         string $description = '',
         array $metadata = [],
     ): Invoice;
+
+    /**
+     * Confirm a PaymentIntent with a specific payment method (server-side).
+     */
+    public function confirmPaymentIntent(string $paymentIntentId, string $paymentMethodId): PaymentIntent;
 }

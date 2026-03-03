@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Enums\FormTypes;
@@ -10,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Form extends Model
+final class Form extends Model
 {
     use HasFactory;
 
@@ -26,15 +28,6 @@ class Form extends Model
         'valid_until' => 'datetime',
     ];
 
-    #[Scope]
-    protected function isActive(Builder $query): void
-    {
-        $query->where(function ($q) {
-            $q->whereNull('valid_until')
-                ->orWhere('valid_until', '>', now());
-        });
-    }
-
     public function courses(): BelongsToMany
     {
         return $this->belongsToMany(Course::class, 'course_forms');
@@ -48,5 +41,14 @@ class Form extends Model
     public function formUsers(): HasMany
     {
         return $this->hasMany(FormUser::class);
+    }
+
+    #[Scope]
+    protected function isActive(Builder $query): void
+    {
+        $query->where(function ($q) {
+            $q->whereNull('valid_until')
+                ->orWhere('valid_until', '>', now());
+        });
     }
 }

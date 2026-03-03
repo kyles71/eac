@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Enums\CreditTransactionType;
-use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanMethod;
 use App\Models\Course;
 use App\Models\DiscountCode;
-use App\Models\GiftCardType;
 use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
 use App\Models\User;
@@ -19,6 +17,10 @@ use InvalidArgumentException;
 
 final class CreateOrder
 {
+    public function __construct(
+        private readonly CompleteOrder $completeOrder,
+    ) {}
+
     public function handle(
         User $user,
         ?DiscountCode $discountCode = null,
@@ -166,44 +168,10 @@ final class CreateOrder
 
             // If fully covered by discount + credit, complete immediately
             if ($total === 0) {
-                $this->completeZeroTotalOrder($order, $user);
+                $this->completeOrder->handle($order);
             }
 
             return $order;
         });
-    }
-
-    /**
-     * Complete a zero-total order immediately (no Stripe needed).
-     */
-    private function completeZeroTotalOrder(Order $order, User $user): void
-    {
-        $order->update(['status' => OrderStatus::Completed]);
-
-        $order->loadMissing('orderItems.product.productable');
-
-        /** @var \App\Models\OrderItem $orderItem */
-        foreach ($order->orderItems as $orderItem) {
-            /** @var \App\Models\Product $product */
-            $product = $orderItem->product;
-
-            if ($product->productable instanceof Course) {
-                for ($i = 0; $i < $orderItem->quantity; $i++) {
-                    \App\Models\Enrollment::query()->create([
-                        'course_id' => $product->productable->id,
-                        'user_id' => $user->id,
-                        'student_id' => null,
-                    ]);
-                }
-                $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
-            } elseif ($product->productable instanceof GiftCardType) {
-                $fulfillGiftCard = new FulfillGiftCard;
-                $fulfillGiftCard->handle($orderItem, $user);
-                $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
-            }
-            // Costume and standalone products remain Pending for manual fulfillment
-        }
-
-        $user->cartItems()->delete();
     }
 }

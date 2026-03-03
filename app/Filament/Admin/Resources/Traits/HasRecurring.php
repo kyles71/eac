@@ -33,7 +33,7 @@ trait HasRecurring
             return $return;
         }
 
-        if (!$repeat_frequency instanceof \App\Enums\ScheduleFrequency) {
+        if (! $repeat_frequency instanceof ScheduleFrequency) {
             return $return;
         }
 
@@ -43,19 +43,19 @@ trait HasRecurring
 
         while (isset($repeat_through, $repeat_frequency) && $start->lt($repeat_through)) {
             switch ($repeat_frequency) {
-                case ScheduleFrequency::DAILY:
+                case ScheduleFrequency::Daily:
                     $start->addDay();
                     $end->addDay();
                     break;
-                case ScheduleFrequency::WEEKLY:
+                case ScheduleFrequency::Weekly:
                     $start->addWeek();
                     $end->addWeek();
                     break;
-                case ScheduleFrequency::BIWEEKLY:
+                case ScheduleFrequency::Biweekly:
                     $start->addWeeks(2);
                     $end->addWeeks(2);
                     break;
-                case ScheduleFrequency::MONTHLY:
+                case ScheduleFrequency::Monthly:
                     $start->addMonth();
                     $end->addMonth();
                     break;

@@ -29,7 +29,7 @@ final class DatabaseSeeder extends Seeder
         ]);
 
         Form::factory()
-            ->create(['name' => 'Student Waiver 25-26', 'form_type' => FormTypes::STUDENT_WAIVER->value]);
+            ->create(['name' => 'Student Waiver 25-26', 'form_type' => FormTypes::StudentWaiver->value]);
 
         if (config('app.env') !== 'production') {
             $this->seedDevData();

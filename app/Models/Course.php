@@ -49,10 +49,10 @@ final class Course extends Model
     public function nextEvent(): HasOne
     {
         return $this->events()->one()->ofMany([
-            'start_time' => 'max',
-            'id' => 'max',
+            'start_time' => 'min',
+            'id' => 'min',
         ], function (Builder $query): void {
-            $query->where('start_time', '<', now());
+            $query->where('start_time', '>', now());
         });
     }
 

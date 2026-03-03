@@ -49,7 +49,7 @@ final class Enrollment extends Model
             ->whereNotNull('enrollments.student_id')
             ->where('courses.start_time', '<', $date)
             ->where('events.start_time', '>', $date)
-            ->groupBy('courses.id');
+            ->groupBy('enrollments.id');
     }
 
     #[Scope]
@@ -72,7 +72,7 @@ final class Enrollment extends Model
 
         $query->join('courses', 'courses.id', '=', 'enrollments.course_id')
             ->leftJoin('events', function ($join) use ($date): void {
-                $join->on('events.course_id', '=', 'enrollments.id')
+                $join->on('events.course_id', '=', 'courses.id')
                     ->where('events.start_time', '>', $date);
             })
             ->whereNotNull('enrollments.student_id')
