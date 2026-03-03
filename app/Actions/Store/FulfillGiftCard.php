@@ -36,6 +36,7 @@ final readonly class FulfillGiftCard
             /** @var GiftCard $giftCard */
             $giftCard = GiftCard::query()->create([
                 'code' => $this->generateUniqueCode(),
+                'gift_card_type_id' => $giftCardType->id,
                 'initial_amount' => $amount,
                 'remaining_amount' => $amount,
                 'purchased_by_user_id' => $purchaser->id,

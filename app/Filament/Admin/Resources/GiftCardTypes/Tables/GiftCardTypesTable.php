@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\GiftCardTypes\Tables;
 
+use App\Models\GiftCardType;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -24,6 +25,11 @@ final class GiftCardTypesTable
                         ? '$'.number_format($state / 100, 2)
                         : 'Custom')
                     ->sortable(),
+                TextColumn::make('restriction')
+                    ->label('Restriction')
+                    ->state(fn (GiftCardType $record): string => $record->restrictionSummary())
+                    ->badge()
+                    ->color(fn (GiftCardType $record): string => $record->hasRestrictions() ? 'warning' : 'success'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

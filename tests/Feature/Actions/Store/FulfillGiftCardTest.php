@@ -38,6 +38,7 @@ it('creates a gift card for a purchased gift card type', function () {
         ->and($giftCard->remaining_amount)->toBe(5000)
         ->and($giftCard->purchased_by_user_id)->toBe($this->user->id)
         ->and($giftCard->order_id)->toBe($this->order->id)
+        ->and($giftCard->gift_card_type_id)->toBe($this->giftCardType->id)
         ->and($giftCard->is_active)->toBeTrue()
         ->and($giftCard->redeemed_at)->toBeNull()
         ->and(mb_strlen($giftCard->code))->toBe(16);

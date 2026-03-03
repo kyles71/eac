@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\ProductType;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -21,6 +22,7 @@ final class GiftCardTypeFactory extends Factory
         return [
             'name' => '$'.fake()->randomElement([25, 50, 100]).' Gift Card',
             'denomination' => fake()->randomElement([2500, 5000, 10000]),
+            'restricted_to_product_type' => null,
         ];
     }
 
@@ -43,6 +45,16 @@ final class GiftCardTypeFactory extends Factory
         return $this->state(fn (array $attributes): array => [
             'name' => '$'.number_format($cents / 100, 2).' Gift Card',
             'denomination' => $cents,
+        ]);
+    }
+
+    /**
+     * Restrict this gift card type to a specific product type.
+     */
+    public function restrictedToProductType(ProductType $productType): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'restricted_to_product_type' => $productType,
         ]);
     }
 }

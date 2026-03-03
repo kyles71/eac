@@ -24,6 +24,7 @@ final class GiftCardFactory extends Factory
 
         return [
             'code' => mb_strtoupper(Str::random(12)),
+            'gift_card_type_id' => null,
             'initial_amount' => $amount,
             'remaining_amount' => $amount,
             'purchased_by_user_id' => User::factory(),
@@ -32,6 +33,16 @@ final class GiftCardFactory extends Factory
             'is_active' => true,
             'redeemed_at' => null,
         ];
+    }
+
+    /**
+     * Associate with a specific gift card type.
+     */
+    public function forType(\App\Models\GiftCardType $type): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'gift_card_type_id' => $type->id,
+        ]);
     }
 
     /**

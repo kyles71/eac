@@ -95,6 +95,7 @@ final readonly class CreateCheckoutSession
                 'discount_code_id' => null,
                 'discount_amount' => 0,
                 'credit_applied' => 0,
+                'restricted_credit_applied' => 0,
             ]);
 
             foreach ($orderItems as $item) {
@@ -115,6 +116,47 @@ final readonly class CreateCheckoutSession
                 ]);
 
                 $discountCode->increment('times_used');
+            }
+
+            // Apply restricted credits to eligible items
+            $restrictedCreditTotal = 0;
+            $order->loadMissing('orderItems.product.productable');
+
+            /** @var \App\Models\OrderItem $orderItem */
+            foreach ($order->orderItems as $orderItem) {
+                if ($total <= 0) {
+                    break;
+                }
+
+                /** @var \App\Models\Product $product */
+                $product = $orderItem->product;
+                $itemTotal = $orderItem->total_price;
+
+                $availableRestricted = $user->getRestrictedCreditForProduct($product);
+
+                if ($availableRestricted > 0) {
+                    $applicableAmount = min($availableRestricted, $itemTotal, $total);
+                    $actualDebited = $user->applyRestrictedCredit($product, $applicableAmount);
+
+                    if ($actualDebited > 0) {
+                        $restrictedCreditTotal += $actualDebited;
+                        $total = max(0, $total - $actualDebited);
+                    }
+                }
+            }
+
+            if ($restrictedCreditTotal > 0) {
+                $order->update([
+                    'restricted_credit_applied' => $restrictedCreditTotal,
+                    'total' => $total,
+                ]);
+
+                $user->adjustCredit(
+                    0,
+                    CreditTransactionType::CheckoutDebit,
+                    $order,
+                    "Restricted credit applied to order #{$order->id}",
+                );
             }
 
             // Apply store credit if requested

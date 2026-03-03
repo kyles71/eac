@@ -18,4 +18,4 @@ final class ListGiftCards extends ListRecords
             CreateAction::make(),
         ];
     }
-    }
+}

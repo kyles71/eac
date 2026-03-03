@@ -26,7 +26,6 @@ use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
@@ -36,7 +35,6 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 
 final class Cart extends Page implements HasTable
@@ -199,6 +197,36 @@ final class Cart extends Page implements HasTable
     }
 
     /**
+     * Get the restricted credit amount applicable to current cart items in cents.
+     */
+    public function getRestrictedCreditAmountProperty(): int
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        $totalRestricted = 0;
+        $remaining = $this->subtotal - $this->discountAmount;
+
+        /** @var CartItem $cartItem */
+        foreach ($this->cartItems as $cartItem) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $itemTotal = $cartItem->product->price * $cartItem->quantity;
+            $available = $user->getRestrictedCreditForProduct($cartItem->product);
+
+            if ($available > 0) {
+                $applicable = min($available, $itemTotal, $remaining);
+                $totalRestricted += $applicable;
+                $remaining -= $applicable;
+            }
+        }
+
+        return $totalRestricted;
+    }
+
+    /**
      * Get the credit amount to apply in cents.
      */
     public function getCreditAmountProperty(): int
@@ -211,15 +239,15 @@ final class Cart extends Page implements HasTable
         $user = auth()->user();
         $creditBalance = $user->credit_balance ?? 0;
 
-        return min($creditBalance, $this->subtotal - $this->discountAmount);
+        return min($creditBalance, $this->subtotal - $this->discountAmount - $this->restrictedCreditAmount);
     }
 
     /**
-     * Get the grand total in cents (after discounts/credits).
+     * Get the grand total in cents (after discounts/restricted credits/credits).
      */
     public function getGrandTotalProperty(): int
     {
-        return max(0, $this->subtotal - $this->discountAmount - $this->creditAmount);
+        return max(0, $this->subtotal - $this->discountAmount - $this->restrictedCreditAmount - $this->creditAmount);
     }
 
     /**
@@ -432,6 +460,10 @@ final class Cart extends Page implements HasTable
                     $parts[] = "Discount: {$this->appliedDiscountDisplay}";
                 }
 
+                if ($this->restrictedCreditAmount > 0) {
+                    $parts[] = 'Restricted credit: -'.$this->formatMoney($this->restrictedCreditAmount);
+                }
+
                 if ($this->creditAmount > 0) {
                     $parts[] = 'Store credit: -'.$this->formatMoney($this->creditAmount);
                 }
@@ -539,7 +571,7 @@ final class Cart extends Page implements HasTable
         }
 
         $totalComponents[] = Flex::make([
-            Text::make("Subtotal")
+            Text::make('Subtotal')
                 ->color('neutral')
                 ->columnSpanFull(),
             Text::make(fn (): string => $this->formatMoney($this->subtotal))
@@ -558,9 +590,20 @@ final class Cart extends Page implements HasTable
             ]);
         }
 
+        if ($this->restrictedCreditAmount > 0) {
+            $totalComponents[] = Flex::make([
+                Text::make('Restricted Credit')
+                    ->color('danger')
+                    ->columnSpanFull(),
+                Text::make(fn (): string => "-{$this->formatMoney($this->restrictedCreditAmount)}")
+                    ->color('danger')
+                    ->grow(false),
+            ]);
+        }
+
         if ($this->creditAmount > 0) {
             $totalComponents[] = Flex::make([
-                Text::make("Store Credit")
+                Text::make('Store Credit')
                     ->color('danger')
                     ->columnSpanFull(),
                 Text::make(fn (): string => "-{$this->formatMoney($this->creditAmount)}")
@@ -570,7 +613,7 @@ final class Cart extends Page implements HasTable
         }
 
         $totalComponents[] = Flex::make([
-            Text::make("Total")
+            Text::make('Total')
                 ->size('md')
                 ->weight(FontWeight::Bold)
                 ->columnSpanFull(),
@@ -590,7 +633,7 @@ final class Cart extends Page implements HasTable
                     ->extraAttributes(['class' => 'border-t border-gray-300 pt-2 w-full']);
 
             $totalComponents[] = Flex::make([
-                Text::make("Amount Due Today")
+                Text::make('Amount Due Today')
                     ->weight(FontWeight::Bold)
                     ->columnSpanFull(),
                 Text::make(fn (): string => $this->formatMoney($this->amountDueToday))

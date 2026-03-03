@@ -6,13 +6,15 @@ namespace App\Actions\Store;
 
 use App\Enums\CreditTransactionType;
 use App\Models\GiftCard;
+use App\Models\RestrictedCredit;
 use App\Models\User;
 use InvalidArgumentException;
 
 final readonly class RedeemGiftCard
 {
     /**
-     * Redeem a gift card code and add the balance to the user's store credit.
+     * Redeem a gift card code and add the balance to the user's store credit
+     * (or restricted credit if the gift card type has restrictions).
      */
     public function handle(string $code, User $user): GiftCard
     {
@@ -42,12 +44,31 @@ final readonly class RedeemGiftCard
             'remaining_amount' => 0,
         ]);
 
-        $user->adjustCredit(
-            $amount,
-            CreditTransactionType::GiftCardRedemption,
-            $giftCard,
-            "Redeemed gift card {$giftCard->code}",
-        );
+        $giftCardType = $giftCard->giftCardType;
+
+        if ($giftCardType !== null && $giftCardType->hasRestrictions()) {
+            // Create a restricted credit entry instead of adding to general balance
+            RestrictedCredit::query()->create([
+                'user_id' => $user->id,
+                'gift_card_type_id' => $giftCardType->id,
+                'gift_card_id' => $giftCard->id,
+                'balance' => $amount,
+            ]);
+
+            $user->adjustCredit(
+                0,
+                CreditTransactionType::GiftCardRedemption,
+                $giftCard,
+                "Redeemed restricted gift card {$giftCard->code} ({$giftCardType->restrictionSummary()})",
+            );
+        } else {
+            $user->adjustCredit(
+                $amount,
+                CreditTransactionType::GiftCardRedemption,
+                $giftCard,
+                "Redeemed gift card {$giftCard->code}",
+            );
+        }
 
         return $giftCard->refresh();
     }

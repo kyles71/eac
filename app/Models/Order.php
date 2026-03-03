@@ -25,6 +25,7 @@ final class Order extends Model
         'discount_code_id' => 'integer',
         'discount_amount' => 'integer',
         'credit_applied' => 'integer',
+        'restricted_credit_applied' => 'integer',
     ];
 
     public function user(): BelongsTo

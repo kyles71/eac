@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class GiftCard extends Model
 {
@@ -15,6 +16,7 @@ final class GiftCard extends Model
 
     protected $casts = [
         'id' => 'integer',
+        'gift_card_type_id' => 'integer',
         'initial_amount' => 'integer',
         'remaining_amount' => 'integer',
         'purchased_by_user_id' => 'integer',
@@ -23,6 +25,11 @@ final class GiftCard extends Model
         'is_active' => 'boolean',
         'redeemed_at' => 'datetime',
     ];
+
+    public function giftCardType(): BelongsTo
+    {
+        return $this->belongsTo(GiftCardType::class);
+    }
 
     public function purchasedBy(): BelongsTo
     {
@@ -37,6 +44,11 @@ final class GiftCard extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function restrictedCredits(): HasMany
+    {
+        return $this->hasMany(RestrictedCredit::class);
     }
 
     /**

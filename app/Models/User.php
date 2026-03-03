@@ -118,6 +118,57 @@ final class User extends Authenticatable implements FilamentUser, HasName
         return $this->hasMany(CreditTransaction::class);
     }
 
+    public function restrictedCredits(): HasMany
+    {
+        return $this->hasMany(RestrictedCredit::class);
+    }
+
+    /**
+     * Get the total restricted credit balance applicable to a given product.
+     */
+    public function getRestrictedCreditForProduct(Product $product): int
+    {
+        return $this->restrictedCredits()
+            ->where('balance', '>', 0)
+            ->with('giftCardType.products')
+            ->get()
+            ->filter(fn (RestrictedCredit $rc): bool => $rc->giftCardType->appliesToProduct($product))
+            ->sum('balance');
+    }
+
+    /**
+     * Debit restricted credits applicable to a product (FIFO by oldest).
+     * Returns the actual amount debited.
+     */
+    public function applyRestrictedCredit(Product $product, int $amount): int
+    {
+        if ($amount <= 0) {
+            return 0;
+        }
+
+        $applicableCredits = $this->restrictedCredits()
+            ->where('balance', '>', 0)
+            ->with('giftCardType.products')
+            ->orderBy('created_at')
+            ->get()
+            ->filter(fn (RestrictedCredit $rc): bool => $rc->giftCardType->appliesToProduct($product));
+
+        $totalDebited = 0;
+
+        /** @var RestrictedCredit $restrictedCredit */
+        foreach ($applicableCredits as $restrictedCredit) {
+            if ($totalDebited >= $amount) {
+                break;
+            }
+
+            $debit = min($restrictedCredit->balance, $amount - $totalDebited);
+            $restrictedCredit->update(['balance' => $restrictedCredit->balance - $debit]);
+            $totalDebited += $debit;
+        }
+
+        return $totalDebited;
+    }
+
     /**
      * Adjust the user's credit balance and record a transaction.
      *
