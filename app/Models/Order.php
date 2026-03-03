@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Enums\PaymentPlanMethod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +27,8 @@ final class Order extends Model
         'discount_amount' => 'integer',
         'credit_applied' => 'integer',
         'restricted_credit_applied' => 'integer',
+        'payment_plan_template_id' => 'integer',
+        'payment_plan_method' => PaymentPlanMethod::class,
     ];
 
     public function user(): BelongsTo
@@ -36,6 +39,11 @@ final class Order extends Model
     public function discountCode(): BelongsTo
     {
         return $this->belongsTo(DiscountCode::class);
+    }
+
+    public function paymentPlanTemplate(): BelongsTo
+    {
+        return $this->belongsTo(PaymentPlanTemplate::class);
     }
 
     public function orderItems(): HasMany

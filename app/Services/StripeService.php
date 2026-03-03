@@ -6,7 +6,7 @@ namespace App\Services;
 
 use App\Contracts\StripeServiceContract;
 use App\Models\User;
-use Stripe\Checkout\Session as CheckoutSession;
+use Illuminate\Support\Collection;
 use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
@@ -42,35 +42,44 @@ final readonly class StripeService implements StripeServiceContract
     }
 
     /**
-     * @param  array<int, array{price_data: array{currency: string, product_data: array{name: string}, unit_amount: int}, quantity: int}>  $lineItems
      * @param  array<string, string>  $metadata
      */
-    public function createCheckoutSession(
+    public function createPaymentIntent(
         User $user,
-        array $lineItems,
-        string $successUrl,
-        string $cancelUrl,
+        int $amount,
         array $metadata = [],
         bool $setupFutureUsage = false,
-    ): CheckoutSession {
+    ): PaymentIntent {
         $customer = $this->createOrGetCustomer($user);
 
         $params = [
             'customer' => $customer->id,
-            'line_items' => $lineItems,
-            'mode' => 'payment',
-            'success_url' => $successUrl,
-            'cancel_url' => $cancelUrl,
+            'amount' => $amount,
+            'currency' => 'usd',
             'metadata' => $metadata,
+            'automatic_payment_methods' => [
+                'enabled' => true,
+            ],
         ];
 
         if ($setupFutureUsage) {
-            $params['payment_intent_data'] = [
-                'setup_future_usage' => 'off_session',
-            ];
+            $params['setup_future_usage'] = 'off_session';
         }
 
-        return $this->client->checkout->sessions->create($params);
+        return $this->client->paymentIntents->create($params);
+    }
+
+    /**
+     * @return Collection<int, \Stripe\PaymentMethod>
+     */
+    public function getPaymentMethods(string $customerId): Collection
+    {
+        $methods = $this->client->paymentMethods->all([
+            'customer' => $customerId,
+            'type' => 'card',
+        ]);
+
+        return collect($methods->data);
     }
 
     /**

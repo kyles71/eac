@@ -21,7 +21,7 @@ beforeEach(function () {
     $this->product = Product::factory()->create(['price' => 5000]);
 });
 
-it('handles checkout session completed webhook', function () {
+it('handles payment_intent.succeeded webhook for order completion', function () {
     $user = User::factory()->create();
 
     $order = Order::factory()->create([
@@ -29,7 +29,7 @@ it('handles checkout session completed webhook', function () {
         'status' => OrderStatus::Pending,
         'subtotal' => 5000,
         'total' => 5000,
-        'stripe_checkout_session_id' => 'cs_test_webhook',
+        'stripe_payment_intent_id' => 'pi_test_webhook',
     ]);
 
     OrderItem::factory()->create([
@@ -41,11 +41,12 @@ it('handles checkout session completed webhook', function () {
     ]);
 
     $event = new Stripe\Event;
-    $event->type = 'checkout.session.completed';
+    $event->type = 'payment_intent.succeeded';
     $event->data = (object) [
         'object' => (object) [
-            'id' => 'cs_test_webhook',
-            'payment_intent' => 'pi_test_webhook',
+            'id' => 'pi_test_webhook',
+            'payment_method' => 'pm_test_123',
+            'customer' => 'cus_test_123',
             'metadata' => (object) [
                 'order_id' => (string) $order->id,
             ],
@@ -70,7 +71,6 @@ it('handles checkout session completed webhook', function () {
     expect($response->getData(true))->toBe(['message' => 'Order processed']);
 
     expect($order->refresh()->status)->toBe(OrderStatus::Completed);
-    expect($order->stripe_payment_intent_id)->toBe('pi_test_webhook');
 });
 
 it('returns 400 for invalid webhook signature', function () {
@@ -150,13 +150,12 @@ it('handles payment intent failed webhook', function () {
     expect($order->refresh()->status)->toBe(OrderStatus::Failed);
 });
 
-it('returns 400 when checkout session is missing order_id metadata', function () {
+it('handles payment_intent.succeeded without order or installment metadata gracefully', function () {
     $event = new Stripe\Event;
-    $event->type = 'checkout.session.completed';
+    $event->type = 'payment_intent.succeeded';
     $event->data = (object) [
         'object' => (object) [
-            'id' => 'cs_test_no_meta',
-            'payment_intent' => 'pi_test',
+            'id' => 'pi_test_no_meta',
             'metadata' => (object) [],
         ],
     ];
@@ -175,11 +174,11 @@ it('returns 400 when checkout session is missing order_id metadata', function ()
     $controller = app(StripeWebhookController::class);
     $response = $controller($request);
 
-    expect($response->getStatusCode())->toBe(400);
-    expect($response->getData(true))->toBe(['error' => 'Missing order_id']);
+    expect($response->getStatusCode())->toBe(200);
+    expect($response->getData(true))->toBe(['message' => 'No order or installment metadata, skipping']);
 });
 
-it('creates a payment plan when checkout session has template metadata', function () {
+it('creates a payment plan when order has payment plan template', function () {
     $user = User::factory()->create(['stripe_id' => 'cus_test_123']);
 
     $template = PaymentPlanTemplate::factory()->create([
@@ -192,7 +191,9 @@ it('creates a payment plan when checkout session has template metadata', functio
         'status' => OrderStatus::Pending,
         'subtotal' => 9000,
         'total' => 9000,
-        'stripe_checkout_session_id' => 'cs_test_plan',
+        'stripe_payment_intent_id' => 'pi_test_plan',
+        'payment_plan_template_id' => $template->id,
+        'payment_plan_method' => PaymentPlanMethod::AutoCharge,
     ]);
 
     OrderItem::factory()->create([
@@ -204,16 +205,14 @@ it('creates a payment plan when checkout session has template metadata', functio
     ]);
 
     $event = new Stripe\Event;
-    $event->type = 'checkout.session.completed';
+    $event->type = 'payment_intent.succeeded';
     $event->data = (object) [
         'object' => (object) [
-            'id' => 'cs_test_plan',
-            'payment_intent' => 'pi_test_plan',
+            'id' => 'pi_test_plan',
+            'payment_method' => 'pm_test_plan',
             'customer' => 'cus_test_123',
             'metadata' => (object) [
                 'order_id' => (string) $order->id,
-                'payment_plan_template_id' => (string) $template->id,
-                'payment_plan_method' => PaymentPlanMethod::AutoCharge->value,
             ],
         ],
     ];
@@ -282,34 +281,6 @@ it('handles payment_intent.succeeded webhook for installment', function () {
     expect($response->getStatusCode())->toBe(200);
     expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
     expect($installment->stripe_payment_intent_id)->toBe('pi_test_inst_success');
-});
-
-it('handles payment_intent.succeeded without installment metadata gracefully', function () {
-    $event = new Stripe\Event;
-    $event->type = 'payment_intent.succeeded';
-    $event->data = (object) [
-        'object' => (object) [
-            'id' => 'pi_test_no_meta',
-            'metadata' => (object) [],
-        ],
-    ];
-
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('constructWebhookEvent')
-        ->once()
-        ->andReturn($event);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
-        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
-    ]);
-
-    $controller = app(StripeWebhookController::class);
-    $response = $controller($request);
-
-    expect($response->getStatusCode())->toBe(200);
-    expect($response->getData(true))->toBe(['message' => 'No installment metadata, skipping']);
 });
 
 it('handles invoice.paid webhook for installment', function () {

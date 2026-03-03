@@ -37,10 +37,6 @@ final class OrderInfolist
                             ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
                         TextEntry::make('total')
                             ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
-                        TextEntry::make('stripe_checkout_session_id')
-                            ->label('Stripe Session ID')
-                            ->placeholder('N/A')
-                            ->copyable(),
                         TextEntry::make('stripe_payment_intent_id')
                             ->label('Stripe Payment Intent')
                             ->placeholder('N/A')

@@ -2,19 +2,16 @@
 
 declare(strict_types=1);
 
-use App\Actions\Store\CreateCheckoutSession;
-use App\Contracts\StripeServiceContract;
+use App\Actions\Store\CreateOrder;
 use App\Enums\OrderStatus;
 use App\Enums\ProductType;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
-use App\Models\Order;
 use App\Models\Product;
 use App\Models\RestrictedCredit;
 use App\Models\User;
-use Stripe\Checkout\Session as StripeSession;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -44,14 +41,9 @@ it('applies restricted credit to eligible items during checkout', function () {
         'quantity' => 1,
     ]);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user);
 
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->subtotal)->toBe(5000)
         ->and($order->restricted_credit_applied)->toBe(5000)
@@ -87,21 +79,9 @@ it('does not apply restricted credit to ineligible items', function () {
         'quantity' => 1,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_restricted',
-        'url' => 'https://checkout.stripe.com/restricted',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->restricted_credit_applied)->toBe(0)
         ->and($order->total)->toBe(3000);
 
@@ -142,21 +122,8 @@ it('combines restricted credit and unrestricted credit', function () {
         'quantity' => 1,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_combined',
-        'url' => 'https://checkout.stripe.com/combined',
-    ]);
-
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', null, 3000);
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, creditToApply: 3000);
 
     // Restricted credit (3000) applied to the course product
     expect($order->restricted_credit_applied)->toBe(3000)
@@ -193,14 +160,9 @@ it('partially applies restricted credit when item is cheaper than credit', funct
         'quantity' => 1,
     ]);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user);
 
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->restricted_credit_applied)->toBe(5000)
         ->and($order->total)->toBe(0);

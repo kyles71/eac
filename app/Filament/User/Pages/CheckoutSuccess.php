@@ -28,13 +28,13 @@ final class CheckoutSuccess extends Page
 
     public function mount(): void
     {
-        $sessionId = request()->query('session_id');
+        $paymentIntent = request()->query('payment_intent');
         $orderId = request()->query('order_id');
 
-        if ($sessionId !== null) {
+        if ($paymentIntent !== null) {
             $this->order = Order::query()
                 ->where('user_id', auth()->id())
-                ->where('stripe_checkout_session_id', $sessionId)
+                ->where('stripe_payment_intent_id', $paymentIntent)
                 ->with('orderItems.product')
                 ->first();
         } elseif ($orderId !== null) {

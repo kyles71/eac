@@ -2,8 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Actions\Store\CreateCheckoutSession;
-use App\Contracts\StripeServiceContract;
+use App\Actions\Store\CreateOrder;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
@@ -21,7 +20,6 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\User;
-use Stripe\Checkout\Session as StripeSession;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -29,37 +27,20 @@ beforeEach(function () {
     $this->product = Product::factory()->forCourse($this->course)->create(['price' => 5000]);
 });
 
-it('creates an order and returns a stripe checkout url', function () {
+it('creates an order and returns the order model', function () {
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->product->id,
         'quantity' => 2,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_123',
-        'url' => 'https://checkout.stripe.com/test',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
-
-    expect($url)->toBe('https://checkout.stripe.com/test');
-
-    // Verify order was created
-    $order = Order::query()->where('user_id', $this->user->id)->first();
-    expect($order)->not->toBeNull()
+    expect($order)->toBeInstanceOf(Order::class)
         ->and($order->status)->toBe(OrderStatus::Pending)
         ->and($order->subtotal)->toBe(10000) // 2 * 5000
-        ->and($order->total)->toBe(10000)
-        ->and($order->stripe_checkout_session_id)->toBe('cs_test_123');
+        ->and($order->total)->toBe(10000);
 
     // Verify order items
     $orderItems = OrderItem::query()->where('order_id', $order->id)->get();
@@ -71,11 +52,8 @@ it('creates an order and returns a stripe checkout url', function () {
 });
 
 it('fails when cart is empty', function () {
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
+    $action = new CreateOrder;
+    $action->handle($this->user);
 })->throws(InvalidArgumentException::class, 'Your cart is empty.');
 
 it('fails when course capacity is insufficient at checkout', function () {
@@ -90,11 +68,8 @@ it('fails when course capacity is insufficient at checkout', function () {
         Enrollment::factory()->create(['course_id' => $this->course->id]);
     }
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
+    $action = new CreateOrder;
+    $action->handle($this->user);
 })->throws(InvalidArgumentException::class);
 
 it('creates an order with multiple cart items', function () {
@@ -113,22 +88,9 @@ it('creates an order with multiple cart items', function () {
         'quantity' => 2,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_456',
-        'url' => 'https://checkout.stripe.com/test2',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->subtotal)->toBe(20000) // 5000 + (7500 * 2)
         ->and($order->orderItems)->toHaveCount(2);
 });
@@ -142,22 +104,9 @@ it('applies a percentage discount code to the order', function () {
 
     $discountCode = DiscountCode::factory()->percentage(20)->create();
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_discount',
-        'url' => 'https://checkout.stripe.com/discount',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, $discountCode);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->subtotal)->toBe(10000)
         ->and($order->discount_amount)->toBe(2000)
         ->and($order->total)->toBe(8000)
@@ -176,22 +125,9 @@ it('applies a fixed amount discount code to the order', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(3000)->create();
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_fixed',
-        'url' => 'https://checkout.stripe.com/fixed',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, $discountCode);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->subtotal)->toBe(10000)
         ->and($order->discount_amount)->toBe(3000)
         ->and($order->total)->toBe(7000);
@@ -206,18 +142,9 @@ it('completes order immediately when discount covers full amount', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, $discountCode);
 
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
-
-    // Should redirect to success page with order_id
-    expect($url)->toContain('order_id=');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->total)->toBe(0)
         ->and($order->discount_amount)->toBe(5000);
@@ -238,22 +165,9 @@ it('applies store credit to reduce the order total', function () {
         'quantity' => 2,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_credit',
-        'url' => 'https://checkout.stripe.com/credit',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, creditToApply: 3000);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', null, 3000);
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->subtotal)->toBe(10000)
         ->and($order->credit_applied)->toBe(3000)
         ->and($order->total)->toBe(7000);
@@ -276,17 +190,9 @@ it('completes order immediately when credit covers full amount', function () {
         'quantity' => 1,
     ]);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, creditToApply: 15000);
 
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', null, 15000);
-
-    expect($url)->toContain('order_id=');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->credit_applied)->toBe(5000)
         ->and($order->total)->toBe(0);
@@ -310,17 +216,9 @@ it('combines discount code and credit to cover the full amount', function () {
     // 50% discount on 10000 = 5000 remaining, then 5000 credit covers it
     $discountCode = DiscountCode::factory()->percentage(50)->create();
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, $discountCode, 5000);
 
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode, 5000);
-
-    expect($url)->toContain('order_id=');
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->subtotal)->toBe(10000)
         ->and($order->discount_amount)->toBe(5000)
@@ -339,22 +237,9 @@ it('does not apply more credit than the user has', function () {
         'quantity' => 2,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_limited_credit',
-        'url' => 'https://checkout.stripe.com/limited',
-    ]);
+    $action = new CreateOrder;
+    $order = $action->handle($this->user, creditToApply: 5000);
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', null, 5000);
-
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     // Should only apply 2000 (user's actual balance), not 5000
     expect($order->credit_applied)->toBe(2000)
         ->and($order->total)->toBe(8000);
@@ -374,13 +259,8 @@ it('fulfills gift cards when order completes at zero total', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
+    $action = new CreateOrder;
+    $action->handle($this->user, $discountCode);
 
     // Gift card should have been created
     expect(GiftCard::query()->where('purchased_by_user_id', $this->user->id)->count())->toBe(1);
@@ -403,12 +283,8 @@ it('leaves costume order items as pending in zero total order', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
+    $action = new CreateOrder;
+    $action->handle($this->user, $discountCode);
 
     $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed);
@@ -428,12 +304,8 @@ it('leaves standalone order items as pending in zero total order', function () {
 
     $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
+    $action = new CreateOrder;
+    $action->handle($this->user, $discountCode);
 
     $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed);
@@ -460,12 +332,8 @@ it('marks course items fulfilled and leaves costume items pending in mixed zero 
 
     $discountCode = DiscountCode::factory()->fixedAmount(20000)->create();
 
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldNotReceive('createCheckoutSession');
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle($this->user, 'https://example.com/success', 'https://example.com/cancel', $discountCode);
+    $action = new CreateOrder;
+    $action->handle($this->user, $discountCode);
 
     $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->status)->toBe(OrderStatus::Completed);
@@ -486,7 +354,7 @@ it('marks course items fulfilled and leaves costume items pending in mixed zero 
     expect(Enrollment::query()->where('course_id', $this->course->id)->count())->toBe(1);
 });
 
-it('creates checkout session with payment plan charging first installment only', function () {
+it('stores payment plan template and method on the order', function () {
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->product->id,
@@ -499,44 +367,17 @@ it('creates checkout session with payment plan charging first installment only',
         'max_price' => 50000,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_plan',
-        'url' => 'https://checkout.stripe.com/plan',
-    ]);
-
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->withArgs(function ($user, $lineItems, $successUrl, $cancelUrl, $metadata, $setupFutureUsage) use ($template) {
-            // First installment of 10000 split 3 ways: 3334 + 3333 + 3333
-            expect($lineItems)->toHaveCount(1)
-                ->and($lineItems[0]['price_data']['unit_amount'])->toBe(3334)
-                ->and($lineItems[0]['quantity'])->toBe(1)
-                ->and($lineItems[0]['price_data']['product_data']['name'])->toContain('Installment 1 of 3')
-                ->and($metadata['payment_plan_template_id'])->toBe((string) $template->id)
-                ->and($metadata['payment_plan_method'])->toBe(PaymentPlanMethod::AutoCharge->value)
-                ->and($setupFutureUsage)->toBeTrue();
-
-            return true;
-        })
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $url = $action->handle(
+    $action = new CreateOrder;
+    $order = $action->handle(
         $this->user,
-        'https://example.com/success',
-        'https://example.com/cancel',
         paymentPlanTemplate: $template,
         paymentPlanMethod: PaymentPlanMethod::AutoCharge,
     );
 
-    expect($url)->toBe('https://checkout.stripe.com/plan');
-
-    // Full order total should still be 10000
-    $order = Order::query()->where('user_id', $this->user->id)->first();
-    expect($order->total)->toBe(10000);
+    expect($order->status)->toBe(OrderStatus::Pending)
+        ->and($order->total)->toBe(10000)
+        ->and($order->payment_plan_template_id)->toBe($template->id)
+        ->and($order->payment_plan_method)->toBe(PaymentPlanMethod::AutoCharge);
 });
 
 it('combines discount code with payment plan', function () {
@@ -553,37 +394,17 @@ it('combines discount code with payment plan', function () {
         'max_price' => 50000,
     ]);
 
-    $mockSession = StripeSession::constructFrom([
-        'id' => 'cs_test_plan_disc',
-        'url' => 'https://checkout.stripe.com/plan_disc',
-    ]);
-
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('createCheckoutSession')
-        ->once()
-        ->withArgs(function ($user, $lineItems, $successUrl, $cancelUrl, $metadata, $setupFutureUsage) {
-            // Total after discount: 8000. First installment of 4: 2000 each, no remainder
-            expect($lineItems[0]['price_data']['unit_amount'])->toBe(2000)
-                ->and($setupFutureUsage)->toBeTrue();
-
-            return true;
-        })
-        ->andReturn($mockSession);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CreateCheckoutSession::class);
-    $action->handle(
+    $action = new CreateOrder;
+    $order = $action->handle(
         $this->user,
-        'https://example.com/success',
-        'https://example.com/cancel',
         $discountCode,
         paymentPlanTemplate: $template,
         paymentPlanMethod: PaymentPlanMethod::ManualInvoice,
     );
 
-    $order = Order::query()->where('user_id', $this->user->id)->first();
     expect($order->subtotal)->toBe(10000)
         ->and($order->discount_amount)->toBe(2000)
-        ->and($order->total)->toBe(8000);
+        ->and($order->total)->toBe(8000)
+        ->and($order->payment_plan_template_id)->toBe($template->id)
+        ->and($order->payment_plan_method)->toBe(PaymentPlanMethod::ManualInvoice);
 });

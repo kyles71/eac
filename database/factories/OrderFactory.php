@@ -28,8 +28,9 @@ final class OrderFactory extends Factory
             'status' => OrderStatus::Pending,
             'subtotal' => $subtotal,
             'total' => $subtotal,
-            'stripe_checkout_session_id' => null,
             'stripe_payment_intent_id' => null,
+            'payment_plan_template_id' => null,
+            'payment_plan_method' => null,
         ];
     }
 
@@ -40,7 +41,6 @@ final class OrderFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'status' => OrderStatus::Completed,
-            'stripe_checkout_session_id' => 'cs_test_'.fake()->uuid(),
             'stripe_payment_intent_id' => 'pi_test_'.fake()->uuid(),
         ]);
     }

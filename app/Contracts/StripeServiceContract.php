@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Contracts;
 
 use App\Models\User;
-use Stripe\Checkout\Session as StripeSession;
+use Illuminate\Support\Collection;
 use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Invoice;
@@ -17,17 +17,23 @@ interface StripeServiceContract
     public function createOrGetCustomer(User $user): Customer;
 
     /**
-     * @param  array<int, array<string, mixed>>  $lineItems
+     * Create an on-session PaymentIntent for the given user and amount.
+     *
      * @param  array<string, string>  $metadata
      */
-    public function createCheckoutSession(
+    public function createPaymentIntent(
         User $user,
-        array $lineItems,
-        string $successUrl,
-        string $cancelUrl,
+        int $amount,
         array $metadata = [],
         bool $setupFutureUsage = false,
-    ): StripeSession;
+    ): PaymentIntent;
+
+    /**
+     * Get saved payment methods for a Stripe customer.
+     *
+     * @return Collection<int, \Stripe\PaymentMethod>
+     */
+    public function getPaymentMethods(string $customerId): Collection;
 
     public function constructWebhookEvent(string $payload, string $signature): Event;
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages;
 
 use App\Actions\Store\ApplyCode;
-use App\Actions\Store\CreateCheckoutSession;
+use App\Actions\Store\CreateOrder;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Enums\PaymentPlanMethod;
@@ -17,7 +17,6 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -417,69 +416,14 @@ final class Cart extends Page implements HasTable
     public function checkoutAction(): Action
     {
         return Action::make('checkout')
-            ->label('Review Order')
+            ->label('Proceed to Checkout')
             ->icon(Heroicon::OutlinedCreditCard)
             ->color('warning')
             ->size('lg')
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
-            ->requiresConfirmation()
-            ->modalHeading('Review Your Order')
-            ->modalDescription(function (): string {
-                $parts = [];
-
-                if ($this->appliedDiscountCodeId !== null) {
-                    $parts[] = "Discount: {$this->appliedDiscountDisplay}";
-                }
-
-                if ($this->restrictedCreditAmount > 0) {
-                    $parts[] = 'Restricted credit: -'.$this->formatMoney($this->restrictedCreditAmount);
-                }
-
-                if ($this->creditAmount > 0) {
-                    $parts[] = 'Store credit: -'.$this->formatMoney($this->creditAmount);
-                }
-
-                if ($this->selectedTemplate !== null) {
-                    $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
-                    $parts[] = "Payment plan: {$this->selectedTemplate->number_of_installments} payments of {$this->formatMoney($amounts['remaining'])}";
-                    $parts[] = "Amount due today: {$this->formatMoney($amounts['first'])}";
-                }
-
-                $parts[] = "Total: {$this->formatMoney($this->grandTotal)}";
-                $parts[] = '';
-                $parts[] = 'You will be redirected to Stripe to complete your payment (unless fully covered by discount/credit).';
-
-                return implode("\n", $parts);
-            })
-            ->form([
-                Toggle::make('use_credit')
-                    ->label(function (): string {
-                        /** @var \App\Models\User $user */
-                        $user = auth()->user();
-                        $creditBalance = $user->credit_balance ?? 0;
-
-                        return 'Apply store credit ('.$this->formatMoney($creditBalance).')';
-                    })
-                    ->default($this->useCredit)
-                    ->visible(function (): bool {
-                        /** @var \App\Models\User $user */
-                        $user = auth()->user();
-
-                        return ($user->credit_balance ?? 0) > 0;
-                    }),
-                Select::make('payment_plan_method')
-                    ->label('Payment Plan Method')
-                    ->options(PaymentPlanMethod::class)
-                    ->default($this->selectedPaymentPlanMethod ?? PaymentPlanMethod::AutoCharge->value)
-                    ->visible(fn (): bool => $this->selectedTemplate !== null)
-                    ->required(fn (): bool => $this->selectedTemplate !== null),
-            ])
-            ->action(function (array $data): void {
+            ->action(function (): void {
                 try {
-                    $createCheckout = app(CreateCheckoutSession::class);
-
-                    $successUrl = CheckoutSuccess::getUrl();
-                    $cancelUrl = self::getUrl();
+                    $createOrder = new CreateOrder;
 
                     $discountCode = $this->appliedDiscountCodeId !== null
                         ? DiscountCode::query()->find($this->appliedDiscountCodeId)
@@ -487,27 +431,27 @@ final class Cart extends Page implements HasTable
 
                     /** @var \App\Models\User $user */
                     $user = auth()->user();
-                    $creditToApply = ! empty($data['use_credit']) ? ($user->credit_balance ?? 0) : 0;
+                    $creditToApply = $this->useCredit ? ($user->credit_balance ?? 0) : 0;
 
                     $paymentPlanTemplate = $this->selectedTemplate;
 
-                    $paymentPlanMethod = ! empty($data['payment_plan_method'])
-                        ? PaymentPlanMethod::from($data['payment_plan_method'])
-                        : ($this->selectedPaymentPlanMethod !== null
-                            ? PaymentPlanMethod::from($this->selectedPaymentPlanMethod)
-                            : null);
+                    $paymentPlanMethod = $this->selectedPaymentPlanMethod !== null
+                        ? PaymentPlanMethod::from($this->selectedPaymentPlanMethod)
+                        : null;
 
-                    $checkoutUrl = $createCheckout->handle(
+                    $order = $createOrder->handle(
                         $user,
-                        $successUrl,
-                        $cancelUrl,
                         $discountCode,
                         $creditToApply,
                         $paymentPlanTemplate,
                         $paymentPlanMethod,
                     );
 
-                    $this->redirect($checkoutUrl);
+                    if ($order->status === \App\Enums\OrderStatus::Completed) {
+                        $this->redirect(CheckoutSuccess::getUrl().'?order_id='.$order->id);
+                    } else {
+                        $this->redirect(Checkout::getUrl().'?order_id='.$order->id);
+                    }
                 } catch (InvalidArgumentException $e) {
                     Notification::make()
                         ->title('Checkout failed')
@@ -538,6 +482,14 @@ final class Cart extends Page implements HasTable
                         ->prepend('Pay in Full', '')
                         ->all()
                 )
+                ->live();
+
+            $components[] = Select::make('selectedPaymentPlanMethod')
+                ->label('Payment Plan Method')
+                ->options(PaymentPlanMethod::class)
+                ->default(PaymentPlanMethod::AutoCharge->value)
+                ->visible(fn (): bool => $this->selectedTemplate !== null)
+                ->required(fn (): bool => $this->selectedTemplate !== null)
                 ->live();
         }
 
