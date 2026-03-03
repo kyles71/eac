@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Tables;
 
+use App\Filament\Actions\SendEmailAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -45,6 +46,8 @@ final class UsersTable
                 //
             ])
             ->recordActions([
+                SendEmailAction::make()
+                    ->to(fn ($record) => [$record->email])
 
             ])
             ->toolbarActions([
