@@ -16,8 +16,13 @@ return new class() extends Migration
             $table->string('status')->default('Pending');
             $table->unsignedInteger('subtotal');
             $table->unsignedInteger('total');
-            $table->string('stripe_checkout_session_id')->nullable();
+            $table->foreignId('discount_code_id')->nullable()->constrained()->nullOnDelete();
+            $table->unsignedInteger('discount_amount')->default(0);
+            $table->unsignedInteger('credit_applied')->default(0);
+            $table->unsignedInteger('restricted_credit_applied')->default(0);
             $table->string('stripe_payment_intent_id')->nullable();
+            $table->foreignId('payment_plan_template_id')->nullable()->constrained('payment_plan_templates');
+            $table->string('payment_plan_method')->nullable();
             $table->timestamps();
         });
     }

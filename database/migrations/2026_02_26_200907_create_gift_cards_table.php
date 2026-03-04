@@ -12,6 +12,7 @@ return new class() extends Migration
     {
         Schema::create('gift_cards', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('gift_card_type_id')->nullable()->constrained()->nullOnDelete();
             $table->string('code')->unique();
             $table->unsignedInteger('initial_amount');
             $table->unsignedInteger('remaining_amount');

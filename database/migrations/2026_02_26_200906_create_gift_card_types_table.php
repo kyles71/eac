@@ -14,6 +14,7 @@ return new class() extends Migration
             $table->id();
             $table->string('name');
             $table->unsignedInteger('denomination')->default(0);
+            $table->string('restricted_to_product_type')->nullable();
             $table->timestamps();
         });
     }

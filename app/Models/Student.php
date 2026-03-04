@@ -57,14 +57,4 @@ final class Student extends Model
     {
         return $this->hasMany(FormUser::class);
     }
-
-    public function showcaseParticipation(): HasMany
-    {
-        return $this->hasMany(ShowcaseParticipation::class);
-    }
-
-    public function studentWaiver(): HasMany
-    {
-        return $this->hasMany(StudentWaiver::class);
-    }
 }

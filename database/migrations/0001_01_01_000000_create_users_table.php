@@ -20,6 +20,9 @@ return new class extends Migration
             $table->text('app_authentication_secret')->nullable();
             $table->text('app_authentication_recovery_codes')->nullable();
             $table->rememberToken();
+            $table->unsignedInteger('credit_balance')->default(0);
+            $table->string('stripe_id')->nullable()->unique();
+            $table->string('stripe_payment_method_id')->nullable();
             $table->timestamps();
         });
 

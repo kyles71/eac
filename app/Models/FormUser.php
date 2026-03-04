@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Database\Factories\FormUserFactory;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 final class FormUser extends Model
 {
+    /** @use HasFactory<FormUserFactory> */
+    use HasFactory;
+
     public function form(): BelongsTo
     {
         return $this->belongsTo(Form::class);
