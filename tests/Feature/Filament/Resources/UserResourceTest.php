@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use App\Filament\Resources\Users\Pages\CreateUser;
-use App\Filament\Resources\Users\Pages\EditUser;
-use App\Filament\Resources\Users\Pages\ListUsers;
+use App\Filament\Admin\Resources\Users\Pages\ListUsers;
+use App\Filament\Admin\Resources\Users\Pages\ViewUser;
 use App\Models\User;
-use Filament\Actions\DeleteAction;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Str;
 
@@ -25,15 +25,10 @@ it('can render the index page', function () {
         ->assertOk();
 });
 
-it('can render the create page', function () {
-    livewire(CreateUser::class)
-        ->assertOk();
-});
-
-it('can render the edit page', function () {
+it('can render the view page', function () {
     $user = User::factory()->create();
 
-    livewire(EditUser::class, [
+    livewire(ViewUser::class, [
         'record' => $user->id,
     ])
         ->assertOk()
@@ -80,14 +75,13 @@ it('can search column', function (string $column) {
 it('can create a user', function () {
     $user = User::factory()->make();
 
-    livewire(CreateUser::class)
-        ->fillForm([
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
             'first_name' => $user->first_name,
             'last_name' => $user->last_name,
             'email' => $user->email,
             'password' => $user->password,
         ])
-        ->call('create')
         ->assertNotified();
 
     assertDatabaseHas(User::class, [
@@ -101,15 +95,14 @@ it('can update a user', function () {
     $user = User::factory()->create();
     $newUserData = User::factory()->make();
 
-    livewire(EditUser::class, [
+    livewire(ViewUser::class, [
         'record' => $user->id,
     ])
-        ->fillForm([
+        ->callAction(EditAction::class, data: [
             'first_name' => $newUserData->first_name,
             'last_name' => $newUserData->last_name,
             'email' => $newUserData->email,
         ])
-        ->call('save')
         ->assertNotified();
 
     assertDatabaseHas(User::class, [
@@ -118,19 +111,6 @@ it('can update a user', function () {
         'last_name' => $newUserData->last_name,
         'email' => $newUserData->email,
     ]);
-});
-
-it('can delete a user', function () {
-    $user = User::factory()->create();
-
-    livewire(EditUser::class, [
-        'record' => $user->id,
-    ])
-        ->callAction(DeleteAction::class)
-        ->assertNotified()
-        ->assertRedirect();
-
-    assertDatabaseMissing($user);
 });
 
 it('can bulk delete users', function () {
@@ -147,31 +127,55 @@ it('can bulk delete users', function () {
     $users->each(fn (User $user) => assertDatabaseMissing($user));
 });
 
-it('can validate unique', function (string $column) {
+it('can validate create unique', function (string $column) {
     $record = User::factory()->create();
 
-    livewire(CreateUser::class)
-        ->fillForm(['email' => $record->email])
-        ->call('create')
-        ->assertHasFormErrors([$column => ['unique']]);
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'email' => $record->email,
+            'password' => 'password',
+        ])
+        ->assertHasActionErrors([$column => ['unique']]);
 })->with(['email']);
 
-it('validates the form data', function (array $data, array $errors) {
+it('validates the create form data', function (array $data, array $errors) {
+    $newUserData = User::factory()->make();
+
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => $newUserData->first_name,
+            'last_name' => $newUserData->last_name,
+            'email' => $newUserData->email,
+            'password' => 'password',
+            ...$data,
+        ])
+        ->assertHasActionErrors($errors);
+})->with([
+    '`first_name` is required' => [['first_name' => null], ['first_name' => 'required']],
+    '`first_name` is max 255 characters' => [['first_name' => Str::random(256)], ['first_name' => 'max']],
+    '`last_name` is required' => [['last_name' => null], ['last_name' => 'required']],
+    '`last_name` is max 255 characters' => [['last_name' => Str::random(256)], ['last_name' => 'max']],
+    '`email` is a valid email address' => [['email' => Str::random()], ['email' => 'email']],
+    '`email` is required' => [['email' => null], ['email' => 'required']],
+    '`email` is max 255 characters' => [['email' => Str::random(256)], ['email' => 'max']],
+]);
+
+it('validates the edit form data', function (array $data, array $errors) {
     $user = User::factory()->create();
     $newUserData = User::factory()->make();
 
-    livewire(EditUser::class, [
+    livewire(ViewUser::class, [
         'record' => $user->id,
     ])
-        ->fillForm([
+        ->callAction(EditAction::class, data: [
             'first_name' => $newUserData->first_name,
             'last_name' => $newUserData->last_name,
             'email' => $newUserData->email,
             ...$data,
         ])
-        ->call('save')
-        ->assertHasFormErrors($errors)
-        ->assertNotNotified();
+        ->assertHasActionErrors($errors);
 })->with([
     '`first_name` is required' => [['first_name' => null], ['first_name' => 'required']],
     '`first_name` is max 255 characters' => [['first_name' => Str::random(256)], ['first_name' => 'max']],
