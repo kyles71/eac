@@ -12,46 +12,15 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
-use Filament\Pages\Page;
-use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use InvalidArgumentException;
-use Livewire\Attributes\Url;
 
-final class MyPaymentPlans extends Page implements HasTable
+final class MyPaymentPlans extends TablePage
 {
-    use InteractsWithTable {
-        makeTable as makeBaseTable;
-    }
-
-    #[Url(as: 'reordering')]
-    public bool $isTableReordering = false;
-
-    /**
-     * @var array<string, mixed> | null
-     */
-    #[Url(as: 'filters')]
-    public ?array $tableFilters = null;
-
-    #[Url(as: 'grouping')]
-    public ?string $tableGrouping = null;
-
-    /**
-     * @var ?string
-     */
-    #[Url(as: 'search')]
-    public $tableSearch = '';
-
-    #[Url(as: 'sort')]
-    public ?string $tableSort = null;
-
     protected static ?string $title = 'My Payment Plans';
 
     protected static ?string $slug = 'payment-plans';
@@ -73,14 +42,6 @@ final class MyPaymentPlans extends Page implements HasTable
     public static function getNavigationBadgeColor(): string
     {
         return 'warning';
-    }
-
-    public function content(Schema $schema): Schema
-    {
-        return $schema
-            ->components([
-                EmbeddedTable::make(),
-            ]);
     }
 
     protected function makeTable(): Table
@@ -172,7 +133,7 @@ final class MyPaymentPlans extends Page implements HasTable
                                     ->schema([
                                         \Filament\Infolists\Components\TextEntry::make('')
                                             ->label('Amount')
-                                            ->state('$' . number_format($installment->amount / 100, 2)),
+                                            ->state('$'.number_format($installment->amount / 100, 2)),
                                         \Filament\Infolists\Components\TextEntry::make('')
                                             ->label('Due Date')
                                             ->state($installment->due_date->format('M j, Y')),

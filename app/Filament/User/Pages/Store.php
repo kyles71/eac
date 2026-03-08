@@ -10,44 +10,13 @@ use App\Models\Product;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
-use Filament\Pages\Page;
-use Filament\Schemas\Components\EmbeddedTable;
-use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use InvalidArgumentException;
-use Livewire\Attributes\Url;
 
-final class Store extends Page implements HasTable
+final class Store extends TablePage
 {
-    use InteractsWithTable {
-        makeTable as makeBaseTable;
-    }
-
-    #[Url(as: 'reordering')]
-    public bool $isTableReordering = false;
-
-    /**
-     * @var array<string, mixed> | null
-     */
-    #[Url(as: 'filters')]
-    public ?array $tableFilters = null;
-
-    #[Url(as: 'grouping')]
-    public ?string $tableGrouping = null;
-
-    /**
-     * @var ?string
-     */
-    #[Url(as: 'search')]
-    public $tableSearch = '';
-
-    #[Url(as: 'sort')]
-    public ?string $tableSort = null;
-
     protected static ?string $title = 'Store';
 
     protected static ?string $slug = 'store';
@@ -59,14 +28,6 @@ final class Store extends Page implements HasTable
     protected ?string $heading = 'Store';
 
     protected ?string $subheading = 'Browse available products and add them to your cart.';
-
-    public function content(Schema $schema): Schema
-    {
-        return $schema
-            ->components([
-                EmbeddedTable::make(),
-            ]);
-    }
 
     protected function makeTable(): Table
     {
