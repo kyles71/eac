@@ -54,4 +54,14 @@ final class OrderFactory extends Factory
             'status' => OrderStatus::Failed,
         ]);
     }
+
+    /**
+     * Mark order as cancelled.
+     */
+    public function cancelled(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'status' => OrderStatus::Cancelled,
+        ]);
+    }
 }

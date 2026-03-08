@@ -170,6 +170,37 @@ final class User extends Authenticatable implements FilamentUser, HasName
     }
 
     /**
+     * Reverse restricted credits that were debited for an order.
+     * Re-credits the amount back to the most recent applicable restricted credit records (reverse FIFO).
+     */
+    public function reverseRestrictedCredit(int $amount): int
+    {
+        if ($amount <= 0) {
+            return 0;
+        }
+
+        $applicableCredits = $this->restrictedCredits()
+            ->where('balance', '>=', 0)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $totalCredited = 0;
+
+        /** @var RestrictedCredit $restrictedCredit */
+        foreach ($applicableCredits as $restrictedCredit) {
+            if ($totalCredited >= $amount) {
+                break;
+            }
+
+            $credit = min($amount - $totalCredited, PHP_INT_MAX);
+            $restrictedCredit->update(['balance' => $restrictedCredit->balance + $credit]);
+            $totalCredited += $credit;
+        }
+
+        return $totalCredited;
+    }
+
+    /**
      * Adjust the user's credit balance and record a transaction.
      *
      * @param  int  $amount  Positive to add credit, negative to debit

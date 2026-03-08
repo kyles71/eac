@@ -162,4 +162,9 @@ final readonly class StripeService implements StripeServiceContract
             'payment_method' => $paymentMethodId,
         ]);
     }
+
+    public function cancelPaymentIntent(string $paymentIntentId): PaymentIntent
+    {
+        return $this->client->paymentIntents->cancel($paymentIntentId);
+    }
 }

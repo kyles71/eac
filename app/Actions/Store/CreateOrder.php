@@ -19,6 +19,7 @@ final class CreateOrder
 {
     public function __construct(
         private readonly CompleteOrder $completeOrder,
+        private readonly CancelOrder $cancelOrder,
     ) {}
 
     public function handle(
@@ -29,6 +30,14 @@ final class CreateOrder
         ?PaymentPlanMethod $paymentPlanMethod = null,
     ): Order {
         return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate, $paymentPlanMethod): Order {
+            // Cancel any existing pending orders for this user to prevent duplicates
+            $pendingOrders = $user->orders()->where('status', OrderStatus::Pending)->get();
+
+            /** @var Order $pendingOrder */
+            foreach ($pendingOrders as $pendingOrder) {
+                $this->cancelOrder->handle($pendingOrder);
+            }
+
             $cartItems = $user->cartItems()->with('product.productable')->get();
 
             if ($cartItems->isEmpty()) {

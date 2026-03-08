@@ -68,4 +68,9 @@ interface StripeServiceContract
      * Confirm a PaymentIntent with a specific payment method (server-side).
      */
     public function confirmPaymentIntent(string $paymentIntentId, string $paymentMethodId): PaymentIntent;
+
+    /**
+     * Cancel a PaymentIntent that has not yet been captured or confirmed.
+     */
+    public function cancelPaymentIntent(string $paymentIntentId): PaymentIntent;
 }

@@ -411,3 +411,70 @@ it('combines discount code with payment plan', function () {
         ->and($order->payment_plan_template_id)->toBe($template->id)
         ->and($order->payment_plan_method)->toBe(PaymentPlanMethod::ManualInvoice);
 });
+
+it('cancels existing pending orders before creating a new one', function () {
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    // Create a first order
+    $action = app(CreateOrder::class);
+    $firstOrder = $action->handle($this->user);
+
+    expect($firstOrder->status)->toBe(OrderStatus::Pending);
+
+    // Add a different product to cart (unique constraint on user_id, product_id)
+    $course2 = Course::factory()->create(['capacity' => 10]);
+    $product2 = Product::factory()->forCourse($course2)->create(['price' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $product2->id,
+        'quantity' => 1,
+    ]);
+
+    // Create a second order — this should cancel the first
+    $secondOrder = $action->handle($this->user);
+
+    expect($secondOrder->status)->toBe(OrderStatus::Pending)
+        ->and($secondOrder->id)->not->toBe($firstOrder->id);
+
+    // First order should now be cancelled
+    expect($firstOrder->refresh()->status)->toBe(OrderStatus::Cancelled);
+});
+
+it('reverses store credit from previous pending order when creating a new one', function () {
+    $this->user->update(['credit_balance' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $action = app(CreateOrder::class);
+    $firstOrder = $action->handle($this->user, creditToApply: 3000);
+
+    expect($firstOrder->credit_applied)->toBe(3000)
+        ->and($this->user->refresh()->credit_balance)->toBe(0);
+
+    // Add a different product to cart
+    $course2 = Course::factory()->create(['capacity' => 10]);
+    $product2 = Product::factory()->forCourse($course2)->create(['price' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $product2->id,
+        'quantity' => 1,
+    ]);
+
+    // Create a new order with credit — old credit should be reversed first
+    $secondOrder = $action->handle($this->user, creditToApply: 3000);
+
+    // First order cancelled, credit restored then re-debited on second order
+    expect($firstOrder->refresh()->status)->toBe(OrderStatus::Cancelled)
+        ->and($secondOrder->credit_applied)->toBe(3000)
+        ->and($this->user->refresh()->credit_balance)->toBe(0);
+});
