@@ -9,7 +9,7 @@ use Filament\Support\Contracts\HasLabel;
 enum PaymentPlanMethod: string implements HasLabel
 {
     case AutoCharge = 'Auto Charge';
-    case ManualInvoice = 'Manual Invoice';
+    case ManualInvoice = 'Email Invoice';
 
     public function getLabel(): string
     {

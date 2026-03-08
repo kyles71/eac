@@ -423,7 +423,7 @@ final class Cart extends Page implements HasTable
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
             ->action(function (): void {
                 try {
-                    $createOrder = new CreateOrder;
+                    $createOrder = app(CreateOrder::class);
 
                     $discountCode = $this->appliedDiscountCodeId !== null
                         ? DiscountCode::query()->find($this->appliedDiscountCodeId)
@@ -477,7 +477,7 @@ final class Cart extends Page implements HasTable
                 ->options(
                     $this->paymentPlanTemplates
                         ->mapWithKeys(fn (PaymentPlanTemplate $template): array => [
-                            $template->id => 'Payment Plan',
+                            $template->id => "{$template->number_of_installments} {$template->frequency->value} Payments",
                         ])
                         ->prepend('Pay in Full', '')
                         ->all()

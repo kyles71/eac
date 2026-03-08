@@ -24,12 +24,14 @@ final readonly class AddToCart
                 throw new InvalidArgumentException('This product does not have a valid price.');
             }
 
+            $cartItem = CartItem::query()
+                ->where('user_id', $user->id)
+                ->where('product_id', $product->id)
+                ->first();
+
             if ($product->productable instanceof Course) {
                 $availableCapacity = $product->productable->availableCapacity();
-                $existingQuantity = CartItem::query()
-                    ->where('user_id', $user->id)
-                    ->where('product_id', $product->id)
-                    ->value('quantity') ?? 0;
+                $existingQuantity = $cartItem->quantity ?? 0;
 
                 $totalRequested = $existingQuantity + $quantity;
 
@@ -39,11 +41,6 @@ final readonly class AddToCart
                     );
                 }
             }
-
-            $cartItem = CartItem::query()
-                ->where('user_id', $user->id)
-                ->where('product_id', $product->id)
-                ->first();
 
             if ($cartItem !== null) {
                 $cartItem->increment('quantity', $quantity);

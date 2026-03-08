@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages;
 
 use App\Filament\Admin\Resources\Enrollments\Tables\EnrollmentsTable;
+use BackedEnum;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Filament\Resources\Concerns\HasTabs;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
@@ -23,6 +25,8 @@ final class MyEnrollments extends Page implements HasTable
     use InteractsWithTable {
         makeTable as makeBaseTable;
     }
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedAcademicCap;
 
     #[Url(as: 'reordering')]
     public bool $isTableReordering = false;

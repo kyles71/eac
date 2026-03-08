@@ -163,7 +163,7 @@ final class MyPaymentPlans extends Page implements HasTable
                     ->label('View Installments')
                     ->icon(Heroicon::OutlinedEye)
                     ->modalHeading(fn (PaymentPlan $record): string => "Installments for Order #{$record->order_id}")
-                    ->infolist(fn (PaymentPlan $record): array => $record->loadMissing('installments')
+                    ->schema(fn (PaymentPlan $record): array => $record->loadMissing('installments')
                         ->installments
                         ->sortBy('installment_number')
                         ->map(fn (\App\Models\Installment $installment): Section => Section::make("#{$installment->installment_number}")
@@ -178,14 +178,8 @@ final class MyPaymentPlans extends Page implements HasTable
                                             ->state($installment->due_date->format('M j, Y')),
                                         \Filament\Infolists\Components\TextEntry::make('')
                                             ->label('Status')
-                                            ->state($installment->status->getLabel())
-                                            ->badge()
-                                            ->color(match ($installment->status) {
-                                                InstallmentStatus::Paid => 'success',
-                                                InstallmentStatus::Pending => 'warning',
-                                                InstallmentStatus::Failed => 'danger',
-                                                InstallmentStatus::Overdue => 'danger',
-                                            }),
+                                            ->state($installment->status)
+                                            ->badge(),
                                         \Filament\Infolists\Components\TextEntry::make('')
                                             ->label('Paid At')
                                             ->state($installment->paid_at?->format('M j, Y') ?? '—'),

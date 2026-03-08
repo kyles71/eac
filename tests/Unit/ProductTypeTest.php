@@ -54,5 +54,5 @@ it('has correct labels', function (ProductType $type, string $label) {
     [ProductType::Course, 'Course'],
     [ProductType::GiftCardType, 'Gift Card'],
     [ProductType::Costume, 'Costume'],
-    [ProductType::Standalone, 'Standalone'],
+    [ProductType::Standalone, 'Generic Product'],
 ]);

@@ -68,14 +68,8 @@ final class CheckoutSuccess extends Page
                         ->state(fn (): string => "#{$this->order->id}"),
                     TextEntry::make('status')
                         ->label('Status')
-                        ->state(fn (): string => $this->order->status->getLabel())
-                        ->badge()
-                        ->color(fn (): string => match ($this->order->status) {
-                            OrderStatus::Completed => 'success',
-                            OrderStatus::Pending => 'warning',
-                            OrderStatus::Failed => 'danger',
-                            OrderStatus::Refunded => 'gray',
-                        }),
+                        ->state($this->order->status)
+                        ->badge(),
                     TextEntry::make('total')
                         ->label('Total Paid')
                         ->state(fn (): string => $this->order->formattedTotal()),

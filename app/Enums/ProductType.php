@@ -16,7 +16,7 @@ enum ProductType: string implements HasLabel
     case Course = 'Course';
     case GiftCardType = 'Gift Card';
     case Costume = 'Costume';
-    case Standalone = 'Standalone';
+    case Standalone = 'Generic Product';
 
     /**
      * Map a product's productable_type morph class (or null) to the corresponding enum case.

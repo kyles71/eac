@@ -8,5 +8,5 @@ it('has correct labels', function (PaymentPlanMethod $method, string $label) {
     expect($method->getLabel())->toBe($label);
 })->with([
     [PaymentPlanMethod::AutoCharge, 'Auto Charge'],
-    [PaymentPlanMethod::ManualInvoice, 'Manual Invoice'],
+    [PaymentPlanMethod::ManualInvoice, 'Email Invoice'],
 ]);
