@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Contracts;
 
 use App\Models\User;
-use Illuminate\Support\Collection;
 use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Invoice;
@@ -29,11 +28,9 @@ interface StripeServiceContract
     ): PaymentIntent;
 
     /**
-     * Get saved payment methods for a Stripe customer.
-     *
-     * @return Collection<int, \Stripe\PaymentMethod>
+     * Create a Customer Session for Payment Element saved-card features.
      */
-    public function getPaymentMethods(string $customerId): Collection;
+    public function createCustomerSession(string $customerId): \Stripe\CustomerSession;
 
     public function constructWebhookEvent(string $payload, string $signature): Event;
 
@@ -63,11 +60,6 @@ interface StripeServiceContract
         string $description = '',
         array $metadata = [],
     ): Invoice;
-
-    /**
-     * Confirm a PaymentIntent with a specific payment method (server-side).
-     */
-    public function confirmPaymentIntent(string $paymentIntentId, string $paymentMethodId): PaymentIntent;
 
     /**
      * Cancel a PaymentIntent that has not yet been captured or confirmed.

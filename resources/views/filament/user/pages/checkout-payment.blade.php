@@ -20,7 +20,8 @@
         if (!clientSecret) return
 
         this.stripe = Stripe(@js(config('services.stripe.key')))
-        this.elements = this.stripe.elements({
+
+        const elementsOptions = {
             clientSecret: clientSecret,
             appearance: {
                 theme: 'stripe',
@@ -29,7 +30,14 @@
                     borderRadius: '8px',
                 },
             },
-        })
+        }
+
+        const customerSessionClientSecret = @js($this->customerSessionClientSecret);
+        if (customerSessionClientSecret) {
+            elementsOptions.customerSessionClientSecret = customerSessionClientSecret
+        }
+
+        this.elements = this.stripe.elements(elementsOptions)
 
         this.paymentElement = this.elements.create('payment')
         this.paymentElement.mount('#payment-element')
@@ -38,14 +46,6 @@
         if (this.processing) return
         this.processing = true
         this.errorMessage = ''
-
-        // Check if using a saved payment method
-        const savedMethod = $wire.selectedSavedPaymentMethod
-        if (savedMethod && savedMethod !== 'new') {
-            await $wire.confirmWithSavedMethod()
-            this.processing = false
-            return
-        }
 
         const { error } = await this.stripe.confirmPayment({
             elements: this.elements,
@@ -60,8 +60,7 @@
         }
     },
 }" class="space-y-4">
-    <div id="payment-element" x-show="!$wire.selectedSavedPaymentMethod || $wire.selectedSavedPaymentMethod === 'new'"
-        class="min-h-[120px]"></div>
+    <div id="payment-element" class="min-h-[120px]"></div>
 
     <div x-show="errorMessage" x-text="errorMessage"
         class="rounded-lg bg-danger-50 p-3 text-sm text-danger-600 dark:bg-danger-400/10 dark:text-danger-400"></div>

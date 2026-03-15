@@ -105,14 +105,7 @@ final class StripeWebhookController
 
         $this->completeOrder->handle($order);
 
-        // Extract and save payment method
         $stripePaymentMethodId = $paymentIntent->payment_method ?? null;
-
-        if ($stripePaymentMethodId !== null) {
-            /** @var \App\Models\User $user */
-            $user = $order->user;
-            $user->update(['stripe_payment_method_id' => $stripePaymentMethodId]);
-        }
 
         // Create payment plan if configured on the order
         $order->loadMissing('paymentPlanTemplate');

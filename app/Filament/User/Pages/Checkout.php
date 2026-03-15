@@ -8,10 +8,7 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use BackedEnum;
-use Exception;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Flex;
@@ -29,12 +26,7 @@ final class Checkout extends Page
 
     public ?string $clientSecret = null;
 
-    public bool $savePaymentMethod = true;
-
-    public ?string $selectedSavedPaymentMethod = null;
-
-    /** @var array<int, array{id: string, brand: string, last4: string, exp_month: int, exp_year: int}> */
-    public array $savedPaymentMethods = [];
+    public ?string $customerSessionClientSecret = null;
 
     protected static ?string $title = 'Checkout';
 
@@ -74,7 +66,7 @@ final class Checkout extends Page
         }
 
         $this->createPaymentIntent();
-        $this->loadSavedPaymentMethods();
+        $this->createCustomerSession();
     }
 
     public function content(Schema $schema): Schema
@@ -107,46 +99,6 @@ final class Checkout extends Page
                 Section::make('Payment')
                     ->schema($this->getPaymentSchema()),
             ]);
-    }
-
-    /**
-     * Confirm payment using a saved payment method (server-side).
-     */
-    public function confirmWithSavedMethod(): void
-    {
-        if ($this->order === null || $this->selectedSavedPaymentMethod === null) {
-            Notification::make()
-                ->title('Payment failed')
-                ->body('Please select a payment method.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        try {
-            /** @var StripeServiceContract $stripeService */
-            $stripeService = app(StripeServiceContract::class);
-
-            $stripeService->confirmPaymentIntent(
-                $this->order->stripe_payment_intent_id,
-                $this->selectedSavedPaymentMethod,
-            );
-
-            if ($this->savePaymentMethod) {
-                /** @var \App\Models\User $user */
-                $user = auth()->user();
-                $user->update(['stripe_payment_method_id' => $this->selectedSavedPaymentMethod]);
-            }
-
-            $this->redirect(CheckoutSuccess::getUrl().'?order_id='.$this->order->id);
-        } catch (Exception $e) {
-            Notification::make()
-                ->title('Payment failed')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
     }
 
     protected function getHeaderActions(): array
@@ -205,7 +157,7 @@ final class Checkout extends Page
         $this->clientSecret = $paymentIntent->client_secret;
     }
 
-    private function loadSavedPaymentMethods(): void
+    private function createCustomerSession(): void
     {
         /** @var \App\Models\User $user */
         $user = auth()->user();
@@ -217,15 +169,9 @@ final class Checkout extends Page
         /** @var StripeServiceContract $stripeService */
         $stripeService = app(StripeServiceContract::class);
 
-        $methods = $stripeService->getPaymentMethods($user->stripe_id);
+        $customerSession = $stripeService->createCustomerSession($user->stripe_id);
 
-        $this->savedPaymentMethods = $methods->map(fn ($method): array => [
-            'id' => $method->id,
-            'brand' => ucfirst($method->card->brand),
-            'last4' => $method->card->last4,
-            'exp_month' => $method->card->exp_month,
-            'exp_year' => $method->card->exp_year,
-        ])->all();
+        $this->customerSessionClientSecret = $customerSession->client_secret;
     }
 
     /**
@@ -397,28 +343,8 @@ final class Checkout extends Page
      */
     private function getPaymentSchema(): array
     {
-        $components = [];
-
-        if (! empty($this->savedPaymentMethods)) {
-            $options = [];
-            foreach ($this->savedPaymentMethods as $method) {
-                $options[$method['id']] = "{$method['brand']} ending in {$method['last4']} (expires {$method['exp_month']}/{$method['exp_year']})";
-            }
-            $options['new'] = 'Use a new card';
-
-            $components[] = Radio::make('selectedSavedPaymentMethod')
-                ->label('Payment Method')
-                ->options($options)
-                ->default('new')
-                ->live();
-        }
-
-        $components[] = Checkbox::make('savePaymentMethod')
-            ->label('Save this payment method for future use')
-            ->default(true);
-
-        $components[] = View::make('filament.user.pages.checkout-payment');
-
-        return $components;
+        return [
+            View::make('filament.user.pages.checkout-payment'),
+        ];
     }
 }

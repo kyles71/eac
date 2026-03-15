@@ -6,7 +6,6 @@ namespace App\Services;
 
 use App\Contracts\StripeServiceContract;
 use App\Models\User;
-use Illuminate\Support\Collection;
 use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
@@ -69,17 +68,22 @@ final readonly class StripeService implements StripeServiceContract
         return $this->client->paymentIntents->create($params);
     }
 
-    /**
-     * @return Collection<int, \Stripe\PaymentMethod>
-     */
-    public function getPaymentMethods(string $customerId): Collection
+    public function createCustomerSession(string $customerId): \Stripe\CustomerSession
     {
-        $methods = $this->client->paymentMethods->all([
+        return $this->client->customerSessions->create([
             'customer' => $customerId,
-            'type' => 'card',
+            'components' => [
+                'payment_element' => [
+                    'enabled' => true,
+                    'features' => [
+                        'payment_method_redisplay' => 'enabled',
+                        'payment_method_save' => 'enabled',
+                        'payment_method_save_usage' => 'off_session',
+                        'payment_method_remove' => 'enabled',
+                    ],
+                ],
+            ],
         ]);
-
-        return collect($methods->data);
     }
 
     /**
@@ -154,13 +158,6 @@ final readonly class StripeService implements StripeServiceContract
         ]);
 
         return $this->client->invoices->sendInvoice($invoice->id);
-    }
-
-    public function confirmPaymentIntent(string $paymentIntentId, string $paymentMethodId): PaymentIntent
-    {
-        return $this->client->paymentIntents->confirm($paymentIntentId, [
-            'payment_method' => $paymentMethodId,
-        ]);
     }
 
     public function cancelPaymentIntent(string $paymentIntentId): PaymentIntent
