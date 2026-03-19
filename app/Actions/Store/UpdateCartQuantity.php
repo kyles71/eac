@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Contracts\HasCapacity;
 use App\Models\CartItem;
-use App\Models\Course;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -32,8 +32,8 @@ final readonly class UpdateCartQuantity
             /** @var \App\Models\Product $product */
             $product = $cartItem->product;
 
-            if ($product->productable instanceof Course) {
-                $availableCapacity = $product->productable->availableCapacity();
+            if ($product->productable instanceof HasCapacity) {
+                $availableCapacity = $product->productable->getAvailableCapacity();
 
                 if ($quantity > $availableCapacity) {
                     throw new InvalidArgumentException(

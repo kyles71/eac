@@ -11,11 +11,11 @@ use Carbon\Carbon;
 it('calculates available capacity correctly', function () {
     $course = Course::factory()->create(['capacity' => 5]);
 
-    expect($course->availableCapacity())->toBe(5);
+    expect($course->getAvailableCapacity())->toBe(5);
 
     Enrollment::factory(3)->create(['course_id' => $course->id]);
 
-    expect($course->availableCapacity())->toBe(2);
+    expect($course->getAvailableCapacity())->toBe(2);
 });
 
 it('returns zero when fully enrolled', function () {
@@ -23,7 +23,7 @@ it('returns zero when fully enrolled', function () {
 
     Enrollment::factory(2)->create(['course_id' => $course->id]);
 
-    expect($course->availableCapacity())->toBe(0);
+    expect($course->getAvailableCapacity())->toBe(0);
 });
 
 it('has a product relationship', function () {

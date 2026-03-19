@@ -19,9 +19,9 @@ final class CourseInfolist
                     ->numeric(),
                 TextEntry::make('available_capacity')
                     ->label('Available Spots')
-                    ->state(fn (Course $record): int => $record->availableCapacity())
+                    ->state(fn (Course $record): int => $record->getAvailableCapacity())
                     ->badge()
-                    ->color(fn (Course $record): string => $record->availableCapacity() > 0 ? 'success' : 'danger'),
+                    ->color(fn (Course $record): string => $record->getAvailableCapacity() > 0 ? 'success' : 'danger'),
                 TextEntry::make('product.price')
                     ->label('Price')
                     ->formatStateUsing(fn (?int $state): string => $state !== null ? '$'.number_format($state / 100, 2) : 'No product linked')

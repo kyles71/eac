@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages;
 
 use App\Actions\Store\AddToCart;
-use App\Models\Course;
+use App\Contracts\HasCapacity;
 use App\Models\Product;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -51,23 +51,32 @@ final class Store extends TablePage
                 TextColumn::make('available_spots')
                     ->label('Available Spots')
                     ->state(function (Product $record): string {
-                        if ($record->productable instanceof Course) {
-                            $available = $record->productable->availableCapacity();
-
-                            return $available > 0 ? (string) $available : 'Sold Out';
+                        if (! ($record->productable instanceof HasCapacity)) {
+                            return 'N/A';
                         }
 
-                        return 'N/A';
+                        $capacity = $record->productable->getAvailableCapacity();
+
+                        return $capacity > 0 ? (string) $capacity : 'Sold Out';
                     })
                     ->badge()
-                    ->color(fn (Product $record): string => $record->productable instanceof Course && $record->productable->availableCapacity() <= 0 ? 'danger' : 'success'),
+                    ->color(function (Product $record): string {
+                        if ($record->productable instanceof HasCapacity) {
+                            return $record->productable->getAvailableCapacity() <= 0 ? 'danger' : 'success';
+                        }
+
+                        return 'success';
+                    }),
             ])
             ->recordActions([
                 Action::make('addToCart')
                     ->label('Add to Cart')
                     ->icon(Heroicon::OutlinedShoppingCart)
                     ->color('primary')
-                    ->disabled(fn (Product $record): bool => $record->productable instanceof Course && $record->productable->availableCapacity() <= 0)
+                    ->disabled(function (Product $record): bool {
+                        return $record->productable instanceof HasCapacity
+                            && $record->productable->getAvailableCapacity() <= 0;
+                    })
                     ->action(function (Product $record): void {
                         try {
                             $addToCart = new AddToCart;

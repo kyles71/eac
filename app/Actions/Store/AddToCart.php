@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Contracts\HasCapacity;
 use App\Models\CartItem;
-use App\Models\Course;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -29,8 +29,8 @@ final readonly class AddToCart
                 ->where('product_id', $product->id)
                 ->first();
 
-            if ($product->productable instanceof Course) {
-                $availableCapacity = $product->productable->availableCapacity();
+            if ($product->productable instanceof HasCapacity) {
+                $availableCapacity = $product->productable->getAvailableCapacity();
                 $existingQuantity = $cartItem->quantity ?? 0;
 
                 $totalRequested = $existingQuantity + $quantity;

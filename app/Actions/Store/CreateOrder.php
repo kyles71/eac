@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Contracts\HasCapacity;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanMethod;
-use App\Models\Course;
 use App\Models\DiscountCode;
 use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
@@ -49,8 +49,10 @@ final class CreateOrder
             foreach ($cartItems as $cartItem) {
                 /** @var \App\Models\Product $product */
                 $product = $cartItem->product;
-                if ($product->productable instanceof Course) {
-                    $available = $product->productable->availableCapacity();
+
+                if ($product->productable instanceof HasCapacity) {
+                    $available = $product->productable->getAvailableCapacity();
+
                     if ($cartItem->quantity > $available) {
                         throw new InvalidArgumentException(
                             "Not enough spots available for \"{$product->name}\". Only {$available} remaining."

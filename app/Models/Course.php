@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\HasCapacity;
+use App\Contracts\Productable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-final class Course extends Model
+final class Course extends Model implements HasCapacity, Productable
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
     use HasFactory;
@@ -104,9 +106,22 @@ final class Course extends Model
     /**
      * Get the number of available enrollment spots remaining.
      */
-    public function availableCapacity(): int
+    public function getAvailableCapacity(): int
     {
         return $this->capacity - $this->enrollments()->count();
+    }
+
+    public function fulfillOrderItem(OrderItem $orderItem, User $purchaser): bool
+    {
+        for ($i = 0; $i < $orderItem->quantity; $i++) {
+            Enrollment::query()->create([
+                'course_id' => $this->id,
+                'user_id' => $purchaser->id,
+                'student_id' => null,
+            ]);
+        }
+
+        return true;
     }
 
     /**

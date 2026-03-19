@@ -28,9 +28,9 @@ final class CoursesTable
                     ->sortable(),
                 TextColumn::make('available_capacity')
                     ->label('Available')
-                    ->state(fn (Course $record): int => $record->availableCapacity())
+                    ->state(fn (Course $record): int => $record->getAvailableCapacity())
                     ->badge()
-                    ->color(fn (Course $record): string => $record->availableCapacity() > 0 ? 'success' : 'danger'),
+                    ->color(fn (Course $record): string => $record->getAvailableCapacity() > 0 ? 'success' : 'danger'),
                 TextColumn::make('start_time')
                     ->dateTime()
                     ->sortable(),

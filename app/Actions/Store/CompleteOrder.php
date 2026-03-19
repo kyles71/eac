@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Contracts\HasCapacity;
 use App\Contracts\StripeServiceContract;
-use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
-use App\Models\Course;
-use App\Models\Enrollment;
-use App\Models\GiftCardType;
 use App\Models\Order;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -40,20 +37,25 @@ final readonly class CompleteOrder
                 /** @var \App\Models\Product $product */
                 $product = $orderItem->product;
 
-                if (! ($product->productable instanceof Course)) {
+                if (! ($product->productable instanceof HasCapacity)) {
                     continue;
                 }
 
-                // Lock the course row to prevent concurrent overselling
-                /** @var Course $course */
-                $course = Course::query()
-                    ->lockForUpdate()
-                    ->find($product->productable->id);
+                /** @var HasCapacity&\Illuminate\Database\Eloquent\Model $productable */
+                $productable = $product->productable;
 
-                $availableCapacity = $course->availableCapacity();
+                // Lock the row to prevent concurrent overselling
+                /** @var HasCapacity&\Illuminate\Database\Eloquent\Model $locked */
+                $locked = $productable::query()
+                    ->lockForUpdate()
+                    ->find($productable->id);
+
+                $availableCapacity = $locked->getAvailableCapacity();
+
+                $productableClass = $productable::class;
 
                 if ($orderItem->quantity > $availableCapacity) {
-                    Log::warning("Order #{$order->id} failed: insufficient capacity for course #{$course->id}.", [
+                    Log::warning("Order #{$order->id} failed: insufficient capacity for {$productableClass} #{$productable->id}.", [
                         'requested' => $orderItem->quantity,
                         'available' => $availableCapacity,
                     ]);
@@ -69,29 +71,20 @@ final readonly class CompleteOrder
                 }
             }
 
-            // Create enrollments for course products and fulfill gift cards
+            // Fulfill order items via their productable contract
             /** @var \App\Models\OrderItem $orderItem */
             foreach ($order->orderItems as $orderItem) {
                 /** @var \App\Models\Product $product */
                 $product = $orderItem->product;
 
-                if ($product->productable instanceof Course) {
-                    for ($i = 0; $i < $orderItem->quantity; $i++) {
-                        Enrollment::query()->create([
-                            'course_id' => $product->productable->id,
-                            'user_id' => $order->user_id,
-                            'student_id' => null,
-                        ]);
-                    }
-                    $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
-                } elseif ($product->productable instanceof GiftCardType) {
-                    $fulfillGiftCard = new FulfillGiftCard;
-                    /** @var \App\Models\User $purchaser */
-                    $purchaser = $order->user;
-                    $fulfillGiftCard->handle($orderItem, $purchaser);
-                    $orderItem->update(['status' => OrderItemStatus::Fulfilled]);
+                /** @var \App\Models\User $purchaser */
+                $purchaser = $order->user;
+
+                $fulfilled = $product->productable?->fulfillOrderItem($orderItem, $purchaser) ?? false;
+
+                if ($fulfilled) {
+                    $orderItem->markFulfilled();
                 }
-                // Costume and standalone products remain Pending for manual fulfillment
             }
 
             $order->update(['status' => OrderStatus::Completed]);
