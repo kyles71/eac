@@ -22,13 +22,13 @@ final class GiftCardTypeForm
                     ->maxLength(255),
                 TextInput::make('denomination')
                     ->label('Denomination ($)')
-                    ->helperText('Set to 0 for custom-amount gift cards.')
+                    ->helperText('The face value of the gift card. The product price can differ for promotions.')
                     ->required()
                     ->numeric()
                     ->prefix('$')
-                    ->default(0)
+                    ->minValue(0.01)
                     ->dehydrateStateUsing(fn (string $state): int => (int) round((float) $state * 100))
-                    ->formatStateUsing(fn (?int $state): string => $state !== null ? number_format($state / 100, 2) : '0.00'),
+                    ->formatStateUsing(fn (?int $state): string => $state !== null ? number_format($state / 100, 2) : ''),
                 Select::make('restricted_to_product_type')
                     ->label('Restrict to Product Type')
                     ->options(

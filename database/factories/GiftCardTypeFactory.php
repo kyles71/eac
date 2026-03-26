@@ -27,17 +27,6 @@ final class GiftCardTypeFactory extends Factory
     }
 
     /**
-     * A custom-amount gift card type (denomination = 0).
-     */
-    public function custom(): static
-    {
-        return $this->state(fn (array $attributes): array => [
-            'name' => 'Custom Gift Card',
-            'denomination' => 0,
-        ]);
-    }
-
-    /**
      * A gift card type with a specific denomination in cents.
      */
     public function denomination(int $cents): static

@@ -76,6 +76,14 @@ final class ProductForm
                     })
                     ->afterStateUpdated(function (callable $set, ?string $state): void {
                         $set('productable_id', $state);
+
+                        if ($state !== null) {
+                            $denomination = GiftCardType::query()->find($state)?->denomination;
+
+                            if ($denomination !== null) {
+                                $set('price', number_format($denomination / 100, 2, '.', ''));
+                            }
+                        }
                     }),
                 Select::make('requires_course_id')
                     ->label('Requires Enrollment In')

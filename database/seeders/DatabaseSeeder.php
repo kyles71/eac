@@ -83,7 +83,7 @@ final class DatabaseSeeder extends Seeder
         $giftCardTypes = collect([
             GiftCardType::factory()->denomination(2500)->create(),
             GiftCardType::factory()->denomination(5000)->create(),
-            GiftCardType::factory()->custom()->create(),
+            GiftCardType::factory()->denomination(10000)->create(),
         ]);
 
         $costumes = Costume::factory(5)->create();

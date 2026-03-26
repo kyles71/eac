@@ -21,9 +21,7 @@ final class GiftCardTypesTable
                     ->sortable(),
                 TextColumn::make('denomination')
                     ->label('Denomination')
-                    ->formatStateUsing(fn (int $state): string => $state > 0
-                        ? '$'.number_format($state / 100, 2)
-                        : 'Custom')
+                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
                     ->sortable(),
                 TextColumn::make('restriction')
                     ->label('Restriction')

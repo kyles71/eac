@@ -88,14 +88,10 @@ final class GiftCardType extends Model implements Productable
     }
 
     /**
-     * Get the formatted denomination in dollars, or "Custom" if 0.
+     * Get the formatted denomination in dollars.
      */
     public function formattedDenomination(): string
     {
-        if ($this->denomination === 0) {
-            return 'Custom';
-        }
-
         return '$'.number_format($this->denomination / 100, 2);
     }
 

@@ -17,9 +17,3 @@ it('formats denomination in dollars', function () {
 
     expect($giftCardType->formattedDenomination())->toBe('$50.00');
 });
-
-it('formats zero denomination as Custom', function () {
-    $giftCardType = GiftCardType::factory()->custom()->create();
-
-    expect($giftCardType->formattedDenomination())->toBe('Custom');
-});

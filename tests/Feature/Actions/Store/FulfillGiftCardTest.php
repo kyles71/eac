@@ -85,16 +85,16 @@ it('uses denomination amount when set on the gift card type', function () {
     expect($giftCards[0]->initial_amount)->toBe(10000);
 });
 
-it('uses product price when denomination is zero (custom)', function () {
-    $giftCardType = GiftCardType::factory()->custom()->create();
-    $product = Product::factory()->forGiftCardType($giftCardType)->create(['price' => 7500]);
+it('uses denomination as gift card value even when product price differs', function () {
+    $giftCardType = GiftCardType::factory()->denomination(5000)->create();
+    $product = Product::factory()->forGiftCardType($giftCardType)->create(['price' => 4000]);
 
     $orderItem = OrderItem::factory()->create([
         'order_id' => $this->order->id,
         'product_id' => $product->id,
         'quantity' => 1,
-        'unit_price' => 7500,
-        'total_price' => 7500,
+        'unit_price' => 4000,
+        'total_price' => 4000,
     ]);
 
     $orderItem->load('product.productable');
@@ -102,5 +102,5 @@ it('uses product price when denomination is zero (custom)', function () {
     $action = new FulfillGiftCard;
     $giftCards = $action->handle($orderItem, $this->user);
 
-    expect($giftCards[0]->initial_amount)->toBe(7500);
+    expect($giftCards[0]->initial_amount)->toBe(5000);
 });
