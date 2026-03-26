@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\GiftCardTypes;
 
-use App\Filament\Admin\Resources\GiftCardTypes\Pages\CreateGiftCardType;
-use App\Filament\Admin\Resources\GiftCardTypes\Pages\EditGiftCardType;
 use App\Filament\Admin\Resources\GiftCardTypes\Pages\ListGiftCardTypes;
 use App\Filament\Admin\Resources\GiftCardTypes\Schemas\GiftCardTypeForm;
 use App\Filament\Admin\Resources\GiftCardTypes\Tables\GiftCardTypesTable;
@@ -55,8 +53,6 @@ final class GiftCardTypeResource extends Resource
     {
         return [
             'index' => ListGiftCardTypes::route('/'),
-            'create' => CreateGiftCardType::route('/create'),
-            'edit' => EditGiftCardType::route('/{record}/edit'),
         ];
     }
 }

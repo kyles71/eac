@@ -55,8 +55,6 @@ final class PaymentPlanTemplateResource extends Resource
     {
         return [
             'index' => ListPaymentPlanTemplates::route('/'),
-            'create' => CreatePaymentPlanTemplate::route('/create'),
-            'edit' => EditPaymentPlanTemplate::route('/{record}/edit'),
         ];
     }
 }

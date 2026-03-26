@@ -22,7 +22,7 @@ final class PaymentPlanResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static UnitEnum|string|null $navigationGroup = 'Purchases';
 
     protected static ?string $navigationLabel = 'Payment Plans';
 

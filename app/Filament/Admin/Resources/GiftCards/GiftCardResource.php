@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\GiftCards;
 
-use App\Filament\Admin\Resources\GiftCards\Pages\CreateGiftCard;
-use App\Filament\Admin\Resources\GiftCards\Pages\EditGiftCard;
 use App\Filament\Admin\Resources\GiftCards\Pages\ListGiftCards;
 use App\Filament\Admin\Resources\GiftCards\Schemas\GiftCardForm;
 use App\Filament\Admin\Resources\GiftCards\Tables\GiftCardsTable;
@@ -23,7 +21,7 @@ final class GiftCardResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGift;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static UnitEnum|string|null $navigationGroup = 'Purchases';
 
     protected static ?string $recordTitleAttribute = 'code';
 
@@ -53,8 +51,6 @@ final class GiftCardResource extends Resource
     {
         return [
             'index' => ListGiftCards::route('/'),
-            'create' => CreateGiftCard::route('/create'),
-            'edit' => EditGiftCard::route('/{record}/edit'),
         ];
     }
 }
