@@ -32,7 +32,7 @@ final class GiftCardTypeFactory extends Factory
     public function denomination(int $cents): static
     {
         return $this->state(fn (array $attributes): array => [
-            'name' => '$'.number_format($cents / 100, 2).' Gift Card',
+            'name' => format_money($cents).' Gift Card',
             'denomination' => $cents,
         ]);
     }

@@ -30,7 +30,7 @@ final readonly class ApplyDiscountCode
         }
 
         if ($discountCode->min_order_amount !== null && $subtotal < $discountCode->min_order_amount) {
-            $minFormatted = '$'.number_format($discountCode->min_order_amount / 100, 2);
+            $minFormatted = format_money($discountCode->min_order_amount);
 
             throw new InvalidArgumentException(
                 "This discount code requires a minimum order of {$minFormatted}.",

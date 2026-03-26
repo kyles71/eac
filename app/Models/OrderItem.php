@@ -40,7 +40,7 @@ final class OrderItem extends Model
      */
     public function formattedUnitPrice(): string
     {
-        return '$'.number_format($this->unit_price / 100, 2);
+        return format_money($this->unit_price);
     }
 
     /**
@@ -48,7 +48,7 @@ final class OrderItem extends Model
      */
     public function formattedTotalPrice(): string
     {
-        return '$'.number_format($this->total_price / 100, 2);
+        return format_money($this->total_price);
     }
 
     /**

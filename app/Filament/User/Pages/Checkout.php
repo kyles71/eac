@@ -6,6 +6,7 @@ namespace App\Filament\User\Pages;
 
 use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
+use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\Order;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -17,7 +18,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 
 final class Checkout extends Page
@@ -124,14 +124,6 @@ final class Checkout extends Page
         ];
     }
 
-    /**
-     * Format cents as dollars.
-     */
-    private function formatMoney(int $cents): string
-    {
-        return '$'.number_format($cents / 100, 2);
-    }
-
     private function createPaymentIntent(): void
     {
         /** @var StripeServiceContract $stripeService */
@@ -204,7 +196,7 @@ final class Checkout extends Page
                 Text::make("Qty: {$item->quantity}")
                     ->color('neutral')
                     ->grow(false),
-                Text::make($this->formatMoney($item->total_price))
+                Text::make(format_money($item->total_price))
                     ->grow(false),
             ]);
         }
@@ -232,7 +224,7 @@ final class Checkout extends Page
                 Text::make($discountLabel)
                     ->color('danger')
                     ->columnSpanFull(),
-                Text::make("-{$this->formatMoney($this->order->discount_amount)}")
+                Text::make('-'.format_money($this->order->discount_amount))
                     ->color('danger')
                     ->grow(false),
             ]);
@@ -243,7 +235,7 @@ final class Checkout extends Page
                 Text::make('Restricted Credit')
                     ->color('danger')
                     ->columnSpanFull(),
-                Text::make("-{$this->formatMoney($this->order->restricted_credit_applied)}")
+                Text::make('-'.format_money($this->order->restricted_credit_applied))
                     ->color('danger')
                     ->grow(false),
             ]);
@@ -254,7 +246,7 @@ final class Checkout extends Page
                 Text::make('Store Credit')
                     ->color('danger')
                     ->columnSpanFull(),
-                Text::make("-{$this->formatMoney($this->order->credit_applied)}")
+                Text::make('-'.format_money($this->order->credit_applied))
                     ->color('danger')
                     ->grow(false),
             ]);
@@ -268,86 +260,21 @@ final class Checkout extends Page
      */
     private function getOrderSummarySchema(): array
     {
-        $totalComponents = [];
+        $discountLabel = null;
 
-        $totalComponents[] = Flex::make([
-            Text::make('Subtotal')
-                ->color('neutral')
-                ->columnSpanFull(),
-            Text::make($this->formatMoney($this->order->subtotal))
-                ->color('neutral')
-                ->grow(false),
-        ]);
-
-        if ($this->order->discount_amount > 0) {
-            $totalComponents[] = Flex::make([
-                Text::make('Discount')
-                    ->color('danger')
-                    ->columnSpanFull(),
-                Text::make("-{$this->formatMoney($this->order->discount_amount)}")
-                    ->color('danger')
-                    ->grow(false),
-            ]);
+        if ($this->order->discount_amount > 0 && $this->order->discountCode !== null) {
+            $discountLabel = "Discount ({$this->order->discountCode->code})";
         }
 
-        if ($this->order->restricted_credit_applied > 0) {
-            $totalComponents[] = Flex::make([
-                Text::make('Restricted Credit')
-                    ->color('danger')
-                    ->columnSpanFull(),
-                Text::make("-{$this->formatMoney($this->order->restricted_credit_applied)}")
-                    ->color('danger')
-                    ->grow(false),
-            ]);
-        }
-
-        if ($this->order->credit_applied > 0) {
-            $totalComponents[] = Flex::make([
-                Text::make('Store Credit')
-                    ->color('danger')
-                    ->columnSpanFull(),
-                Text::make("-{$this->formatMoney($this->order->credit_applied)}")
-                    ->color('danger')
-                    ->grow(false),
-            ]);
-        }
-
-        $totalComponents[] = Flex::make([
-            Text::make('Total')
-                ->size('md')
-                ->weight(FontWeight::Bold)
-                ->columnSpanFull(),
-            Text::make($this->formatMoney($this->order->total))
-                ->size('md')
-                ->weight(FontWeight::Bold)
-                ->grow(false),
-        ])
-            ->extraAttributes(['class' => 'border-t border-gray-300 pt-2']);
-
-        $template = $this->order->paymentPlanTemplate;
-
-        if ($template !== null) {
-            $amounts = $template->installmentAmounts($this->order->total);
-
-            $totalComponents[] = Text::make("{$template->number_of_installments} payments of {$this->formatMoney($amounts['remaining'])}")
-                ->color('neutral')
-                ->extraAttributes(['class' => 'border-t border-gray-300 pt-2 w-full']);
-
-            $totalComponents[] = Flex::make([
-                Text::make('Amount Due Today')
-                    ->weight(FontWeight::Bold)
-                    ->columnSpanFull(),
-                Text::make($this->formatMoney($amounts['first']))
-                    ->weight(FontWeight::Bold)
-                    ->grow(false),
-            ]);
-        }
-
-        return [
-            Grid::make(1)
-                ->schema($totalComponents)
-                ->gap(false),
-        ];
+        return OrderSummarySchema::make(
+            subtotal: $this->order->subtotal,
+            discountAmount: $this->order->discount_amount,
+            discountLabel: $discountLabel,
+            restrictedCreditAmount: $this->order->restricted_credit_applied,
+            creditAmount: $this->order->credit_applied,
+            total: $this->order->total,
+            template: $this->order->paymentPlanTemplate,
+        );
     }
 
     /**

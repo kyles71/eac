@@ -61,7 +61,7 @@ final class Order extends Model
      */
     public function formattedSubtotal(): string
     {
-        return '$'.number_format($this->subtotal / 100, 2);
+        return format_money($this->subtotal);
     }
 
     /**
@@ -69,6 +69,6 @@ final class Order extends Model
      */
     public function formattedTotal(): string
     {
-        return '$'.number_format($this->total / 100, 2);
+        return format_money($this->total);
     }
 }

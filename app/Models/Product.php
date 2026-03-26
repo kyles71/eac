@@ -58,6 +58,6 @@ final class Product extends Model
      */
     public function formattedPrice(): string
     {
-        return '$'.number_format($this->price / 100, 2);
+        return format_money($this->price);
     }
 }

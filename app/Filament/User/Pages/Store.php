@@ -46,7 +46,7 @@ final class Store extends TablePage
                     ->toggleable(),
                 TextColumn::make('price')
                     ->label('Price')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->formatStateUsing(fn (int $state): string => format_money($state))
                     ->sortable(),
                 TextColumn::make('available_spots')
                     ->label('Available Spots')

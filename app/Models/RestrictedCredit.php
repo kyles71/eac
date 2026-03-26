@@ -41,6 +41,6 @@ final class RestrictedCredit extends Model
      */
     public function formattedBalance(): string
     {
-        return '$'.number_format($this->balance / 100, 2);
+        return format_money($this->balance);
     }
 }

@@ -59,7 +59,7 @@ final class MyPaymentPlans extends TablePage
                     ->sortable(),
                 TextColumn::make('total_amount')
                     ->label('Total')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->formatStateUsing(fn (int $state): string => format_money($state))
                     ->sortable(),
                 TextColumn::make('number_of_installments')
                     ->label('Installments')
@@ -72,10 +72,10 @@ final class MyPaymentPlans extends TablePage
                     ->badge(),
                 TextColumn::make('amount_paid')
                     ->label('Paid')
-                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->amountPaid() / 100, 2)),
+                    ->state(fn (PaymentPlan $record): string => format_money($record->amountPaid())),
                 TextColumn::make('remaining_balance')
                     ->label('Remaining')
-                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->remainingBalance() / 100, 2)),
+                    ->state(fn (PaymentPlan $record): string => format_money($record->remainingBalance())),
                 TextColumn::make('next_due')
                     ->label('Next Due')
                     ->state(function (PaymentPlan $record): string {
@@ -133,7 +133,7 @@ final class MyPaymentPlans extends TablePage
                                     ->schema([
                                         \Filament\Infolists\Components\TextEntry::make('')
                                             ->label('Amount')
-                                            ->state('$'.number_format($installment->amount / 100, 2)),
+                                            ->state(format_money($installment->amount)),
                                         \Filament\Infolists\Components\TextEntry::make('')
                                             ->label('Due Date')
                                             ->state($installment->due_date->format('M j, Y')),

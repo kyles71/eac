@@ -117,7 +117,7 @@ final class DiscountCode extends Model
     {
         return match ($this->type) {
             DiscountType::Percentage => $this->value.'%',
-            DiscountType::FixedAmount => '$'.number_format($this->value / 100, 2),
+            DiscountType::FixedAmount => format_money($this->value),
         };
     }
 }

@@ -9,6 +9,7 @@ use App\Actions\Store\CreateOrder;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Enums\PaymentPlanMethod;
+use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
@@ -21,11 +22,9 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -116,7 +115,7 @@ final class Cart extends Page implements HasTable
                                     $user = auth()->user();
                                     $creditBalance = $user->credit_balance ?? 0;
 
-                                    return "Apply store credit ({$this->formatMoney($creditBalance)})";
+                                    return 'Apply store credit ('.format_money($creditBalance).')';
                                 })
                                 ->live()
                                 ->visible(function (): bool {
@@ -267,14 +266,6 @@ final class Cart extends Page implements HasTable
         $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
 
         return $amounts['first'];
-    }
-
-    /**
-     * Format cents as dollars.
-     */
-    public function formatMoney(int $cents): string
-    {
-        return '$'.number_format($cents / 100, 2);
     }
 
     public function incrementQuantity(int $cartItemId): void
@@ -493,81 +484,21 @@ final class Cart extends Page implements HasTable
                 ->live();
         }
 
-        $totalComponents[] = Flex::make([
-            Text::make('Subtotal')
-                ->color('neutral')
-                ->columnSpanFull(),
-            Text::make(fn (): string => $this->formatMoney($this->subtotal))
-                ->color('neutral')
-                ->grow(false),
-        ]);
+        $discountLabel = $this->discountAmount > 0 && $this->appliedDiscountDisplay !== ''
+            ? "Discount ({$this->appliedDiscountDisplay})"
+            : null;
 
-        if ($this->discountAmount > 0) {
-            $totalComponents[] = Flex::make([
-                Text::make("Discount ({$this->appliedDiscountDisplay})")
-                    ->color('danger')
-                    ->columnSpanFull(),
-                Text::make(fn (): string => "-{$this->formatMoney($this->discountAmount)}")
-                    ->color('danger')
-                    ->grow(false),
-            ]);
-        }
+        $components = array_merge($components, OrderSummarySchema::make(
+            subtotal: $this->subtotal,
+            discountAmount: $this->discountAmount,
+            discountLabel: $discountLabel,
+            restrictedCreditAmount: $this->restrictedCreditAmount,
+            creditAmount: $this->creditAmount,
+            total: $this->grandTotal,
+            template: $this->selectedTemplate,
+            amountDueToday: $this->selectedTemplate !== null ? $this->amountDueToday : null,
+        ));
 
-        if ($this->restrictedCreditAmount > 0) {
-            $totalComponents[] = Flex::make([
-                Text::make('Restricted Credit')
-                    ->color('danger')
-                    ->columnSpanFull(),
-                Text::make(fn (): string => "-{$this->formatMoney($this->restrictedCreditAmount)}")
-                    ->color('danger')
-                    ->grow(false),
-            ]);
-        }
-
-        if ($this->creditAmount > 0) {
-            $totalComponents[] = Flex::make([
-                Text::make('Store Credit')
-                    ->color('danger')
-                    ->columnSpanFull(),
-                Text::make(fn (): string => "-{$this->formatMoney($this->creditAmount)}")
-                    ->color('danger')
-                    ->grow(false),
-            ]);
-        }
-
-        $totalComponents[] = Flex::make([
-            Text::make('Total')
-                ->size('md')
-                ->weight(FontWeight::Bold)
-                ->columnSpanFull(),
-            Text::make(fn (): string => $this->formatMoney($this->grandTotal))
-                ->size('md')
-                ->weight(FontWeight::Bold)
-                ->grow(false),
-        ])
-            ->extraAttributes(['class' => 'border-t border-gray-300 pt-2']);
-
-        if ($this->selectedTemplate !== null) {
-            $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
-
-            $totalComponents[] =
-                Text::make(fn () => "{$this->selectedTemplate->number_of_installments} payments of {$this->formatMoney($amounts['remaining'])}")
-                    ->color('neutral')
-                    ->extraAttributes(['class' => 'border-t border-gray-300 pt-2 w-full']);
-
-            $totalComponents[] = Flex::make([
-                Text::make('Amount Due Today')
-                    ->weight(FontWeight::Bold)
-                    ->columnSpanFull(),
-                Text::make(fn (): string => $this->formatMoney($this->amountDueToday))
-                    ->weight(FontWeight::Bold)
-                    ->grow(false),
-            ]);
-        }
-
-        $components[] = Grid::make(1)
-            ->schema($totalComponents)
-            ->gap(false);
         $components[] = $this->checkoutAction;
 
         return $components;

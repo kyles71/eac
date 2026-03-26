@@ -40,6 +40,6 @@ final class CreditTransaction extends Model
     {
         $prefix = $this->amount >= 0 ? '+' : '-';
 
-        return $prefix.'$'.number_format(abs($this->amount) / 100, 2);
+        return $prefix.format_money(abs($this->amount));
     }
 }

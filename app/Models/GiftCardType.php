@@ -92,7 +92,7 @@ final class GiftCardType extends Model implements Productable
      */
     public function formattedDenomination(): string
     {
-        return '$'.number_format($this->denomination / 100, 2);
+        return format_money($this->denomination);
     }
 
     /**

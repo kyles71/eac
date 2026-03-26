@@ -72,7 +72,7 @@ final class GiftCard extends Model
      */
     public function formattedInitialAmount(): string
     {
-        return '$'.number_format($this->initial_amount / 100, 2);
+        return format_money($this->initial_amount);
     }
 
     /**
@@ -80,6 +80,6 @@ final class GiftCard extends Model
      */
     public function formattedRemainingAmount(): string
     {
-        return '$'.number_format($this->remaining_amount / 100, 2);
+        return format_money($this->remaining_amount);
     }
 }
