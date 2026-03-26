@@ -47,16 +47,19 @@
         this.processing = true
         this.errorMessage = ''
 
+        await $wire.markOrderProcessing()
+
         const { error } = await this.stripe.confirmPayment({
             elements: this.elements,
             confirmParams: {
-                return_url: @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl()) + '?order_id=' + @js($this->order?->id),
+                return_url: @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl()),
             },
         })
 
         if (error) {
             this.errorMessage = error.message
             this.processing = false
+            await $wire.revertOrderToPending()
         }
     },
 }" class="space-y-4">

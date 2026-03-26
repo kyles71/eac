@@ -149,6 +149,33 @@ it('skips if order is not pending', function () {
     expect($result)->toBeFalse();
 });
 
+it('completes an order in processing status', function () {
+    $order = Order::factory()->create([
+        'user_id' => $this->user->id,
+        'status' => OrderStatus::Processing,
+        'subtotal' => 5000,
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_test_processing',
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $action = app(CompleteOrder::class);
+    $result = $action->handle($order);
+
+    expect($result)->toBeTrue();
+    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
+});
+
 it('handles multiple order items for different courses', function () {
     $course2 = Course::factory()->create(['capacity' => 10]);
     $product2 = Product::factory()->forCourse($course2)->create(['price' => 7500]);

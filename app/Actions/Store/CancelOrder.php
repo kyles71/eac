@@ -23,7 +23,7 @@ final readonly class CancelOrder
         return DB::transaction(function () use ($order): bool {
             $order = Order::query()->lockForUpdate()->find($order->id);
 
-            if ($order === null || $order->status !== OrderStatus::Pending) {
+            if ($order === null || ! in_array($order->status, [OrderStatus::Pending, OrderStatus::Processing])) {
                 return false;
             }
 

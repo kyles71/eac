@@ -22,9 +22,9 @@ final readonly class CompleteOrder
         return DB::transaction(function () use ($order): bool {
             $order->loadMissing('orderItems.product.productable');
 
-            // Verify order is still pending
-            if ($order->status !== OrderStatus::Pending) {
-                Log::warning("Order #{$order->id} is not pending, skipping completion.", [
+            // Verify order is still pending or processing
+            if (! in_array($order->status, [OrderStatus::Pending, OrderStatus::Processing])) {
+                Log::warning("Order #{$order->id} is not pending or processing, skipping completion.", [
                     'status' => $order->status->value,
                 ]);
 

@@ -38,19 +38,11 @@ final class Checkout extends Page
 
     public function mount(): void
     {
-        $orderId = request()->query('order_id');
-
-        if ($orderId === null) {
-            $this->redirect(Cart::getUrl());
-
-            return;
-        }
-
         $this->order = Order::query()
             ->where('user_id', auth()->id())
-            ->where('id', $orderId)
             ->where('status', OrderStatus::Pending)
             ->with(['orderItems.product', 'discountCode', 'paymentPlanTemplate'])
+            ->latest()
             ->first();
 
         if ($this->order === null) {
@@ -67,6 +59,26 @@ final class Checkout extends Page
 
         $this->createPaymentIntent();
         $this->createCustomerSession();
+    }
+
+    /**
+     * Mark the order as processing before Stripe payment confirmation.
+     */
+    public function markOrderProcessing(): void
+    {
+        if ($this->order !== null && $this->order->status === OrderStatus::Pending) {
+            $this->order->update(['status' => OrderStatus::Processing]);
+        }
+    }
+
+    /**
+     * Revert the order to pending if Stripe returns a client-side error.
+     */
+    public function revertOrderToPending(): void
+    {
+        if ($this->order !== null && $this->order->status === OrderStatus::Processing) {
+            $this->order->update(['status' => OrderStatus::Pending]);
+        }
     }
 
     public function content(Schema $schema): Schema

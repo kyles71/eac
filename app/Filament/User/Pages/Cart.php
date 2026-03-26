@@ -450,7 +450,7 @@ final class Cart extends Page implements HasTable
                     if ($order->status === \App\Enums\OrderStatus::Completed) {
                         $this->redirect(CheckoutSuccess::getUrl().'?order_id='.$order->id);
                     } else {
-                        $this->redirect(Checkout::getUrl().'?order_id='.$order->id);
+                        $this->redirect(Checkout::getUrl());
                     }
                 } catch (InvalidArgumentException $e) {
                     Notification::make()

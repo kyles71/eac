@@ -55,7 +55,7 @@ final class StripeWebhookController
             ->where('stripe_payment_intent_id', $paymentIntent->id)
             ->first();
 
-        if ($order !== null && $order->status === OrderStatus::Pending) {
+        if ($order !== null && $order->status === OrderStatus::Processing) {
             $order->update(['status' => OrderStatus::Failed]);
 
             Log::info("Order #{$order->id} marked as failed due to payment intent failure.", [
@@ -99,7 +99,7 @@ final class StripeWebhookController
             return response()->json(['error' => 'Order not found'], 404);
         }
 
-        if ($order->status !== OrderStatus::Pending) {
+        if ($order->status !== OrderStatus::Processing) {
             return response()->json(['message' => 'Order already processed']);
         }
 

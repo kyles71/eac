@@ -445,6 +445,35 @@ it('cancels existing pending orders before creating a new one', function () {
     expect($firstOrder->refresh()->status)->toBe(OrderStatus::Cancelled);
 });
 
+it('does not cancel processing orders when creating a new one', function () {
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    // Create a first order and mark it as processing (payment submitted to Stripe)
+    $action = app(CreateOrder::class);
+    $firstOrder = $action->handle($this->user);
+    $firstOrder->update(['status' => OrderStatus::Processing]);
+
+    // Add a different product to cart
+    $course2 = Course::factory()->create(['capacity' => 10]);
+    $product2 = Product::factory()->forCourse($course2)->create(['price' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $product2->id,
+        'quantity' => 1,
+    ]);
+
+    // Create a second order — this should NOT cancel the processing order
+    $secondOrder = $action->handle($this->user);
+
+    expect($secondOrder->status)->toBe(OrderStatus::Pending)
+        ->and($firstOrder->refresh()->status)->toBe(OrderStatus::Processing);
+});
+
 it('reverses store credit from previous pending order when creating a new one', function () {
     $this->user->update(['credit_balance' => 3000]);
 

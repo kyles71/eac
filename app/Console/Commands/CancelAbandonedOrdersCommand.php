@@ -13,14 +13,14 @@ final class CancelAbandonedOrdersCommand extends Command
 {
     protected $signature = 'orders:cancel-abandoned {--hours=24 : Hours after which a pending order is considered abandoned}';
 
-    protected $description = 'Cancel pending orders that have been abandoned beyond the configured threshold';
+    protected $description = 'Cancel pending orders that have been abandoned or been in processing status beyond the configured threshold';
 
     public function handle(CancelOrder $cancelOrder): int
     {
         $hours = (int) $this->option('hours');
 
         $abandonedOrders = Order::query()
-            ->where('status', OrderStatus::Pending)
+            ->whereIn('status', [OrderStatus::Pending, OrderStatus::Processing])
             ->where('created_at', '<', now()->subHours($hours))
             ->get();
 

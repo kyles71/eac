@@ -25,13 +25,7 @@ final class OrdersTable
                     ->label('Email')
                     ->searchable(),
                 TextColumn::make('status')
-                    ->badge()
-                    ->color(fn (OrderStatus $state): string => match ($state) {
-                        OrderStatus::Completed => 'success',
-                        OrderStatus::Pending => 'warning',
-                        OrderStatus::Failed => 'danger',
-                        OrderStatus::Refunded => 'gray',
-                    }),
+                    ->badge(),
                 TextColumn::make('total')
                     ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
                     ->sortable(),
