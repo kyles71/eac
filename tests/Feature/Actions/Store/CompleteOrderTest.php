@@ -58,39 +58,6 @@ it('creates enrollments and marks order as completed', function () {
     expect($enrollments->every(fn ($e) => $e->student_id === null))->toBeTrue();
 });
 
-it('clears the users cart after completion', function () {
-    $order = Order::factory()->create([
-        'user_id' => $this->user->id,
-        'status' => OrderStatus::Pending,
-        'subtotal' => 5000,
-        'total' => 5000,
-    ]);
-
-    OrderItem::factory()->create([
-        'order_id' => $order->id,
-        'product_id' => $this->product->id,
-        'quantity' => 1,
-        'unit_price' => 5000,
-        'total_price' => 5000,
-    ]);
-
-    // Add a cart item
-    $this->user->cartItems()->create([
-        'product_id' => $this->product->id,
-        'quantity' => 1,
-    ]);
-
-    expect($this->user->cartItems()->count())->toBe(1);
-
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $action = app(CompleteOrder::class);
-    $action->handle($order);
-
-    expect($this->user->cartItems()->count())->toBe(0);
-});
-
 it('fails and refunds when capacity is exceeded at completion time', function () {
     $order = Order::factory()->create([
         'user_id' => $this->user->id,

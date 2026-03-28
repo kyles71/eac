@@ -89,11 +89,6 @@ final readonly class CompleteOrder
 
             $order->update(['status' => OrderStatus::Completed]);
 
-            // Clear the user's cart
-            /** @var \App\Models\User $user */
-            $user = $order->user;
-            $user->cartItems()->delete();
-
             return true;
         });
     }

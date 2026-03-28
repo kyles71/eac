@@ -98,6 +98,24 @@ final class CreateOrder
                 $order->orderItems()->create($item);
             }
 
+            // Clear purchased items from the user's cart (quantity-aware)
+            /** @var \App\Models\CartItem $cartItem */
+            foreach ($cartItems as $cartItem) {
+                $orderedQuantity = collect($orderItems)
+                    ->where('product_id', $cartItem->product_id)
+                    ->sum('quantity');
+
+                if ($orderedQuantity <= 0) {
+                    continue;
+                }
+
+                if ($cartItem->quantity <= $orderedQuantity) {
+                    $cartItem->delete();
+                } else {
+                    $cartItem->update(['quantity' => $cartItem->quantity - $orderedQuantity]);
+                }
+            }
+
             $total = $subtotal;
 
             // Apply discount code if provided

@@ -507,3 +507,47 @@ it('reverses store credit from previous pending order when creating a new one', 
         ->and($secondOrder->credit_applied)->toBe(3000)
         ->and($this->user->refresh()->credit_balance)->toBe(0);
 });
+
+it('clears cart items that match the order after creation', function () {
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+    ]);
+
+    expect($this->user->cartItems()->count())->toBe(1);
+
+    $action = app(CreateOrder::class);
+    $action->handle($this->user);
+
+    expect($this->user->cartItems()->count())->toBe(0);
+});
+
+it('does not clear cart items added after order creation', function () {
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $action = app(CreateOrder::class);
+    $order = $action->handle($this->user);
+
+    // Cart should be empty after order creation
+    expect($this->user->cartItems()->count())->toBe(0);
+
+    // Simulate adding a new item to the cart after the order was created
+    $otherProduct = Product::factory()->standalone()->create(['price' => 2000]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $otherProduct->id,
+        'quantity' => 1,
+    ]);
+
+    // Complete the order — it should NOT clear the new cart item
+    $completeAction = app(App\Actions\Store\CompleteOrder::class);
+    $completeAction->handle($order);
+
+    expect($this->user->cartItems()->count())->toBe(1);
+});
