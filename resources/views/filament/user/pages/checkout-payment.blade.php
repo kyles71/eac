@@ -3,6 +3,7 @@
     elements: null,
     paymentElement: null,
     processing: false,
+    ready: false,
     errorMessage: '',
     init() {
         if (typeof Stripe === 'undefined') {
@@ -40,10 +41,11 @@
         this.elements = this.stripe.elements(elementsOptions)
 
         this.paymentElement = this.elements.create('payment')
+        this.paymentElement.on('ready', () => { this.ready = true })
         this.paymentElement.mount('#payment-element')
     },
     async submitPayment() {
-        if (this.processing) return
+        if (this.processing || !this.ready) return
         this.processing = true
         this.errorMessage = ''
 
@@ -63,12 +65,12 @@
         }
     },
 }" class="space-y-4">
-    <div id="payment-element" class="min-h-[120px]"></div>
+    <div id="payment-element" wire:ignore class="min-h-[120px]"></div>
 
     <div x-show="errorMessage" x-text="errorMessage"
         class="rounded-lg bg-danger-50 p-3 text-sm text-danger-600 dark:bg-danger-400/10 dark:text-danger-400"></div>
 
-    <button type="button" x-on:click="submitPayment()" x-bind:disabled="processing"
+    <button type="button" x-on:click="submitPayment()" x-bind:disabled="processing || !ready"
         class="fi-btn fi-btn-size-lg relative inline-grid grid-flow-col items-center justify-center gap-1.5 rounded-lg bg-warning-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm outline-none transition duration-75 hover:bg-warning-500 focus-visible:ring-2 focus-visible:ring-warning-600 disabled:pointer-events-none disabled:opacity-70 dark:bg-warning-500 dark:hover:bg-warning-400 dark:focus-visible:ring-warning-500">
         <template x-if="processing">
             <x-filament::loading-indicator class="h-5 w-5" />
