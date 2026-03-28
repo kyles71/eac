@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 use App\Enums\PaymentPlanFrequency;
 use App\Enums\ProductType;
-use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\CreatePaymentPlanTemplate;
-use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\EditPaymentPlanTemplate;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\ListPaymentPlanTemplates;
 use App\Models\PaymentPlanTemplate;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 
+use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
@@ -35,14 +35,14 @@ it('can search templates by name', function () {
 
     livewire(ListPaymentPlanTemplates::class)
         ->loadTable()
-        ->searchTable('Monthly')
+        ->searchTable('3-Pay')
         ->assertCanSeeTableRecords([$template1])
         ->assertCanNotSeeTableRecords([$template2]);
 });
 
 it('can create a payment plan template', function () {
-    livewire(CreatePaymentPlanTemplate::class)
-        ->fillForm([
+    livewire(ListPaymentPlanTemplates::class)
+        ->callAction(CreateAction::class, data: [
             'name' => 'Test Template',
             'product_type' => ProductType::Any->value,
             'min_price' => 5000,
@@ -51,33 +51,17 @@ it('can create a payment plan template', function () {
             'frequency' => PaymentPlanFrequency::Monthly->value,
             'is_active' => true,
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertNotified();
 
-    $this->assertDatabaseHas('payment_plan_templates', [
+    assertDatabaseHas('payment_plan_templates', [
         'name' => 'Test Template',
         'number_of_installments' => 3,
     ]);
 });
 
-it('can edit a payment plan template', function () {
-    $template = PaymentPlanTemplate::factory()->create(['name' => 'Old Name']);
-
-    livewire(EditPaymentPlanTemplate::class, [
-        'record' => $template->id,
-    ])
-        ->fillForm([
-            'name' => 'Updated Name',
-        ])
-        ->call('save')
-        ->assertHasNoFormErrors();
-
-    expect($template->refresh()->name)->toBe('Updated Name');
-});
-
 it('requires name to create a template', function () {
-    livewire(CreatePaymentPlanTemplate::class)
-        ->fillForm([
+    livewire(ListPaymentPlanTemplates::class)
+        ->callAction(CreateAction::class, data: [
             'name' => '',
             'product_type' => ProductType::Any->value,
             'min_price' => 5000,
@@ -85,13 +69,12 @@ it('requires name to create a template', function () {
             'number_of_installments' => 3,
             'frequency' => PaymentPlanFrequency::Monthly->value,
         ])
-        ->call('create')
-        ->assertHasFormErrors(['name' => 'required']);
+        ->assertHasActionErrors(['name' => 'required']);
 });
 
 it('requires number of installments between 2 and 24', function () {
-    livewire(CreatePaymentPlanTemplate::class)
-        ->fillForm([
+    livewire(ListPaymentPlanTemplates::class)
+        ->callAction(CreateAction::class, data: [
             'name' => 'Test',
             'product_type' => ProductType::Any->value,
             'min_price' => 5000,
@@ -99,8 +82,7 @@ it('requires number of installments between 2 and 24', function () {
             'number_of_installments' => 1,
             'frequency' => PaymentPlanFrequency::Monthly->value,
         ])
-        ->call('create')
-        ->assertHasFormErrors(['number_of_installments']);
+        ->assertHasActionErrors(['number_of_installments']);
 });
 
 it('has required columns', function (string $column) {

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use App\Filament\Admin\Resources\GiftCards\Pages\CreateGiftCard;
-use App\Filament\Admin\Resources\GiftCards\Pages\EditGiftCard;
 use App\Filament\Admin\Resources\GiftCards\Pages\ListGiftCards;
 use App\Models\GiftCard;
 use App\Models\User;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 
+use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
@@ -17,18 +17,6 @@ beforeEach(function () {
 
 it('can render the gift cards index page', function () {
     livewire(ListGiftCards::class)
-        ->assertSuccessful();
-});
-
-it('can render the create gift card page', function () {
-    livewire(CreateGiftCard::class)
-        ->assertSuccessful();
-});
-
-it('can render the edit gift card page', function () {
-    $giftCard = GiftCard::factory()->create();
-
-    livewire(EditGiftCard::class, ['record' => $giftCard->getRouteKey()])
         ->assertSuccessful();
 });
 
@@ -43,18 +31,17 @@ it('can list gift cards', function () {
 it('can create a gift card', function () {
     $user = User::factory()->create();
 
-    livewire(CreateGiftCard::class)
-        ->fillForm([
+    livewire(ListGiftCards::class)
+        ->callAction(CreateAction::class, data: [
             'code' => 'TESTGIFTCARD123',
             'initial_amount' => 50,
             'remaining_amount' => 50,
             'purchased_by_user_id' => $user->id,
             'is_active' => true,
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertNotified();
 
-    $this->assertDatabaseHas(GiftCard::class, [
+    assertDatabaseHas(GiftCard::class, [
         'code' => 'TESTGIFTCARD123',
         'purchased_by_user_id' => $user->id,
     ]);

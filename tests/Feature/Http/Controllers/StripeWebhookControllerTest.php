@@ -26,7 +26,7 @@ it('handles payment_intent.succeeded webhook for order completion', function () 
 
     $order = Order::factory()->create([
         'user_id' => $user->id,
-        'status' => OrderStatus::Pending,
+        'status' => OrderStatus::Processing,
         'subtotal' => 5000,
         'total' => 5000,
         'stripe_payment_intent_id' => 'pi_test_webhook',
@@ -120,7 +120,7 @@ it('handles payment intent failed webhook', function () {
 
     $order = Order::factory()->create([
         'user_id' => $user->id,
-        'status' => OrderStatus::Pending,
+        'status' => OrderStatus::Processing,
         'stripe_payment_intent_id' => 'pi_test_failed',
     ]);
 
@@ -188,7 +188,7 @@ it('creates a payment plan when order has payment plan template', function () {
 
     $order = Order::factory()->create([
         'user_id' => $user->id,
-        'status' => OrderStatus::Pending,
+        'status' => OrderStatus::Processing,
         'subtotal' => 9000,
         'total' => 9000,
         'stripe_payment_intent_id' => 'pi_test_plan',

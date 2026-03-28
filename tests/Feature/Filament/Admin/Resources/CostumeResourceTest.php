@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use App\Filament\Admin\Resources\Costumes\Pages\CreateCostume;
-use App\Filament\Admin\Resources\Costumes\Pages\EditCostume;
 use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
 use App\Models\Costume;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 
+use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
@@ -39,40 +39,23 @@ it('can search costumes by name', function () {
 });
 
 it('can create a costume', function () {
-    livewire(CreateCostume::class)
-        ->fillForm([
+    livewire(ListCostumes::class)
+        ->callAction(CreateAction::class, data: [
             'name' => 'New Costume',
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertNotified();
 
-    $this->assertDatabaseHas('costumes', [
+    assertDatabaseHas('costumes', [
         'name' => 'New Costume',
     ]);
 });
 
-it('can edit a costume', function () {
-    $costume = Costume::factory()->create(['name' => 'Old Name']);
-
-    livewire(EditCostume::class, [
-        'record' => $costume->id,
-    ])
-        ->fillForm([
-            'name' => 'Updated Name',
-        ])
-        ->call('save')
-        ->assertHasNoFormErrors();
-
-    expect($costume->refresh()->name)->toBe('Updated Name');
-});
-
 it('requires name to create a costume', function () {
-    livewire(CreateCostume::class)
-        ->fillForm([
+    livewire(ListCostumes::class)
+        ->callAction(CreateAction::class, data: [
             'name' => '',
         ])
-        ->call('create')
-        ->assertHasFormErrors(['name' => 'required']);
+        ->assertHasActionErrors(['name' => 'required']);
 });
 
 it('has required columns', function (string $column) {

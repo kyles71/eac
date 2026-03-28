@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 use App\Enums\DiscountType;
-use App\Filament\Admin\Resources\DiscountCodes\Pages\CreateDiscountCode;
-use App\Filament\Admin\Resources\DiscountCodes\Pages\EditDiscountCode;
 use App\Filament\Admin\Resources\DiscountCodes\Pages\ListDiscountCodes;
 use App\Models\DiscountCode;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 
+use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
@@ -17,18 +17,6 @@ beforeEach(function () {
 
 it('can render the discount codes index page', function () {
     livewire(ListDiscountCodes::class)
-        ->assertSuccessful();
-});
-
-it('can render the create discount code page', function () {
-    livewire(CreateDiscountCode::class)
-        ->assertSuccessful();
-});
-
-it('can render the edit discount code page', function () {
-    $code = DiscountCode::factory()->create();
-
-    livewire(EditDiscountCode::class, ['record' => $code->getRouteKey()])
         ->assertSuccessful();
 });
 
@@ -41,17 +29,16 @@ it('can list discount codes', function () {
 });
 
 it('can create a percentage discount code', function () {
-    livewire(CreateDiscountCode::class)
-        ->fillForm([
+    livewire(ListDiscountCodes::class)
+        ->callAction(CreateAction::class, data: [
             'code' => 'SUMMER20',
             'type' => DiscountType::Percentage->value,
             'value' => 20,
             'is_active' => true,
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertNotified();
 
-    $this->assertDatabaseHas(DiscountCode::class, [
+    assertDatabaseHas(DiscountCode::class, [
         'code' => 'SUMMER20',
         'type' => DiscountType::Percentage->value,
         'value' => 20,
@@ -59,17 +46,16 @@ it('can create a percentage discount code', function () {
 });
 
 it('can create a fixed amount discount code', function () {
-    livewire(CreateDiscountCode::class)
-        ->fillForm([
+    livewire(ListDiscountCodes::class)
+        ->callAction(CreateAction::class, data: [
             'code' => 'SAVE10',
             'type' => DiscountType::FixedAmount->value,
             'value' => 10,
             'is_active' => true,
         ])
-        ->call('create')
-        ->assertHasNoFormErrors();
+        ->assertNotified();
 
-    $this->assertDatabaseHas(DiscountCode::class, [
+    assertDatabaseHas(DiscountCode::class, [
         'code' => 'SAVE10',
         'type' => DiscountType::FixedAmount->value,
     ]);

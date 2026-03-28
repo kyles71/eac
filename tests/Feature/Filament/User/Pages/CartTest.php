@@ -191,7 +191,7 @@ it('shows payment plan options when templates exist', function () {
 
     livewire(Cart::class)
         ->assertSee('Payment Option')
-        ->assertSee('Payment Plan');
+        ->assertSee('4 Monthly Payments');
 });
 
 it('shows payment plan breakdown when a plan is selected', function () {

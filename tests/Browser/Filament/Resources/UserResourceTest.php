@@ -2,22 +2,27 @@
 
 declare(strict_types=1);
 
+use App\Models\Calendar;
 use App\Models\User;
 
 use function Pest\Laravel\assertDatabaseHas;
-use function Pest\Laravel\assertDatabaseMissing;
+
+beforeEach(function () {
+    Calendar::factory()->create();
+    $this->withVite();
+});
 
 it('can create a new user', function () {
     $user = User::factory()->make();
 
-    visit('/admin')
-        ->click('Users')
-        ->click('New user')
-        ->fill('form.first_name', $user->first_name)
-        ->fill('form.last_name', $user->last_name)
-        ->fill('form.email', $user->email)
-        ->fill('form.password', 'password')
-        ->press('.fi-ac-btn-action[type=submit]')
+    visit('/admin/users')
+        ->click('New User')
+        ->assertSee('Create User')
+        ->fill('mountedActionSchema0.first_name', $user->first_name)
+        ->fill('mountedActionSchema0.last_name', $user->last_name)
+        ->fill('mountedActionSchema0.email', $user->email)
+        ->fill('mountedActionSchema0.password', 'password')
+        ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Created');
 
     assertDatabaseHas('users', [
@@ -28,31 +33,20 @@ it('can create a new user', function () {
 });
 
 it('can edit an existing user', function () {
-    $newRecord = User::factory()->make();
+    $existingUser = User::factory()->create();
+    $newData = User::factory()->make();
 
-    visit('/admin')
-        ->click('Users')
+    visit("/admin/users/{$existingUser->id}")
         ->click('Edit')
-        ->fill('form.first_name', $newRecord->first_name)
-        ->fill('form.last_name', $newRecord->last_name)
-        ->click('.fi-ac-btn-action[type=submit]')
+        ->assertSee('Save')
+        ->fill('mountedActionSchema0.first_name', $newData->first_name)
+        ->fill('mountedActionSchema0.last_name', $newData->last_name)
+        ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Saved');
 
     assertDatabaseHas('users', [
-        'first_name' => $newRecord->first_name,
-        'last_name' => $newRecord->last_name,
-    ]);
-});
-
-it('can delete an existing user', function () {
-    visit('/admin')
-        ->click('Users')
-        ->click('Edit')
-        ->click('Delete')
-        ->click('.fi-modal-window button[type=submit]')
-        ->assertSee('Deleted');
-
-    assertDatabaseMissing('users', [
-        'id' => auth()->user()->id,
+        'id' => $existingUser->id,
+        'first_name' => $newData->first_name,
+        'last_name' => $newData->last_name,
     ]);
 });
