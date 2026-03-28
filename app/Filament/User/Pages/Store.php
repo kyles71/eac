@@ -82,6 +82,8 @@ final class Store extends TablePage
                             $addToCart = new AddToCart;
                             $addToCart->handle(auth()->user(), $record);
 
+                            $this->dispatch('refresh-sidebar');
+
                             Notification::make()
                                 ->title('Added to cart')
                                 ->body("\"{$record->name}\" has been added to your cart.")

@@ -282,6 +282,8 @@ final class Cart extends Page implements HasTable
 
             $updateQuantity = new UpdateCartQuantity;
             $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity + 1);
+
+            $this->dispatch('refresh-sidebar');
         } catch (InvalidArgumentException $e) {
             Notification::make()
                 ->title('Could not update quantity')
@@ -309,6 +311,8 @@ final class Cart extends Page implements HasTable
 
             $updateQuantity = new UpdateCartQuantity;
             $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity - 1);
+
+            $this->dispatch('refresh-sidebar');
         } catch (InvalidArgumentException $e) {
             Notification::make()
                 ->title('Could not update quantity')
@@ -323,6 +327,8 @@ final class Cart extends Page implements HasTable
         try {
             $removeFromCart = new RemoveFromCart;
             $removeFromCart->handle(auth()->user(), $cartItemId);
+
+            $this->dispatch('refresh-sidebar');
 
             Notification::make()
                 ->title('Item removed from cart')
