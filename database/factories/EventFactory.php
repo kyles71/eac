@@ -31,11 +31,25 @@ final class EventFactory extends Factory
         $end_time = $start_time->copy()->addMinutes(fake()->randomElement([30, 45, 60, 90, 120]));
 
         return [
-            'name' => fake()->name(),
+            'name' => '',
             'description' => fake()->text(),
             'start_time' => $start_time,
             'end_time' => $end_time,
             'course_id' => Course::factory(),
         ];
+    }
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Event $event): void {
+            if (empty($event->name) && $event->relationLoaded('course') === false) {
+                $event->load('course');
+            }
+
+            if ($event->course !== null) {
+                $event->name = $event->course->name . ' Class';
+                $event->save();
+            }
+        });
     }
 }

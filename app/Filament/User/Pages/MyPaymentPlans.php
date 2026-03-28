@@ -7,10 +7,12 @@ namespace App\Filament\User\Pages;
 use App\Actions\Store\SwitchPaymentPlanMethod;
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentPlanMethod;
+use App\Models\Installment;
 use App\Models\PaymentPlan;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -97,7 +99,7 @@ final class MyPaymentPlans extends TablePage
                     ->label('Switch Method')
                     ->icon(Heroicon::OutlinedArrowPath)
                     ->visible(fn (PaymentPlan $record): bool => ! $record->isFullyPaid())
-                    ->form([
+                    ->schema([
                         Select::make('method')
                             ->label('Payment Method')
                             ->options(PaymentPlanMethod::class)
@@ -127,21 +129,21 @@ final class MyPaymentPlans extends TablePage
                     ->schema(fn (PaymentPlan $record): array => $record->loadMissing('installments')
                         ->installments
                         ->sortBy('installment_number')
-                        ->map(fn (\App\Models\Installment $installment): Section => Section::make("#{$installment->installment_number}")
+                        ->map(fn (Installment $installment): Section => Section::make("#{$installment->installment_number}")
                             ->schema([
                                 Grid::make(4)
                                     ->schema([
-                                        \Filament\Infolists\Components\TextEntry::make('')
+                                        TextEntry::make('amount')
                                             ->label('Amount')
                                             ->state(format_money($installment->amount)),
-                                        \Filament\Infolists\Components\TextEntry::make('')
+                                        TextEntry::make('due_date')
                                             ->label('Due Date')
                                             ->state($installment->due_date->format('M j, Y')),
-                                        \Filament\Infolists\Components\TextEntry::make('')
+                                        TextEntry::make('status')
                                             ->label('Status')
                                             ->state($installment->status)
                                             ->badge(),
-                                        \Filament\Infolists\Components\TextEntry::make('')
+                                        TextEntry::make('paid_at')
                                             ->label('Paid At')
                                             ->state($installment->paid_at?->format('M j, Y') ?? '—'),
                                     ]),

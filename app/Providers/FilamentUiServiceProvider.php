@@ -84,10 +84,9 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ]);
         });
 
-        // if an action is a modal, do not close by clicking away and default to slideover
+        // if an action is a modal, default to slideover
         Action::configureUsing(function (Action $action) {
             $action
-                ->closeModalByClickingAway(false)
                 ->slideOver();
         });
 
