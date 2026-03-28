@@ -71,4 +71,36 @@ final class Order extends Model
     {
         return format_money($this->total);
     }
+
+    /**
+     * Clear matching cart items for the user, scoped to products on this order.
+     *
+     * If the cart item quantity is less than or equal to the ordered quantity, it is deleted.
+     * If the cart item has more quantity than was ordered, it is decremented.
+     */
+    public function clearPurchasedCartItems(): void
+    {
+        $this->loadMissing('orderItems', 'user');
+
+        /** @var User $user */
+        $user = $this->user;
+
+        /** @var OrderItem $orderItem */
+        foreach ($this->orderItems as $orderItem) {
+            /** @var CartItem|null $cartItem */
+            $cartItem = $user->cartItems()
+                ->where('product_id', $orderItem->product_id)
+                ->first();
+
+            if ($cartItem === null) {
+                continue;
+            }
+
+            if ($cartItem->quantity <= $orderItem->quantity) {
+                $cartItem->delete();
+            } else {
+                $cartItem->update(['quantity' => $cartItem->quantity - $orderItem->quantity]);
+            }
+        }
+    }
 }

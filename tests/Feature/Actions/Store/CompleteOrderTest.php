@@ -58,6 +58,71 @@ it('creates enrollments and marks order as completed', function () {
     expect($enrollments->every(fn ($e) => $e->student_id === null))->toBeTrue();
 });
 
+it('clears only cart items for products on the order', function () {
+    $order = Order::factory()->create([
+        'user_id' => $this->user->id,
+        'status' => OrderStatus::Pending,
+        'subtotal' => 5000,
+        'total' => 5000,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    // Cart item for the ordered product
+    $this->user->cartItems()->create([
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    // Cart item for an unrelated product (should survive)
+    $otherProduct = Product::factory()->standalone()->create(['price' => 2000]);
+    $this->user->cartItems()->create([
+        'product_id' => $otherProduct->id,
+        'quantity' => 3,
+    ]);
+
+    expect($this->user->cartItems()->count())->toBe(2);
+
+    $order->clearPurchasedCartItems();
+
+    expect($this->user->cartItems()->count())->toBe(1);
+    expect($this->user->cartItems()->first()->product_id)->toBe($otherProduct->id);
+});
+
+it('decrements cart item quantity when cart has more than ordered', function () {
+    $order = Order::factory()->create([
+        'user_id' => $this->user->id,
+        'status' => OrderStatus::Pending,
+        'subtotal' => 5000,
+        'total' => 5000,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    // Cart has more quantity than was ordered
+    $this->user->cartItems()->create([
+        'product_id' => $this->product->id,
+        'quantity' => 3,
+    ]);
+
+    $order->clearPurchasedCartItems();
+
+    expect($this->user->cartItems()->count())->toBe(1);
+    expect($this->user->cartItems()->first()->quantity)->toBe(2);
+});
+
 it('fails and refunds when capacity is exceeded at completion time', function () {
     $order = Order::factory()->create([
         'user_id' => $this->user->id,

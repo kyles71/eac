@@ -31,6 +31,8 @@ final readonly class CompleteOrder
                 return false;
             }
 
+            $order->clearPurchasedCartItems();
+
             // Atomic capacity check with row-level locks
             /** @var \App\Models\OrderItem $orderItem */
             foreach ($order->orderItems as $orderItem) {
