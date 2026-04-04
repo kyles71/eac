@@ -8,9 +8,11 @@ use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -97,6 +99,31 @@ final class ProductForm
                     ->searchable()
                     ->preload()
                     ->visible(fn (callable $get): bool => in_array($get('productable_type'), [Course::class, Costume::class], true)),
+                Section::make('Media')
+                    ->columns(2)
+                    ->collapsed()
+                    ->columnSpanFull()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('images')
+                            ->collection('images')
+                            ->multiple()
+                            ->reorderable()
+                            ->image(),
+                        SpatieMediaLibraryFileUpload::make('documents')
+                            ->collection('documents')
+                            ->multiple()
+                            ->acceptedFileTypes([
+                                'application/pdf',
+                                'application/msword',
+                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                'application/vnd.ms-excel',
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            ]),
+                        SpatieMediaLibraryFileUpload::make('videos')
+                            ->collection('videos')
+                            ->multiple()
+                            ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
+                    ]),
             ]);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -13,6 +14,10 @@ final class EventInfolist
     {
         return $schema
             ->components([
+                SpatieMediaLibraryImageEntry::make('images')
+                    ->collection('images')
+                    // ->conversion('thumb')
+                    ->columnSpanFull(),
                 TextEntry::make('name'),
                 TextEntry::make('focus'),
                 TextEntry::make('start_time')

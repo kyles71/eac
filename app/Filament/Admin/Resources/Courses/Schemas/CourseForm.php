@@ -9,9 +9,11 @@ use App\Models\Form;
 use App\Models\User;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -64,6 +66,31 @@ final class CourseForm
                         ->first()
                         ?->id
                     ),
+                Section::make('Media')
+                    ->columns(3)
+                    ->collapsed()
+                    ->columnSpanFull()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('images')
+                            ->collection('images')
+                            ->multiple()
+                            ->reorderable()
+                            ->image(),
+                        SpatieMediaLibraryFileUpload::make('documents')
+                            ->collection('documents')
+                            ->multiple()
+                            ->acceptedFileTypes([
+                                'application/pdf',
+                                'application/msword',
+                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                'application/vnd.ms-excel',
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            ]),
+                        SpatieMediaLibraryFileUpload::make('videos')
+                            ->collection('videos')
+                            ->multiple()
+                            ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
+                    ]),
             ]);
     }
 }

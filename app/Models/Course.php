@@ -14,11 +14,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-final class Course extends Model implements HasCapacity, Productable
+final class Course extends Model implements HasCapacity, HasMedia, Productable
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
-    use HasFactory;
+    use HasFactory, InteractsWithMedia;
 
     protected $casts = [
         'id' => 'integer',
@@ -136,4 +139,23 @@ final class Course extends Model implements HasCapacity, Productable
                 ->whereColumn('enrollments.course_id', 'courses.id')
         );
     }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('images');
+
+        $this->addMediaCollection('documents');
+
+        $this->addMediaCollection('videos');
+    }
+
+    // public function registerMediaConversions(?Media $media = null): void
+    // {
+    //     $this->addMediaConversion('thumb')
+    //         ->width(300)
+    //         ->height(300)
+    //         ->sharpen(10)
+    //         ->performOnCollections('images')
+    //         ->nonQueued();
+    // }
 }

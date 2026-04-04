@@ -10,11 +10,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-final class Product extends Model
+final class Product extends Model implements HasMedia
 {
     /** @use HasFactory<\Database\Factories\ProductFactory> */
-    use HasFactory;
+    use HasFactory, InteractsWithMedia;
 
     protected $casts = [
         'id' => 'integer',
@@ -60,4 +63,23 @@ final class Product extends Model
     {
         return format_money($this->price);
     }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('images');
+
+        $this->addMediaCollection('documents');
+
+        $this->addMediaCollection('videos');
+    }
+
+    // public function registerMediaConversions(?Media $media = null): void
+    // {
+    //     $this->addMediaConversion('thumb')
+    //         ->width(300)
+    //         ->height(300)
+    //         ->sharpen(10)
+    //         ->performOnCollections('images')
+    //         ->nonQueued();
+    // }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
@@ -15,6 +16,12 @@ final class UserForm
     {
         return $schema
             ->components([
+                SpatieMediaLibraryFileUpload::make('avatar')
+                    ->collection('avatars')
+                    ->image()
+                    ->avatar()
+                    ->circleCropper()
+                    ->columnSpanFull(),
                 TextInput::make('first_name')
                     ->maxLength(255)
                     ->required(),
@@ -34,6 +41,11 @@ final class UserForm
                     ->autocomplete('new-password')
                     ->dehydrated(fn ($state): bool => filled($state))
                     ->dehydrateStateUsing(fn ($state): string => Hash::make($state)),
+                SpatieMediaLibraryFileUpload::make('staff_photo')
+                    ->label('Staff Photo')
+                    ->collection('staff-photo')
+                    ->image()
+                    ->columnSpanFull(),
             ]);
     }
 }

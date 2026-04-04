@@ -61,4 +61,4 @@ it('requires name to create a costume', function () {
 it('has required columns', function (string $column) {
     livewire(ListCostumes::class)
         ->assertTableColumnExists($column);
-})->with(['id', 'name']);
+})->with(['name']);

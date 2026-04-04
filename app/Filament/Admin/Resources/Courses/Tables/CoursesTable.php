@@ -55,7 +55,7 @@ final class CoursesTable
             ])
             ->recordActions([
                 SendEmailAction::make()
-                    ->to(fn ($record) => $record->purchasers->pluck('email')->all())
+                    ->to(fn ($record) => $record->purchasers->pluck('email')->all()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Users\Tables;
 use App\Filament\Actions\SendEmailAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -16,6 +17,10 @@ final class UsersTable
     {
         return $table
             ->columns([
+                SpatieMediaLibraryImageColumn::make('avatar')
+                    ->collection('avatars')
+                    // ->conversion('thumb')
+                    ->circular(),
                 TextColumn::make('first_name')
                     ->sortable()
                     ->searchable(),
@@ -47,7 +52,7 @@ final class UsersTable
             ])
             ->recordActions([
                 SendEmailAction::make()
-                    ->to(fn ($record) => [$record->email])
+                    ->to(fn ($record) => [$record->email]),
 
             ])
             ->toolbarActions([

@@ -8,11 +8,14 @@ use App\Contracts\Productable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Costume extends Model implements Productable
+final class Costume extends Model implements Productable, HasMedia
 {
     /** @use HasFactory<\Database\Factories\CostumeFactory> */
     use HasFactory;
+    use InteractsWithMedia;
 
     protected $casts = [
         'id' => 'integer',
@@ -27,4 +30,18 @@ final class Costume extends Model implements Productable
     {
         return false;
     }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('images');
+    }
+
+    // public function registerMediaConversions(?Media $media = null): void
+    // {
+    //     $this->addMediaConversion('thumb')
+    //         ->width(300)
+    //         ->height(300)
+    //         ->sharpen(10)
+    //         ->nonQueued();
+    // }
 }

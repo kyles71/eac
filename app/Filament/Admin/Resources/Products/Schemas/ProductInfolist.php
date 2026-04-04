@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Products\Schemas;
 
 use App\Models\Course;
 use App\Models\Product;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -15,6 +16,9 @@ final class ProductInfolist
     {
         return $schema
             ->components([
+                SpatieMediaLibraryImageEntry::make('images')
+                    ->collection('images'),
+                    // ->conversion('thumb'),
                 TextEntry::make('name'),
                 TextEntry::make('description'),
                 TextEntry::make('price')

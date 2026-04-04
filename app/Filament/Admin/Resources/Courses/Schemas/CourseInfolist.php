@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
 use App\Models\Course;
+use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -33,6 +34,11 @@ final class CourseInfolist
                 TextEntry::make('teacher.full_name')
                     ->label('Teacher\'s Name'),
                 TextEntry::make('guest_teacher'),
+                SpatieMediaLibraryImageEntry::make('course_images')
+                    ->label('Images')
+                    ->collection('images')
+                    // ->conversion('thumb')
+                    ->columnSpanFull(),
                 TextEntry::make('created_at')
                     ->dateTime(),
                 TextEntry::make('updated_at')

@@ -8,6 +8,7 @@ namespace App\Models;
 use App\Enums\CreditTransactionType;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -20,11 +21,30 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Jeffgreco13\FilamentBreezy\Traits\TwoFactorAuthenticatable;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-final class User extends Authenticatable implements FilamentUser, HasName
+final class User extends Authenticatable implements FilamentUser, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'credit_balance' => 'integer',
+            'app_authentication_secret' => 'encrypted',
+            'app_authentication_recovery_codes' => 'encrypted:array',
+        ];
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -52,6 +72,14 @@ final class User extends Authenticatable implements FilamentUser, HasName
     {
         // @phpstan-ignore-next-line property.notFound
         return $this->fullName;
+    }
+
+    public function getFilamentAvatarUrl(): ?string
+    {
+        $media = $this->getFirstMedia('avatars');
+
+        return $media?->getUrl();
+        // return $media?->getUrl('thumb') ?? $media?->getUrl();
     }
 
     public function canAccessPanel(Panel $panel): bool
@@ -219,19 +247,22 @@ final class User extends Authenticatable implements FilamentUser, HasName
         ]);
     }
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    public function registerMediaCollections(): void
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'credit_balance' => 'integer',
-            'app_authentication_secret' => 'encrypted',
-            'app_authentication_recovery_codes' => 'encrypted:array',
-        ];
+        $this->addMediaCollection('avatars')
+            ->singleFile();
+
+        $this->addMediaCollection('staff-photo')
+            ->singleFile();
     }
+
+    // public function registerMediaConversions(?Media $media = null): void
+    // {
+    //     $this->addMediaConversion('thumb')
+    //         ->width(150)
+    //         ->height(150)
+    //         ->sharpen(10)
+    //         ->performOnCollections('avatars', 'staff-photo')
+    //         ->nonQueued();
+    // }
 }

@@ -14,9 +14,11 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -50,6 +52,27 @@ final class EventForm
                     $query->where('id', '>', 1)->orderBy('id', 'asc');
                 })
                 ->default(2),
+            Section::make('Media')
+                ->columns(2)
+                ->collapsed()
+                ->columnSpanFull()
+                ->schema([
+                    SpatieMediaLibraryFileUpload::make('images')
+                        ->collection('images')
+                        ->multiple()
+                        ->reorderable()
+                        ->image(),
+                    SpatieMediaLibraryFileUpload::make('documents')
+                        ->collection('documents')
+                        ->multiple()
+                        ->acceptedFileTypes([
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/vnd.ms-excel',
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        ]),
+                ]),
             Select::make('repeat_frequency')
                 ->live()
                 ->visible(fn (string $operation): bool => $operation === 'create')
