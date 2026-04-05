@@ -1,0 +1,13 @@
+name: Deploy dev branch
+
+on:
+  push:
+    branches: [ dev ]
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: dev
+      concurrency_group: dev

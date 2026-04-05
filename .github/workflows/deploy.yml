@@ -1,0 +1,40 @@
+name: Reusable deploy workflow
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      concurrency_group:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    concurrency:
+      group: ${{ inputs.concurrency_group }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+
+      - name: Install dependencies
+        run: composer install
+
+      - name: Deploy
+        uses: deployphp/action@v1
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        with:
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          dep: deploy env=${{ inputs.environment }}
