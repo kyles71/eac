@@ -16,6 +16,7 @@ host(getenv('DEPLOY_HOST'))
     ->setLabels([
         'env' => 'dev',
     ])
+    ->set('branch', 'dev')
     ->set('remote_user', getenv('DEPLOY_USER'))
     ->set('sudo_password', getenv('DEPLOY_PASSWORD'))
     ->set('deploy_path', '/var/www/html/eac-test');
