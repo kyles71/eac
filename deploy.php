@@ -4,7 +4,7 @@ namespace Deployer;
 require 'recipe/laravel.php';
 
 // Config
-
+set('keep_releases', 5);
 set('repository', 'https://github.com/kyles71/eac.git');
 
 add('shared_files', ['.env']);
@@ -24,7 +24,6 @@ host(getenv('DEPLOY_HOST'))
 // Tasks
 
 desc('Install & build npm packages');
-
 task('npm:build', function () {
     run('cd {{release_path}} && npm ci && npm run build');
 });

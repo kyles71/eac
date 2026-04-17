@@ -13,7 +13,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
-        "bezhansalleh/filament-panel-switch": "^2.1",
+        "bezhansalleh/filament-panel-switch": "^3.1",
         "filament/filament": "^4.0",
         "filament/spatie-laravel-media-library-plugin": "^4.0",
         "jeffgreco13/filament-breezy": "^3.0",

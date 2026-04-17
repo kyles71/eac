@@ -18,12 +18,15 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -31,6 +34,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 use Livewire\Component;
 
@@ -418,6 +422,44 @@ final class Cart extends Page implements HasTable
             ->color('warning')
             ->size('lg')
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
+            ->slideOver(false)
+            ->modalHidden(function (Get $get): bool {
+                return $get('selectedPaymentPlanMethod') === null;
+            })
+            ->schema(function (Get $get): array {
+                // Only return schema if we want to show the modal
+                if ($get('selectedPaymentPlanMethod') === null) {
+                    return [];
+                }
+
+                return [
+                    Grid::make()
+                        ->columns(1)
+                        ->extraAttributes(['x-data' => '{ scrolledToBottom: false }'])
+                        ->schema([
+                            TextEntry::make('terms_and_conditions')
+                                ->state(new HtmlString('
+                                    <div
+                                        class="h-32 overflow-y-scroll"
+                                        @scroll="
+                                            const el = $event.target;
+                                            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) {
+                                                scrolledToBottom = true;
+                                            }
+                                        "
+                                    >
+                                    some long list of terms<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah
+                                    </div>')),
+                            Checkbox::make('terms')
+                                ->label('I have read and agree to the terms and conditions')
+                                ->accepted()
+                                ->required()
+                                ->helperText(new HtmlString('<p>By checking this box, you agree to the terms and conditions.</p>
+                                    <p class="text-red" x-show="! scrolledToBottom"><strong>You must scroll to the bottom of the Terms & Conditions to select this checkbox.</strong></p>'))
+                                ->extraInputAttributes(['x-bind:disabled' => '!scrolledToBottom']),
+                        ])
+                ];
+            })
             ->action(function (): void {
                 try {
                     $createOrder = app(CreateOrder::class);
