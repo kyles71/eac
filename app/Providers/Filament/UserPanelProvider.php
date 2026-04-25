@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\User\Pages\Auth\Register;
 use App\Http\Middleware\UserBanners;
 use Filament\Panel;
 
@@ -17,6 +18,7 @@ class UserPanelProvider extends BasePanelProvider
 
         return $panel
             ->viteTheme('resources/css/filament/user/theme.css')
+            ->registration(Register::class)
             ->middleware([
                 UserBanners::class,
             ])
