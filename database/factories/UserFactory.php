@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -43,5 +44,41 @@ final class UserFactory extends Factory
         return $this->state(fn (array $attributes): array => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /**
+     * Give the user the super admin role.
+     */
+    public function isSuperAdmin(): Factory
+    {
+        return $this->afterMaking(function (User $user) {
+            $user->assignRole('super_admin');
+        })->afterCreating(function (User $user) {
+            $user->assignRole('super_admin');
+        });
+    }
+
+    /**
+     * Give the user the owner role.
+     */
+    public function isOwner(): Factory
+    {
+        return $this->afterMaking(function (User $user) {
+            $user->assignRole('owner');
+        })->afterCreating(function (User $user) {
+            $user->assignRole('owner');
+        });
+    }
+
+    /**
+     * Give the user the teacher role.
+     */
+    public function isTeacher(): Factory
+    {
+        return $this->afterMaking(function (User $user) {
+            $user->assignRole('teacher');
+        })->afterCreating(function (User $user) {
+            $user->assignRole('teacher');
+        });
     }
 }

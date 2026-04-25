@@ -37,6 +37,10 @@ final class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call([
+            ShieldSeeder::class,
+        ]);
+
         CalendarFactory::new()->createMany([
             [
                 'name' => 'My Calendar',
@@ -67,7 +71,8 @@ final class DatabaseSeeder extends Seeder
                 'last_name' => config('app.default_user.last_name'),
                 'password' => bcrypt(config('app.default_user.password')),
             ],
-        );
+        )
+            ->assignRole('super_admin');
 
         $users = User::factory(15)->create();
         $allUsers = $users->push($adminUser);

@@ -21,9 +21,13 @@ final class UserInfolist
                 SpatieMediaLibraryImageEntry::make('staff_photo')
                     ->label('Staff Photo')
                     ->collection('staff-photo'),
-                    // ->conversion('thumb'),
+                // ->conversion('thumb'),
                 TextEntry::make('first_name'),
                 TextEntry::make('last_name'),
+                TextEntry::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->listWithLineBreaks(),
                 TextEntry::make('email'),
                 TextEntry::make('email_verified_at')
                     ->dateTime(),

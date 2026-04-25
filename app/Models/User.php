@@ -24,11 +24,12 @@ use Jeffgreco13\FilamentBreezy\Traits\TwoFactorAuthenticatable;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Spatie\Permission\Traits\HasRoles;
 
 final class User extends Authenticatable implements FilamentUser, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, HasRoles, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * Get the attributes that should be cast.
@@ -85,7 +86,7 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
-            return true || $this->hasVerifiedEmail();
+            return /*$this->hasVerifiedEmail() && */$this->hasAnyRole(['super_admin', 'owner', 'admin']);
         }
 
         return true;
