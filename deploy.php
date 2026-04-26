@@ -9,10 +9,6 @@ set('repository', 'https://github.com/kyles71/eac.git');
 
 add('shared_files', ['.env']);
 add('shared_dirs', ['storage']);
-add('writable_dirs', []);
-set('writable_use_sudo', false);
-set('writable_recursive', true);
-set('http_group', 'www-data');
 
 // Hosts
 host(getenv('DEPLOY_HOST'))
