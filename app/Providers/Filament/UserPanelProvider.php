@@ -17,6 +17,7 @@ class UserPanelProvider extends BasePanelProvider
         $panel = $this->applySharedConfig($panel);
 
         return $panel
+            ->brandName('EAC Dancer')
             ->viteTheme('resources/css/filament/user/theme.css')
             ->registration(Register::class)
             ->middleware([

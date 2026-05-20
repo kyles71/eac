@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "eb4da286953bb544368232bff7857f2f",
+    "content-hash": "72673a233cc9c95e246b10f571b7f4a7",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -588,6 +588,78 @@
                 }
             ],
             "time": "2024-02-09T16:56:22+00:00"
+        },
+        {
+            "name": "charlieetienne/filament-font-picker",
+            "version": "1.4.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/CharlieEtienne/filament-font-picker.git",
+                "reference": "a43fdac98fdf318bf6e6d076cc09248f28f55ee4"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/CharlieEtienne/filament-font-picker/zipball/a43fdac98fdf318bf6e6d076cc09248f28f55ee4",
+                "reference": "a43fdac98fdf318bf6e6d076cc09248f28f55ee4",
+                "shasum": ""
+            },
+            "require": {
+                "filament/forms": "^4.0|^5.0",
+                "php": "^8.2",
+                "spatie/laravel-package-tools": "^1.15.0"
+            },
+            "require-dev": {
+                "laravel/framework": "^11.0|^12.0",
+                "orchestra/testbench": "^9.0|^10.0",
+                "pestphp/pest": "^3.0|^4.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "CharlieEtienne\\FilamentFontPicker\\FontPickerServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "CharlieEtienne\\FilamentFontPicker\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Charlie Etienne",
+                    "email": "hello@charlieetienne.com"
+                }
+            ],
+            "description": "A Filament form component for selecting Google Fonts with real-time previews, search functionality, and category filtering.",
+            "homepage": "https://github.com/charlieetienne/filament-font-picker",
+            "keywords": [
+                "filament",
+                "font-picker",
+                "form-component",
+                "google-fonts",
+                "laravel"
+            ],
+            "support": {
+                "issues": "https://github.com/charlieetienne/filament-font-picker/issues",
+                "source": "https://github.com/charlieetienne/filament-font-picker"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/CharlieEtienne",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/pxlrbt",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-01-19T08:31:33+00:00"
         },
         {
             "name": "chillerlan/php-qrcode",
@@ -2615,6 +2687,76 @@
                 "source": "https://github.com/kirschbaum-development/eloquent-power-joins/tree/4.3.1"
             },
             "time": "2026-03-29T12:05:03+00:00"
+        },
+        {
+            "name": "kyle/filament-theme-builder",
+            "version": "v0.1.0",
+            "source": {
+                "type": "git",
+                "url": "git@github.com:kyles71/filament-themes.git",
+                "reference": "d23b74ce8bd79a21e6235d9bcb76b477881b601c"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/kyles71/filament-themes/zipball/d23b74ce8bd79a21e6235d9bcb76b477881b601c",
+                "reference": "d23b74ce8bd79a21e6235d9bcb76b477881b601c",
+                "shasum": ""
+            },
+            "require": {
+                "charlieetienne/filament-font-picker": "^1.4",
+                "filament/filament": "^4.0 || ^5.0",
+                "illuminate/contracts": "^12.0 || ^13.0",
+                "illuminate/database": "^12.0 || ^13.0",
+                "illuminate/support": "^12.0 || ^13.0",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.24",
+                "mockery/mockery": "^1.6",
+                "orchestra/testbench": "^10.0 || ^11.0",
+                "phpunit/phpunit": "^11.5.50 || ^12.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Kyle\\FilamentThemeBuilder\\ThemeBuilderServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Kyle\\FilamentThemeBuilder\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Kyle\\FilamentThemeBuilder\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "vendor/bin/phpunit"
+                ],
+                "format": [
+                    "vendor/bin/pint"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "A reusable Filament panel plugin for building and applying database-backed themes.",
+            "keywords": [
+                "filament",
+                "filament-plugin",
+                "laravel",
+                "themes"
+            ],
+            "support": {
+                "source": "https://github.com/kyles71/filament-themes/tree/v0.1.0",
+                "issues": "https://github.com/kyles71/filament-themes/issues"
+            },
+            "time": "2026-05-19T02:41:55+00:00"
         },
         {
             "name": "laravel/framework",

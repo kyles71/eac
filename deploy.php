@@ -22,13 +22,11 @@ host(getenv('DEPLOY_HOST'))
     ->set('deploy_path', '/var/www/html/eac-test');
 
 // Tasks
-
 desc('Install & build npm packages');
 task('npm:build', function () {
     run('cd {{release_path}} && npm ci && npm run build');
 });
 
 // Hooks
-
 after('artisan:migrate', 'npm:build');
 after('deploy:failed', 'deploy:unlock');

@@ -1,0 +1,421 @@
+.fi-theme-builder-page .fi-sidebar,
+.fi-theme-builder-page .fi-topbar nav {
+    display: none;
+}
+
+.fi-theme-builder-page .fi-main {
+    max-width: none;
+    height: calc(100vh - var(--fi-theme-builder-topbar-height, 0px));
+}
+
+.fi-theme-builder-page .fi-page-content {
+    height: calc(100vh - var(--fi-theme-builder-topbar-height, 0px));
+    min-height: 0;
+    overflow: hidden;
+}
+
+.fi-theme-builder {
+    display: grid;
+    grid-template-columns: minmax(320px, 410px) minmax(0, 1fr);
+    gap: 1.5rem;
+    height: 100%;
+    min-height: 0;
+}
+
+.fi-theme-builder__controls {
+    min-width: 0;
+    overflow: auto;
+    max-height: 100%;
+    padding-right: .25rem;
+}
+
+.fi-theme-builder__preview {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.fi-theme-builder__preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.fi-theme-builder__preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: .625rem;
+}
+
+.fi-theme-builder__preview-action-group {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: .25rem;
+    padding: .375rem;
+    border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+    border-radius: .5rem;
+    background: color-mix(in oklab, currentColor 7%, transparent);
+}
+
+.fi-theme-builder__preview-action-group .fi-icon-btn {
+    flex: 0 0 auto;
+    margin: 0 !important;
+    color: color-mix(in oklab, currentColor 72%, transparent);
+}
+
+.fi-theme-builder__preview-action-group .fi-icon-btn:hover,
+.fi-theme-builder__preview-action-group .fi-theme-builder__preview-icon-active {
+    color: color-mix(in oklab, currentColor 94%, transparent);
+    background: color-mix(in oklab, currentColor 13%, transparent);
+}
+
+.fi-theme-builder__frame-wrap {
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, .35);
+    border-radius: .75rem;
+    background: rgb(15 23 42);
+}
+
+.fi-theme-builder__frame-wrap--desktop {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.fi-theme-builder__frame-wrap--mobile {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.fi-theme-builder__frame {
+    display: block;
+    width: 1440px;
+    height: 1024px;
+    border: 0;
+    background: white;
+    transform-origin: top center;
+    transition: width .2s ease, height .2s ease;
+}
+
+.fi-theme-builder__frame--mobile {
+    width: 390px;
+    height: 844px;
+}
+
+.fi-theme-builder .fi-fo-color-picker-preview {
+    border: 1px solid color-mix(in oklab, currentColor 28%, transparent);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / .55), 0 0 0 1px rgb(0 0 0 / .08);
+}
+
+.fi-theme-builder .fi-fo-field:has(.fi-fo-color-picker .fi-input-wrp-suffix) {
+    container-type: inline-size;
+}
+
+.fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) {
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: .25rem;
+}
+
+.fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-content-ctn {
+    flex: 1 1 9rem;
+    min-width: 0;
+}
+
+.fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-content {
+    min-width: 0;
+}
+
+.fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input {
+    min-width: 0;
+}
+
+.fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-fo-color-picker-preview {
+    flex: 0 0 auto;
+    border-radius: 9999px;
+}
+
+.fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-suffix {
+    margin-inline-start: 0;
+}
+
+@container (max-width: 16rem) {
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) {
+        column-gap: 0;
+        row-gap: .375rem;
+        padding-bottom: .375rem;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-content-ctn {
+        display: contents;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-content {
+        display: contents;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input {
+        order: 1;
+        flex: 1 0 100%;
+        width: 100%;
+        margin-bottom: 0;
+        text-align: center;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-fo-color-picker-preview {
+        order: 2;
+        flex: 0 0 1.25rem;
+        width: 1.25rem;
+        height: 1.25rem;
+        margin-inline: calc(25% - .625rem);
+        padding: 0;
+        border-radius: 9999px;
+        background-clip: border-box;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-suffix {
+        order: 3;
+        flex: 0 0 50%;
+        width: 50%;
+        justify-content: center;
+        margin-inline-start: 0;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-suffix .fi-icon-btn {
+        width: 1.25rem;
+        height: 1.25rem;
+        margin: 0;
+        border-radius: 9999px;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-input-wrp-actions {
+        justify-content: center;
+    }
+
+    .fi-theme-builder .fi-fo-color-picker:has(.fi-input-wrp-suffix) .fi-fo-color-picker-panel {
+        order: 4;
+    }
+}
+
+.fi-theme-builder-font-picker {
+    position: relative;
+}
+
+.fi-theme-builder-font-picker .fi-select-input-btn {
+    width: 100%;
+    min-height: 2.5rem;
+    padding: .5rem .75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: .5rem;
+    border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+    background: color-mix(in oklab, var(--fi-theme-builder-card, Canvas) 92%, transparent);
+    text-align: start;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-loading {
+    padding: .75rem;
+    color: color-mix(in oklab, currentColor 68%, transparent);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-panel {
+    position: absolute;
+    inset-inline: 0;
+    top: calc(100% + .375rem);
+    z-index: 60;
+    width: 100%;
+    max-height: min(25rem, calc(100vh - 14rem));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: .5rem;
+    border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+    background: var(--fi-theme-builder-card, Canvas);
+    box-shadow: 0 1rem 2rem rgb(15 23 42 / .22);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-header {
+    border-bottom: 1px solid color-mix(in oklab, currentColor 12%, transparent);
+}
+
+.fi-theme-builder-font-picker .fi-select-input-search-ctn {
+    padding: .75rem;
+}
+
+.fi-theme-builder-font-picker .fi-select-input-search-ctn .fi-input {
+    width: 100%;
+    border: 1px solid color-mix(in oklab, currentColor 16%, transparent);
+    border-radius: .375rem;
+    background: color-mix(in oklab, currentColor 5%, transparent);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .375rem;
+    padding: 0 .75rem .75rem;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter {
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklab, currentColor 16%, transparent);
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    line-height: 1rem;
+    color: color-mix(in oklab, currentColor 84%, transparent);
+    background: color-mix(in oklab, currentColor 7%, transparent);
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter-active {
+    color: white;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter-active.fi-theme-font-category-serif {
+    border-color: rgb(220 38 38);
+    background: rgb(220 38 38);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter-active.fi-theme-font-category-sans-serif {
+    border-color: rgb(37 99 235);
+    background: rgb(37 99 235);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter-active.fi-theme-font-category-monospace {
+    border-color: rgb(180 83 9);
+    background: rgb(180 83 9);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter-active.fi-theme-font-category-display {
+    border-color: rgb(147 51 234);
+    background: rgb(147 51 234);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-filter-active.fi-theme-font-category-handwriting {
+    border-color: rgb(22 163 74);
+    background: rgb(22 163 74);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-list {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option {
+    width: 100%;
+    min-height: 4.25rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .75rem .875rem;
+    border-bottom: 1px solid color-mix(in oklab, currentColor 8%, transparent);
+    text-align: start;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option:hover,
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-highlighted,
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-selected {
+    background: color-mix(in oklab, currentColor 8%, transparent);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-copy {
+    min-width: 0;
+    display: grid;
+    gap: .25rem;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .95rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: color-mix(in oklab, currentColor 62%, transparent);
+    font-size: .875rem;
+    line-height: 1.35;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-category {
+    flex: 0 0 auto;
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: .375rem;
+    padding: .125rem .5rem;
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-category.fi-theme-font-category-serif {
+    color: rgb(254 202 202);
+    background: rgb(127 29 29 / .72);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-category.fi-theme-font-category-sans-serif {
+    color: rgb(191 219 254);
+    background: rgb(30 64 175 / .72);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-category.fi-theme-font-category-monospace {
+    color: rgb(253 230 138);
+    background: rgb(146 64 14 / .72);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-category.fi-theme-font-category-display {
+    color: rgb(233 213 255);
+    background: rgb(107 33 168 / .72);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-option-category.fi-theme-font-category-handwriting {
+    color: rgb(187 247 208);
+    background: rgb(22 101 52 / .72);
+}
+
+.fi-theme-builder-font-picker .fi-theme-font-picker-empty,
+.fi-theme-builder-font-picker .fi-theme-font-picker-limit {
+    padding: .875rem;
+    color: color-mix(in oklab, currentColor 64%, transparent);
+    font-size: .875rem;
+}
+
+@media (max-width: 1100px) {
+    .fi-theme-builder {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .fi-theme-builder__controls {
+        max-height: none;
+    }
+
+    .fi-theme-builder__frame-wrap {
+        min-height: 640px;
+    }
+}
