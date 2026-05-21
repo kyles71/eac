@@ -33,7 +33,7 @@ final class AdminPanelProvider extends BasePanelProvider
                     ->gridColumns([
                         'default' => 1,
                         'sm' => 2,
-                        'lg' => 3
+                        'lg' => 3,
                     ])
                     ->sectionColumnSpan(1)
                     ->checkboxListColumns([
@@ -45,7 +45,7 @@ final class AdminPanelProvider extends BasePanelProvider
                         'default' => 1,
                     ]),
                 ThemeBuilderPlugin::make()
-                    // ->authorizeUsing(fn (): bool => true),
+                    ->authorizeUsing('Manage:ThemeBuilder'),
             ])
             ->globalSearchFieldSuffix(fn (): ?string => match (Platform::detect()) {
                 Platform::Windows, Platform::Linux => 'CTRL + K',

@@ -6,7 +6,6 @@ use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 
-
 return [
 
     /*
@@ -28,7 +27,7 @@ return [
             'pages' => true,
             'widgets' => true,
             'resources' => true,
-            'custom_permissions' => false,
+            'custom_permissions' => true,
         ],
     ],
 
@@ -232,7 +231,9 @@ return [
     |
     */
 
-    'custom_permissions' => [],
+    'custom_permissions' => [
+        'Manage:ThemeBuilder' => 'Manage Theme Builder',
+    ],
 
     /*
     |--------------------------------------------------------------------------
