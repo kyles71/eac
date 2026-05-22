@@ -12,7 +12,7 @@ class UserPanelProvider extends BasePanelProvider
     {
         $panel = $panel
             ->id('user')
-            ->path('user');
+            ->path('dancefam');
 
         $panel = $this->applySharedConfig($panel);
 
