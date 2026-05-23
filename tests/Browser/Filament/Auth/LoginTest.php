@@ -11,6 +11,8 @@ beforeEach(function () {
         'email' => 'demo@pestphp.com',
         'password' => 'password',
     ]);
+
+    $this->user->assignRole('super_admin');
 });
 
 test('an unauthenticated user can login', function () {
