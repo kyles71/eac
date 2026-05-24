@@ -10,4 +10,9 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    'textmagic' => [
+        'username' => env('TEXTMAGIC_USERNAME'),
+        'api_key' => env('TEXTMAGIC_API_KEY'),
+    ],
+
 ];

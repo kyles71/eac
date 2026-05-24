@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use App\Filament\Actions\SendEmailAction;
-use App\Mail\GenericMail;
+use App\Mail\HandcraftedEmail;
 use Illuminate\Support\Facades\Mail;
 
 it('has the correct default name', function (): void {
@@ -28,21 +28,25 @@ it('can set default to addresses from a closure', function (): void {
     expect($action)->toBeInstanceOf(SendEmailAction::class);
 });
 
-it('sends an email using GenericMail', function (): void {
+it('queues a handcrafted email using the handcrafted mailer', function (): void {
     Mail::fake();
 
     $recipients = ['recipient@example.com'];
     $subject = 'Test Subject';
     $body = 'Test email body content';
 
-    Mail::to($recipients)
-        ->send(new GenericMail(
-            emailSubject: $subject,
-            emailBody: $body,
-        ));
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => $recipients,
+            'subject' => $subject,
+            'body' => $body,
+        ],
+    ]);
 
-    Mail::assertSent(GenericMail::class, function (GenericMail $mail) use ($recipients, $subject): bool {
+    Mail::assertQueued(HandcraftedEmail::class, function (HandcraftedEmail $mail) use ($recipients, $subject, $body): bool {
         return $mail->hasTo($recipients[0])
-            && $mail->emailSubject === $subject;
+            && $mail->usesMailer('handcrafted')
+            && $mail->emailSubject === $subject
+            && $mail->emailBody === $body;
     });
 });

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8901e00dbf2efd2e2b8b8bcd1c1274e0",
+    "content-hash": "a671818dd1ac1164298c6313d2e6589f",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -10351,6 +10351,69 @@
                 }
             ],
             "time": "2026-03-30T13:44:50+00:00"
+        },
+        {
+            "name": "textmagic/textmagic-rest-php-v2",
+            "version": "3.0.50032",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/textmagic/textmagic-rest-php-v2.git",
+                "reference": "16905897ad8e126536b232450b52938ed28e079e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/textmagic/textmagic-rest-php-v2/zipball/16905897ad8e126536b232450b52938ed28e079e",
+                "reference": "16905897ad8e126536b232450b52938ed28e079e",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "ext-mbstring": "*",
+                "guzzlehttp/guzzle": "^7.3",
+                "guzzlehttp/psr7": "^1.7 || ^2.0",
+                "php": "^8.1"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.5",
+                "phpunit/phpunit": "^10.0",
+                "squizlabs/php_codesniffer": "^3.8"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "TextMagic\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "TextMagic",
+                    "email": "developers@textmagic.biz",
+                    "homepage": "https://www.textmagic.com"
+                }
+            ],
+            "description": "PHP SDK for TextMagic API",
+            "homepage": "https://www.textmagic.com",
+            "keywords": [
+                "api",
+                "openapi",
+                "openapi-generator",
+                "openapitools",
+                "php",
+                "rest",
+                "sdk",
+                "sms",
+                "textmagic"
+            ],
+            "support": {
+                "issues": "https://github.com/textmagic/textmagic-rest-php-v2/issues",
+                "source": "https://github.com/textmagic/textmagic-rest-php-v2/tree/v3.0.50032"
+            },
+            "time": "2026-05-21T08:54:23+00:00"
         },
         {
             "name": "tijsverkoyen/css-to-inline-styles",

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Actions;
 
-use App\Mail\GenericMail;
+use App\Mail\HandcraftedEmail;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TagsInput;
@@ -14,17 +14,12 @@ use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Mail;
 
-class SendEmailAction extends Action
+final class SendEmailAction extends Action
 {
     /**
      * @var array<int, string>|Closure(): array<int, string>
      */
     protected array|Closure $defaultTo = [];
-
-    public static function getDefaultName(): ?string
-    {
-        return 'sendEmail';
-    }
 
     protected function setUp(): void
     {
@@ -53,17 +48,23 @@ class SendEmailAction extends Action
                 /** @var array<int, string> $recipients */
                 $recipients = $data['to'];
 
-                Mail::to($recipients)
-                    ->send(new GenericMail(
+                Mail::mailer('handcrafted')
+                    ->to($recipients)
+                    ->queue(new HandcraftedEmail(
                         emailSubject: $data['subject'],
                         emailBody: $data['body'],
                     ));
 
                 Notification::make()
-                    ->title('Email sent')
+                    ->title('Email queued')
                     ->success()
                     ->send();
             });
+    }
+
+    public static function getDefaultName(): ?string
+    {
+        return 'sendEmail';
     }
 
     /**
