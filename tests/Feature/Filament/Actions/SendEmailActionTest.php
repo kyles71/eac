@@ -50,3 +50,158 @@ it('queues a handcrafted email using the handcrafted mailer', function (): void 
             && $mail->emailBody === $body;
     });
 });
+
+it('queues one handcrafted email per recipient by default', function (): void {
+    Mail::fake();
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['first@example.com', 'second@example.com', 'FIRST@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 2);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && ! $mail->hasTo('second@example.com'));
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('second@example.com')
+        && ! $mail->hasTo('first@example.com'));
+});
+
+it('uses the configured handcrafted delivery mode', function (): void {
+    Mail::fake();
+
+    config()->set('mail.mailers.handcrafted.delivery_mode', SendEmailAction::DELIVERY_MODE_GROUPED);
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['first@example.com', 'second@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 1);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && $mail->hasTo('second@example.com'));
+});
+
+it('can queue one handcrafted email to all recipients when grouped mode is set on the action', function (): void {
+    Mail::fake();
+
+    SendEmailAction::make()
+        ->deliveryMode(SendEmailAction::DELIVERY_MODE_GROUPED)
+        ->call([
+            'data' => [
+                'to' => ['first@example.com', 'second@example.com'],
+                'subject' => 'Class update',
+                'body' => 'See you soon.',
+            ],
+        ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 1);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && $mail->hasTo('second@example.com'));
+});
+
+it('uses bcc archive copies for non-Textmagic mailers', function (): void {
+    Mail::fake();
+
+    config()->set('mail.mailers.handcrafted.transport', 'log');
+    config()->set('mail.mailers.handcrafted.archive_to', 'archive@example.com');
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['first@example.com', 'second@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 2);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && $mail->hasBcc('archive@example.com'));
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('second@example.com')
+        && $mail->hasBcc('archive@example.com'));
+});
+
+it('can override archive recipients for a send action instance', function (): void {
+    Mail::fake();
+
+    config()->set('mail.mailers.handcrafted.archive_to', '');
+
+    SendEmailAction::make()
+        ->archiveTo(['archive@example.com'])
+        ->call([
+            'data' => [
+                'to' => ['first@example.com'],
+                'subject' => 'Class update',
+                'body' => 'See you soon.',
+            ],
+        ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 1);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && $mail->hasBcc('archive@example.com'));
+});
+
+it('uses a separate archive email for Textmagic mailers', function (): void {
+    Mail::fake();
+
+    config()->set('mail.mailers.handcrafted.transport', 'textmagic');
+    config()->set('mail.mailers.handcrafted.archive_to', 'archive@example.com');
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['first@example.com', 'second@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 3);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && ! $mail->hasBcc('archive@example.com'));
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('second@example.com')
+        && ! $mail->hasBcc('archive@example.com'));
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('archive@example.com')
+        && ! $mail->hasTo('first@example.com')
+        && ! $mail->hasTo('second@example.com'));
+});
+
+it('does not queue an archive copy when archive recipients are empty', function (): void {
+    Mail::fake();
+
+    config()->set('mail.mailers.handcrafted.archive_to', '');
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['first@example.com', 'second@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 2);
+});
+
+it('can disable archive copies for a send action instance', function (): void {
+    Mail::fake();
+
+    config()->set('mail.mailers.handcrafted.archive_to', 'archive@example.com');
+
+    SendEmailAction::make()
+        ->withoutArchiveCopy()
+        ->call([
+            'data' => [
+                'to' => ['first@example.com'],
+                'subject' => 'Class update',
+                'body' => 'See you soon.',
+            ],
+        ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 1);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
+        && ! $mail->hasBcc('archive@example.com'));
+});

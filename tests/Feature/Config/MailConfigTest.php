@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Mail;
 it('defines provider-neutral mailers that stay on log by default', function (): void {
     expect(config('mail.mailers.transactional.transport'))->toBe('log')
         ->and(config('mail.mailers.handcrafted.transport'))->toBe('log')
+        ->and(config('mail.mailers.handcrafted.delivery_mode'))->toBe('individual')
+        ->and(config('mail.mailers.handcrafted.archive_to'))->toBe('')
         ->and(config('mail.mailers.transactional.textmagic'))->toHaveKeys(['sender_id', 'from_name', 'reply_to'])
         ->and(config('mail.mailers.handcrafted.textmagic'))->toHaveKeys(['sender_id', 'from_name', 'reply_to']);
 });
