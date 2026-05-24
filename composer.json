@@ -24,6 +24,7 @@
         "league/flysystem-aws-s3-v3": "^3.34",
         "nunomaduro/essentials": "^0.1",
         "saade/filament-fullcalendar": "^4.0",
+        "sentry/sentry-laravel": "^4.25",
         "stripe/stripe-php": "^19.4",
         "textmagic/textmagic-rest-php-v2": "^3.0"
     },
