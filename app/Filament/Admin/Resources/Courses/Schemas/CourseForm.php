@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Courses\Schemas;
 use App\Enums\FormTypes;
 use App\Models\Form;
 use App\Models\User;
+use App\Support\MediaDisks;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -73,11 +74,15 @@ final class CourseForm
                     ->schema([
                         SpatieMediaLibraryFileUpload::make('images')
                             ->collection('images')
+                            ->disk(MediaDisks::public())
+                            ->visibility('public')
                             ->multiple()
                             ->reorderable()
                             ->image(),
                         SpatieMediaLibraryFileUpload::make('documents')
                             ->collection('documents')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             ->multiple()
                             ->acceptedFileTypes([
                                 'application/pdf',
@@ -88,6 +93,8 @@ final class CourseForm
                             ]),
                         SpatieMediaLibraryFileUpload::make('videos')
                             ->collection('videos')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             ->multiple()
                             ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
                     ]),

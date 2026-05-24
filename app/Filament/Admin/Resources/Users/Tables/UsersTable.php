@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Users\Tables;
 
 use App\Filament\Actions\SendEmailAction;
+use App\Support\MediaDisks;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
@@ -19,6 +20,8 @@ final class UsersTable
             ->columns([
                 SpatieMediaLibraryImageColumn::make('avatar')
                     ->collection('avatars')
+                    ->disk(MediaDisks::private())
+                    ->visibility('private')
                     // ->conversion('thumb')
                     ->circular(),
                 TextColumn::make('first_name')

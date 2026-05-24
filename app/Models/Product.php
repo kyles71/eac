@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MediaDisks;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -66,11 +67,14 @@ final class Product extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('images');
+        $this->addMediaCollection('images')
+            ->useDisk(MediaDisks::public());
 
-        $this->addMediaCollection('documents');
+        $this->addMediaCollection('documents')
+            ->useDisk(MediaDisks::private());
 
-        $this->addMediaCollection('videos');
+        $this->addMediaCollection('videos')
+            ->useDisk(MediaDisks::private());
     }
 
     // public function registerMediaConversions(?Media $media = null): void

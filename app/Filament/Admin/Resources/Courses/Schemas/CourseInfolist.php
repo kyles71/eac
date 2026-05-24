@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
 use App\Models\Course;
+use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
@@ -37,6 +38,8 @@ final class CourseInfolist
                 SpatieMediaLibraryImageEntry::make('course_images')
                     ->label('Images')
                     ->collection('images')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     // ->conversion('thumb')
                     ->columnSpanFull(),
                 TextEntry::make('created_at')

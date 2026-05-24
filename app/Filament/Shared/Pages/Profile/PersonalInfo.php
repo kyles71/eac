@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Shared\Pages\Profile;
 
-use Filament\Facades\Filament;
+use App\Support\MediaDisks;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Group;
@@ -24,6 +24,19 @@ final class PersonalInfo extends BreezyPersonalInfo
             ->statePath('data');
     }
 
+    public function submit(): void
+    {
+        $data = collect($this->form->getState())->only($this->only)->all();
+        $this->user->update($data);
+
+        $this->form->model($this->user)->saveRelationships();
+
+        $this->sendNotification();
+
+        // this causes the panel switcher to duplicate
+        $this->dispatch('refresh-topbar');
+    }
+
     protected function getProfileFormSchema(): array
     {
         $groupFields = Group::make([
@@ -40,23 +53,12 @@ final class PersonalInfo extends BreezyPersonalInfo
 
         $avatarField = SpatieMediaLibraryFileUpload::make('media')
             ->collection('avatars')
+            ->disk(MediaDisks::private())
+            ->visibility('private')
             ->hiddenLabel(true)
             ->image()
             ->avatar();
 
         return [$avatarField, $groupFields];
-    }
-
-    public function submit(): void
-    {
-        $data = collect($this->form->getState())->only($this->only)->all();
-        $this->user->update($data);
-
-        $this->form->model($this->user)->saveRelationships();
-
-        $this->sendNotification();
-
-        // this causes the panel switcher to duplicate
-        $this->dispatch('refresh-topbar');
     }
 }

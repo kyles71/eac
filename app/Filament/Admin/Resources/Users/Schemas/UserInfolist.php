@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
+use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
@@ -16,11 +17,15 @@ final class UserInfolist
             ->components([
                 SpatieMediaLibraryImageEntry::make('avatar')
                     ->collection('avatars')
+                    ->disk(MediaDisks::private())
+                    ->visibility('private')
                     // ->conversion('thumb')
                     ->circular(),
                 SpatieMediaLibraryImageEntry::make('staff_photo')
                     ->label('Staff Photo')
-                    ->collection('staff-photo'),
+                    ->collection('staff-photo')
+                    ->disk(MediaDisks::private())
+                    ->visibility('private'),
                 // ->conversion('thumb'),
                 TextEntry::make('first_name'),
                 TextEntry::make('last_name'),

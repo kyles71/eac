@@ -10,6 +10,7 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\MediaDisks;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
@@ -59,11 +60,15 @@ final class EventForm
                 ->schema([
                     SpatieMediaLibraryFileUpload::make('images')
                         ->collection('images')
+                        ->disk(MediaDisks::public())
+                        ->visibility('public')
                         ->multiple()
                         ->reorderable()
                         ->image(),
                     SpatieMediaLibraryFileUpload::make('documents')
                         ->collection('documents')
+                        ->disk(MediaDisks::private())
+                        ->visibility('private')
                         ->multiple()
                         ->acceptedFileTypes([
                             'application/pdf',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
+use App\Support\MediaDisks;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
@@ -19,6 +20,8 @@ final class UserForm
             ->components([
                 SpatieMediaLibraryFileUpload::make('avatar')
                     ->collection('avatars')
+                    ->disk(MediaDisks::private())
+                    ->visibility('private')
                     ->image()
                     ->avatar()
                     ->circleCropper()
@@ -50,6 +53,8 @@ final class UserForm
                 SpatieMediaLibraryFileUpload::make('staff_photo')
                     ->label('Staff Photo')
                     ->collection('staff-photo')
+                    ->disk(MediaDisks::private())
+                    ->visibility('private')
                     ->image()
                     ->columnSpanFull(),
             ]);

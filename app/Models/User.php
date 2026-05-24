@@ -6,6 +6,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\CreditTransactionType;
+use App\Support\MediaDisks;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
@@ -25,27 +26,12 @@ use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Traits\HasRoles;
+use Throwable;
 
 final class User extends Authenticatable implements FilamentUser, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'credit_balance' => 'integer',
-            'app_authentication_secret' => 'encrypted',
-            'app_authentication_recovery_codes' => 'encrypted:array',
-        ];
-    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -79,14 +65,28 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     {
         $media = $this->getFirstMedia('avatars');
 
-        return $media?->getUrl();
+        if ($media === null) {
+            return null;
+        }
+
+        if ($media->disk === MediaDisks::private()) {
+            try {
+                return $media->getTemporaryUrl(
+                    now()->addMinutes((int) config('filament.temporary_file_url_expiry_minutes', 30))->endOfHour()
+                );
+            } catch (Throwable) {
+                return $media->getUrl();
+            }
+        }
+
+        return $media->getUrl();
         // return $media?->getUrl('thumb') ?? $media?->getUrl();
     }
 
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
-            return /*$this->hasVerifiedEmail() && */$this->hasAnyRole(['super_admin', 'owner', 'admin']);
+            return /* $this->hasVerifiedEmail() && */ $this->hasAnyRole(['super_admin', 'owner', 'admin']);
         }
 
         return true;
@@ -251,10 +251,28 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('avatars')
+            ->useDisk(MediaDisks::private())
             ->singleFile();
 
         $this->addMediaCollection('staff-photo')
+            ->useDisk(MediaDisks::private())
             ->singleFile();
+    }
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'credit_balance' => 'integer',
+            'app_authentication_secret' => 'encrypted',
+            'app_authentication_recovery_codes' => 'encrypted:array',
+        ];
     }
 
     // public function registerMediaConversions(?Media $media = null): void

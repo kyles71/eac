@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Products\Schemas;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
+use App\Support\MediaDisks;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
@@ -106,11 +107,15 @@ final class ProductForm
                     ->schema([
                         SpatieMediaLibraryFileUpload::make('images')
                             ->collection('images')
+                            ->disk(MediaDisks::public())
+                            ->visibility('public')
                             ->multiple()
                             ->reorderable()
                             ->image(),
                         SpatieMediaLibraryFileUpload::make('documents')
                             ->collection('documents')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             ->multiple()
                             ->acceptedFileTypes([
                                 'application/pdf',
@@ -121,6 +126,8 @@ final class ProductForm
                             ]),
                         SpatieMediaLibraryFileUpload::make('videos')
                             ->collection('videos')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             ->multiple()
                             ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
                     ]),

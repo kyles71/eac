@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MediaDisks;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,9 +46,11 @@ final class Event extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('images');
+        $this->addMediaCollection('images')
+            ->useDisk(MediaDisks::public());
 
-        $this->addMediaCollection('documents');
+        $this->addMediaCollection('documents')
+            ->useDisk(MediaDisks::private());
     }
 
     // public function registerMediaConversions(?Media $media = null): void

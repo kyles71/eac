@@ -7,11 +7,13 @@ use App\Models\Course;
 use App\Models\Event;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\MediaDisks;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     Storage::fake('public');
+    Storage::fake('local');
 });
 
 it('registers media collections on Costume', function () {
@@ -20,7 +22,8 @@ it('registers media collections on Costume', function () {
     $costume->addMedia(UploadedFile::fake()->image('photo.jpg'))
         ->toMediaCollection('images');
 
-    expect($costume->getMedia('images'))->toHaveCount(1);
+    expect($costume->getMedia('images'))->toHaveCount(1)
+        ->and($costume->getFirstMedia('images')->disk)->toBe(MediaDisks::public());
 });
 
 it('allows multiple images on Costume', function () {
@@ -43,7 +46,9 @@ it('registers media collections on Event', function () {
         ->toMediaCollection('documents');
 
     expect($event->getMedia('images'))->toHaveCount(1)
-        ->and($event->getMedia('documents'))->toHaveCount(1);
+        ->and($event->getFirstMedia('images')->disk)->toBe(MediaDisks::public())
+        ->and($event->getMedia('documents'))->toHaveCount(1)
+        ->and($event->getFirstMedia('documents')->disk)->toBe(MediaDisks::private());
 });
 
 it('registers media collections on Product', function () {
@@ -57,8 +62,11 @@ it('registers media collections on Product', function () {
         ->toMediaCollection('videos');
 
     expect($product->getMedia('images'))->toHaveCount(1)
+        ->and($product->getFirstMedia('images')->disk)->toBe(MediaDisks::public())
         ->and($product->getMedia('documents'))->toHaveCount(1)
-        ->and($product->getMedia('videos'))->toHaveCount(1);
+        ->and($product->getFirstMedia('documents')->disk)->toBe(MediaDisks::private())
+        ->and($product->getMedia('videos'))->toHaveCount(1)
+        ->and($product->getFirstMedia('videos')->disk)->toBe(MediaDisks::private());
 });
 
 it('registers media collections on Course', function () {
@@ -72,8 +80,11 @@ it('registers media collections on Course', function () {
         ->toMediaCollection('videos');
 
     expect($course->getMedia('images'))->toHaveCount(1)
+        ->and($course->getFirstMedia('images')->disk)->toBe(MediaDisks::public())
         ->and($course->getMedia('documents'))->toHaveCount(1)
-        ->and($course->getMedia('videos'))->toHaveCount(1);
+        ->and($course->getFirstMedia('documents')->disk)->toBe(MediaDisks::private())
+        ->and($course->getMedia('videos'))->toHaveCount(1)
+        ->and($course->getFirstMedia('videos')->disk)->toBe(MediaDisks::private());
 });
 
 it('registers media collections on User', function () {
@@ -85,7 +96,9 @@ it('registers media collections on User', function () {
         ->toMediaCollection('staff-photo');
 
     expect($user->getMedia('avatars'))->toHaveCount(1)
-        ->and($user->getMedia('staff-photo'))->toHaveCount(1);
+        ->and($user->getFirstMedia('avatars')->disk)->toBe(MediaDisks::private())
+        ->and($user->getMedia('staff-photo'))->toHaveCount(1)
+        ->and($user->getFirstMedia('staff-photo')->disk)->toBe(MediaDisks::private());
 });
 
 it('enforces single file on User avatar collection', function () {

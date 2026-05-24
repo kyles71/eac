@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Contracts\Productable;
+use App\Support\MediaDisks;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
-final class Costume extends Model implements Productable, HasMedia
+final class Costume extends Model implements HasMedia, Productable
 {
     /** @use HasFactory<\Database\Factories\CostumeFactory> */
     use HasFactory;
+
     use InteractsWithMedia;
 
     protected $casts = [
@@ -33,7 +35,8 @@ final class Costume extends Model implements Productable, HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('images');
+        $this->addMediaCollection('images')
+            ->useDisk(MediaDisks::public());
     }
 
     // public function registerMediaConversions(?Media $media = null): void

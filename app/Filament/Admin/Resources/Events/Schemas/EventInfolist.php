@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
+use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
@@ -16,6 +17,8 @@ final class EventInfolist
             ->components([
                 SpatieMediaLibraryImageEntry::make('images')
                     ->collection('images')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     // ->conversion('thumb')
                     ->columnSpanFull(),
                 TextEntry::make('name'),

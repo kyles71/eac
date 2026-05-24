@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Products\Tables;
 
+use App\Support\MediaDisks;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\IconColumn;
@@ -20,6 +21,8 @@ final class ProductsTable
             ->columns([
                 SpatieMediaLibraryImageColumn::make('images')
                     ->collection('images')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     // ->conversion('thumb')
                     ->circular(),
                 TextColumn::make('name')

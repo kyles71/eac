@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Costumes\Tables;
 
+use App\Support\MediaDisks;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -17,6 +18,8 @@ final class CostumesTable
             ->columns([
                 SpatieMediaLibraryImageColumn::make('images')
                     ->collection('images')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     // ->conversion('thumb')
                     ->circular(),
                 TextColumn::make('name')
