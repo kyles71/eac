@@ -17,6 +17,10 @@ final class FormUser extends Model
     /** @use HasFactory<FormUserFactory> */
     use HasFactory;
 
+    protected $casts = [
+        'date_signed' => 'date',
+    ];
+
     public function form(): BelongsTo
     {
         return $this->belongsTo(Form::class);

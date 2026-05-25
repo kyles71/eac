@@ -24,7 +24,7 @@ final class EventFactory extends Factory
     public function definition(): array
     {
         $start_time = Carbon::create(fake()->dateTimeThisMonth('last day of this month'))
-            ->setHours(fake()->numberBetween(17, 20))
+            ->setHours(fake()->numberBetween(21, 23))
             ->setMinutes(0)
             ->setSeconds(0);
 

@@ -14,6 +14,7 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Saade\FilamentFullCalendar\Actions\CreateAction;
 use Saade\FilamentFullCalendar\Widgets\FullCalendarWidget;
@@ -54,10 +55,13 @@ final class CalendarWidget extends FullCalendarWidget
 
     public function fetchEvents(array $fetchInfo): array
     {
+        $startsAt = Carbon::parse($fetchInfo['start'])->setTimezone(config('app.timezone'));
+        $endsAt = Carbon::parse($fetchInfo['end'])->setTimezone(config('app.timezone'));
+
         return Event::query()
             ->select('events.*')
-            ->where('events.start_time', '>=', $fetchInfo['start'])
-            ->where('events.end_time', '<=', $fetchInfo['end'])
+            ->where('events.start_time', '>=', $startsAt)
+            ->where('events.end_time', '<=', $endsAt)
             ->whereNotNull('events.calendar_id')
             ->when(
                 $this->calendar?->id > 2,

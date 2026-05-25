@@ -81,7 +81,7 @@ final class MyPaymentPlans extends TablePage
                 TextColumn::make('next_due')
                     ->label('Next Due')
                     ->state(function (PaymentPlan $record): string {
-                        /** @var \App\Models\Installment|null $nextInstallment */
+                        /** @var Installment|null $nextInstallment */
                         $nextInstallment = $record->installments
                             ->where('status', InstallmentStatus::Pending)
                             ->sortBy('due_date')
@@ -145,7 +145,9 @@ final class MyPaymentPlans extends TablePage
                                             ->badge(),
                                         TextEntry::make('paid_at')
                                             ->label('Paid At')
-                                            ->state($installment->paid_at?->format('M j, Y') ?? '—'),
+                                            ->state($installment->paid_at)
+                                            ->dateTime('M j, Y')
+                                            ->placeholder('—'),
                                     ]),
                             ])
                             ->compact()

@@ -22,7 +22,7 @@ final class FormUserFactory extends Factory
             'responseable_type' => null,
             'responseable_id' => null,
             'signature' => fake()->name(),
-            'date_signed' => fake()->dateTimeBetween('-1 month', 'now'),
+            'date_signed' => fake()->date(),
         ];
     }
 

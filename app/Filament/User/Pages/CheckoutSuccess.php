@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -75,7 +74,8 @@ final class CheckoutSuccess extends Page
                         ->state(fn (): string => $this->order->formattedTotal()),
                     TextEntry::make('date')
                         ->label('Date')
-                        ->state(fn (): string => $this->order->created_at->format('M j, Y g:i A')),
+                        ->state(fn () => $this->order->created_at)
+                        ->dateTime('M j, Y g:i A'),
                 ]),
             Section::make('Items Purchased')
                 ->schema(

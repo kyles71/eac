@@ -6,6 +6,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Dates are stored in UTC and displayed in the local business timezone.
+    |
+    */
+
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'America/Detroit'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Default User Configuration
     |--------------------------------------------------------------------------
     |

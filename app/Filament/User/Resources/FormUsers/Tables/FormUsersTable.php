@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Resources\FormUsers\Tables;
 
 use App\Models\FormUser;
@@ -7,7 +9,7 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class FormUsersTable
+final class FormUsersTable
 {
     public static function configure(Table $table): Table
     {

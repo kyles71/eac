@@ -1,17 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Resources\FormUsers\Schemas;
 
 use App\Enums\FormTypes;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Group;
-use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 
-class FormUserForm
+final class FormUserForm
 {
     public static function configure(Schema $schema, ?FormTypes $form_type = null): Schema
     {
@@ -24,7 +23,7 @@ class FormUserForm
                     ->columnSpanFull()
                     ->components(
                         $form_type->getFormSchemaClass()::configure($schema)->getComponents() // maybe use clone instead
-                    )
+                    ),
             ];
         }
 

@@ -15,6 +15,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
+use Filament\Support\Facades\FilamentTimezone;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -36,6 +37,10 @@ final class FilamentUiServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $displayTimezone = config('app.display_timezone');
+
+        FilamentTimezone::set(is_string($displayTimezone) ? $displayTimezone : 'UTC');
+
         // When a field has multiple words like "due_date", the label changes from "Due date" to "Due Date".
         Field::configureUsing(function (Field $field) {
             $field->label(function (Component $component) {
@@ -131,8 +136,8 @@ final class FilamentUiServiceProvider extends ServiceProvider
         Schema::configureUsing(function (Schema $schema) {
             return $schema
                 ->defaultDateDisplayFormat('m/d/Y')
-                ->defaultDateTimeDisplayFormat('h:i A')
-                ->defaultTimeDisplayFormat('m/d/Y h:i A');
+                ->defaultDateTimeDisplayFormat('m/d/Y g:ia')
+                ->defaultTimeDisplayFormat('g:ia');
         });
     }
 }

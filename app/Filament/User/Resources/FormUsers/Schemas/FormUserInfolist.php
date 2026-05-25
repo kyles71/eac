@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Resources\FormUsers\Schemas;
 
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
-class FormUserInfolist
+final class FormUserInfolist
 {
     public static function configure(Schema $schema): Schema
     {

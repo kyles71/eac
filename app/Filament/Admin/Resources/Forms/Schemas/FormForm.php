@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Resources\Forms\Schemas;
 
 use App\Enums\FormTypes;
@@ -9,7 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
-class FormForm
+final class FormForm
 {
     public static function configure(Schema $schema): Schema
     {
