@@ -45,6 +45,7 @@ return [
             'secret' => env('IONOS_PRIVATE_SECRET_ACCESS_KEY'),
             'region' => env('IONOS_REGION', 'us-central-1'),
             'bucket' => env('IONOS_PRIVATE_BUCKET'),
+            'url' => env('IONOS_PRIVATE_URL'),
             'endpoint' => env('IONOS_ENDPOINT'),
             'use_path_style_endpoint' => env('IONOS_USE_PATH_STYLE_ENDPOINT', true),
             'visibility' => 'private',
