@@ -52,17 +52,16 @@ final class EnrollmentsTable
                     ->schema([
                         Select::make('student_id')
                             ->required()
-                            ->relationship('student', 'id', function (Builder $query, Enrollment $record) {
-                                return $query->where('user_id', $record->user_id);
-                                // return $query->where('user_id', auth()->id());
-                            })
-                            ->getOptionLabelFromRecordUsing(fn (Student $student) => $student->fullName)
-                            ->createOptionForm(fn (Schema $schema, Enrollment $record): \Filament\Schemas\Schema => StudentForm::configure($schema, $record->user_id))
-                            // ->createOptionForm(fn (Schema $schema) => StudentForm::configure($schema, auth()->id()))
+                            ->searchableRelationship(
+                                name: 'student',
+                                searchColumns: ['first_name', 'last_name'],
+                                labelFromRecord: fn (Student $student): string => $student->fullName,
+                                modifyQueryUsing: fn (Builder $query, Enrollment $record): Builder => $query->where('user_id', $record->user_id),
+                                orderBy: ['first_name', 'last_name'],
+                            )
+                            ->createOptionForm(fn (Schema $schema, Enrollment $record): Schema => StudentForm::configure($schema, $record->user_id))
                             ->createOptionUsing(function (array $data, Enrollment $record): int {
                                 return $record->user->students()->create($data)->getKey();
-                                // will this assign to the correct user if being impersonated?
-                                // return auth()->user()->students()->create($data)->getKey();
                             }),
                     ]),
             ]);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Support\Filament\SelectSearch;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\DatePicker;
@@ -87,6 +89,25 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->validationMessages([
                     'min' => 'Please enter a valid phone number including area code.',
                 ]);
+        });
+
+        Select::macro('searchableRelationship', function (
+            string $name,
+            array $searchColumns,
+            Closure $labelFromRecord,
+            ?Closure $modifyQueryUsing = null,
+            array $orderBy = [],
+            string $titleAttribute = 'id',
+        ): Select {
+            return SelectSearch::relationship(
+                select: $this,
+                name: $name,
+                searchColumns: $searchColumns,
+                labelFromRecord: $labelFromRecord,
+                modifyQueryUsing: $modifyQueryUsing,
+                orderBy: $orderBy,
+                titleAttribute: $titleAttribute,
+            );
         });
 
         // if an action is a modal, default to slideover

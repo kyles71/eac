@@ -17,6 +17,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Spatie\Permission\Models\Role;
 
 final class CourseForm
 {
@@ -40,16 +41,15 @@ final class CourseForm
                     ->numeric()
                     ->default(60),
                 Select::make('teacher_id')
+                    ->label('Teacher')
                     ->preload()
-                    ->searchable()
-                    // ->createOptionForm(UserForm::configure($schema))
-                    // ->editOptionForm(User::getForm())
-                    ->relationship(
+                    ->searchableRelationship(
                         name: 'teacher',
-                        titleAttribute: 'id',
-                        modifyQueryUsing: fn (Builder $query) => $query->orderBy('first_name')->orderBy('last_name'),
-                    )
-                    ->getOptionLabelFromRecordUsing(fn (User $user) => $user->fullName),
+                        searchColumns: ['first_name', 'last_name'],
+                        labelFromRecord: fn (User $user): string => $user->fullName,
+                        modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),
+                        orderBy: ['first_name', 'last_name'],
+                    ),
                 TextInput::make('guest_teacher'),
                 Select::make('courseForms')
                     ->label('Forms')
@@ -99,5 +99,14 @@ final class CourseForm
                             ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
                     ]),
             ]);
+    }
+
+    public static function scopeTeacherOptions(Builder $query): Builder
+    {
+        if (! Role::query()->where('name', 'teacher')->exists()) {
+            return $query;
+        }
+
+        return $query->role('teacher');
     }
 }

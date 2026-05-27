@@ -24,20 +24,30 @@ final class EnrollmentForm
                     ->relationship('course', 'name')
                     ->required(),
                 Select::make('user_id')
-                    ->relationship('user', 'id', fn (Builder $query, Get $get) => $query->when($get('student_id'), function ($q) use ($get): void {
-                        $q->select('users.*')
-                            ->join('students', 'students.user_id', '=', 'users.id')
-                            ->where('students.id', $get('student_id'));
-                    })->orderBy('first_name')->orderBy('last_name'))
-                    ->getOptionLabelFromRecordUsing(fn (User $user) => $user->fullName)
                     ->live()
-                    ->required(),
+                    ->required()
+                    ->searchableRelationship(
+                        name: 'user',
+                        searchColumns: ['first_name', 'last_name'],
+                        labelFromRecord: fn (User $user): string => $user->fullName,
+                        modifyQueryUsing: fn (Builder $query, Get $get): Builder => $query->when($get('student_id'), function (Builder $query) use ($get): void {
+                            $query->select('users.*')
+                                ->join('students', 'students.user_id', '=', 'users.id')
+                                ->where('students.id', $get('student_id'));
+                        }),
+                        orderBy: ['first_name', 'last_name'],
+                    ),
                 Select::make('student_id')
                     ->live()
                     ->required()
-                    ->relationship('student', 'id', fn(Builder $query, Get $get) => $query->when($get('user_id'), fn ($q) => $q->where('user_id', $get('user_id'))->orderBy('first_name')->orderBy('last_name')))
-                    ->getOptionLabelFromRecordUsing(fn (Student $student) => $student->fullName)
-                    ->createOptionForm(fn (Schema $schema, Get $get): \Filament\Schemas\Schema => StudentForm::configure($schema, $get('user_id')))
+                    ->searchableRelationship(
+                        name: 'student',
+                        searchColumns: ['first_name', 'last_name'],
+                        labelFromRecord: fn (Student $student): string => $student->fullName,
+                        modifyQueryUsing: fn (Builder $query, Get $get): Builder => $query->when($get('user_id'), fn (Builder $query, mixed $userId): Builder => $query->where('user_id', $userId)),
+                        orderBy: ['first_name', 'last_name'],
+                    )
+                    ->createOptionForm(fn (Schema $schema, Get $get): Schema => StudentForm::configure($schema, $get('user_id')))
                     ->createOptionUsing(function (array $data, Get $get): int {
                         // should validate user_id
                         $data['user_id'] = $get('user_id');

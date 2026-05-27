@@ -8,7 +8,6 @@ use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
 
 final class StudentForm
 {
@@ -23,9 +22,12 @@ final class StudentForm
                 Select::make('user_id')
                     ->hidden(fn (): bool => $user_id !== null)
                     ->preload()
-                    ->relationship('user', 'id', fn (Builder $query) => $query->orderBy('first_name')->orderBy('last_name'))
-                    ->getOptionLabelFromRecordUsing(fn (User $record): string => "{$record->first_name} {$record->last_name}")
-                    ->searchable(['first_name', 'last_name']),
+                    ->searchableRelationship(
+                        name: 'user',
+                        searchColumns: ['first_name', 'last_name'],
+                        labelFromRecord: fn (User $user): string => $user->fullName,
+                        orderBy: ['first_name', 'last_name'],
+                    ),
             ]);
     }
 }
