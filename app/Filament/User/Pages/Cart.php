@@ -8,11 +8,16 @@ use App\Actions\Store\ApplyCode;
 use App\Actions\Store\CreateOrder;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
+use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanMethod;
+use App\Enums\ProductType;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
+use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
+use App\Models\Product;
+use App\Models\RestrictedCredit;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
@@ -26,7 +31,6 @@ use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -44,6 +48,10 @@ final class Cart extends Page implements HasTable
         makeTable as makeBaseTable;
     }
 
+    public const string PAYMENT_OPTION_PAY_IN_FULL = 'pay_in_full';
+
+    private const string PAYMENT_OPTION_TEMPLATE_PREFIX = 'template:';
+
     public ?int $appliedDiscountCodeId = null;
 
     public string $appliedDiscountDisplay = '';
@@ -52,7 +60,7 @@ final class Cart extends Page implements HasTable
 
     public string $code = '';
 
-    public ?int $selectedPaymentPlanTemplateId = null;
+    public string $selectedPaymentOption = self::PAYMENT_OPTION_PAY_IN_FULL;
 
     public ?string $selectedPaymentPlanMethod = null;
 
@@ -115,19 +123,12 @@ final class Cart extends Page implements HasTable
                                 ->visible(fn (): bool => $this->appliedDiscountCodeId !== null),
                             Checkbox::make('useCredit')
                                 ->label(function (): string {
-                                    /** @var \App\Models\User $user */
-                                    $user = auth()->user();
-                                    $creditBalance = $user->credit_balance ?? 0;
+                                    $creditBalance = $this->getPreviewStoreCreditBalance();
 
                                     return 'Apply store credit ('.format_money($creditBalance).')';
                                 })
                                 ->live()
-                                ->visible(function (): bool {
-                                    /** @var \App\Models\User $user */
-                                    $user = auth()->user();
-
-                                    return ($user->credit_balance ?? 0) > 0;
-                                }),
+                                ->visible(fn (): bool => $this->getPreviewStoreCreditBalance() > 0),
                         ])
                         ->grow(false)
                         ->columnSpanFull(),
@@ -152,8 +153,31 @@ final class Cart extends Page implements HasTable
     {
         return CartItem::query()
             ->where('user_id', auth()->id())
-            ->with('product')
+            ->with('product.productable')
             ->get();
+    }
+
+    /**
+     * Get pending orders whose reserved credits would be released before creating a new checkout order.
+     *
+     * @return Collection<int, Order>
+     */
+    public function getPendingOrdersProperty(): Collection
+    {
+        return Order::query()
+            ->where('user_id', auth()->id())
+            ->where('status', OrderStatus::Pending)
+            ->get();
+    }
+
+    public function getPendingStoreCreditAmountProperty(): int
+    {
+        return $this->pendingOrders->sum('credit_applied');
+    }
+
+    public function getPendingRestrictedCreditAmountProperty(): int
+    {
+        return $this->pendingOrders->sum('restricted_credit_applied');
     }
 
     /**
@@ -187,9 +211,6 @@ final class Cart extends Page implements HasTable
      */
     public function getRestrictedCreditAmountProperty(): int
     {
-        /** @var \App\Models\User $user */
-        $user = auth()->user();
-
         $totalRestricted = 0;
         $remaining = $this->subtotal - $this->discountAmount;
 
@@ -200,7 +221,7 @@ final class Cart extends Page implements HasTable
             }
 
             $itemTotal = $cartItem->product->price * $cartItem->quantity;
-            $available = $user->getRestrictedCreditForProduct($cartItem->product);
+            $available = $this->getPreviewRestrictedCreditForProduct($cartItem->product);
 
             if ($available > 0) {
                 $applicable = min($available, $itemTotal, $remaining);
@@ -221,11 +242,9 @@ final class Cart extends Page implements HasTable
             return 0;
         }
 
-        /** @var \App\Models\User $user */
-        $user = auth()->user();
-        $creditBalance = $user->credit_balance ?? 0;
+        $creditBalance = $this->getPreviewStoreCreditBalance();
 
-        return min($creditBalance, $this->subtotal - $this->discountAmount - $this->restrictedCreditAmount);
+        return min($creditBalance, max(0, $this->subtotal - $this->discountAmount - $this->restrictedCreditAmount));
     }
 
     /**
@@ -243,7 +262,17 @@ final class Cart extends Page implements HasTable
      */
     public function getPaymentPlanTemplatesProperty(): Collection
     {
-        return PaymentPlanTemplate::query()->active()->get();
+        if ($this->cartItems->isEmpty()) {
+            return collect();
+        }
+
+        return PaymentPlanTemplate::query()
+            ->active()
+            ->get()
+            ->filter(fn (PaymentPlanTemplate $template): bool => $this->cartItems->every(
+                fn (CartItem $cartItem): bool => $this->paymentPlanTemplateMatchesCartItem($template, $cartItem),
+            ))
+            ->values();
     }
 
     /**
@@ -251,11 +280,13 @@ final class Cart extends Page implements HasTable
      */
     public function getSelectedTemplateProperty(): ?PaymentPlanTemplate
     {
-        if ($this->selectedPaymentPlanTemplateId === null) {
+        $templateId = $this->selectedPaymentPlanTemplateId();
+
+        if ($templateId === null) {
             return null;
         }
 
-        return $this->paymentPlanTemplates->firstWhere('id', $this->selectedPaymentPlanTemplateId);
+        return $this->paymentPlanTemplates->firstWhere('id', $templateId);
     }
 
     /**
@@ -287,6 +318,7 @@ final class Cart extends Page implements HasTable
             $updateQuantity = new UpdateCartQuantity;
             $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity + 1);
 
+            $this->refreshCartState();
             $this->dispatch('refresh-sidebar');
         } catch (InvalidArgumentException $e) {
             Notification::make()
@@ -316,6 +348,7 @@ final class Cart extends Page implements HasTable
             $updateQuantity = new UpdateCartQuantity;
             $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity - 1);
 
+            $this->refreshCartState();
             $this->dispatch('refresh-sidebar');
         } catch (InvalidArgumentException $e) {
             Notification::make()
@@ -332,6 +365,7 @@ final class Cart extends Page implements HasTable
             $removeFromCart = new RemoveFromCart;
             $removeFromCart->handle(auth()->user(), $cartItemId);
 
+            $this->refreshCartState();
             $this->dispatch('refresh-sidebar');
 
             Notification::make()
@@ -392,12 +426,15 @@ final class Cart extends Page implements HasTable
                 ->danger()
                 ->send();
         }
+
+        $this->refreshCartState();
     }
 
     public function removeDiscount(): void
     {
         $this->appliedDiscountCodeId = null;
         $this->appliedDiscountDisplay = '';
+        $this->refreshCartState();
 
         Notification::make()
             ->title('Discount removed')
@@ -405,13 +442,21 @@ final class Cart extends Page implements HasTable
             ->send();
     }
 
-    public function updatedSelectedPaymentPlanTemplateId(): void
+    public function updatedUseCredit(): void
     {
-        if ($this->selectedPaymentPlanTemplateId === null) {
-            $this->selectedPaymentPlanMethod = null;
-        } elseif ($this->selectedPaymentPlanMethod === null) {
-            $this->selectedPaymentPlanMethod = PaymentPlanMethod::AutoCharge->value;
-        }
+        $this->refreshCartState();
+    }
+
+    public function updatedSelectedPaymentOption(): void
+    {
+        unset($this->selectedTemplate, $this->amountDueToday);
+
+        $this->syncSelectedPaymentPlanMethod();
+    }
+
+    public function updatedSelectedPaymentPlanMethod(): void
+    {
+        $this->syncSelectedPaymentPlanMethod();
     }
 
     public function checkoutAction(): Action
@@ -423,12 +468,9 @@ final class Cart extends Page implements HasTable
             ->size('lg')
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
             ->slideOver(false)
-            ->modalHidden(function (Get $get): bool {
-                return $get('selectedPaymentPlanMethod') === null;
-            })
-            ->schema(function (Get $get): array {
-                // Only return schema if we want to show the modal
-                if ($get('selectedPaymentPlanMethod') === null) {
+            ->modalHidden(fn (): bool => $this->selectedTemplate === null)
+            ->schema(function (): array {
+                if ($this->selectedTemplate === null) {
                     return [];
                 }
 
@@ -457,7 +499,7 @@ final class Cart extends Page implements HasTable
                                 ->helperText(new HtmlString('<p>By checking this box, you agree to the terms and conditions.</p>
                                     <p class="text-red" x-show="! scrolledToBottom"><strong>You must scroll to the bottom of the Terms & Conditions to select this checkbox.</strong></p>'))
                                 ->extraInputAttributes(['x-bind:disabled' => '!scrolledToBottom']),
-                        ])
+                        ]),
                 ];
             })
             ->action(function (): void {
@@ -470,11 +512,11 @@ final class Cart extends Page implements HasTable
 
                     /** @var \App\Models\User $user */
                     $user = auth()->user();
-                    $creditToApply = $this->useCredit ? ($user->credit_balance ?? 0) : 0;
+                    $creditToApply = $this->useCredit ? $this->getPreviewStoreCreditBalance() : 0;
 
                     $paymentPlanTemplate = $this->selectedTemplate;
 
-                    $paymentPlanMethod = $this->selectedPaymentPlanMethod !== null
+                    $paymentPlanMethod = $paymentPlanTemplate !== null && $this->selectedPaymentPlanMethod !== null
                         ? PaymentPlanMethod::from($this->selectedPaymentPlanMethod)
                         : null;
 
@@ -486,7 +528,7 @@ final class Cart extends Page implements HasTable
                         $paymentPlanMethod,
                     );
 
-                    if ($order->status === \App\Enums\OrderStatus::Completed) {
+                    if ($order->status === OrderStatus::Completed) {
                         $this->redirect(CheckoutSuccess::getUrl().'?order_id='.$order->id);
                     } else {
                         $this->redirect(Checkout::getUrl());
@@ -510,41 +552,45 @@ final class Cart extends Page implements HasTable
     {
         $components = [];
 
-        if ($this->paymentPlanTemplates->isNotEmpty()) {
-            $components[] = Select::make('selectedPaymentPlanTemplateId')
-                ->label('Payment Option')
-                ->options(
-                    $this->paymentPlanTemplates
-                        ->mapWithKeys(fn (PaymentPlanTemplate $template): array => [
-                            $template->id => "{$template->number_of_installments} {$template->frequency->value} Payments",
-                        ])
-                        ->prepend('Pay in Full', '')
-                        ->all()
-                )
-                ->live();
+        $components[] = Select::make('selectedPaymentOption')
+            ->label('Payment Option')
+            ->options(fn (): array => [
+                self::PAYMENT_OPTION_PAY_IN_FULL => 'Pay In Full',
+                ...$this->paymentPlanTemplates
+                    ->mapWithKeys(fn (PaymentPlanTemplate $template): array => [
+                        $this->paymentOptionForTemplate($template) => "{$template->number_of_installments} {$template->frequency->value} Payments",
+                    ])
+                    ->all(),
+            ])
+            ->default(self::PAYMENT_OPTION_PAY_IN_FULL)
+            ->searchable(false)
+            ->selectablePlaceholder(false)
+            ->visible(fn (): bool => $this->paymentPlanTemplates->isNotEmpty())
+            ->live();
 
-            $components[] = Select::make('selectedPaymentPlanMethod')
-                ->label('Payment Plan Method')
-                ->options(PaymentPlanMethod::class)
-                ->default(PaymentPlanMethod::AutoCharge->value)
-                ->visible(fn (): bool => $this->selectedTemplate !== null)
-                ->required(fn (): bool => $this->selectedTemplate !== null)
-                ->live();
-        }
-
-        $discountLabel = $this->discountAmount > 0 && $this->appliedDiscountDisplay !== ''
-            ? "Discount ({$this->appliedDiscountDisplay})"
-            : null;
+        $components[] = Select::make('selectedPaymentPlanMethod')
+            ->label('Payment Plan Method')
+            ->options(PaymentPlanMethod::class)
+            ->default(PaymentPlanMethod::AutoCharge->value)
+            ->visible(fn (): bool => $this->selectedTemplate !== null)
+            ->required(fn (): bool => $this->selectedTemplate !== null)
+            ->live();
 
         $components = array_merge($components, OrderSummarySchema::make(
-            subtotal: $this->subtotal,
-            discountAmount: $this->discountAmount,
-            discountLabel: $discountLabel,
-            restrictedCreditAmount: $this->restrictedCreditAmount,
-            creditAmount: $this->creditAmount,
-            total: $this->grandTotal,
-            template: $this->selectedTemplate,
-            amountDueToday: $this->selectedTemplate !== null ? $this->amountDueToday : null,
+            subtotal: fn (): int => $this->subtotal,
+            discountAmount: fn (): int => $this->discountAmount,
+            discountLabel: function (): ?string {
+                if ($this->discountAmount <= 0 || $this->appliedDiscountDisplay === '') {
+                    return null;
+                }
+
+                return "Discount ({$this->appliedDiscountDisplay})";
+            },
+            restrictedCreditAmount: fn (): int => $this->restrictedCreditAmount,
+            creditAmount: fn (): int => $this->creditAmount,
+            total: fn (): int => $this->grandTotal,
+            template: fn (): ?PaymentPlanTemplate => $this->selectedTemplate,
+            amountDueToday: fn (): ?int => $this->selectedTemplate !== null ? $this->amountDueToday : null,
         ));
 
         $components[] = $this->checkoutAction;
@@ -625,5 +671,127 @@ final class Cart extends Page implements HasTable
                     ->icon(Heroicon::OutlinedShoppingBag)
                     ->url(Store::getUrl()),
             ]);
+    }
+
+    private function syncSelectedPaymentPlanMethod(): void
+    {
+        if ($this->selectedTemplate === null) {
+            $this->selectedPaymentPlanMethod = null;
+        } elseif ($this->selectedPaymentPlanMethod === null) {
+            $this->selectedPaymentPlanMethod = PaymentPlanMethod::AutoCharge->value;
+        }
+    }
+
+    private function selectedPaymentPlanTemplateId(): ?int
+    {
+        if (! str_starts_with($this->selectedPaymentOption, self::PAYMENT_OPTION_TEMPLATE_PREFIX)) {
+            return null;
+        }
+
+        $templateId = (int) mb_substr($this->selectedPaymentOption, mb_strlen(self::PAYMENT_OPTION_TEMPLATE_PREFIX));
+
+        return $templateId > 0 ? $templateId : null;
+    }
+
+    private function paymentOptionForTemplate(PaymentPlanTemplate $template): string
+    {
+        return self::PAYMENT_OPTION_TEMPLATE_PREFIX.$template->id;
+    }
+
+    private function paymentPlanTemplateMatchesCartItem(PaymentPlanTemplate $template, CartItem $cartItem): bool
+    {
+        $lineTotal = $cartItem->product->price * $cartItem->quantity;
+        $productType = ProductType::fromProductableType($cartItem->product->productable_type);
+
+        return in_array($template->product_type, [ProductType::Any, $productType], true)
+            && $template->min_price <= $lineTotal
+            && $template->max_price >= $lineTotal;
+    }
+
+    private function refreshCartState(): void
+    {
+        foreach ([
+            'cartItems',
+            'subtotal',
+            'discountAmount',
+            'restrictedCreditAmount',
+            'creditAmount',
+            'grandTotal',
+            'pendingOrders',
+            'pendingStoreCreditAmount',
+            'pendingRestrictedCreditAmount',
+            'paymentPlanTemplates',
+            'selectedTemplate',
+            'amountDueToday',
+        ] as $property) {
+            unset($this->{$property});
+        }
+
+        $this->flushCachedTableRecords();
+
+        if (! $this->selectedPaymentPlanTemplateIsEligible()) {
+            $this->selectedPaymentOption = self::PAYMENT_OPTION_PAY_IN_FULL;
+        }
+
+        $this->syncSelectedPaymentPlanMethod();
+    }
+
+    private function selectedPaymentPlanTemplateIsEligible(): bool
+    {
+        $templateId = $this->selectedPaymentPlanTemplateId();
+
+        if ($templateId === null) {
+            return true;
+        }
+
+        return $this->paymentPlanTemplates->contains(
+            fn (PaymentPlanTemplate $template): bool => $template->id === $templateId,
+        );
+    }
+
+    private function getPreviewStoreCreditBalance(): int
+    {
+        $user = auth()->user();
+
+        $creditBalance = $user !== null && array_key_exists('credit_balance', $user->getAttributes())
+            ? (int) $user->getAttribute('credit_balance')
+            : (int) ($user?->newQuery()->whereKey(auth()->id())->value('credit_balance') ?? 0);
+
+        return $creditBalance + $this->pendingStoreCreditAmount;
+    }
+
+    private function getPreviewRestrictedCreditForProduct(Product $product): int
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        $pendingRestrictedCreditAmount = $this->pendingRestrictedCreditAmount;
+
+        if ($pendingRestrictedCreditAmount <= 0) {
+            return $user->getRestrictedCreditForProduct($product);
+        }
+
+        $restrictedCredits = $user->restrictedCredits()
+            ->where('balance', '>=', 0)
+            ->with('giftCardType.products')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $available = 0;
+
+        /** @var RestrictedCredit $restrictedCredit */
+        foreach ($restrictedCredits as $restrictedCredit) {
+            $effectiveBalance = $restrictedCredit->balance;
+
+            if ($pendingRestrictedCreditAmount > 0) {
+                $effectiveBalance += $pendingRestrictedCreditAmount;
+                $pendingRestrictedCreditAmount = 0;
+            }
+
+            if ($restrictedCredit->giftCardType->appliesToProduct($product)) {
+                $available += $effectiveBalance;
+            }
+        }
+
+        return $available;
     }
 }

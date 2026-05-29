@@ -236,7 +236,13 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
      */
     public function adjustCredit(int $amount, CreditTransactionType $type, ?Model $reference = null, ?string $description = null): CreditTransaction
     {
-        $this->increment('credit_balance', $amount);
+        if ($amount !== 0) {
+            self::query()
+                ->whereKey($this->getKey())
+                ->increment('credit_balance', $amount);
+
+            $this->refresh();
+        }
 
         /** @var CreditTransaction */
         return $this->creditTransactions()->create([

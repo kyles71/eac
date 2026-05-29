@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Enums\OrderStatus;
 use App\Models\Order;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -15,7 +16,13 @@ use Filament\Support\Icons\Heroicon;
 
 final class CheckoutSuccess extends Page
 {
+    private const int MAX_STATUS_POLLS = 10;
+
     public ?Order $order = null;
+
+    public ?string $redirectStatus = null;
+
+    public int $statusPolls = 0;
 
     protected static ?string $title = 'Order Confirmation';
 
@@ -29,6 +36,10 @@ final class CheckoutSuccess extends Page
     {
         $paymentIntent = request()->query('payment_intent');
         $orderId = request()->query('order_id');
+        $redirectStatus = request()->query('redirect_status');
+        $this->redirectStatus = is_string($redirectStatus)
+            ? $redirectStatus
+            : null;
 
         if ($paymentIntent !== null) {
             $this->order = Order::query()
@@ -43,6 +54,34 @@ final class CheckoutSuccess extends Page
                 ->with('orderItems.product')
                 ->first();
         }
+    }
+
+    public function refreshOrderStatus(): void
+    {
+        if ($this->order === null || ! $this->isFinalizingPayment || $this->statusPolls >= self::MAX_STATUS_POLLS) {
+            return;
+        }
+
+        $this->statusPolls++;
+
+        $this->order = Order::query()
+            ->where('user_id', auth()->id())
+            ->where('id', $this->order->id)
+            ->with('orderItems.product')
+            ->first();
+
+        unset($this->isFinalizingPayment, $this->hasExceededStatusPolling);
+    }
+
+    public function getIsFinalizingPaymentProperty(): bool
+    {
+        return $this->redirectStatus === 'succeeded'
+            && $this->order?->status === OrderStatus::Processing;
+    }
+
+    public function getHasExceededStatusPollingProperty(): bool
+    {
+        return $this->isFinalizingPayment && $this->statusPolls >= self::MAX_STATUS_POLLS;
     }
 
     public function content(Schema $schema): Schema
@@ -60,6 +99,16 @@ final class CheckoutSuccess extends Page
         }
 
         $components = [
+            Section::make('Payment Finalizing')
+                ->schema([
+                    TextEntry::make('payment_finalizing_message')
+                        ->hiddenLabel()
+                        ->state(fn (): string => $this->hasExceededStatusPolling
+                            ? 'Your payment was submitted successfully and is taking a little longer than usual to finish confirming. This page is safe to refresh, and your order status will update as soon as confirmation is complete.'
+                            : 'Your payment was submitted successfully. We are confirming the final details now, and this page will update automatically.'),
+                ])
+                ->visible(fn (): bool => $this->isFinalizingPayment)
+                ->extraAttributes(['wire:poll.2s' => 'refreshOrderStatus']),
             Section::make('Order Details')
                 ->schema([
                     TextEntry::make('order_number')

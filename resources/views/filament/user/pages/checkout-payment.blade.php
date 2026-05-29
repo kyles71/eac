@@ -51,18 +51,29 @@
 
         await $wire.markOrderProcessing()
 
+        const returnUrl = @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl() . '?order_id=' . $this->order->id)
+
         const { error } = await this.stripe.confirmPayment({
             elements: this.elements,
             confirmParams: {
-                return_url: @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl()),
+                return_url: returnUrl,
             },
+            redirect: 'if_required',
         })
 
         if (error) {
             this.errorMessage = error.message
             this.processing = false
             await $wire.revertOrderToPending()
+
+            return
         }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        const successUrl = new URL(returnUrl, window.location.origin)
+        successUrl.searchParams.set('redirect_status', 'succeeded')
+        window.location.href = successUrl.toString()
     },
 }" class="space-y-4">
     <div id="payment-element" wire:ignore class="min-h-[120px]"></div>

@@ -2,13 +2,20 @@
 
 declare(strict_types=1);
 
+use App\Enums\PaymentPlanMethod;
+use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\DiscountCode;
 use App\Models\GiftCard;
+use App\Models\GiftCardType;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\RestrictedCredit;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -190,8 +197,132 @@ it('shows payment plan options when templates exist', function () {
     ]);
 
     livewire(Cart::class)
+        ->assertSet('selectedPaymentOption', Cart::PAYMENT_OPTION_PAY_IN_FULL)
         ->assertSee('Payment Option')
+        ->assertSee('Pay In Full')
         ->assertSee('4 Monthly Payments');
+});
+
+it('does not allow a blank payment option placeholder', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    PaymentPlanTemplate::factory()->create();
+
+    $component = livewire(Cart::class);
+    $reflection = new ReflectionMethod(Cart::class, 'getOrderSummarySchema');
+    $components = collect($reflection->invoke($component->instance()));
+
+    $paymentOptionSelect = $components->first(
+        fn (object $component): bool => method_exists($component, 'getName')
+            && $component->getName() === 'selectedPaymentOption',
+    );
+
+    expect($paymentOptionSelect)->not->toBeNull()
+        ->and($paymentOptionSelect->canSelectPlaceholder())->toBeFalse()
+        ->and(array_key_first($paymentOptionSelect->getOptions()))->toBe(Cart::PAYMENT_OPTION_PAY_IN_FULL);
+});
+
+it('hides payment plan options when no active templates are eligible', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    PaymentPlanTemplate::factory()->inactive()->create([
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'min_price' => 6000,
+        'max_price' => 10000,
+    ]);
+
+    livewire(Cart::class)
+        ->assertDontSee('Payment Option')
+        ->assertDontSee('Pay In Full');
+});
+
+it('filters payment plan templates by product type and line total', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Any,
+        'min_price' => 1000,
+        'max_price' => 7000,
+        'number_of_installments' => 3,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Costume,
+        'min_price' => 1000,
+        'max_price' => 12000,
+        'number_of_installments' => 4,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'min_price' => 1000,
+        'max_price' => 12000,
+        'number_of_installments' => 5,
+    ]);
+
+    livewire(Cart::class)
+        ->assertDontSee('3 Monthly Payments')
+        ->assertDontSee('4 Monthly Payments')
+        ->assertSee('5 Monthly Payments');
+});
+
+it('only shows templates eligible for every item in a mixed cart', function () {
+    $costume = Costume::factory()->create();
+    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 4000]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $costumeProduct->id,
+        'quantity' => 1,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'min_price' => 1000,
+        'max_price' => 10000,
+        'number_of_installments' => 3,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Costume,
+        'min_price' => 1000,
+        'max_price' => 10000,
+        'number_of_installments' => 4,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Any,
+        'min_price' => 1000,
+        'max_price' => 10000,
+        'number_of_installments' => 5,
+    ]);
+
+    livewire(Cart::class)
+        ->assertDontSee('3 Monthly Payments')
+        ->assertDontSee('4 Monthly Payments')
+        ->assertSee('5 Monthly Payments');
 });
 
 it('shows payment plan breakdown when a plan is selected', function () {
@@ -206,9 +337,11 @@ it('shows payment plan breakdown when a plan is selected', function () {
     ]);
 
     livewire(Cart::class)
-        ->set('selectedPaymentPlanTemplateId', $template->id)
+        ->set('selectedPaymentOption', "template:{$template->id}")
+        ->assertSet('selectedPaymentPlanMethod', PaymentPlanMethod::AutoCharge->value)
         ->assertSee('4 payments of')
-        ->assertSee('Amount Due Today');
+        ->assertSee('Amount Due Today')
+        ->assertSee('Payment Plan Method');
 });
 
 it('calculates discount correctly in grand total', function () {
@@ -228,6 +361,197 @@ it('calculates discount correctly in grand total', function () {
     expect($component->get('subtotal'))->toBe(10000);
     expect($component->get('discountAmount'))->toBe(2000);
     expect($component->get('grandTotal'))->toBe(8000);
+});
+
+it('shows restricted credit in the order summary', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $giftCardType = GiftCardType::factory()
+        ->restrictedToProductType(ProductType::Course)
+        ->create();
+
+    RestrictedCredit::factory()->create([
+        'user_id' => auth()->id(),
+        'gift_card_type_id' => $giftCardType->id,
+        'balance' => 3000,
+    ]);
+
+    livewire(Cart::class)
+        ->assertSet('restrictedCreditAmount', 3000)
+        ->assertSet('grandTotal', 2000)
+        ->assertSee('Restricted Credit')
+        ->assertSee('-$30.00')
+        ->assertSee('$20.00');
+});
+
+it('shows restricted credit in the order summary after redeeming a restricted gift card', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $giftCardType = GiftCardType::factory()
+        ->restrictedToProductType(ProductType::Course)
+        ->create();
+
+    $giftCard = GiftCard::factory()
+        ->forType($giftCardType)
+        ->amount(3000)
+        ->create();
+
+    livewire(Cart::class)
+        ->set('code', $giftCard->code)
+        ->call('applyCode')
+        ->assertNotified('Gift card redeemed!')
+        ->assertSet('restrictedCreditAmount', 3000)
+        ->assertSet('grandTotal', 2000)
+        ->assertSee('Restricted Credit')
+        ->assertSee('-$30.00')
+        ->assertSee('$20.00');
+});
+
+it('shows restricted credit reserved on a pending order in the order summary', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+    ]);
+
+    $giftCardType = GiftCardType::factory()->create();
+
+    RestrictedCredit::factory()->create([
+        'user_id' => auth()->id(),
+        'gift_card_type_id' => $giftCardType->id,
+        'balance' => 0,
+    ]);
+
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 10000,
+        'restricted_credit_applied' => 5000,
+        'total' => 5000,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+        'unit_price' => 5000,
+        'total_price' => 10000,
+    ]);
+
+    livewire(Cart::class)
+        ->assertSet('restrictedCreditAmount', 5000)
+        ->assertSet('grandTotal', 5000)
+        ->assertSee('Restricted Credit')
+        ->assertSee('-$50.00')
+        ->assertSee('$50.00');
+});
+
+it('shows applied store credit in the order summary', function () {
+    auth()->user()->update(['credit_balance' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    livewire(Cart::class)
+        ->assertDontSee('Store Credit')
+        ->set('useCredit', true)
+        ->assertSet('creditAmount', 3000)
+        ->assertSet('grandTotal', 2000)
+        ->assertSee('Store Credit')
+        ->assertSee('-$30.00')
+        ->assertSee('$20.00');
+});
+
+it('shows store credit reserved on a pending order in the order summary after it is applied', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 5000,
+        'credit_applied' => 3000,
+        'total' => 2000,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    livewire(Cart::class)
+        ->assertSee('Apply store credit ($30.00)')
+        ->set('useCredit', true)
+        ->assertSet('creditAmount', 3000)
+        ->assertSet('grandTotal', 2000)
+        ->assertSee('Store Credit')
+        ->assertSee('-$30.00')
+        ->assertSee('$20.00');
+});
+
+it('shows redeemed store credit in the order summary after it is applied', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $giftCard = GiftCard::factory()
+        ->amount(3000)
+        ->create();
+
+    livewire(Cart::class)
+        ->set('code', $giftCard->code)
+        ->call('applyCode')
+        ->assertNotified('Gift card redeemed!')
+        ->assertSee('Apply store credit ($30.00)')
+        ->set('useCredit', true)
+        ->assertSet('creditAmount', 3000)
+        ->assertSet('grandTotal', 2000)
+        ->assertSee('Store Credit')
+        ->assertSee('-$30.00')
+        ->assertSee('$20.00');
+});
+
+it('refreshes totals and payment plan eligibility after quantity changes', function () {
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'min_price' => 1000,
+        'max_price' => 7000,
+        'number_of_installments' => 3,
+    ]);
+
+    livewire(Cart::class)
+        ->set('selectedPaymentOption', "template:{$template->id}")
+        ->assertSet('subtotal', 5000)
+        ->assertSet('grandTotal', 5000)
+        ->assertSee('3 Monthly Payments')
+        ->call('incrementQuantity', $cartItem->id)
+        ->assertSet('subtotal', 10000)
+        ->assertSet('grandTotal', 10000)
+        ->assertSet('selectedPaymentOption', Cart::PAYMENT_OPTION_PAY_IN_FULL)
+        ->assertSet('selectedPaymentPlanMethod', null)
+        ->assertDontSee('3 Monthly Payments');
 });
 
 it('cannot modify other users cart items via increment', function () {
