@@ -83,6 +83,17 @@ it('rejects adding a product with no price', function () {
     $action->handle($this->user, $this->product->refresh());
 })->throws(InvalidArgumentException::class, 'This product does not have a valid price.');
 
+it('rejects adding a product that requires an unpurchased enrollment', function () {
+    $requiredCourse = Course::factory()->create();
+    $restrictedProduct = Product::factory()->create([
+        'requires_course_id' => $requiredCourse->id,
+        'price' => 5000,
+    ]);
+
+    $action = new AddToCart;
+    $action->handle($this->user, $restrictedProduct);
+})->throws(InvalidArgumentException::class, 'This product requires an existing course enrollment.');
+
 it('can remove an item from the cart', function () {
     $cartItem = CartItem::factory()->create([
         'user_id' => $this->user->id,

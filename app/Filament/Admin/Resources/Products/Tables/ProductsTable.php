@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Products\Tables;
 
+use App\Enums\ProductType;
 use App\Support\MediaDisks;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -36,10 +37,7 @@ final class ProductsTable
                     ->boolean(),
                 TextColumn::make('productable_type')
                     ->label('Type')
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'App\\Models\\Course' => 'Course',
-                        default => $state ?? 'General',
-                    }),
+                    ->formatStateUsing(fn (?string $state): string => ProductType::labelForProductableType($state)),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

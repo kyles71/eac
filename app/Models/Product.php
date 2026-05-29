@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\ProvidesStorefrontDetails;
 use App\Support\MediaDisks;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Collection;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -24,6 +26,7 @@ final class Product extends Model implements HasMedia
         'id' => 'integer',
         'price' => 'integer',
         'is_active' => 'boolean',
+        'include_productable_images' => 'boolean',
         'requires_course_id' => 'integer',
     ];
 
@@ -48,13 +51,20 @@ final class Product extends Model implements HasMedia
     }
 
     /**
-     * Scope to only include active products that are available for purchase.
-     * For Course products, this also checks that there is remaining capacity.
+     * Scope to only include active products with a valid price.
      */
     public function scopeAvailable(Builder $query): void
     {
         $query->where('is_active', true)
             ->where('price', '>', 0);
+    }
+
+    public function scopePurchasableBy(Builder $query, User $user): void
+    {
+        $query->where(function (Builder $query) use ($user): void {
+            $query->whereNull('requires_course_id')
+                ->orWhereIn('requires_course_id', $user->enrollments()->select('course_id'));
+        });
     }
 
     /**
@@ -63,6 +73,43 @@ final class Product extends Model implements HasMedia
     public function formattedPrice(): string
     {
         return format_money($this->price);
+    }
+
+    /**
+     * @return Collection<int, Media>
+     */
+    public function galleryImages(): Collection
+    {
+        $images = $this->getMedia('images');
+
+        if (! $this->include_productable_images || ! ($this->productable instanceof HasMedia)) {
+            return $images;
+        }
+
+        return $images->merge($this->productable->getMedia('images'))->values();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function storefrontDetails(): array
+    {
+        if (! $this->productable instanceof ProvidesStorefrontDetails) {
+            return [];
+        }
+
+        return $this->productable->storefrontDetails();
+    }
+
+    public function canBePurchasedBy(User $user): bool
+    {
+        if ($this->requires_course_id === null) {
+            return true;
+        }
+
+        return $user->enrollments()
+            ->where('course_id', $this->requires_course_id)
+            ->exists();
     }
 
     public function registerMediaCollections(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\User\Pages\Store;
 use App\Models\Course;
+use App\Models\Enrollment;
 use App\Models\Product;
 use Filament\Facades\Filament;
 
@@ -42,6 +43,36 @@ it('does not display products with zero price', function () {
         ->loadTable()
         ->assertCanSeeTableRecords([$this->product])
         ->assertCanNotSeeTableRecords([$freeProduct]);
+});
+
+it('does not display products that require an unpurchased enrollment', function () {
+    $requiredCourse = Course::factory()->create();
+    $restrictedProduct = Product::factory()->create([
+        'requires_course_id' => $requiredCourse->id,
+        'price' => 5000,
+    ]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$this->product])
+        ->assertCanNotSeeTableRecords([$restrictedProduct]);
+});
+
+it('displays products that require an already purchased enrollment', function () {
+    $requiredCourse = Course::factory()->create();
+    $restrictedProduct = Product::factory()->create([
+        'requires_course_id' => $requiredCourse->id,
+        'price' => 5000,
+    ]);
+
+    Enrollment::factory()->create([
+        'course_id' => $requiredCourse->id,
+        'user_id' => auth()->id(),
+    ]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$this->product, $restrictedProduct]);
 });
 
 it('has required columns', function (string $column) {

@@ -31,10 +31,14 @@ final class Store extends TablePage
 
     protected function makeTable(): Table
     {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
         return $this->makeBaseTable()
             ->query(
                 Product::query()
                     ->available()
+                    ->purchasableBy($user)
                     ->with('productable')
             )
             ->columns([

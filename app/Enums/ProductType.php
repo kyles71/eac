@@ -37,6 +37,11 @@ enum ProductType: string implements HasLabel
         };
     }
 
+    public static function labelForProductableType(?string $morphClass): string
+    {
+        return self::fromProductableType($morphClass)->getLabel();
+    }
+
     public function getLabel(): string
     {
         return $this->value;

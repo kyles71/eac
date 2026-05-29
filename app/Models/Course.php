@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
+use App\Contracts\ProvidesStorefrontDetails;
 use App\Support\MediaDisks;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,7 +20,7 @@ use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-final class Course extends Model implements HasCapacity, HasMedia, Productable
+final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
     use HasFactory, InteractsWithMedia;
@@ -126,6 +127,22 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable
         }
 
         return true;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function storefrontDetails(): array
+    {
+        $availableCapacity = $this->getAvailableCapacity();
+        $teacherName = $this->guest_teacher ?: $this->teacher?->fullName;
+
+        return array_filter([
+            'Start Time' => $this->start_time?->format('M j, Y g:i A'),
+            'Duration' => "{$this->duration} minutes",
+            'Teacher' => $teacherName,
+            'Available Spots' => $availableCapacity > 0 ? (string) $availableCapacity : 'Sold Out',
+        ], fn (?string $value): bool => filled($value));
     }
 
     /**

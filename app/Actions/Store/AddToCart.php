@@ -24,6 +24,10 @@ final readonly class AddToCart
                 throw new InvalidArgumentException('This product does not have a valid price.');
             }
 
+            if (! $product->canBePurchasedBy($user)) {
+                throw new InvalidArgumentException('This product requires an existing course enrollment.');
+            }
+
             $cartItem = CartItem::query()
                 ->where('user_id', $user->id)
                 ->where('product_id', $product->id)

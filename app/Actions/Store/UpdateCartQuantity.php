@@ -32,6 +32,10 @@ final readonly class UpdateCartQuantity
             /** @var \App\Models\Product $product */
             $product = $cartItem->product;
 
+            if (! $product->canBePurchasedBy($user)) {
+                throw new InvalidArgumentException('This product requires an existing course enrollment.');
+            }
+
             if ($product->productable instanceof HasCapacity) {
                 $availableCapacity = $product->productable->getAvailableCapacity();
 

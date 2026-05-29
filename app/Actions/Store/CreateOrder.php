@@ -50,6 +50,12 @@ final class CreateOrder
                 /** @var \App\Models\Product $product */
                 $product = $cartItem->product;
 
+                if (! $product->canBePurchasedBy($user)) {
+                    throw new InvalidArgumentException(
+                        "\"{$product->name}\" requires an existing course enrollment."
+                    );
+                }
+
                 if ($product->productable instanceof HasCapacity) {
                     $available = $product->productable->getAvailableCapacity();
 
