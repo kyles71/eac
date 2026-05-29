@@ -20,8 +20,8 @@ final class UserForm
             ->components([
                 SpatieMediaLibraryFileUpload::make('avatar')
                     ->collection('avatars')
-                    ->disk(MediaDisks::private())
-                    ->visibility('private')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     ->image()
                     ->avatar()
                     ->circleCropper()
@@ -53,8 +53,8 @@ final class UserForm
                 SpatieMediaLibraryFileUpload::make('staff_photo')
                     ->label('Staff Photo')
                     ->collection('staff-photo')
-                    ->disk(MediaDisks::private())
-                    ->visibility('private')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     ->image()
                     ->columnSpanFull(),
             ]);

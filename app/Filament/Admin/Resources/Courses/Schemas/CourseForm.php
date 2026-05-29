@@ -81,8 +81,8 @@ final class CourseForm
                             ->image(),
                         SpatieMediaLibraryFileUpload::make('documents')
                             ->collection('documents')
-                            ->disk(MediaDisks::private())
-                            ->visibility('private')
+                            ->disk(MediaDisks::public())
+                            ->visibility('public')
                             ->multiple()
                             ->acceptedFileTypes([
                                 'application/pdf',
@@ -93,8 +93,8 @@ final class CourseForm
                             ]),
                         SpatieMediaLibraryFileUpload::make('videos')
                             ->collection('videos')
-                            ->disk(MediaDisks::private())
-                            ->visibility('private')
+                            ->disk(MediaDisks::public())
+                            ->visibility('public')
                             ->multiple()
                             ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
                     ]),

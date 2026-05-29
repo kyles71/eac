@@ -20,8 +20,8 @@ final class UsersTable
             ->columns([
                 SpatieMediaLibraryImageColumn::make('avatar')
                     ->collection('avatars')
-                    ->disk(MediaDisks::private())
-                    ->visibility('private')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     // ->conversion('thumb')
                     ->circular(),
                 TextColumn::make('first_name')

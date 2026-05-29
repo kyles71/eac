@@ -67,8 +67,8 @@ final class EventForm
                         ->image(),
                     SpatieMediaLibraryFileUpload::make('documents')
                         ->collection('documents')
-                        ->disk(MediaDisks::private())
-                        ->visibility('private')
+                        ->disk(MediaDisks::public())
+                        ->visibility('public')
                         ->multiple()
                         ->acceptedFileTypes([
                             'application/pdf',

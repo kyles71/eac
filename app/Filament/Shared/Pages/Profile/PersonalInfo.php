@@ -53,8 +53,8 @@ final class PersonalInfo extends BreezyPersonalInfo
 
         $avatarField = SpatieMediaLibraryFileUpload::make('media')
             ->collection('avatars')
-            ->disk(MediaDisks::private())
-            ->visibility('private')
+            ->disk(MediaDisks::public())
+            ->visibility('public')
             ->hiddenLabel(true)
             ->image()
             ->avatar();

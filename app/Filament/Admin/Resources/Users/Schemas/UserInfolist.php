@@ -17,15 +17,15 @@ final class UserInfolist
             ->components([
                 SpatieMediaLibraryImageEntry::make('avatar')
                     ->collection('avatars')
-                    ->disk(MediaDisks::private())
-                    ->visibility('private')
+                    ->disk(MediaDisks::public())
+                    ->visibility('public')
                     // ->conversion('thumb')
                     ->circular(),
                 SpatieMediaLibraryImageEntry::make('staff_photo')
                     ->label('Staff Photo')
                     ->collection('staff-photo')
-                    ->disk(MediaDisks::private())
-                    ->visibility('private'),
+                    ->disk(MediaDisks::public())
+                    ->visibility('public'),
                 // ->conversion('thumb'),
                 TextEntry::make('first_name'),
                 TextEntry::make('last_name'),
