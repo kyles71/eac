@@ -10,6 +10,7 @@ use App\Models\Enrollment;
 use App\Models\Product;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Tables\Columns\TextColumn;
 
 use function Pest\Livewire\livewire;
 
@@ -82,6 +83,20 @@ it('has required columns', function (string $column) {
     livewire(Store::class)
         ->assertTableColumnExists($column);
 })->with(['name', 'description', 'price', 'available_spots']);
+
+it('shows the full description in a tooltip when the table value is truncated', function () {
+    $description = 'This is a longer store description that should stay compact in the table but be visible in full on hover.';
+
+    $this->product->update(['description' => $description]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertTableColumnExists(
+            'description',
+            fn (TextColumn $column): bool => $column->getTooltip() === $description,
+            $this->product,
+        );
+});
 
 it('links table rows to product details', function () {
     $component = livewire(Store::class);

@@ -48,6 +48,15 @@ final class Store extends TablePage
                     ->sortable(),
                 TextColumn::make('description')
                     ->limit(50)
+                    ->tooltip(function (TextColumn $column): ?string {
+                        $state = $column->getState();
+
+                        if (! is_string($state) || str($state)->length() <= $column->getCharacterLimit()) {
+                            return null;
+                        }
+
+                        return $state;
+                    })
                     ->toggleable(),
                 TextColumn::make('price')
                     ->label('Price')
