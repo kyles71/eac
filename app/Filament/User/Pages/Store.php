@@ -41,6 +41,7 @@ final class Store extends TablePage
                     ->purchasableBy($user)
                     ->with('productable')
             )
+            ->recordUrl(fn (Product $record): string => ProductDetails::getUrl(['product' => $record]))
             ->columns([
                 TextColumn::make('name')
                     ->searchable()

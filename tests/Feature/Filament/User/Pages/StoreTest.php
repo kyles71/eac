@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
+use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 
 use function Pest\Livewire\livewire;
@@ -79,3 +82,21 @@ it('has required columns', function (string $column) {
     livewire(Store::class)
         ->assertTableColumnExists($column);
 })->with(['name', 'description', 'price', 'available_spots']);
+
+it('links table rows to product details', function () {
+    $component = livewire(Store::class);
+
+    expect($component->instance()->getTable()->getRecordUrl($this->product))
+        ->toBe(ProductDetails::getUrl(['product' => $this->product]));
+});
+
+it('can still quickly add a product to the cart from the table', function () {
+    livewire(Store::class)
+        ->callAction(TestAction::make('addToCart')->table($this->product))
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->value('quantity'))->toBe(1);
+});
