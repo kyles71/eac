@@ -70,6 +70,17 @@ final class ProductDetails extends Page
         return $this->product?->name ?? self::$title ?? 'Product Details';
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('backToCart')
+                ->label('Back to Store')
+                ->icon(Heroicon::OutlinedArrowLeft)
+                ->color('gray')
+                ->url(Store::getUrl()),
+        ];
+    }
+
     public function content(Schema $schema): Schema
     {
         if ($this->product === null) {
