@@ -9,7 +9,9 @@ use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Invoice;
 use Stripe\PaymentIntent;
+use Stripe\PaymentMethod;
 use Stripe\Refund;
+use Stripe\SetupIntent;
 
 interface StripeServiceContract
 {
@@ -31,6 +33,24 @@ interface StripeServiceContract
      * Create a Customer Session for Payment Element saved-card features.
      */
     public function createCustomerSession(string $customerId): \Stripe\CustomerSession;
+
+    /**
+     * Create a SetupIntent for saving a reusable off-session payment method.
+     *
+     * @param  array<string, string>  $metadata
+     */
+    public function createSetupIntent(User $user, array $metadata = []): SetupIntent;
+
+    /**
+     * @return list<PaymentMethod>
+     */
+    public function listPaymentMethods(string $customerId, string $type = 'card'): array;
+
+    public function setDefaultPaymentMethod(string $customerId, string $paymentMethodId): Customer;
+
+    public function detachPaymentMethod(string $paymentMethodId): PaymentMethod;
+
+    public function retrieveInvoice(string $invoiceId): Invoice;
 
     public function constructWebhookEvent(string $payload, string $signature): Event;
 

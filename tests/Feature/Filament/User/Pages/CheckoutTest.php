@@ -72,6 +72,24 @@ it('does not load a completed order', function () {
         ->assertRedirect(Cart::getUrl());
 });
 
+it('shows limited use credit in the checkout summary', function () {
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+        'subtotal' => 5000,
+        'restricted_credit_applied' => 2500,
+        'total' => 2500,
+    ]);
+
+    OrderItem::factory()->create(['order_id' => $order->id]);
+
+    livewire(Checkout::class)
+        ->assertOk()
+        ->assertSee('Limited Use Credit')
+        ->assertSee('-$25.00')
+        ->assertDontSee('Restricted Credit');
+});
+
 it('marks the order as processing', function () {
     $order = Order::factory()->create([
         'user_id' => auth()->id(),

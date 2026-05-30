@@ -11,7 +11,9 @@ use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Invoice;
 use Stripe\PaymentIntent;
+use Stripe\PaymentMethod;
 use Stripe\Refund;
+use Stripe\SetupIntent;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 
@@ -84,6 +86,51 @@ final readonly class StripeService implements StripeServiceContract
                 ],
             ],
         ]);
+    }
+
+    /**
+     * @param  array<string, string>  $metadata
+     */
+    public function createSetupIntent(User $user, array $metadata = []): SetupIntent
+    {
+        $customer = $this->createOrGetCustomer($user);
+
+        return $this->client->setupIntents->create([
+            'customer' => $customer->id,
+            'payment_method_types' => ['card'],
+            'usage' => 'off_session',
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * @return list<PaymentMethod>
+     */
+    public function listPaymentMethods(string $customerId, string $type = 'card'): array
+    {
+        return $this->client->paymentMethods->all([
+            'customer' => $customerId,
+            'type' => $type,
+        ])->data;
+    }
+
+    public function setDefaultPaymentMethod(string $customerId, string $paymentMethodId): Customer
+    {
+        return $this->client->customers->update($customerId, [
+            'invoice_settings' => [
+                'default_payment_method' => $paymentMethodId,
+            ],
+        ]);
+    }
+
+    public function detachPaymentMethod(string $paymentMethodId): PaymentMethod
+    {
+        return $this->client->paymentMethods->detach($paymentMethodId);
+    }
+
+    public function retrieveInvoice(string $invoiceId): Invoice
+    {
+        return $this->client->invoices->retrieve($invoiceId);
     }
 
     /**

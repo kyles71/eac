@@ -13,16 +13,23 @@ final readonly class SwitchPaymentPlanMethod
     /**
      * Switch the payment method for a payment plan.
      */
-    public function handle(PaymentPlan $paymentPlan, PaymentPlanMethod $newMethod): void
+    public function handle(PaymentPlan $paymentPlan, PaymentPlanMethod $newMethod, ?string $stripePaymentMethodId = null): void
     {
-        if ($paymentPlan->method === $newMethod) {
+        $paymentMethodId = $stripePaymentMethodId ?? $paymentPlan->stripe_payment_method_id;
+
+        if ($paymentPlan->method === $newMethod && $paymentMethodId === $paymentPlan->stripe_payment_method_id) {
             throw new InvalidArgumentException('Payment plan is already using this method.');
         }
 
-        if ($newMethod === PaymentPlanMethod::AutoCharge && $paymentPlan->stripe_payment_method_id === null) {
+        if ($newMethod === PaymentPlanMethod::AutoCharge && $paymentMethodId === null) {
             throw new InvalidArgumentException('Cannot switch to auto-charge without a saved payment method.');
         }
 
-        $paymentPlan->update(['method' => $newMethod]);
+        $paymentPlan->update([
+            'method' => $newMethod,
+            'stripe_payment_method_id' => $newMethod === PaymentPlanMethod::AutoCharge
+                ? $paymentMethodId
+                : $paymentPlan->stripe_payment_method_id,
+        ]);
     }
 }

@@ -35,4 +35,6 @@ return [
         'email' => env('DEFAULT_USER_EMAIL', 'admin@example.com'),
         'password' => env('DEFAULT_USER_PASSWORD', 'password'),
     ],
+
+    'enrollment_unassign_cutoff_days' => (int) env('ENROLLMENT_UNASSIGN_CUTOFF_DAYS', 7),
 ];

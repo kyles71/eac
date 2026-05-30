@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Filament\User\Resources\Students\Pages;
+
+use App\Filament\User\Resources\Students\StudentResource;
+use Filament\Actions\CreateAction;
+use Filament\Resources\Pages\ListRecords;
+
+final class ListStudents extends ListRecords
+{
+    protected static string $resource = StudentResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make()
+                ->mutateDataUsing(function (array $data): array {
+                    $data['user_id'] = auth()->id();
+
+                    return $data;
+                }),
+        ];
+    }
+}

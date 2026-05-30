@@ -157,7 +157,7 @@ final class CreateOrder
                     0,
                     CreditTransactionType::CheckoutDebit,
                     $order,
-                    "Restricted credit applied to order #{$order->id}",
+                    "Limited use credit applied to order #{$order->id}",
                 );
             }
 

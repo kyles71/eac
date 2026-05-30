@@ -232,7 +232,7 @@ final class Checkout extends Page
 
         if ($this->order->restricted_credit_applied > 0) {
             $components[] = Flex::make([
-                Text::make('Restricted Credit')
+                Text::make('Limited Use Credit')
                     ->color('danger')
                     ->columnSpanFull(),
                 Text::make('-'.format_money($this->order->restricted_credit_applied))

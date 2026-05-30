@@ -363,7 +363,7 @@ it('calculates discount correctly in grand total', function () {
     expect($component->get('grandTotal'))->toBe(8000);
 });
 
-it('shows restricted credit in the order summary', function () {
+it('shows limited use credit in the order summary', function () {
     CartItem::factory()->create([
         'user_id' => auth()->id(),
         'product_id' => $this->product->id,
@@ -383,12 +383,12 @@ it('shows restricted credit in the order summary', function () {
     livewire(Cart::class)
         ->assertSet('restrictedCreditAmount', 3000)
         ->assertSet('grandTotal', 2000)
-        ->assertSee('Restricted Credit')
+        ->assertSee('Limited Use Credit')
         ->assertSee('-$30.00')
         ->assertSee('$20.00');
 });
 
-it('shows restricted credit in the order summary after redeeming a restricted gift card', function () {
+it('shows limited use credit in the order summary after redeeming a restricted gift card', function () {
     CartItem::factory()->create([
         'user_id' => auth()->id(),
         'product_id' => $this->product->id,
@@ -410,12 +410,12 @@ it('shows restricted credit in the order summary after redeeming a restricted gi
         ->assertNotified('Gift card redeemed!')
         ->assertSet('restrictedCreditAmount', 3000)
         ->assertSet('grandTotal', 2000)
-        ->assertSee('Restricted Credit')
+        ->assertSee('Limited Use Credit')
         ->assertSee('-$30.00')
         ->assertSee('$20.00');
 });
 
-it('shows restricted credit reserved on a pending order in the order summary', function () {
+it('shows limited use credit reserved on a pending order in the order summary', function () {
     CartItem::factory()->create([
         'user_id' => auth()->id(),
         'product_id' => $this->product->id,
@@ -448,7 +448,7 @@ it('shows restricted credit reserved on a pending order in the order summary', f
     livewire(Cart::class)
         ->assertSet('restrictedCreditAmount', 5000)
         ->assertSet('grandTotal', 5000)
-        ->assertSee('Restricted Credit')
+        ->assertSee('Limited Use Credit')
         ->assertSee('-$50.00')
         ->assertSee('$50.00');
 });

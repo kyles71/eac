@@ -55,7 +55,7 @@ final class OrderSummarySchema
             ->visible(fn (): bool => self::amount($discountAmount) > 0);
 
         $totalComponents[] = Flex::make([
-            Text::make('Restricted Credit')
+            Text::make('Limited Use Credit')
                 ->color('danger')
                 ->columnSpanFull(),
             Text::make(fn (): string => '-'.format_money(self::amount($restrictedCreditAmount)))

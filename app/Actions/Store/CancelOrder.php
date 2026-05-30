@@ -48,7 +48,7 @@ final readonly class CancelOrder
                     0,
                     CreditTransactionType::Refund,
                     $order,
-                    "Reversed restricted credit for cancelled order #{$order->id}",
+                    "Reversed limited use credit for cancelled order #{$order->id}",
                 );
             }
 
