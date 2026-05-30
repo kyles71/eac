@@ -8,6 +8,7 @@ use App\Support\Filament\SelectSearch;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Field;
@@ -111,7 +112,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
         });
 
         // if an action is a modal, default to slideover
-        Action::configureUsing(function (Action $action) {
+        EditAction::configureUsing(function (EditAction $action) {
             $action
                 ->slideOver();
         });
@@ -119,7 +120,8 @@ final class FilamentUiServiceProvider extends ServiceProvider
         // capitalize the model name in a create action label
         CreateAction::configureUsing(function (CreateAction $action) {
             $action
-                ->label(fn (): string => __('filament-actions::create.single.label', ['label' => ucwords($action->getModelLabel())]));
+                ->label(fn (): string => __('filament-actions::create.single.label', ['label' => ucwords($action->getModelLabel())]))
+                ->slideOver();
         });
 
         // various table presets
@@ -131,7 +133,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 // ->columnManagerColumns(2)
                 ->defaultDateTimeDisplayFormat('F j, Y, g:ia')
                 ->columnManagerTriggerAction(fn (Action $action) => $action->button()->label('Columns'))
-                ->filtersTriggerAction(fn (Action $action) => $action->button()->label('Filters')->slideOver()->closeModalByClickingAway(true))
+                ->filtersTriggerAction(fn (Action $action) => $action->button()->label('Filters')->closeModalByClickingAway(true))
                 ->filtersFormWidth(Width::Small)
                 ->paginationPageOptions([10, 25, 50]);
         });

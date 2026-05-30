@@ -17,8 +17,8 @@ final class EmergencyContactFactory extends Factory
             'student_waiver_id' => StudentWaiver::factory(),
             'name' => fake()->name(),
             'relationship' => fake()->randomElement(['Mother', 'Father', 'Guardian', 'Grandparent', 'Sibling']),
-            'phone_number' => fake()->phoneNumber(),
-            'email' => fake()->optional()->safeEmail(),
+            'phone_number' => fake()->numerify('(###) ###-####'),
+            'email' => fake()->safeEmail(),
         ];
     }
 }

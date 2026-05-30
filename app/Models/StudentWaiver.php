@@ -24,4 +24,21 @@ final class StudentWaiver extends Model
     {
         return $this->hasMany(EmergencyContact::class);
     }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'student_birth_date' => 'date',
+            'wants_text_updates' => 'boolean',
+            'medical_release_consent' => 'boolean',
+            'medical_release_signed_on' => 'date',
+            'health_safety_policy_consent' => 'boolean',
+            'health_safety_policy_signed_on' => 'date',
+            'media_release_consent' => 'boolean',
+            'media_release_signed_on' => 'date',
+        ];
+    }
 }
