@@ -69,7 +69,8 @@ final class CalendarWidget extends FullCalendarWidget
             )
             ->when($this->calendar->id === 1,
                 fn ($query) => $query->join('courses', 'events.course_id', '=', 'courses.id')
-                    ->where('courses.teacher_id', auth()->id())
+                    ->join('course_teacher', 'courses.id', '=', 'course_teacher.course_id')
+                    ->where('course_teacher.teacher_id', auth()->id())
                     ->union(
                         User::query()
                             ->select('events.*')

@@ -72,9 +72,9 @@ it('delegates course storefront details to the linked course', function () {
         'capacity' => 8,
         'duration' => 90,
         'start_time' => Carbon::parse('2027-01-15 18:30:00'),
-        'teacher_id' => $teacher->id,
         'guest_teacher' => null,
     ]);
+    $course->teachers()->sync([$teacher->id]);
     $product = Product::factory()->forCourse($course)->create();
 
     expect($product->storefrontDetails())->toMatchArray([
@@ -83,6 +83,36 @@ it('delegates course storefront details to the linked course', function () {
         'Teacher' => 'Misty Copeland',
         'Available Spots' => '8',
     ]);
+});
+
+it('delegates multiple course teacher names to storefront details', function () {
+    $firstTeacher = User::factory()->create([
+        'first_name' => 'Alvin',
+        'last_name' => 'Ailey',
+    ]);
+    $secondTeacher = User::factory()->create([
+        'first_name' => 'Twyla',
+        'last_name' => 'Tharp',
+    ]);
+    $course = Course::factory()->create(['guest_teacher' => null]);
+    $course->teachers()->sync([$secondTeacher->id, $firstTeacher->id]);
+    $product = Product::factory()->forCourse($course)->create();
+
+    expect($product->storefrontDetails())
+        ->toHaveKey('Teacher', 'Alvin Ailey, Twyla Tharp');
+});
+
+it('lets guest teacher override assigned course teachers in storefront details', function () {
+    $teacher = User::factory()->create([
+        'first_name' => 'Misty',
+        'last_name' => 'Copeland',
+    ]);
+    $course = Course::factory()->create(['guest_teacher' => 'Guest Artist']);
+    $course->teachers()->sync([$teacher->id]);
+    $product = Product::factory()->forCourse($course)->create();
+
+    expect($product->storefrontDetails())
+        ->toHaveKey('Teacher', 'Guest Artist');
 });
 
 it('delegates gift card storefront details to the linked gift card type', function () {

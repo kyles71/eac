@@ -112,9 +112,10 @@ final class DatabaseSeeder extends Seeder
             ...collect(range(0, 14))->map(fn (int $i) => ['user_id' => $allUsers->random()->id])->all()
         )->create();
 
-        $courses = Course::factory(10)->sequence(
-            ...collect(range(0, 9))->map(fn (int $i) => ['teacher_id' => $allUsers->random()->id])->all()
-        )->create();
+        $courses = Course::factory(10)->create();
+        $courses->each(fn (Course $course): array => $course->teachers()->sync(
+            $allUsers->random(fake()->numberBetween(1, 2))->pluck('id')->all()
+        ));
 
         $courseProducts = $courses->map(fn (Course $course) => Product::factory()->forCourse($course)->create());
 

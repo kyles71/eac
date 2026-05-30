@@ -40,11 +40,12 @@ final class CourseForm
                     ->required()
                     ->numeric()
                     ->default(60),
-                Select::make('teacher_id')
-                    ->label('Teacher')
+                Select::make('teachers')
+                    ->label('Teachers')
+                    ->multiple()
                     ->preload()
                     ->searchableRelationship(
-                        name: 'teacher',
+                        name: 'teachers',
                         searchColumns: ['first_name', 'last_name'],
                         labelFromRecord: fn (User $user): string => $user->fullName,
                         modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),

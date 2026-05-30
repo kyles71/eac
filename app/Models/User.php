@@ -117,6 +117,12 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         return $this->belongsToMany(Course::class, 'enrollments');
     }
 
+    public function teachingCourses(): BelongsToMany
+    {
+        return $this->belongsToMany(Course::class, 'course_teacher', 'teacher_id', 'course_id')
+            ->withTimestamps();
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

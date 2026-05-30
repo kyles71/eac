@@ -39,8 +39,10 @@ final class CoursesTable
                     ->sortable(),
                 TextColumn::make('guest_teacher')
                     ->searchable(),
-                TextColumn::make('teacher.full_name')
-                    ->sortable(),
+                TextColumn::make('teacher_display_name')
+                    ->label('Teachers')
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

@@ -2,14 +2,24 @@
 
 declare(strict_types=1);
 
+use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Schemas\CourseForm;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
 use App\Models\Student;
 use App\Models\User;
+use Filament\Actions\CreateAction;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Spatie\Permission\Models\Role;
+
+use function Pest\Laravel\assertDatabaseHas;
+use function Pest\Livewire\livewire;
+
+beforeEach(function () {
+    Filament::setCurrentPanel('admin');
+});
 
 it('registers the searchable relationship select macro', function () {
     expect(Select::hasMacro('searchableRelationship'))->toBeTrue()
@@ -35,10 +45,11 @@ it('searches teachers by partial full name terms', function () {
         'last_name' => 'Other',
     ]);
 
-    $results = Select::make('teacher_id')
+    $results = Select::make('teachers')
+        ->multiple()
         ->model(Course::class)
         ->searchableRelationship(
-            name: 'teacher',
+            name: 'teachers',
             searchColumns: ['first_name', 'last_name'],
             labelFromRecord: fn (User $user): string => $user->fullName,
             orderBy: ['first_name', 'last_name'],
@@ -50,6 +61,44 @@ it('searches teachers by partial full name terms', function () {
         ->not->toHaveKey($otherTeacher->id)
         ->and($results[$teacher->id])
         ->toBe('First Last');
+});
+
+it('saves multiple teachers from the course form', function () {
+    $firstTeacher = User::factory()->create([
+        'first_name' => 'Alvin',
+        'last_name' => 'Ailey',
+    ]);
+    $secondTeacher = User::factory()->create([
+        'first_name' => 'Twyla',
+        'last_name' => 'Tharp',
+    ]);
+
+    $firstTeacher->assignRole('teacher');
+    $secondTeacher->assignRole('teacher');
+
+    livewire(ListCourses::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Ballet 1',
+            'description' => null,
+            'capacity' => 10,
+            'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
+            'duration' => 60,
+            'teachers' => [$firstTeacher->id, $secondTeacher->id],
+            'guest_teacher' => null,
+            'courseForms' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    $course = Course::query()->where('name', 'Ballet 1')->firstOrFail();
+
+    assertDatabaseHas('course_teacher', [
+        'course_id' => $course->id,
+        'teacher_id' => $firstTeacher->id,
+    ]);
+    assertDatabaseHas('course_teacher', [
+        'course_id' => $course->id,
+        'teacher_id' => $secondTeacher->id,
+    ]);
 });
 
 it('limits course teacher options to users with the teacher role when it exists', function () {

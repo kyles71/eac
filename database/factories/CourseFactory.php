@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Models\Course;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -13,6 +14,13 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 final class CourseFactory extends Factory
 {
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Course $course): void {
+            $course->teachers()->syncWithoutDetaching([User::factory()->create()->id]);
+        });
+    }
+
     /**
      * Define the model's default state.
      *
@@ -32,7 +40,6 @@ final class CourseFactory extends Factory
             'start_time' => $start_time,
             'duration' => fake()->randomElement([30, 45, 60]),
             'guest_teacher' => null,
-            'teacher_id' => User::factory(),
         ];
     }
 }

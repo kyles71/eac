@@ -9,9 +9,9 @@ use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
 use App\Support\MediaDisks;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -30,7 +30,6 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'start_time' => 'datetime',
         'capacity' => 'integer',
         'duration' => 'integer',
-        'teacher_id' => 'integer',
     ];
 
     public function events(): HasMany
@@ -73,9 +72,21 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         });
     }
 
-    public function teacher(): BelongsTo
+    public function teacherDisplayName(): Attribute
     {
-        return $this->belongsTo(User::class);
+        return Attribute::make(
+            get: fn (): ?string => filled($this->guest_teacher)
+                ? $this->guest_teacher
+                : $this->formattedTeacherNames()
+        );
+    }
+
+    public function teachers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
+            ->withTimestamps()
+            ->orderBy('first_name')
+            ->orderBy('last_name');
     }
 
     public function courseForms(): HasMany
@@ -135,12 +146,11 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function storefrontDetails(): array
     {
         $availableCapacity = $this->getAvailableCapacity();
-        $teacherName = $this->guest_teacher ?: $this->teacher?->fullName;
 
         return array_filter([
             'Start Time' => $this->start_time?->format('M j, Y g:i A'),
             'Duration' => "{$this->duration} minutes",
-            'Teacher' => $teacherName,
+            'Teacher' => $this->teacherDisplayName,
             'Available Spots' => $availableCapacity > 0 ? (string) $availableCapacity : 'Sold Out',
         ], fn (?string $value): bool => filled($value));
     }
@@ -179,4 +189,18 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     //         ->performOnCollections('images')
     //         ->nonQueued();
     // }
+
+    private function formattedTeacherNames(): ?string
+    {
+        $teachers = $this->relationLoaded('teachers')
+            ? $this->teachers
+            : $this->teachers()->get();
+
+        $teacherNames = $teachers
+            ->pluck('fullName')
+            ->filter()
+            ->join(', ');
+
+        return filled($teacherNames) ? $teacherNames : null;
+    }
 }

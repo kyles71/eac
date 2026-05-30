@@ -32,8 +32,8 @@ final class CourseInfolist
                     ->dateTime(),
                 TextEntry::make('duration')
                     ->numeric(),
-                TextEntry::make('teacher.full_name')
-                    ->label('Teacher\'s Name'),
+                TextEntry::make('teacher_display_name')
+                    ->label('Teachers'),
                 TextEntry::make('guest_teacher'),
                 SpatieMediaLibraryImageEntry::make('course_images')
                     ->label('Images')
