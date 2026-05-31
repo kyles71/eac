@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Schemas\CourseForm;
+use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
@@ -99,6 +100,31 @@ it('saves multiple teachers from the course form', function () {
         'course_id' => $course->id,
         'teacher_id' => $secondTeacher->id,
     ]);
+
+    expect($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::SLUG_EAC);
+});
+
+it('saves selected course calendar tags from the course form', function () {
+    $teacher = User::factory()->create();
+    $teacher->assignRole('teacher');
+
+    livewire(ListCourses::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Comp Team',
+            'description' => null,
+            'capacity' => 10,
+            'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
+            'duration' => 60,
+            'calendar_tag_slugs' => [Calendar::SLUG_COMP],
+            'teachers' => [$teacher->id],
+            'guest_teacher' => null,
+            'courseForms' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    $course = Course::query()->where('name', 'Comp Team')->firstOrFail();
+
+    expect($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toBe([Calendar::SLUG_COMP]);
 });
 
 it('limits course teacher options to users with the teacher role when it exists', function () {

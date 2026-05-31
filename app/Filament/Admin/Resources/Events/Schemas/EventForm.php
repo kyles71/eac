@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
 use App\Enums\ScheduleFrequency;
+use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
 use App\Models\EventAttendee;
@@ -23,6 +24,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 final class EventForm
 {
@@ -46,13 +49,50 @@ final class EventForm
             Textarea::make('details')
                 ->label('Lesson Plan')
                 ->columnSpanFull(),
-            DateTimePicker::make('start_time'),
-            DateTimePicker::make('end_time'),
+            DateTimePicker::make('start_time')
+                ->timezone(self::displayTimezone()),
+            DateTimePicker::make('end_time')
+                ->timezone(self::displayTimezone()),
             Select::make('calendar_id')
                 ->relationship('calendar', 'name', function ($query): void {
-                    $query->where('id', '>', 1)->orderBy('id', 'asc');
+                    $user = auth()->user();
+
+                    $query
+                        ->where('slug', '!=', Calendar::SLUG_MY)
+                        ->when($user instanceof User, fn ($query) => $query->assignableBy($user))
+                        ->orderBy('id', 'asc');
                 })
-                ->default(2),
+                ->live()
+                ->default(fn (): ?int => Calendar::query()
+                    ->where('slug', Calendar::SLUG_EAC)
+                    ->value('id')),
+            Select::make('excluded_user_ids')
+                ->label('Excluded Users')
+                ->multiple()
+                ->preload()
+                ->searchable()
+                ->options(fn (Get $get): array => self::excludedUserOptions((int) $get('calendar_id')))
+                ->loadStateFromRelationshipsUsing(function (Select $component, ?Event $record): void {
+                    $component->state($record?->excludedUsers()
+                        ->pluck('users.id')
+                        ->map(fn (int $id): string => (string) $id)
+                        ->all() ?? []);
+                })
+                ->saveRelationshipsUsing(function (?Event $record, array $state): void {
+                    if (! $record instanceof Event) {
+                        return;
+                    }
+
+                    $userIds = User::query()
+                        ->whereHas('roles')
+                        ->whereIn('id', $state)
+                        ->pluck('id')
+                        ->all();
+
+                    $record->excludedUsers()->sync($userIds);
+                })
+                ->dehydrated(false)
+                ->columnSpanFull(),
             Section::make('Media')
                 ->columns(2)
                 ->collapsed()
@@ -118,27 +158,13 @@ final class EventForm
                     Repeater::make('attendees_list')
                         ->grid(3)
                         ->default([])
-                        ->relationship('attendees')
-                        ->saveRelationshipsUsing(function (Event $record, $state): void {
-                            EventAttendee::query()
-                                ->where('event_id', $record->id)
-                                ->whereNot(function ($query) use ($state): void {
-                                    foreach ($state as $item) {
-                                        $query->orWhere(function ($q) use ($item): void {
-                                            $q->where('attendee_type', $item['attendee_type'])
-                                                ->where('attendee_id', $item['attendee_id']);
-                                        });
-                                    }
-                                })
-                                ->delete();
-
-                            foreach ($state as $item) {
-                                $record->attendees()->updateOrCreate([
-                                    'attendee_type' => $item['attendee_type'],
-                                    'attendee_id' => $item['attendee_id'],
-                                ]);
-                            }
+                        ->loadStateFromRelationshipsUsing(function (Repeater $component, Event $record): void {
+                            $component->state(self::attendeeState($record));
                         })
+                        ->saveRelationshipsUsing(function (Event $record, ?array $state): void {
+                            self::syncAttendees($record, $state ?? []);
+                        })
+                        ->dehydrated(false)
                         ->schema([
                             TextInput::make('label'),
                             TextInput::make('attendee_type'),
@@ -174,6 +200,103 @@ final class EventForm
 
         // persist and clear trigger field
         self::finalizeAttendeesChange($set, $fieldName, $attendees);
+    }
+
+    private static function excludedUserOptions(int $calendarId): array
+    {
+        $calendar = Calendar::query()
+            ->with('tags')
+            ->find($calendarId);
+
+        $query = User::query()
+            ->whereHas('roles')
+            ->orderBy('first_name')
+            ->orderBy('last_name');
+
+        if ($calendar instanceof Calendar && ! $calendar->isPublicSystemCalendar()) {
+            $audienceTagIds = $calendar->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
+                ->pluck('id');
+
+            if ($calendar->isInternalSystemCalendar() || $calendar->isAudienceSystemCalendar() || $audienceTagIds->isNotEmpty()) {
+                if ($audienceTagIds->isEmpty()) {
+                    return [];
+                }
+
+                $query->whereHas('tags', fn (Builder $query): Builder => $query
+                    ->where('type', Calendar::AUDIENCE_TAG_TYPE)
+                    ->whereIn('tags.id', $audienceTagIds));
+            }
+        }
+
+        return $query
+            ->get()
+            ->mapWithKeys(fn (User $user): array => [$user->id => $user->fullName])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{attendee_type: string|null, attendee_id: int|null, label: string}>
+     */
+    private static function attendeeState(Event $event): array
+    {
+        return $event
+            ->attendees()
+            ->with('attendee')
+            ->get()
+            ->map(fn (EventAttendee $eventAttendee): array => [
+                'attendee_type' => $eventAttendee->attendee_type,
+                'attendee_id' => $eventAttendee->attendee_id,
+                'label' => self::attendeeLabel($eventAttendee->attendee),
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $state
+     */
+    private static function syncAttendees(Event $event, array $state): void
+    {
+        $attendees = collect($state)
+            ->filter(fn (mixed $item): bool => is_array($item) && filled($item['attendee_type'] ?? null) && filled($item['attendee_id'] ?? null))
+            ->map(fn (array $item): array => [
+                'attendee_type' => (string) $item['attendee_type'],
+                'attendee_id' => (int) $item['attendee_id'],
+            ])
+            ->unique(fn (array $item): string => $item['attendee_type'].':'.$item['attendee_id'])
+            ->values();
+
+        if ($attendees->isEmpty()) {
+            $event->attendees()->delete();
+
+            return;
+        }
+
+        $event->attendees()
+            ->whereNot(function (Builder $query) use ($attendees): void {
+                foreach ($attendees as $attendee) {
+                    $query->orWhere(function (Builder $query) use ($attendee): void {
+                        $query
+                            ->where('attendee_type', $attendee['attendee_type'])
+                            ->where('attendee_id', $attendee['attendee_id']);
+                    });
+                }
+            })
+            ->delete();
+
+        foreach ($attendees as $attendee) {
+            $event->attendees()->updateOrCreate($attendee);
+        }
+    }
+
+    private static function attendeeLabel(?Model $attendee): string
+    {
+        if (! $attendee instanceof Model) {
+            return 'Unknown Attendee';
+        }
+
+        $label = data_get($attendee, 'full_name') ?? data_get($attendee, 'name');
+
+        return is_string($label) ? $label : (string) $attendee->getKey();
     }
 
     private static function handleAddCourse($state, callable $set, callable $get, string $fieldName = 'add_course'): void
@@ -240,5 +363,10 @@ final class EventForm
     {
         $set('attendees_list', $attendees);
         $set($fieldName, null);
+    }
+
+    private static function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 }

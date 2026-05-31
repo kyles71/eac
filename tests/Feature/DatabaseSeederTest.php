@@ -27,13 +27,17 @@ use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use Spatie\Tags\Tag;
 
 it('seeds the development database with all models', function (): void {
     $this->seed();
 
     expect(User::count())->toBeGreaterThanOrEqual(16)
         ->and(Student::count())->toBeGreaterThanOrEqual(15)
-        ->and(Calendar::count())->toBe(2)
+        ->and(Calendar::count())->toBe(5)
+        ->and(Tag::query()->where('type', Calendar::AUDIENCE_TAG_TYPE)->count())->toBeGreaterThanOrEqual(4)
+        ->and(Calendar::query()->where('slug', Calendar::SLUG_MY)->first()?->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
+        ->and(Calendar::query()->where('slug', Calendar::SLUG_EAC)->first()?->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
         ->and(Form::count())->toBe(2)
         ->and(Course::count())->toBeGreaterThanOrEqual(10)
         ->and(Product::count())->toBeGreaterThanOrEqual(20)

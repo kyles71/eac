@@ -11,10 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Spatie\Tags\HasTags;
 
 final class Student extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTags;
+
+    public const string GENERAL_TAG_TYPE = 'student-general';
 
     /**
      * The attributes that should be cast to native types.

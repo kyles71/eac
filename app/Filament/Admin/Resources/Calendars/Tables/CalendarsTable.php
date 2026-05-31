@@ -11,6 +11,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ColorColumn;
+use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -23,6 +24,10 @@ final class CalendarsTable
                 TextColumn::make('name')
                     ->searchable(),
                 ColorColumn::make('background_color'),
+                SpatieTagsColumn::make('tags')
+                    ->label('Audience Tags')
+                    ->type(Calendar::AUDIENCE_TAG_TYPE)
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -39,7 +44,7 @@ final class CalendarsTable
                 ActionGroup::make([
                     EditAction::make(),
                     DeleteAction::make()
-                        ->visible(fn (Calendar $record): bool => $record->id > 2),
+                        ->visible(fn (Calendar $record): bool => ! $record->isSystemCalendar()),
                 ]),
             ])
             ->toolbarActions([

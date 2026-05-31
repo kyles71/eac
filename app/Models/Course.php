@@ -19,11 +19,14 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Spatie\Tags\HasTags;
 
 final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
-    use HasFactory, InteractsWithMedia;
+    use HasFactory, HasTags, InteractsWithMedia;
+
+    public const string CALENDAR_TAG_TYPE = 'course-calendar';
 
     protected $casts = [
         'id' => 'integer',
@@ -189,6 +192,17 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     //         ->performOnCollections('images')
     //         ->nonQueued();
     // }
+
+    protected static function booted(): void
+    {
+        self::created(function (Course $course): void {
+            $course->loadMissing('tags');
+
+            if ($course->tagsWithType(self::CALENDAR_TAG_TYPE)->isEmpty()) {
+                $course->attachTag(Calendar::SLUG_EAC, self::CALENDAR_TAG_TYPE);
+            }
+        });
+    }
 
     private function formattedTeacherNames(): ?string
     {

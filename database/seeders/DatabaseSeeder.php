@@ -30,8 +30,8 @@ use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
-use Database\Factories\CalendarFactory;
 use Illuminate\Database\Seeder;
+use Spatie\Tags\Tag;
 
 final class DatabaseSeeder extends Seeder
 {
@@ -41,16 +41,7 @@ final class DatabaseSeeder extends Seeder
             ShieldSeeder::class,
         ]);
 
-        CalendarFactory::new()->createMany([
-            [
-                'name' => 'My Calendar',
-                'background_color' => null,
-            ],
-            [
-                'name' => 'EAC Calendar',
-                'background_color' => '#FF5733',
-            ],
-        ]);
+        $this->seedSystemCalendars();
 
         Form::factory()
             ->create(['name' => 'Student Waiver 25-26', 'form_type' => FormTypes::StudentWaiver->value]);
@@ -58,6 +49,69 @@ final class DatabaseSeeder extends Seeder
         if (config('app.env') !== 'production') {
             $this->seedDevData();
         }
+
+        $this->grantDefaultCalendarAudienceTags();
+    }
+
+    private function seedSystemCalendars(): void
+    {
+        foreach (Calendar::systemCalendarDefinitions() as $slug => $calendar) {
+            Calendar::query()->updateOrCreate(
+                ['slug' => $slug],
+                $calendar,
+            );
+        }
+
+        foreach ($this->systemCalendarAudienceTags() as $slug => $tagName) {
+            Calendar::query()
+                ->where('slug', $slug)
+                ->first()
+                ?->attachTag($tagName, Calendar::AUDIENCE_TAG_TYPE);
+        }
+
+        Tag::findOrCreate(Calendar::SLUG_EAC, Course::CALENDAR_TAG_TYPE);
+        Tag::findOrCreate(Calendar::SLUG_COMP, Course::CALENDAR_TAG_TYPE);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function systemCalendarAudienceTags(): array
+    {
+        return [
+            Calendar::SLUG_MY => Calendar::AUDIENCE_TAG_PUBLIC,
+            Calendar::SLUG_EAC => Calendar::AUDIENCE_TAG_PUBLIC,
+            Calendar::SLUG_OWNERS => Calendar::AUDIENCE_TAG_OWNERS,
+            Calendar::SLUG_STAFF => Calendar::AUDIENCE_TAG_STAFF,
+            Calendar::SLUG_COMP => Calendar::AUDIENCE_TAG_COMP,
+        ];
+    }
+
+    private function grantDefaultCalendarAudienceTags(): void
+    {
+        $this->grantCalendarAudienceTagsToRole('super_admin', [
+            Calendar::AUDIENCE_TAG_OWNERS,
+            Calendar::AUDIENCE_TAG_STAFF,
+            Calendar::AUDIENCE_TAG_COMP,
+        ]);
+        $this->grantCalendarAudienceTagsToRole('owner', [
+            Calendar::AUDIENCE_TAG_OWNERS,
+            Calendar::AUDIENCE_TAG_STAFF,
+            Calendar::AUDIENCE_TAG_COMP,
+        ]);
+        $this->grantCalendarAudienceTagsToRole('teacher', [
+            Calendar::AUDIENCE_TAG_STAFF,
+        ]);
+    }
+
+    /**
+     * @param  array<int, string>  $tagNames
+     */
+    private function grantCalendarAudienceTagsToRole(string $roleName, array $tagNames): void
+    {
+        User::role($roleName)
+            ->get()
+            ->each(fn (User $user): User => $user->attachTags($tagNames, Calendar::AUDIENCE_TAG_TYPE));
     }
 
     private function seedDevData(): void
