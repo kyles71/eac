@@ -84,6 +84,14 @@ it('has required columns', function (string $column) {
         ->assertTableColumnExists($column);
 })->with(['name', 'description', 'price', 'available_spots']);
 
+it('does not search or sort by computed available spots', function () {
+    livewire(Store::class)
+        ->assertTableColumnExists(
+            'available_spots',
+            fn (TextColumn $column): bool => ! $column->isSearchable() && ! $column->isSortable(),
+        );
+});
+
 it('shows the full description in a tooltip when the table value is truncated', function () {
     $description = 'This is a longer store description that should stay compact in the table but be visible in full on hover.';
 

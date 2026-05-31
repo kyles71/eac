@@ -64,6 +64,8 @@ final class Store extends TablePage
                     ->sortable(),
                 TextColumn::make('available_spots')
                     ->label('Available Spots')
+                    ->searchable(false)
+                    ->sortable(false)
                     ->state(function (Product $record): string {
                         if (! ($record->productable instanceof HasCapacity)) {
                             return 'N/A';
