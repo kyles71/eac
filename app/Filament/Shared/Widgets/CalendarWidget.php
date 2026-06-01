@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Filament\Shared\Widgets;
 
+use App\Actions\Store\AddToCart;
+use App\Contracts\HasCapacity;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
+use App\Filament\User\Pages\ProductDetails;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
+use App\Models\Product;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
@@ -18,10 +22,13 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Saade\FilamentFullCalendar\Actions\CreateAction;
 use Saade\FilamentFullCalendar\Actions\DeleteAction;
 use Saade\FilamentFullCalendar\Actions\EditAction;
@@ -70,17 +77,27 @@ final class CalendarWidget extends FullCalendarWidget
         }
 
         return [
-            TextInput::make('name')
-                ->label('Event'),
-            TextInput::make('calendar_name')
-                ->label('Calendar'),
-            TextInput::make('course_name')
-                ->label('Course'),
-            DateTimePicker::make('start_time'),
-            DateTimePicker::make('end_time'),
-            TextInput::make('focus'),
-            Textarea::make('description')
-                ->columnSpanFull(),
+            Section::make('Event')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('name')
+                        ->label('Event'),
+                    TextInput::make('calendar_name')
+                        ->label('Calendar'),
+                    TextInput::make('course_name')
+                        ->label('Course'),
+                    TextInput::make('focus')
+                        ->label('Focus / Theme'),
+                    DateTimePicker::make('start_time')
+                        ->label('Starts At')
+                        ->timezone($this->displayTimezone()),
+                    DateTimePicker::make('end_time')
+                        ->label('Ends At')
+                        ->timezone($this->displayTimezone()),
+                    Textarea::make('description')
+                        ->label('Description')
+                        ->columnSpanFull(),
+                ]),
         ];
     }
 
@@ -190,7 +207,25 @@ final class CalendarWidget extends FullCalendarWidget
     protected function modalActions(): array
     {
         if (! $this->isAdminPanel()) {
-            return [];
+            return [
+                Action::make('addCourseProductToCart')
+                    ->label('Add to Cart')
+                    ->icon(Heroicon::OutlinedShoppingCart)
+                    ->color('primary')
+                    ->visible(fn (): bool => $this->courseEventProduct() instanceof Product)
+                    ->disabled(fn (): bool => $this->courseEventProductIsSoldOut())
+                    ->action(function (): void {
+                        $this->addCourseEventProductToCart();
+                    }),
+                Action::make('viewCourseProductInStore')
+                    ->label('View in Store')
+                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->color('gray')
+                    ->visible(fn (): bool => $this->courseEventProduct() instanceof Product)
+                    ->url(fn (): ?string => ($product = $this->courseEventProduct()) instanceof Product
+                        ? ProductDetails::getUrl(['product' => $product])
+                        : null),
+            ];
         }
 
         return [
@@ -211,7 +246,10 @@ final class CalendarWidget extends FullCalendarWidget
             ...$data,
             'calendar_name' => $record->calendar?->name,
             'course_name' => $record->course?->name,
-        ]);
+        ])
+            ->slideOver(false)
+            ->modalWidth('lg')
+            ->modalHeading(fn (Event $record): string => $record->name);
     }
 
     private function selectedCalendar(): ?Calendar
@@ -224,7 +262,9 @@ final class CalendarWidget extends FullCalendarWidget
             return $calendar;
         }
 
-        $fallback = $calendars->firstWhere('slug', Calendar::SLUG_MY) ?? $calendars->first();
+        $fallback = $calendars->firstWhere('slug', Calendar::SLUG_EAC)
+            ?? $calendars->firstWhere('slug', Calendar::SLUG_MY)
+            ?? $calendars->first();
         $this->selectedCalendarId = $fallback?->id;
 
         return $fallback;
@@ -293,11 +333,72 @@ final class CalendarWidget extends FullCalendarWidget
     private function calendarTimestamp(?CarbonInterface $dateTime): ?string
     {
         return $dateTime?->copy()
-        ->toIso8601String();
+            ->timezone($this->displayTimezone())
+            ->toIso8601String();
     }
 
     private function isAdminPanel(): bool
     {
         return Filament::getCurrentPanel()?->getId() === 'admin';
+    }
+
+    private function courseEventProduct(): ?Product
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Event) {
+            return null;
+        }
+
+        $record->loadMissing('course.product');
+
+        $product = $record->course?->product;
+
+        if (! $product instanceof Product || ! $product->is_active || $product->price <= 0) {
+            return null;
+        }
+
+        return $product;
+    }
+
+    private function courseEventProductIsSoldOut(): bool
+    {
+        $product = $this->courseEventProduct();
+
+        return $product?->productable instanceof HasCapacity
+            && $product->productable->getAvailableCapacity() <= 0;
+    }
+
+    private function addCourseEventProductToCart(): void
+    {
+        $product = $this->courseEventProduct();
+        $user = auth()->user();
+
+        if (! $product instanceof Product || ! $user instanceof User) {
+            return;
+        }
+
+        try {
+            app(AddToCart::class)->handle($user, $product);
+
+            $this->dispatch('refresh-sidebar');
+
+            Notification::make()
+                ->title('Added to cart')
+                ->body("\"{$product->name}\" has been added to your cart.")
+                ->success()
+                ->send();
+        } catch (InvalidArgumentException $exception) {
+            Notification::make()
+                ->title('Could not add to cart')
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 }

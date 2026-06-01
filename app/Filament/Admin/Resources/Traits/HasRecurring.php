@@ -10,63 +10,94 @@ use Closure;
 
 trait HasRecurring
 {
-    private $repeat_through;
+    private ?Carbon $repeat_through = null;
 
-    private $repeat_frequency;
+    private ?ScheduleFrequency $repeat_frequency = null;
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
     public function prepRecurringData(array $data): array
     {
-        $this->repeat_frequency = $data['repeat_frequency'] ?? null;
-        $this->repeat_through = isset($data['repeat_through']) ? Carbon::create($data['repeat_through']) : null;
-        $this->attendees_list = $data['attendees_list'] ?? [];
+        $this->repeat_frequency = $this->normalizeRepeatFrequency($data['repeat_frequency'] ?? null);
+        $this->repeat_through = filled($data['repeat_through'] ?? null)
+            ? Carbon::parse($data['repeat_through'])
+            : null;
 
         unset($data['repeat_frequency'], $data['repeat_through']);
 
         return $data;
     }
 
-    public function createRecurring(array $data, ?Carbon $repeat_through, ?ScheduleFrequency $repeat_frequency, Closure $create_method, ?string $start_field = 'start_time', ?string $end_field = 'end_time'): array
-    {
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, mixed>
+     */
+    public function createRecurring(
+        array $data,
+        ?Carbon $repeat_through,
+        ?ScheduleFrequency $repeat_frequency,
+        Closure $create_method,
+        string $start_field = 'start_time',
+        string $end_field = 'end_time',
+    ): array {
         $return = [];
 
-        if (! $create_method) {
+        if (! $repeat_frequency instanceof ScheduleFrequency || ! $repeat_through instanceof Carbon) {
             return $return;
         }
 
-        if (! $repeat_frequency instanceof ScheduleFrequency) {
+        if (blank($data[$start_field] ?? null)) {
             return $return;
         }
 
-        $repeat_through->endOfDay();
-        $start = Carbon::create($data[$start_field]);
-        $end = Carbon::create($data[$end_field]);
+        $repeatThrough = $repeat_through->copy()->endOfDay();
+        $firstStart = Carbon::parse($data[$start_field]);
+        $firstEnd = filled($data[$end_field] ?? null)
+            ? Carbon::parse($data[$end_field])
+            : null;
+        $durationInSeconds = $firstEnd instanceof Carbon
+            ? $firstStart->diffInSeconds($firstEnd, false)
+            : null;
+        $nextStart = $this->nextOccurrenceStart($firstStart, $repeat_frequency);
 
-        while (isset($repeat_through, $repeat_frequency) && $start->lt($repeat_through)) {
-            switch ($repeat_frequency) {
-                case ScheduleFrequency::Daily:
-                    $start->addDay();
-                    $end->addDay();
-                    break;
-                case ScheduleFrequency::Weekly:
-                    $start->addWeek();
-                    $end->addWeek();
-                    break;
-                case ScheduleFrequency::Biweekly:
-                    $start->addWeeks(2);
-                    $end->addWeeks(2);
-                    break;
-                case ScheduleFrequency::Monthly:
-                    $start->addMonth();
-                    $end->addMonth();
-                    break;
+        while ($nextStart->lte($repeatThrough)) {
+            $data[$start_field] = $nextStart->toDateTimeString();
+
+            if ($durationInSeconds !== null) {
+                $data[$end_field] = $nextStart->copy()
+                    ->addSeconds($durationInSeconds)
+                    ->toDateTimeString();
             }
 
-            $data[$start_field] = Carbon::create($start)->toDateTimeString();
-            $data[$end_field] = Carbon::create($end)->toDateTimeString();
-
             $return[] = $create_method($data);
+            $nextStart = $this->nextOccurrenceStart($nextStart, $repeat_frequency);
         }
 
         return $return;
+    }
+
+    private function normalizeRepeatFrequency(mixed $frequency): ?ScheduleFrequency
+    {
+        if ($frequency instanceof ScheduleFrequency) {
+            return $frequency;
+        }
+
+        if (! is_string($frequency) || blank($frequency)) {
+            return null;
+        }
+
+        return ScheduleFrequency::tryFrom($frequency);
+    }
+
+    private function nextOccurrenceStart(Carbon $start, ScheduleFrequency $frequency): Carbon
+    {
+        return match ($frequency) {
+            ScheduleFrequency::Daily => $start->copy()->addDay(),
+            ScheduleFrequency::Weekly => $start->copy()->addWeek(),
+            ScheduleFrequency::Biweekly => $start->copy()->addWeeks(2),
+            ScheduleFrequency::Monthly => $start->copy()->addMonthNoOverflow(),
+        };
     }
 }

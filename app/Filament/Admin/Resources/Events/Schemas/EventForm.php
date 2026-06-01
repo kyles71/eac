@@ -14,14 +14,14 @@ use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Fieldset;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,76 +29,194 @@ use Illuminate\Database\Eloquent\Model;
 
 final class EventForm
 {
-    public static function configure(Schema $schema, $course_id = null): Schema
+    public static function configure(Schema $schema, ?int $course_id = null): Schema
     {
         return $schema
             ->components(self::components($course_id));
     }
 
-    public static function components($course_id = null): array
+    public static function components(?int $course_id = null): array
     {
         return [
-            TextInput::make('name')
-                ->required(),
-            Select::make('course_id')
-                ->hidden(fn (): bool => $course_id !== null)
-                ->relationship('course', 'name'),
-            Textarea::make('description')
-                ->columnSpanFull(),
-            TextInput::make('focus'),
-            Textarea::make('details')
-                ->label('Lesson Plan')
-                ->columnSpanFull(),
-            DateTimePicker::make('start_time')
-                ->timezone(self::displayTimezone()),
-            DateTimePicker::make('end_time')
-                ->timezone(self::displayTimezone()),
-            Select::make('calendar_id')
-                ->relationship('calendar', 'name', function ($query): void {
-                    $user = auth()->user();
+            Section::make('Event')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('name')
+                        ->label('Event Name')
+                        ->required()
+                        ->maxLength(255),
+                    Select::make('course_id')
+                        ->label('Course')
+                        ->hidden(fn (): bool => $course_id !== null)
+                        ->relationship('course', 'name')
+                        ->searchable()
+                        ->preload()
+                        ->live(),
+                    TextInput::make('focus')
+                        ->label('Focus / Theme'),
+                    Textarea::make('description')
+                        ->label('Public Description')
+                        ->columnSpanFull(),
+                    Textarea::make('details')
+                        ->label('Lesson Plan')
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Schedule')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    DateTimePicker::make('start_time')
+                        ->label('Starts At')
+                        ->required()
+                        ->timezone(self::displayTimezone()),
+                    DateTimePicker::make('end_time')
+                        ->label('Ends At')
+                        ->required()
+                        ->afterOrEqual('start_time')
+                        ->timezone(self::displayTimezone()),
+                    Select::make('repeat_frequency')
+                        ->label('Repeat')
+                        ->placeholder('Does not repeat')
+                        ->live()
+                        ->visible(fn (string $operation): bool => $operation === 'create')
+                        ->enum(ScheduleFrequency::class)
+                        ->options(ScheduleFrequency::class),
+                    DatePicker::make('repeat_through')
+                        ->label('Repeat Through')
+                        ->required(fn (Get $get): bool => filled($get('repeat_frequency')))
+                        ->visible(fn (Get $get): bool => filled($get('repeat_frequency'))),
+                ]),
+            Section::make('Visibility')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    Select::make('calendar_id')
+                        ->label('Calendar')
+                        ->relationship('calendar', 'name', function ($query): void {
+                            $user = auth()->user();
 
-                    $query
-                        ->where('slug', '!=', Calendar::SLUG_MY)
-                        ->when($user instanceof User, fn ($query) => $query->assignableBy($user))
-                        ->orderBy('id', 'asc');
-                })
-                ->live()
-                ->default(fn (): ?int => Calendar::query()
-                    ->where('slug', Calendar::SLUG_EAC)
-                    ->value('id')),
-            Select::make('excluded_user_ids')
-                ->label('Excluded Users')
-                ->multiple()
-                ->preload()
-                ->searchable()
-                ->options(fn (Get $get): array => self::excludedUserOptions((int) $get('calendar_id')))
-                ->loadStateFromRelationshipsUsing(function (Select $component, ?Event $record): void {
-                    $component->state($record?->excludedUsers()
-                        ->pluck('users.id')
-                        ->map(fn (int $id): string => (string) $id)
-                        ->all() ?? []);
-                })
-                ->saveRelationshipsUsing(function (?Event $record, array $state): void {
-                    if (! $record instanceof Event) {
-                        return;
-                    }
+                            $query
+                                ->where('slug', '!=', Calendar::SLUG_MY)
+                                ->when($user instanceof User, fn ($query) => $query->assignableBy($user))
+                                ->orderBy('id', 'asc');
+                        })
+                        ->required()
+                        ->live()
+                        ->default(fn (): ?int => Calendar::query()
+                            ->where('slug', Calendar::SLUG_EAC)
+                            ->value('id')),
+                    Select::make('excluded_user_ids')
+                        ->label('Excluded Staff / Users')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->options(fn (Get $get): array => self::excludedUserOptions((int) $get('calendar_id')))
+                        ->loadStateFromRelationshipsUsing(function (Select $component, ?Event $record): void {
+                            $component->state($record?->excludedUsers()
+                                ->pluck('users.id')
+                                ->map(fn (int $id): string => (string) $id)
+                                ->all() ?? []);
+                        })
+                        ->saveRelationshipsUsing(function (?Event $record, array $state): void {
+                            if (! $record instanceof Event) {
+                                return;
+                            }
 
-                    $userIds = User::query()
-                        ->whereHas('roles')
-                        ->whereIn('id', $state)
-                        ->pluck('id')
-                        ->all();
+                            $userIds = User::query()
+                                ->whereHas('roles')
+                                ->whereIn('id', $state)
+                                ->pluck('id')
+                                ->all();
 
-                    $record->excludedUsers()->sync($userIds);
-                })
-                ->dehydrated(false)
-                ->columnSpanFull(),
+                            $record->excludedUsers()->sync($userIds);
+                        })
+                        ->dehydrated(false),
+                ]),
+            Section::make('Direct Invitations')
+                ->columns(3)
+                ->columnSpanFull()
+                ->visible(fn (Get $get): bool => $course_id === null && blank($get('course_id')))
+                ->schema([
+                    Select::make('add_user')
+                        ->label('Add User')
+                        ->loadingMessage('Loading users...')
+                        ->options(fn (): array => User::query()
+                            ->orderBy('first_name')
+                            ->orderBy('last_name')
+                            ->get()
+                            ->mapWithKeys(fn (User $user): array => [$user->id => $user->fullName])
+                            ->all())
+                        ->searchable()
+                        ->preload()
+                        ->dehydrated(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                            self::handleAddModel(User::class, 'full_name', 'add_user', $state, $set, $get);
+                        }),
+                    Select::make('add_student')
+                        ->label('Add Student')
+                        ->loadingMessage('Loading students...')
+                        ->options(fn (): array => Student::query()
+                            ->orderBy('first_name')
+                            ->orderBy('last_name')
+                            ->get()
+                            ->mapWithKeys(fn (Student $student): array => [$student->id => $student->fullName])
+                            ->all())
+                        ->searchable()
+                        ->preload()
+                        ->dehydrated(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                            self::handleAddModel(Student::class, 'full_name', 'add_student', $state, $set, $get);
+                        }),
+                    Select::make('add_course')
+                        ->label('Add Course Roster')
+                        ->loadingMessage('Loading courses...')
+                        ->options(fn (): array => Course::query()
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->all())
+                        ->searchable()
+                        ->preload()
+                        ->dehydrated(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                            self::handleAddCourse($state, $set, $get, 'add_course');
+                        }),
+                    Repeater::make('attendees_list')
+                        ->label('Invited Attendees')
+                        ->grid(3)
+                        ->columnSpanFull()
+                        ->default([])
+                        ->loadStateFromRelationshipsUsing(function (Repeater $component, Event $record): void {
+                            $component->state(self::attendeeState($record));
+                        })
+                        ->saveRelationshipsUsing(function (Event $record, ?array $state): void {
+                            self::syncAttendees($record, $state ?? []);
+                        })
+                        ->dehydrated(false)
+                        ->schema([
+                            Hidden::make('label'),
+                            TextEntry::make('attendee_label')
+                                ->label('Attendee')
+                                ->state(fn (Get $get): string => (string) ($get('label') ?? 'Unknown Attendee')),
+                            Hidden::make('attendee_type'),
+                            Hidden::make('attendee_id'),
+                        ])
+                        ->itemLabel(fn (array $state) => $state['label'] ?? 'Unknown Attendee')
+                        ->collapsed()
+                        ->collapsible(false)
+                        ->reorderable(false)
+                        ->addable(false),
+                ]),
             Section::make('Media')
                 ->columns(2)
                 ->collapsed()
                 ->columnSpanFull()
                 ->schema([
                     SpatieMediaLibraryFileUpload::make('images')
+                        ->label('Images')
                         ->collection('images')
                         ->disk(MediaDisks::public())
                         ->visibility('public')
@@ -106,6 +224,7 @@ final class EventForm
                         ->reorderable()
                         ->image(),
                     SpatieMediaLibraryFileUpload::make('documents')
+                        ->label('Documents')
                         ->collection('documents')
                         ->disk(MediaDisks::public())
                         ->visibility('public')
@@ -117,65 +236,6 @@ final class EventForm
                             'application/vnd.ms-excel',
                             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         ]),
-                ]),
-            Select::make('repeat_frequency')
-                ->live()
-                ->visible(fn (string $operation): bool => $operation === 'create')
-                ->enum(ScheduleFrequency::class)
-                ->options(ScheduleFrequency::class),
-            DatePicker::make('repeat_through')
-                ->visible(fn (Get $get): bool => (bool) $get('repeat_frequency')),
-            Fieldset::make('Attendees')
-                ->columns(3)
-                ->columnSpanFull()
-                ->schema([
-                    Text::make('Add attendees to the event from...')
-                        ->columnSpanFull(),
-                    Select::make('add_user')
-                        ->loadingMessage('Loading users...')
-                        ->options(User::orderBy('first_name')->orderBy('last_name')->get()->pluck('full_name', 'id'))
-                        ->dehydrated(false)
-                        ->live()
-                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
-                            self::handleAddModel(User::class, 'full_name', 'add_user', $state, $set, $get);
-                        }),
-                    Select::make('add_student')
-                        ->loadingMessage('Loading students...')
-                        ->options(Student::orderBy('first_name')->orderBy('last_name')->get()->pluck('full_name', 'id'))
-                        ->dehydrated(false)
-                        ->live()
-                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
-                            self::handleAddModel(Student::class, 'full_name', 'add_student', $state, $set, $get);
-                        }),
-                    Select::make('add_course')
-                        ->loadingMessage('Loading courses...')
-                        ->options(Course::orderBy('name')->pluck('name', 'id'))
-                        ->dehydrated(false)
-                        ->live()
-                        ->afterStateUpdated(function ($state, callable $set, callable $get): void {
-                            self::handleAddCourse($state, $set, $get, 'add_course');
-                        }),
-                    Repeater::make('attendees_list')
-                        ->grid(3)
-                        ->default([])
-                        ->loadStateFromRelationshipsUsing(function (Repeater $component, Event $record): void {
-                            $component->state(self::attendeeState($record));
-                        })
-                        ->saveRelationshipsUsing(function (Event $record, ?array $state): void {
-                            self::syncAttendees($record, $state ?? []);
-                        })
-                        ->dehydrated(false)
-                        ->schema([
-                            TextInput::make('label'),
-                            TextInput::make('attendee_type'),
-                            TextInput::make('attendee_id'),
-                        ])
-                        ->itemLabel(fn (array $state) => $state['label'] ?? 'Unknown Attendee')
-                        ->collapsed()
-                        ->collapsible(false)
-                        ->reorderable(false)
-                        ->addable(false)
-                        ->columnSpanFull(),
                 ]),
         ];
     }
@@ -195,10 +255,8 @@ final class EventForm
 
         $attendees = $get('attendees_list') ?? [];
 
-        // reuse the bulk adder for a single model
         $attendees = self::addModelsToAttendees([$model], $modelClass, $labelAccessor, $attendees);
 
-        // persist and clear trigger field
         self::finalizeAttendeesChange($set, $fieldName, $attendees);
     }
 
@@ -294,7 +352,7 @@ final class EventForm
             return 'Unknown Attendee';
         }
 
-        $label = data_get($attendee, 'full_name') ?? data_get($attendee, 'name');
+        $label = data_get($attendee, 'full_name') ?? data_get($attendee, 'fullName') ?? data_get($attendee, 'name');
 
         return is_string($label) ? $label : (string) $attendee->getKey();
     }
@@ -314,7 +372,6 @@ final class EventForm
 
         $attendees = $get('attendees_list') ?? [];
 
-        // add all students from the course using the shared helper
         $attendees = self::addModelsToAttendees($course->students, Student::class, 'full_name', $attendees);
 
         self::finalizeAttendeesChange($set, $fieldName, $attendees);
@@ -332,7 +389,6 @@ final class EventForm
     private static function addModelsToAttendees(iterable $models, string $modelClass, $labelAccessor, array $attendees): array
     {
         foreach ($models as $model) {
-            // determine id and label from the model instance
             $id = $model->id ?? null;
             if ($id === null) {
                 continue;
@@ -342,7 +398,7 @@ final class EventForm
 
             foreach ($attendees as $existing) {
                 if (($existing['attendee_type'] ?? null) === $modelClass && ((string) ($existing['attendee_id'] ?? '') === (string) $id)) {
-                    continue 2; // skip to next model
+                    continue 2;
                 }
             }
 

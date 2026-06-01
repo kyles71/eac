@@ -4,19 +4,24 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Calendars\Pages\ListCalendars;
 use App\Filament\Admin\Resources\Events\EventResource;
+use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Models\Calendar;
+use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
+use App\Models\Product;
 use App\Models\Student;
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Repeater;
 use Illuminate\Support\Carbon;
 use Saade\FilamentFullCalendar\Actions\CreateAction as CalendarCreateAction;
 use Spatie\Permission\Models\Role;
@@ -63,7 +68,7 @@ it('includes course events for any assigned teacher on my calendar', function ()
 
     $this->actingAs($teacher);
 
-    $events = fetchCalendarEvents();
+    $events = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY));
 
     expect($events->pluck('title')->all())
         ->toContain('Ballet 1 Class')
@@ -99,7 +104,7 @@ it('includes enrolled student course events on my calendar without attendee reco
 
     $this->actingAs($user);
 
-    $events = fetchCalendarEvents();
+    $events = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY));
 
     expect($events->pluck('title')->all())
         ->toContain('Jazz 3 Class')
@@ -122,7 +127,7 @@ it('includes direct user and student invites on my calendar', function (): void 
 
     $this->actingAs($user);
 
-    $events = fetchCalendarEvents();
+    $events = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY));
 
     expect($events->pluck('title')->all())
         ->toContain('Parent Meeting', 'Student Fitting')
@@ -151,7 +156,7 @@ it('does not duplicate events that match my calendar in multiple ways', function
 
     $this->actingAs($user);
 
-    $events = fetchCalendarEvents();
+    $events = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY));
 
     expect($events->where('title', 'Acro 4 Class'))->toHaveCount(1);
 });
@@ -219,7 +224,7 @@ it('uses the routed calendar color for visible course events on my calendar', fu
 
     $this->actingAs($user);
 
-    $calendarEvent = fetchCalendarEvents()->firstWhere('id', $event->id);
+    $calendarEvent = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->firstWhere('id', $event->id);
 
     expect($storedCalendar->background_color)->not->toBe($routedCalendar->background_color)
         ->and($calendarEvent['backgroundColor'])->toBe($routedCalendar->background_color)
@@ -274,7 +279,7 @@ it('does not include eac calendar events on my calendar unless the user is direc
 
     $this->actingAs($user);
 
-    $events = fetchCalendarEvents();
+    $events = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY));
 
     expect($events->pluck('id')->all())
         ->not->toContain($publicEvent->id)
@@ -415,7 +420,7 @@ it('routes course events to calendars through course calendar tags', function ()
 
     expect(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_EAC))->pluck('id')->all())->not->toContain($event->id)
         ->and(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_COMP))->pluck('id')->all())->toContain($event->id)
-        ->and(fetchCalendarEvents()->pluck('id')->all())->toContain($event->id);
+        ->and(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all())->toContain($event->id);
 });
 
 it('defaults new courses to the eac calendar tag', function (): void {
@@ -557,16 +562,25 @@ it('keeps the public audience tag on public system calendars when audience tags 
     Calendar::SLUG_EAC,
 ]);
 
-it('allows audience tags to be changed on restricted system calendars', function (string $slug, string $tagName): void {
+it('uses seeded audience tags for restricted system calendar visibility', function (string $slug, string $tagName): void {
     $calendar = calendarBySlug($slug);
+    $allowedUser = User::factory()->create();
+    $otherUser = User::factory()->create();
+    $event = standaloneEvent('Restricted System Event', $calendar);
 
-    $calendar->syncTagsWithType([$tagName], Calendar::AUDIENCE_TAG_TYPE);
+    $allowedUser->attachTag($tagName, Calendar::AUDIENCE_TAG_TYPE);
 
-    expect($calendar->refresh()->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe([$tagName]);
+    $this->actingAs($allowedUser);
+
+    expect(fetchCalendarEvents($calendar)->pluck('id')->all())->toContain($event->id);
+
+    $this->actingAs($otherUser);
+
+    expect(fetchCalendarEvents($calendar)->pluck('id')->all())->not->toContain($event->id);
 })->with([
-    [Calendar::SLUG_OWNERS, 'Owners Updated'],
-    [Calendar::SLUG_STAFF, 'Staff Updated'],
-    [Calendar::SLUG_COMP, 'Comp Updated'],
+    [Calendar::SLUG_OWNERS, Calendar::AUDIENCE_TAG_OWNERS],
+    [Calendar::SLUG_STAFF, Calendar::AUDIENCE_TAG_STAFF],
+    [Calendar::SLUG_COMP, Calendar::AUDIENCE_TAG_COMP],
 ]);
 
 it('prevents required system calendars from being deleted', function (): void {
@@ -594,23 +608,29 @@ it('does not show the internal slug on the admin calendar table', function (): v
         ->assertTableColumnDoesNotExist('slug');
 });
 
-it('can edit audience tags on system calendars', function (): void {
+it('does not allow audience tags to be changed on system calendars', function (string $slug, string $expectedAudienceTag): void {
     Filament::setCurrentPanel('admin');
 
-    $calendar = calendarBySlug(Calendar::SLUG_STAFF);
-    $tag = Tag::findOrCreate('Staff Ops', Calendar::AUDIENCE_TAG_TYPE);
+    $calendar = calendarBySlug($slug);
+    $tag = Tag::findOrCreate('Updated Audience', Calendar::AUDIENCE_TAG_TYPE);
 
     livewire(ListCalendars::class)
         ->callAction(TestAction::make(EditAction::class)->table($calendar), data: [
-            'name' => 'Staff Calendar',
+            'name' => $calendar->name,
             'background_color' => '#123456',
             'audience_tag_ids' => [$tag->id],
         ])
         ->assertNotified();
 
-    expect($calendar->refresh()->name)->toBe('Staff Calendar')
-        ->and($calendar->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe(['Staff Ops']);
-});
+    expect($calendar->refresh()->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())
+        ->toBe([$expectedAudienceTag]);
+})->with([
+    [Calendar::SLUG_MY, Calendar::AUDIENCE_TAG_PUBLIC],
+    [Calendar::SLUG_EAC, Calendar::AUDIENCE_TAG_PUBLIC],
+    [Calendar::SLUG_OWNERS, Calendar::AUDIENCE_TAG_OWNERS],
+    [Calendar::SLUG_STAFF, Calendar::AUDIENCE_TAG_STAFF],
+    [Calendar::SLUG_COMP, Calendar::AUDIENCE_TAG_COMP],
+]);
 
 it('hides excluded events from otherwise eligible users', function (): void {
     $teacher = User::factory()->isTeacher()->create();
@@ -636,7 +656,7 @@ it('lets exclusions override direct my calendar invitations', function (): void 
 
     $this->actingAs($user);
 
-    expect(fetchCalendarEvents()->pluck('id')->all())->not->toContain($event->id);
+    expect(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all())->not->toContain($event->id);
 });
 
 it('adds admin resource urls to admin widget events only', function (): void {
@@ -668,6 +688,37 @@ it('mounts the admin calendar create action with attendee fields', function (): 
         ->assertOk();
 });
 
+it('loads direct invitations with attendee names in a compact repeater', function (): void {
+    $event = standaloneEvent('Private Rehearsal');
+    $user = User::factory()->create([
+        'first_name' => 'Ada',
+        'last_name' => 'Lovelace',
+    ]);
+    $student = Student::factory()->create([
+        'first_name' => 'Grace',
+        'last_name' => 'Hopper',
+    ]);
+
+    EventAttendee::factory()->forUser($user)->create(['event_id' => $event->id]);
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $event->id]);
+
+    $attendees = eventFormAttendeeState($event);
+    $attendeeRepeater = eventFormComponent('attendees_list');
+
+    expect(collect($attendees)->pluck('label')->all())
+        ->toContain('Ada Lovelace', 'Grace Hopper')
+        ->and($attendeeRepeater)->toBeInstanceOf(Repeater::class)
+        ->and($attendeeRepeater?->getColumnSpan('default'))->toBe(1);
+});
+
+it('opens user calendar event details as a modal instead of a slideover', function (): void {
+    Filament::setCurrentPanel('user');
+
+    $action = calendarWidgetViewAction(new CalendarWidget());
+
+    expect($action->isModalSlideOver())->toBeFalse();
+});
+
 it('runs the calendar selection action and closes the dropdown after selecting a calendar action', function (): void {
     $widget = new CalendarWidget();
     $widget->mount();
@@ -692,6 +743,40 @@ it('updates the selected calendar when a calendar is selected', function (): voi
     $widget->selectCalendar($calendar->id);
 
     expect($widget->selectedCalendarId)->toBe($calendar->id);
+});
+
+it('defaults the selected calendar to the eac calendar', function (): void {
+    $this->actingAs(User::factory()->create());
+
+    $widget = new CalendarWidget();
+    $widget->mount();
+
+    expect($widget->selectedCalendarId)->toBe(calendarBySlug(Calendar::SLUG_EAC)->id);
+});
+
+it('adds an event course product to the cart from the user event modal', function (): void {
+    $user = User::factory()->create();
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $course = Course::factory()->create(['capacity' => 5]);
+    $product = Product::factory()->forCourse($course)->create(['price' => 5000]);
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'calendar_id' => $calendar->id,
+        'start_time' => Carbon::parse('2027-01-15 18:00:00'),
+        'end_time' => Carbon::parse('2027-01-15 19:00:00'),
+    ]);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->callAction('addCourseProductToCart')
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', $user->id)
+        ->where('product_id', $product->id)
+        ->value('quantity'))->toBe(1);
 });
 
 it('renders calendar events with a pointer cursor', function (): void {
@@ -719,6 +804,73 @@ function calendarWidgetHeaderActions(CalendarWidget $widget): array
     $method->setAccessible(true);
 
     return $method->invoke($widget);
+}
+
+function calendarWidgetViewAction(CalendarWidget $widget): Action
+{
+    $method = new ReflectionMethod(CalendarWidget::class, 'viewAction');
+    $method->setAccessible(true);
+
+    return $method->invoke($widget);
+}
+
+function eventFormAttendeeState(Event $event): array
+{
+    $method = new ReflectionMethod(EventForm::class, 'attendeeState');
+    $method->setAccessible(true);
+
+    return $method->invoke(null, $event);
+}
+
+function eventFormComponent(string $name): mixed
+{
+    return findEventFormComponent(EventForm::components(), $name);
+}
+
+function findEventFormComponent(array $components, string $name): mixed
+{
+    foreach ($components as $component) {
+        if (method_exists($component, 'getName') && $component->getName() === $name) {
+            return $component;
+        }
+
+        $children = rawEventFormChildComponents($component);
+
+        if ($children !== []) {
+            $childComponent = findEventFormComponent($children, $name);
+
+            if ($childComponent !== null) {
+                return $childComponent;
+            }
+        }
+    }
+
+    return null;
+}
+
+function rawEventFormChildComponents(mixed $component): array
+{
+    if (! is_object($component)) {
+        return [];
+    }
+
+    $reflection = new ReflectionObject($component);
+
+    while (! $reflection->hasProperty('childComponents')) {
+        $parent = $reflection->getParentClass();
+
+        if ($parent === false) {
+            return [];
+        }
+
+        $reflection = $parent;
+    }
+
+    $property = $reflection->getProperty('childComponents');
+    $property->setAccessible(true);
+    $children = $property->getValue($component);
+
+    return is_array($children['default'] ?? null) ? $children['default'] : [];
 }
 
 function standaloneEvent(string $name, ?Calendar $calendar = null): Event
