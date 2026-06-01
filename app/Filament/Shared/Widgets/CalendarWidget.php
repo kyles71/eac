@@ -30,7 +30,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Saade\FilamentFullCalendar\Actions\CreateAction;
-use Saade\FilamentFullCalendar\Actions\DeleteAction;
 use Saade\FilamentFullCalendar\Actions\EditAction;
 use Saade\FilamentFullCalendar\Actions\ViewAction;
 use Saade\FilamentFullCalendar\Widgets\FullCalendarWidget;
@@ -131,10 +130,6 @@ final class CalendarWidget extends FullCalendarWidget
                         'end' => $this->calendarTimestamp($event->end_time),
                         'backgroundColor' => $displayCalendar?->background_color,
                         'borderColor' => $displayCalendar?->background_color,
-                        ...($this->isAdminPanel() ? [
-                            'url' => EventResource::getUrl(name: 'view', parameters: ['record' => $event]),
-                            'shouldOpenUrlInNewTab' => false,
-                        ] : []),
                     ];
                 }
             )
@@ -229,14 +224,23 @@ final class CalendarWidget extends FullCalendarWidget
         }
 
         return [
-            EditAction::make(),
-            DeleteAction::make(),
+            EditAction::make()
+                ->authorize('update'),
+            Action::make('viewFullEvent')
+                ->label('View Full Event')
+                ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                ->color('gray')
+                ->visible(fn (): bool => $this->canViewFullEvent())
+                ->url(fn (): ?string => $this->fullEventUrl()),
         ];
     }
 
     protected function viewAction(): Action
     {
-        $action = ViewAction::make();
+        $action = ViewAction::make()
+            ->slideOver(false)
+            ->modalWidth('lg')
+            ->modalHeading(fn (Event $record): string => $record->name);
 
         if ($this->isAdminPanel()) {
             return $action;
@@ -246,10 +250,7 @@ final class CalendarWidget extends FullCalendarWidget
             ...$data,
             'calendar_name' => $record->calendar?->name,
             'course_name' => $record->course?->name,
-        ])
-            ->slideOver(false)
-            ->modalWidth('lg')
-            ->modalHeading(fn (Event $record): string => $record->name);
+        ]);
     }
 
     private function selectedCalendar(): ?Calendar
@@ -395,6 +396,24 @@ final class CalendarWidget extends FullCalendarWidget
                 ->danger()
                 ->send();
         }
+    }
+
+    private function canViewFullEvent(): bool
+    {
+        $record = $this->getRecord();
+
+        return $record instanceof Event && EventResource::canView($record);
+    }
+
+    private function fullEventUrl(): ?string
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Event || ! EventResource::canView($record)) {
+            return null;
+        }
+
+        return EventResource::getUrl(name: 'view', parameters: ['record' => $record]);
     }
 
     private function displayTimezone(): string

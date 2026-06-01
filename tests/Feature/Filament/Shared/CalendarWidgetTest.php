@@ -18,6 +18,7 @@ use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -659,23 +660,62 @@ it('lets exclusions override direct my calendar invitations', function (): void 
     expect(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all())->not->toContain($event->id);
 });
 
-it('adds admin resource urls to admin widget events only', function (): void {
+it('does not add resource urls to calendar feed events', function (): void {
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
     $event = standaloneEvent('Admin Visible Event', $calendar);
 
     Filament::setCurrentPanel('admin');
 
     $adminEvent = fetchCalendarEvents($calendar)->firstWhere('id', $event->id);
-    $adminUrl = EventResource::getUrl(name: 'view', parameters: ['record' => $event]);
 
     Filament::setCurrentPanel('user');
 
     $userEvent = fetchCalendarEvents($calendar)->firstWhere('id', $event->id);
 
-    expect($adminEvent['url'])
-        ->toBe($adminUrl)
-        ->and($adminEvent['shouldOpenUrlInNewTab'])->toBeFalse()
+    expect($adminEvent)
+        ->not->toHaveKey('url')
+        ->and($adminEvent)->not->toHaveKey('shouldOpenUrlInNewTab')
         ->and($userEvent)->not->toHaveKey('url');
+});
+
+it('opens admin calendar events in the modal with permitted admin actions', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $user = User::factory()->create();
+    $user->givePermissionTo(['View:Event', 'Update:Event']);
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $event = standaloneEvent('Admin Modal Event', $calendar);
+    $fullEventUrl = EventResource::getUrl(name: 'view', parameters: ['record' => $event]);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->assertActionMounted('view')
+        ->assertActionVisible(EditAction::class)
+        ->assertActionHidden(DeleteAction::class)
+        ->assertActionVisible('viewFullEvent')
+        ->assertActionHasUrl('viewFullEvent', $fullEventUrl)
+        ->assertActionDoesNotExist('addCourseProductToCart')
+        ->assertActionDoesNotExist('viewCourseProductInStore');
+});
+
+it('hides admin calendar edit and full event actions without permission', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $user = User::factory()->create();
+    $user->givePermissionTo('ViewAny:Calendar');
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $event = standaloneEvent('Read Only Admin Modal Event', $calendar);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->assertActionMounted('view')
+        ->assertActionHidden(EditAction::class)
+        ->assertActionHidden(DeleteAction::class)
+        ->assertActionHidden('viewFullEvent');
 });
 
 it('mounts the admin calendar create action with attendee fields', function (): void {
