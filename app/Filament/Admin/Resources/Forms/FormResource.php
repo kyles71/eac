@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Resources\Forms;
 
 use App\Filament\Admin\Resources\Forms\Pages\ListForms;
@@ -14,7 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 
-class FormResource extends Resource
+final class FormResource extends Resource
 {
     protected static ?string $model = Form::class;
 

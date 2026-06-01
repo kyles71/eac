@@ -27,7 +27,7 @@ final class OrdersTable
                 TextColumn::make('status')
                     ->badge(),
                 TextColumn::make('total')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->label('Date')

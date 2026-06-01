@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Resources\Forms\Tables;
 
 use Filament\Actions\BulkActionGroup;
@@ -8,7 +10,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class FormsTable
+final class FormsTable
 {
     public static function configure(Table $table): Table
     {
@@ -17,11 +19,14 @@ class FormsTable
                 TextColumn::make('name')
                     ->searchable(),
                 TextColumn::make('form_type')
+                    ->label('Type')
                     ->badge()
                     ->searchable(),
                 IconColumn::make('can_update')
+                    ->label('Can Be Updated')
                     ->boolean(),
                 TextColumn::make('valid_until')
+                    ->label('Valid Until')
                     ->dateTime()
                     ->sortable(),
                 TextColumn::make('created_at')

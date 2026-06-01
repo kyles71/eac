@@ -45,8 +45,8 @@ it('can create a payment plan template', function () {
         ->callAction(CreateAction::class, data: [
             'name' => 'Test Template',
             'product_type' => ProductType::Any->value,
-            'min_price' => 5000,
-            'max_price' => 50000,
+            'min_price' => '50.00',
+            'max_price' => '500.00',
             'number_of_installments' => 3,
             'frequency' => PaymentPlanFrequency::Monthly->value,
             'is_active' => true,
@@ -55,6 +55,8 @@ it('can create a payment plan template', function () {
 
     assertDatabaseHas('payment_plan_templates', [
         'name' => 'Test Template',
+        'min_price' => 5000,
+        'max_price' => 50000,
         'number_of_installments' => 3,
     ]);
 });
@@ -64,8 +66,8 @@ it('requires name to create a template', function () {
         ->callAction(CreateAction::class, data: [
             'name' => '',
             'product_type' => ProductType::Any->value,
-            'min_price' => 5000,
-            'max_price' => 50000,
+            'min_price' => '50.00',
+            'max_price' => '500.00',
             'number_of_installments' => 3,
             'frequency' => PaymentPlanFrequency::Monthly->value,
         ])
@@ -77,8 +79,8 @@ it('requires number of installments between 2 and 24', function () {
         ->callAction(CreateAction::class, data: [
             'name' => 'Test',
             'product_type' => ProductType::Any->value,
-            'min_price' => 5000,
-            'max_price' => 50000,
+            'min_price' => '50.00',
+            'max_price' => '500.00',
             'number_of_installments' => 1,
             'frequency' => PaymentPlanFrequency::Monthly->value,
         ])

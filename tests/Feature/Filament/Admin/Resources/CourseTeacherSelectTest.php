@@ -15,6 +15,7 @@ use App\Models\User;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Filament\Tables\Columns\TextColumn;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -26,6 +27,8 @@ beforeEach(function () {
 
 it('registers the searchable relationship select macro', function () {
     expect(Select::hasMacro('searchableRelationship'))->toBeTrue()
+        ->and(Select::hasMacro('userRelationship'))->toBeTrue()
+        ->and(Select::hasMacro('studentRelationship'))->toBeTrue()
         ->and(
             Select::make('user_id')->searchableRelationship(
                 name: 'user',
@@ -35,6 +38,14 @@ it('registers the searchable relationship select macro', function () {
             )
         )
         ->toBeInstanceOf(Select::class);
+});
+
+it('keeps computed course table columns display only', function () {
+    livewire(ListCourses::class)
+        ->assertTableColumnExists(
+            'available_capacity',
+            fn (TextColumn $column): bool => ! $column->isSearchable() && ! $column->isSortable(),
+        );
 });
 
 it('searches teachers by partial full name terms', function () {

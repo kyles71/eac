@@ -28,11 +28,13 @@ final class EnrollmentsTable
             ->columns([
                 TextColumn::make('course.name')
                     ->searchable(),
-                TextColumn::make('user.fullName')
+                TextColumn::make('user.full_name')
+                    ->label('User')
                     ->hidden($only_my_enrollments)
-                    ->searchable(),
-                TextColumn::make('student.fullName')
-                    ->searchable(),
+                    ->searchable(['first_name', 'last_name']),
+                TextColumn::make('student.full_name')
+                    ->label('Student')
+                    ->searchable(['first_name', 'last_name']),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

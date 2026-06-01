@@ -85,7 +85,7 @@ final class EventForm
                     DatePicker::make('repeat_through')
                         ->label('Repeat Through')
                         ->required(fn (Get $get): bool => filled($get('repeat_frequency')))
-                        ->visible(fn (Get $get): bool => filled($get('repeat_frequency'))),
+                        ->visible(fn (Get $get, string $operation): bool => $operation === 'create' && filled($get('repeat_frequency'))),
                 ]),
             Section::make('Visibility')
                 ->columns(2)
@@ -226,8 +226,8 @@ final class EventForm
                     SpatieMediaLibraryFileUpload::make('documents')
                         ->label('Documents')
                         ->collection('documents')
-                        ->disk(MediaDisks::public())
-                        ->visibility('public')
+                        ->disk(MediaDisks::private())
+                        ->visibility('private')
                         ->multiple()
                         ->acceptedFileTypes([
                             'application/pdf',

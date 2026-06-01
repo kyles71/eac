@@ -34,8 +34,8 @@ it('can create a gift card', function () {
     livewire(ListGiftCards::class)
         ->callAction(CreateAction::class, data: [
             'code' => 'TESTGIFTCARD123',
-            'initial_amount' => 50,
-            'remaining_amount' => 50,
+            'initial_amount' => '50.00',
+            'remaining_amount' => '50.00',
             'purchased_by_user_id' => $user->id,
             'is_active' => true,
         ])
@@ -43,6 +43,8 @@ it('can create a gift card', function () {
 
     assertDatabaseHas(GiftCard::class, [
         'code' => 'TESTGIFTCARD123',
+        'initial_amount' => 5000,
+        'remaining_amount' => 5000,
         'purchased_by_user_id' => $user->id,
     ]);
 });

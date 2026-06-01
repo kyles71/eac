@@ -22,7 +22,7 @@ final class CoursesTable
                     ->searchable(),
                 TextColumn::make('product.price')
                     ->label('Price')
-                    ->formatStateUsing(fn (?int $state): string => $state !== null ? '$'.number_format($state / 100, 2) : '—')
+                    ->moneyCents()
                     ->placeholder('No product'),
                 TextColumn::make('semester')
                     ->badge()
@@ -33,6 +33,8 @@ final class CoursesTable
                 TextColumn::make('available_capacity')
                     ->label('Available')
                     ->state(fn (Course $record): int => $record->getAvailableCapacity())
+                    ->searchable(false)
+                    ->sortable(false)
                     ->badge()
                     ->color(fn (Course $record): string => $record->getAvailableCapacity() > 0 ? 'success' : 'danger'),
                 TextColumn::make('start_time')

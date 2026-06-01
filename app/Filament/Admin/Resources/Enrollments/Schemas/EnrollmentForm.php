@@ -7,7 +7,6 @@ namespace App\Filament\Admin\Resources\Enrollments\Schemas;
 use App\Filament\Admin\Resources\Courses\RelationManagers\EnrollmentsRelationManager;
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Student;
-use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -26,26 +25,20 @@ final class EnrollmentForm
                 Select::make('user_id')
                     ->live()
                     ->required()
-                    ->searchableRelationship(
-                        name: 'user',
-                        searchColumns: ['first_name', 'last_name'],
-                        labelFromRecord: fn (User $user): string => $user->fullName,
-                        modifyQueryUsing: fn (Builder $query, Get $get): Builder => $query->when($get('student_id'), function (Builder $query) use ($get): void {
+                    ->userRelationship(
+                        'user',
+                        fn (Builder $query, Get $get): Builder => $query->when($get('student_id'), function (Builder $query) use ($get): void {
                             $query->select('users.*')
                                 ->join('students', 'students.user_id', '=', 'users.id')
                                 ->where('students.id', $get('student_id'));
                         }),
-                        orderBy: ['first_name', 'last_name'],
                     ),
                 Select::make('student_id')
                     ->live()
                     ->required()
-                    ->searchableRelationship(
-                        name: 'student',
-                        searchColumns: ['first_name', 'last_name'],
-                        labelFromRecord: fn (Student $student): string => $student->fullName,
-                        modifyQueryUsing: fn (Builder $query, Get $get): Builder => $query->when($get('user_id'), fn (Builder $query, mixed $userId): Builder => $query->where('user_id', $userId)),
-                        orderBy: ['first_name', 'last_name'],
+                    ->studentRelationship(
+                        'student',
+                        fn (Builder $query, Get $get): Builder => $query->when($get('user_id'), fn (Builder $query, mixed $userId): Builder => $query->where('user_id', $userId)),
                     )
                     ->createOptionForm(fn (Schema $schema, Get $get): Schema => StudentForm::configure($schema, $get('user_id')))
                     ->createOptionUsing(function (array $data, Get $get): int {
