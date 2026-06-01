@@ -45,6 +45,31 @@ it('creates only occurrences on or before the repeat through date', function ():
         ->and($created[0]['end_time'])->toBe('2027-01-08 11:30:00');
 });
 
+it('treats repeat through as inclusive in the display timezone', function (): void {
+    $recurring = recurringHarness();
+    $data = $recurring->prepRecurringData([
+        'start_time' => '2026-05-12 00:00:00',
+        'end_time' => '2026-05-12 01:00:00',
+        'repeat_frequency' => ScheduleFrequency::Daily,
+        'repeat_through' => '2026-05-15',
+    ]);
+
+    $created = $recurring->createRecurring(
+        $data,
+        $recurring->repeatThrough(),
+        $recurring->repeatFrequency(),
+        fn (array $data): array => $data,
+    );
+
+    expect($created)->toHaveCount(4)
+        ->and(array_column($created, 'start_time'))->toBe([
+            '2026-05-13 00:00:00',
+            '2026-05-14 00:00:00',
+            '2026-05-15 00:00:00',
+            '2026-05-16 00:00:00',
+        ]);
+});
+
 it('uses no overflow monthly recurrence while preserving duration', function (): void {
     $recurring = recurringHarness();
     $data = $recurring->prepRecurringData([

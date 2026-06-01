@@ -21,9 +21,7 @@ trait HasRecurring
     public function prepRecurringData(array $data): array
     {
         $this->repeat_frequency = $this->normalizeRepeatFrequency($data['repeat_frequency'] ?? null);
-        $this->repeat_through = filled($data['repeat_through'] ?? null)
-            ? Carbon::parse($data['repeat_through'])
-            : null;
+        $this->repeat_through = $this->parseRepeatThrough($data['repeat_through'] ?? null);
 
         unset($data['repeat_frequency'], $data['repeat_through']);
 
@@ -52,7 +50,7 @@ trait HasRecurring
             return $return;
         }
 
-        $repeatThrough = $repeat_through->copy()->endOfDay();
+        $repeatThrough = $this->inclusiveRepeatThrough($repeat_through);
         $firstStart = Carbon::parse($data[$start_field]);
         $firstEnd = filled($data[$end_field] ?? null)
             ? Carbon::parse($data[$end_field])
@@ -91,6 +89,28 @@ trait HasRecurring
         return ScheduleFrequency::tryFrom($frequency);
     }
 
+    private function parseRepeatThrough(mixed $repeatThrough): ?Carbon
+    {
+        if ($repeatThrough instanceof Carbon) {
+            return $repeatThrough;
+        }
+
+        if (blank($repeatThrough)) {
+            return null;
+        }
+
+        return Carbon::parse($repeatThrough, $this->displayTimezone());
+    }
+
+    private function inclusiveRepeatThrough(Carbon $repeatThrough): Carbon
+    {
+        return $repeatThrough
+            ->copy()
+            ->timezone($this->displayTimezone())
+            ->endOfDay()
+            ->timezone(config('app.timezone'));
+    }
+
     private function nextOccurrenceStart(Carbon $start, ScheduleFrequency $frequency): Carbon
     {
         return match ($frequency) {
@@ -99,5 +119,10 @@ trait HasRecurring
             ScheduleFrequency::Biweekly => $start->copy()->addWeeks(2),
             ScheduleFrequency::Monthly => $start->copy()->addMonthNoOverflow(),
         };
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 }

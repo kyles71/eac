@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\CourseSemester;
+use App\Enums\ScheduleFrequency;
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Schemas\CourseForm;
 use App\Models\Calendar;
@@ -151,6 +152,85 @@ it('stores general course tags separately from calendar course tags', function (
 
     expect($course->tagsWithType(Course::GENERAL_TAG_TYPE)->pluck('name')->all())->toBe(['audition prep'])
         ->and($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toBe([Calendar::SLUG_COMP]);
+});
+
+it('creates recurring class events when creating a course', function (): void {
+    livewire(ListCourses::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Modern 2',
+            'description' => 'Technique and combinations',
+            'semester' => CourseSemester::Fall->value,
+            'capacity' => 12,
+            'start_time' => '2027-01-01 10:00:00',
+            'duration' => 90,
+            'repeat_frequency' => ScheduleFrequency::Weekly->value,
+            'repeat_through' => '2027-01-15',
+            'calendar_tag_slugs' => [Calendar::SLUG_COMP],
+            'teachers' => [],
+            'guest_teacher' => null,
+            'tags' => [],
+            'courseForms' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    $course = Course::query()->where('name', 'Modern 2')->firstOrFail();
+    $calendar = Calendar::query()->where('slug', Calendar::SLUG_COMP)->firstOrFail();
+    $events = $course->events()->orderBy('start_time')->get();
+
+    expect($events)->toHaveCount(3)
+        ->and($events->pluck('name')->all())->toBe([
+            'Modern 2 Class',
+            'Modern 2 Class',
+            'Modern 2 Class',
+        ])
+        ->and($events->pluck('start_time')->map->toDateTimeString()->all())->toBe([
+            '2027-01-01 15:00:00',
+            '2027-01-08 15:00:00',
+            '2027-01-15 15:00:00',
+        ])
+        ->and($events->pluck('end_time')->map->toDateTimeString()->all())->toBe([
+            '2027-01-01 16:30:00',
+            '2027-01-08 16:30:00',
+            '2027-01-15 16:30:00',
+        ])
+        ->and($events->pluck('calendar_id')->unique()->values()->all())->toBe([$calendar->id]);
+});
+
+it('includes the repeat through day when creating daily course events', function (): void {
+    livewire(ListCourses::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Ballet Intensive',
+            'description' => null,
+            'semester' => CourseSemester::Summer->value,
+            'capacity' => 12,
+            'start_time' => '2026-05-11 20:00:00',
+            'duration' => 60,
+            'repeat_frequency' => ScheduleFrequency::Daily->value,
+            'repeat_through' => '2026-05-15',
+            'calendar_tag_slugs' => [Calendar::SLUG_EAC],
+            'teachers' => [],
+            'guest_teacher' => null,
+            'tags' => [],
+            'courseForms' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    $course = Course::query()->where('name', 'Ballet Intensive')->firstOrFail();
+    $eventDates = $course->events()
+        ->orderBy('start_time')
+        ->get()
+        ->map(fn ($event): string => $event->start_time
+            ->timezone(config('app.display_timezone'))
+            ->toDateString())
+        ->all();
+
+    expect($eventDates)->toBe([
+        '2026-05-11',
+        '2026-05-12',
+        '2026-05-13',
+        '2026-05-14',
+        '2026-05-15',
+    ]);
 });
 
 it('limits course teacher options to users with the teacher role when it exists', function () {

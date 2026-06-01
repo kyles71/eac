@@ -6,11 +6,13 @@ namespace App\Filament\Admin\Resources\Courses\Schemas;
 
 use App\Enums\CourseSemester;
 use App\Enums\FormTypes;
+use App\Enums\ScheduleFrequency;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Form;
 use App\Models\User;
 use App\Support\MediaDisks;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -18,6 +20,7 @@ use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Spatie\Permission\Models\Role;
@@ -46,6 +49,17 @@ final class CourseForm
                     ->required()
                     ->numeric()
                     ->default(60),
+                Select::make('repeat_frequency')
+                    ->label('Repeat')
+                    ->placeholder('Does not repeat')
+                    ->live()
+                    ->visible(fn (string $operation): bool => $operation === 'create')
+                    ->enum(ScheduleFrequency::class)
+                    ->options(ScheduleFrequency::class),
+                DatePicker::make('repeat_through')
+                    ->label('Repeat Through')
+                    ->required(fn (Get $get): bool => filled($get('repeat_frequency')))
+                    ->visible(fn (Get $get, string $operation): bool => $operation === 'create' && filled($get('repeat_frequency'))),
                 Select::make('calendar_tag_slugs')
                     ->label('Apply To Calendars')
                     ->multiple()
