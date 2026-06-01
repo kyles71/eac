@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\CourseSemester;
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Schemas\CourseForm;
 use App\Models\Calendar;
@@ -81,6 +82,7 @@ it('saves multiple teachers from the course form', function () {
         ->callAction(CreateAction::class, data: [
             'name' => 'Ballet 1',
             'description' => null,
+            'semester' => CourseSemester::WinterSpring->value,
             'capacity' => 10,
             'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
             'duration' => 60,
@@ -112,6 +114,7 @@ it('saves selected course calendar tags from the course form', function () {
         ->callAction(CreateAction::class, data: [
             'name' => 'Comp Team',
             'description' => null,
+            'semester' => CourseSemester::Summer->value,
             'capacity' => 10,
             'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
             'duration' => 60,
@@ -125,6 +128,29 @@ it('saves selected course calendar tags from the course form', function () {
     $course = Course::query()->where('name', 'Comp Team')->firstOrFail();
 
     expect($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toBe([Calendar::SLUG_COMP]);
+});
+
+it('stores general course tags separately from calendar course tags', function (): void {
+    livewire(ListCourses::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Jazz Technique',
+            'description' => null,
+            'semester' => CourseSemester::Fall->value,
+            'capacity' => 10,
+            'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
+            'duration' => 60,
+            'calendar_tag_slugs' => [Calendar::SLUG_COMP],
+            'teachers' => [],
+            'guest_teacher' => null,
+            'tags' => ['audition prep'],
+            'courseForms' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    $course = Course::query()->where('name', 'Jazz Technique')->firstOrFail();
+
+    expect($course->tagsWithType(Course::GENERAL_TAG_TYPE)->pluck('name')->all())->toBe(['audition prep'])
+        ->and($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toBe([Calendar::SLUG_COMP]);
 });
 
 it('limits course teacher options to users with the teacher role when it exists', function () {

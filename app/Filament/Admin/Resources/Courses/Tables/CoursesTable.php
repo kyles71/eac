@@ -8,6 +8,7 @@ use App\Filament\Actions\SendEmailAction;
 use App\Models\Course;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -23,6 +24,9 @@ final class CoursesTable
                     ->label('Price')
                     ->formatStateUsing(fn (?int $state): string => $state !== null ? '$'.number_format($state / 100, 2) : '—')
                     ->placeholder('No product'),
+                TextColumn::make('semester')
+                    ->badge()
+                    ->sortable(),
                 TextColumn::make('capacity')
                     ->numeric()
                     ->sortable(),
@@ -43,6 +47,10 @@ final class CoursesTable
                     ->label('Teachers')
                     ->searchable(false)
                     ->sortable(false),
+                SpatieTagsColumn::make('tags')
+                    ->label('Course Tags')
+                    ->type(Course::GENERAL_TAG_TYPE)
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

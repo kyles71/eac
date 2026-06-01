@@ -6,16 +6,22 @@ namespace App\Filament\User\Pages;
 
 use App\Actions\Enrollments\AssignStudentToEnrollmentAction;
 use App\Actions\Enrollments\UnassignStudentFromEnrollmentAction;
+use App\Enums\CourseSemester;
 use App\Filament\User\Resources\Students\Schemas\StudentForm;
 use App\Models\Enrollment;
 use App\Models\Student;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Concerns\HasTabs;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Schema as ComponentSchema;
@@ -58,14 +64,14 @@ final class MyEnrollments extends TablePage
         $now = Carbon::now();
 
         return [
-            'open' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->open()),
-            'active' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->select('enrollments.*')->active($now)),
-            'future' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->future($now)),
+            CourseSemester::WinterSpring->value => Tab::make()
+                ->modifyQueryUsing(fn (Builder $query) => $query->semester(CourseSemester::WinterSpring, $now)),
+            CourseSemester::Summer->value => Tab::make()
+                ->modifyQueryUsing(fn (Builder $query) => $query->semester(CourseSemester::Summer, $now)),
+            CourseSemester::Fall->value => Tab::make()
+                ->modifyQueryUsing(fn (Builder $query) => $query->semester(CourseSemester::Fall, $now)),
             'past' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->select('enrollments.*')->past($now)),
+                ->modifyQueryUsing(fn (Builder $query) => $query->past($now)),
             'all' => Tab::make(),
         ];
     }
@@ -76,13 +82,17 @@ final class MyEnrollments extends TablePage
             ->query(
                 Enrollment::query()
                     ->where('user_id', auth()->id())
-                    ->with(['course.events', 'student'])
+                    ->with(['course.events', 'course.teachers', 'student'])
             )
             ->recordTitle(fn (Enrollment $record): string => $record->course?->name ?? 'Enrollment')
             ->columns([
                 TextColumn::make('course.name')
                     ->label('Course')
                     ->searchable()
+                    ->sortable(),
+                TextColumn::make('course.semester')
+                    ->label('Semester')
+                    ->badge()
                     ->sortable(),
                 TextColumn::make('student.fullName')
                     ->label('Student')
@@ -107,11 +117,20 @@ final class MyEnrollments extends TablePage
                     ->label('Student')
                     ->options(fn (): array => $this->studentOptions()),
             ])
+            ->recordAction('viewCourseDetails')
             ->recordActions([
+                ViewAction::make('viewCourseDetails')
+                    ->label('View Details')
+                    ->icon(Heroicon::OutlinedAcademicCap)
+                    ->modalHeading(fn (Enrollment $record): string => $record->course?->name ?? 'Class Details')
+                    ->modalWidth('lg')
+                    ->slideOver(false)
+                    ->schema($this->courseDetailsSchema())
+                    ->fillForm(fn (Enrollment $record): array => $this->courseDetailsModalData($record)),
                 Action::make('assignStudent')
                     ->label(fn (Enrollment $record): string => $record->student_id === null ? 'Assign Student' : 'Change Student')
                     ->icon(Heroicon::OutlinedUser)
-                    ->visible(fn (Enrollment $record): bool => $record->student_id === null || $this->canChangeAssignedStudent($record))
+                    ->visible(fn (Enrollment $record): bool => ! $this->courseHasConcluded($record) && ($record->student_id === null || $this->canChangeAssignedStudent($record)))
                     ->schema([
                         Select::make('student_id')
                             ->label('Student')
@@ -194,27 +213,27 @@ final class MyEnrollments extends TablePage
 
     private function enrollmentStatus(Enrollment $enrollment): string
     {
-        if ($enrollment->student_id === null) {
-            return 'Open';
-        }
-
         $course = $enrollment->course;
 
         if ($course === null) {
             return 'Past';
         }
 
-        $now = now();
+        $now = Carbon::now();
+
+        if ($course->hasConcluded($now)) {
+            return 'Past';
+        }
+
+        if ($enrollment->student_id === null) {
+            return 'Open';
+        }
 
         if ($course->start_time?->gt($now)) {
             return 'Future';
         }
 
-        if ($course->events->contains(fn ($event): bool => $event->start_time->gt($now))) {
-            return 'Active';
-        }
-
-        return 'Past';
+        return 'Active';
     }
 
     private function canChangeAssignedStudent(Enrollment $enrollment): bool
@@ -228,6 +247,61 @@ final class MyEnrollments extends TablePage
         $user = auth()->user();
 
         return app(UnassignStudentFromEnrollmentAction::class)->canHandle($enrollment, $user);
+    }
+
+    private function courseHasConcluded(Enrollment $enrollment): bool
+    {
+        return $enrollment->course?->hasConcluded() ?? true;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function courseDetailsModalData(Enrollment $enrollment): array
+    {
+        $course = $enrollment->course;
+
+        return [
+            'name' => $course?->name,
+            'semester' => $course?->semester?->getLabel(),
+            'teacher' => $course?->teacherDisplayName,
+            'student' => $enrollment->student?->fullName,
+            'starts_at' => $course?->start_time,
+            'duration' => $course?->duration !== null ? "{$course->duration} minutes" : null,
+            'meetings' => $course?->events->count(),
+            'status' => $this->enrollmentStatus($enrollment),
+            'description' => $course?->description,
+        ];
+    }
+
+    private function courseDetailsSchema(): array
+    {
+        return [
+            Section::make('Course')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('name')
+                        ->label('Course'),
+                    TextInput::make('semester'),
+                    TextInput::make('teacher'),
+                    TextInput::make('student')
+                        ->placeholder('Unassigned'),
+                    DateTimePicker::make('starts_at')
+                        ->label('Starts At')
+                        ->timezone($this->displayTimezone()),
+                    TextInput::make('duration'),
+                    TextInput::make('meetings')
+                        ->label('Class Meetings'),
+                    TextInput::make('status'),
+                    Textarea::make('description')
+                        ->columnSpanFull(),
+                ]),
+        ];
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     /**

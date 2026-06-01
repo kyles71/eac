@@ -7,7 +7,9 @@ namespace App\Models;
 use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Enums\CourseSemester;
 use App\Support\MediaDisks;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,8 +30,11 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
     public const string CALENDAR_TAG_TYPE = 'course-calendar';
 
+    public const string GENERAL_TAG_TYPE = 'course-general';
+
     protected $casts = [
         'id' => 'integer',
+        'semester' => CourseSemester::class,
         'start_time' => 'datetime',
         'capacity' => 'integer',
         'duration' => 'integer',
@@ -151,6 +156,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         $availableCapacity = $this->getAvailableCapacity();
 
         return array_filter([
+            'Semester' => $this->semester?->getLabel(),
             'Start Time' => $this->start_time?->format('M j, Y g:i A'),
             'Duration' => "{$this->duration} minutes",
             'Teacher' => $this->teacherDisplayName,
@@ -169,6 +175,70 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
             Enrollment::selectRaw('count(*)')
                 ->whereColumn('enrollments.course_id', 'courses.id')
         );
+    }
+
+    public function scopeConcluded(Builder $query, ?Carbon $date = null): void
+    {
+        $date ??= Carbon::now();
+
+        $query->where(function (Builder $query) use ($date): void {
+            $query
+                ->where(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereHas('events')
+                        ->whereDoesntHave(
+                            'events',
+                            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+                        );
+                })
+                ->orWhere(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereDoesntHave('events')
+                        ->where('start_time', '<', $date);
+                });
+        });
+    }
+
+    public function scopeNotConcluded(Builder $query, ?Carbon $date = null): void
+    {
+        $date ??= Carbon::now();
+
+        $query->where(function (Builder $query) use ($date): void {
+            $query
+                ->whereHas(
+                    'events',
+                    fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+                )
+                ->orWhere(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereDoesntHave('events')
+                        ->where(function (Builder $query) use ($date): void {
+                            $query
+                                ->whereNull('start_time')
+                                ->orWhere('start_time', '>=', $date);
+                        });
+                });
+        });
+    }
+
+    public function hasConcluded(?Carbon $date = null): bool
+    {
+        $date ??= Carbon::now();
+
+        if ($this->relationLoaded('events')) {
+            if ($this->events->isNotEmpty()) {
+                return ! $this->events->contains(
+                    fn (Event $event): bool => self::eventHasNotPassed($event, $date)
+                );
+            }
+
+            return $this->start_time?->lt($date) ?? false;
+        }
+
+        return ! self::query()
+            ->whereKey($this->getKey())
+            ->notConcluded($date)
+            ->exists();
     }
 
     public function registerMediaCollections(): void
@@ -202,6 +272,28 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
                 $course->attachTag(Calendar::SLUG_EAC, self::CALENDAR_TAG_TYPE);
             }
         });
+    }
+
+    private static function applyEventNotPassedConstraint(Builder $query, Carbon $date): Builder
+    {
+        return $query->where(function (Builder $query) use ($date): void {
+            $query
+                ->where('end_time', '>=', $date)
+                ->orWhere(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereNull('end_time')
+                        ->where('start_time', '>=', $date);
+                });
+        });
+    }
+
+    private static function eventHasNotPassed(Event $event, Carbon $date): bool
+    {
+        if ($event->end_time !== null) {
+            return $event->end_time->gte($date);
+        }
+
+        return $event->start_time?->gte($date) ?? false;
     }
 
     private function formattedTeacherNames(): ?string

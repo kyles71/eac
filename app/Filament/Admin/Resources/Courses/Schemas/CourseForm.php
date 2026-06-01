@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
+use App\Enums\CourseSemester;
 use App\Enums\FormTypes;
 use App\Models\Calendar;
 use App\Models\Course;
@@ -13,6 +14,7 @@ use App\Support\MediaDisks;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -30,6 +32,10 @@ final class CourseForm
                     ->required(),
                 Textarea::make('description')
                     ->columnSpanFull(),
+                Select::make('semester')
+                    ->options(CourseSemester::class)
+                    ->required()
+                    ->default(CourseSemester::Fall->value),
                 TextInput::make('capacity')
                     ->required()
                     ->numeric()
@@ -79,6 +85,10 @@ final class CourseForm
                         orderBy: ['first_name', 'last_name'],
                     ),
                 TextInput::make('guest_teacher'),
+                SpatieTagsInput::make('tags')
+                    ->label('Course Tags')
+                    ->type(Course::GENERAL_TAG_TYPE)
+                    ->columnSpanFull(),
                 Select::make('courseForms')
                     ->label('Forms')
                     ->multiple()
