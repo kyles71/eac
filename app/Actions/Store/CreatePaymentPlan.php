@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Enums\InstallmentStatus;
-use App\Enums\PaymentPlanMethod;
 use App\Models\Order;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
@@ -20,7 +19,6 @@ final readonly class CreatePaymentPlan
     public function handle(
         Order $order,
         PaymentPlanTemplate $template,
-        PaymentPlanMethod $method,
         ?string $stripeCustomerId = null,
         ?string $stripePaymentMethodId = null,
     ): PaymentPlan {
@@ -30,7 +28,6 @@ final readonly class CreatePaymentPlan
         /** @var PaymentPlan $paymentPlan */
         $paymentPlan = $order->paymentPlan()->create([
             'payment_plan_template_id' => $template->id,
-            'method' => $method,
             'total_amount' => $total,
             'number_of_installments' => $template->number_of_installments,
             'frequency' => $template->frequency,

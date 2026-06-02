@@ -7,7 +7,6 @@ namespace App\Contracts;
 use App\Models\User;
 use Stripe\Customer;
 use Stripe\Event;
-use Stripe\Invoice;
 use Stripe\PaymentIntent;
 use Stripe\PaymentMethod;
 use Stripe\Refund;
@@ -50,8 +49,6 @@ interface StripeServiceContract
 
     public function detachPaymentMethod(string $paymentMethodId): PaymentMethod;
 
-    public function retrieveInvoice(string $invoiceId): Invoice;
-
     public function constructWebhookEvent(string $payload, string $signature): Event;
 
     public function refundPaymentIntent(string $paymentIntentId, ?int $amount = null): Refund;
@@ -68,18 +65,6 @@ interface StripeServiceContract
         string $description = '',
         array $metadata = [],
     ): PaymentIntent;
-
-    /**
-     * Create and send a Stripe invoice to the customer.
-     *
-     * @param  array<string, string>  $metadata
-     */
-    public function createAndSendInvoice(
-        string $customerId,
-        int $amount,
-        string $description = '',
-        array $metadata = [],
-    ): Invoice;
 
     /**
      * Cancel a PaymentIntent that has not yet been captured or confirmed.

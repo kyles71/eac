@@ -14,7 +14,6 @@ return new class() extends Migration
             $table->id();
             $table->foreignId('order_id')->constrained()->cascadeOnDelete();
             $table->foreignId('payment_plan_template_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('method');
             $table->unsignedInteger('total_amount');
             $table->unsignedSmallInteger('number_of_installments');
             $table->string('frequency');

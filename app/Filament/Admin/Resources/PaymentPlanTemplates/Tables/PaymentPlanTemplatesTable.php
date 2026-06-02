@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\PaymentPlanTemplates\Tables;
 
+use App\Models\PaymentPlanTemplate;
+use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -22,6 +24,12 @@ final class PaymentPlanTemplatesTable
                 TextColumn::make('product_type')
                     ->label('Product Type')
                     ->badge(),
+                TextColumn::make('course_semesters')
+                    ->label('Semesters')
+                    ->state(fn (PaymentPlanTemplate $record): string => $record->allowedCourseSemesters() === []
+                        ? 'All'
+                        : implode(', ', $record->allowedCourseSemesters()))
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('min_price')
                     ->label('Min Price')
                     ->moneyCents()
@@ -42,6 +50,10 @@ final class PaymentPlanTemplatesTable
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->recordActions([
+                EditAction::make()
+                    ->visible(fn (PaymentPlanTemplate $record): bool => ! $record->isUsed()),
             ]);
     }
 }

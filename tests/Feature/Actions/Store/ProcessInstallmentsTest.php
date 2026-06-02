@@ -5,10 +5,8 @@ declare(strict_types=1);
 use App\Actions\Store\ProcessInstallments;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
-use App\Enums\PaymentPlanMethod;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
-use Stripe\Invoice;
 use Stripe\PaymentIntent;
 
 beforeEach(function () {
@@ -18,7 +16,6 @@ beforeEach(function () {
 
 it('processes due auto-charge installments successfully', function () {
     $plan = PaymentPlan::factory()->create([
-        'method' => PaymentPlanMethod::AutoCharge,
         'stripe_customer_id' => 'cus_test_123',
         'stripe_payment_method_id' => 'pm_test_123',
     ]);
@@ -49,7 +46,6 @@ it('processes due auto-charge installments successfully', function () {
 
 it('marks installment as failed when auto-charge fails', function () {
     $plan = PaymentPlan::factory()->create([
-        'method' => PaymentPlanMethod::AutoCharge,
         'stripe_customer_id' => 'cus_test_123',
         'stripe_payment_method_id' => 'pm_test_123',
     ]);
@@ -76,36 +72,8 @@ it('marks installment as failed when auto-charge fails', function () {
         ->and($installment->retry_count)->toBe(1);
 });
 
-it('processes manual invoice installments', function () {
-    $plan = PaymentPlan::factory()->manualInvoice()->create([
-        'stripe_customer_id' => 'cus_test_123',
-    ]);
-
-    $installment = Installment::factory()->dueToday()->create([
-        'payment_plan_id' => $plan->id,
-        'amount' => 3333,
-    ]);
-
-    $invoice = Invoice::constructFrom(['id' => 'inv_test_123']);
-
-    $this->mockStripe
-        ->shouldReceive('createAndSendInvoice')
-        ->once()
-        ->andReturn($invoice);
-
-    $action = app(ProcessInstallments::class);
-    $result = $action->handle();
-
-    expect($result['processed'])->toBe(1)
-        ->and($result['succeeded'])->toBe(1);
-
-    $installment->refresh();
-    expect($installment->stripe_invoice_id)->toBe('inv_test_123');
-});
-
 it('retries failed installments', function () {
     $plan = PaymentPlan::factory()->create([
-        'method' => PaymentPlanMethod::AutoCharge,
         'stripe_customer_id' => 'cus_test_123',
         'stripe_payment_method_id' => 'pm_test_123',
     ]);
@@ -156,7 +124,6 @@ it('does not process future installments', function () {
 
 it('marks as failed when missing stripe credentials for auto-charge', function () {
     $plan = PaymentPlan::factory()->create([
-        'method' => PaymentPlanMethod::AutoCharge,
         'stripe_customer_id' => null,
         'stripe_payment_method_id' => null,
     ]);

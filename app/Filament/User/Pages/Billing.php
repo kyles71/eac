@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
-use App\Actions\Store\SwitchPaymentPlanMethod;
+use App\Actions\Store\UpdatePaymentPlanPaymentMethod;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
-use App\Enums\PaymentPlanMethod;
 use App\Filament\Actions\RedeemGiftCardAction;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
@@ -30,7 +29,6 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -155,7 +153,6 @@ final class Billing extends Page
                 ->whereHas('order', fn ($query) => $query
                     ->where('user_id', $user->id)
                     ->where('status', '!=', OrderStatus::Cancelled))
-                ->where('method', PaymentPlanMethod::AutoCharge)
                 ->whereHas('installments', fn ($query) => $query->where('status', InstallmentStatus::Pending))
                 ->update(['stripe_payment_method_id' => $paymentMethodId]);
 
@@ -237,20 +234,37 @@ final class Billing extends Page
             ->orderBy('due_date')
             ->first();
 
+        $summaryColumnSpan = ['default' => 1, 'md' => $restrictedCreditBalance > 0 ? 3 : 4];
+
         return [
-            Grid::make()
-                ->columns([
-                    'default' => 1,
-                    'md' => 2,
-                    'xl' => 4,
-                ])
+            Grid::make([
+                'default' => 1,
+                'md' => 12,
+            ])
                 ->schema([
                     Section::make('Store Credit')
                         ->schema([
                             TextEntry::make('store_credit_balance')
                                 ->hiddenLabel()
-                                ->state(format_money($creditBalance))
-                        ]),
+                                ->state(format_money($creditBalance)),
+                        ])
+                        ->columnSpan($summaryColumnSpan),
+                    Section::make('Next Payment')
+                        ->schema([
+                            TextEntry::make('next_payment')
+                                ->hiddenLabel()
+                                ->state($nextInstallment !== null
+                                    ? format_money($nextInstallment->amount).' due '.$nextInstallment->due_date->format('M j, Y')
+                                    : 'No upcoming payments'),
+                        ])
+                        ->columnSpan($summaryColumnSpan),
+                    Section::make('Open Seats')
+                        ->schema([
+                            TextEntry::make('open_enrollments')
+                                ->hiddenLabel()
+                                ->state((string) $openEnrollments),
+                        ])
+                        ->columnSpan($summaryColumnSpan),
                     Section::make('Limited Use Credit')
                         ->headerActions([
                             $this->viewLimitedUseCreditDetailsAction(),
@@ -260,21 +274,8 @@ final class Billing extends Page
                                 ->hiddenLabel()
                                 ->state(format_money($restrictedCreditBalance)),
                         ])
-                        ->visible($restrictedCreditBalance > 0),
-                    Section::make('Next Payment')
-                        ->schema([
-                            TextEntry::make('next_payment')
-                                ->hiddenLabel()
-                                ->state($nextInstallment !== null
-                                    ? format_money($nextInstallment->amount).' due '.$nextInstallment->due_date->format('M j, Y')
-                                    : 'No upcoming payments'),
-                        ]),
-                    Section::make('Open Seats')
-                        ->schema([
-                            TextEntry::make('open_enrollments')
-                                ->hiddenLabel()
-                                ->state((string) $openEnrollments),
-                        ]),
+                        ->visible($restrictedCreditBalance > 0)
+                        ->columnSpan(['default' => 1, 'md' => 3]),
                 ]),
             Section::make('Recent Orders')
                 ->schema($this->getRecentOrdersSchema()),
@@ -423,6 +424,9 @@ final class Billing extends Page
                     TextEntry::make('receipt_store_credit')
                         ->label('Store Credit')
                         ->state(format_money($order->credit_applied)),
+                    TextEntry::make('receipt_payment_plan_fee')
+                        ->label('Payment Plan Fee')
+                        ->state(format_money($order->payment_plan_fee)),
                     TextEntry::make('receipt_total')
                         ->label('Total')
                         ->state($order->formattedTotal()),
@@ -439,7 +443,7 @@ final class Billing extends Page
             ->whereHas('order', fn ($query) => $query
                 ->where('user_id', auth()->id())
                 ->where('status', '!=', OrderStatus::Cancelled))
-            ->with(['order', 'template', 'installments'])
+            ->with(['order.paymentPlanTermsVersion', 'template', 'installments'])
             ->latest()
             ->get();
 
@@ -454,73 +458,64 @@ final class Billing extends Page
             ];
         }
 
-        return $plans
-            ->map(fn (PaymentPlan $plan): Section => Section::make("Order #{$plan->order_id}")
-                ->schema([
-                    Grid::make()
-                        ->columns([
-                            'default' => 1,
-                            'md' => 4,
-                        ])
-                        ->schema([
-                            TextEntry::make("plan_{$plan->id}_total")
-                                ->label('Total')
-                                ->state(format_money($plan->total_amount)),
-                            TextEntry::make("plan_{$plan->id}_paid")
-                                ->label('Paid')
-                                ->state(format_money($plan->amountPaid())),
-                            TextEntry::make("plan_{$plan->id}_remaining")
-                                ->label('Remaining')
-                                ->state(format_money($plan->remainingBalance())),
-                            TextEntry::make("plan_{$plan->id}_method")
-                                ->label('Method')
-                                ->state($plan->method)
-                                ->badge(),
+        return [
+            ...$this->paymentPlanTermsLinkSchema($plans),
+            ...$plans
+                ->map(fn (PaymentPlan $plan): Section => Section::make("Order #{$plan->order_id}")
+                    ->schema([
+                        Grid::make()
+                            ->columns([
+                                'default' => 1,
+                                'md' => 3,
+                            ])
+                            ->schema([
+                                TextEntry::make("plan_{$plan->id}_total")
+                                    ->label('Total')
+                                    ->state(format_money($plan->total_amount)),
+                                TextEntry::make("plan_{$plan->id}_paid")
+                                    ->label('Paid')
+                                    ->state(format_money($plan->amountPaid())),
+                                TextEntry::make("plan_{$plan->id}_remaining")
+                                    ->label('Remaining')
+                                    ->state(format_money($plan->remainingBalance())),
+                            ]),
+                        Actions::make([
+                            $this->updatePaymentPlanPaymentMethodAction($plan),
+                            $this->installmentsAction($plan),
                         ]),
-                    Actions::make([
-                        $this->switchPaymentPlanMethodAction($plan),
-                        $this->installmentsAction($plan),
-                    ]),
-                ])
-                ->compact())
-            ->all();
+                    ])
+                    ->compact())
+                ->all(),
+        ];
     }
 
-    private function switchPaymentPlanMethodAction(PaymentPlan $plan): Action
+    private function updatePaymentPlanPaymentMethodAction(PaymentPlan $plan): Action
     {
-        return Action::make("switch_plan_method_{$plan->id}")
-            ->label('Update Method')
+        return Action::make("update_plan_payment_method_{$plan->id}")
+            ->label('Update Payment Method')
             ->icon(Heroicon::OutlinedArrowPath)
             ->visible(fn (): bool => ! $plan->isFullyPaid())
             ->schema([
-                Select::make('method')
-                    ->label('Payment Plan Method')
-                    ->options(PaymentPlanMethod::class)
-                    ->default($plan->method->value)
-                    ->required()
-                    ->live(),
                 Select::make('stripe_payment_method_id')
                     ->label('Saved Payment Method')
                     ->options(fn (): array => $this->paymentMethodOptions())
                     ->default($plan->stripe_payment_method_id)
-                    ->required(fn (Get $get): bool => $get('method') === PaymentPlanMethod::AutoCharge->value)
-                    ->visible(fn (Get $get): bool => $get('method') === PaymentPlanMethod::AutoCharge->value),
+                    ->required(),
             ])
             ->action(function (array $data) use ($plan): void {
                 try {
-                    app(SwitchPaymentPlanMethod::class)->handle(
+                    app(UpdatePaymentPlanPaymentMethod::class)->handle(
                         $plan,
-                        PaymentPlanMethod::from($data['method']),
-                        $data['stripe_payment_method_id'] ?? null,
+                        $data['stripe_payment_method_id'],
                     );
 
                     Notification::make()
-                        ->title('Payment plan updated')
+                        ->title('Payment method updated')
                         ->success()
                         ->send();
                 } catch (Throwable $exception) {
                     Notification::make()
-                        ->title('Could not update payment plan')
+                        ->title('Could not update payment method')
                         ->body($exception->getMessage())
                         ->danger()
                         ->send();
@@ -587,25 +582,26 @@ final class Billing extends Page
             Actions::make([
                 RedeemGiftCardAction::make(),
             ]),
-            Grid::make()
-                ->columns([
-                    'default' => 1,
-                    'md' => 2,
-                ])
+            Grid::make([
+                'default' => 1,
+                'md' => 2,
+            ])
                 ->schema([
                     Section::make('Store Credit')
                         ->schema([
                             TextEntry::make('credits_store_credit')
                                 ->hiddenLabel()
                                 ->state(format_money($creditBalance)),
-                        ]),
+                        ])
+                        ->columnSpan(['md' => $restrictedCreditBalance > 0 ? 1 : 2]),
                     Section::make('Limited Use Credit')
                         ->schema([
                             TextEntry::make('credits_restricted_credit')
                                 ->hiddenLabel()
                                 ->state(format_money($restrictedCreditBalance)),
                         ])
-                        ->visible($restrictedCreditBalance > 0),
+                        ->visible($restrictedCreditBalance > 0)
+                        ->columnSpan(['md' => 6]),
                 ]),
             Section::make('Limited Use Credit Details')
                 ->schema($this->restrictedCreditSchema($restrictedCredits))
@@ -853,10 +849,60 @@ final class Billing extends Page
             ->whereHas('order', fn ($query) => $query
                 ->where('user_id', auth()->id())
                 ->where('status', '!=', OrderStatus::Cancelled))
-            ->where('method', PaymentPlanMethod::AutoCharge)
             ->where('stripe_payment_method_id', $paymentMethodId)
             ->whereHas('installments', fn ($query) => $query->where('status', InstallmentStatus::Pending))
             ->count();
+    }
+
+    /**
+     * @param  EloquentCollection<int, PaymentPlan>  $plans
+     * @return array<\Filament\Schemas\Components\Component>
+     */
+    private function paymentPlanTermsLinkSchema(EloquentCollection $plans): array
+    {
+        $versions = $plans
+            ->map(fn (PaymentPlan $plan) => $plan->order?->paymentPlanTermsVersion)
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        if ($versions->isEmpty()) {
+            return [];
+        }
+
+        if ($versions->count() === 1) {
+            $version = $versions->first();
+
+            return [
+                Section::make('Terms & Conditions')
+                    ->schema([
+                        Actions::make([
+                            Action::make('view_payment_plan_terms')
+                                ->label('All payment plans below have been agreed to under these Terms & Conditions')
+                                ->icon(Heroicon::OutlinedDocumentText)
+                                ->url(route('legal-documents.versions.show', $version))
+                                ->openUrlInNewTab(),
+                        ]),
+                    ])
+                    ->compact(),
+            ];
+        }
+
+        return [
+            Section::make('Terms & Conditions')
+                ->schema([
+                    Actions::make(
+                        $versions
+                            ->map(fn ($version): Action => Action::make("view_payment_plan_terms_{$version->id}")
+                                ->label("View Terms & Conditions {$version->versionLabel()}")
+                                ->icon(Heroicon::OutlinedDocumentText)
+                                ->url(route('legal-documents.versions.show', $version))
+                                ->openUrlInNewTab())
+                            ->all()
+                    ),
+                ])
+                ->compact(),
+        ];
     }
 
     private function viewLimitedUseCreditDetailsAction(): Action

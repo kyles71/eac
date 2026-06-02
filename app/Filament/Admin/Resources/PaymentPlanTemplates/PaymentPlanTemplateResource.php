@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\PaymentPlanTemplates;
 
-use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\CreatePaymentPlanTemplate;
-use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\EditPaymentPlanTemplate;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\ListPaymentPlanTemplates;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\Schemas\PaymentPlanTemplateForm;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\Tables\PaymentPlanTemplatesTable;

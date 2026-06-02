@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Shared\Schemas;
 
 use App\Models\PaymentPlanTemplate;
+use App\Support\PaymentPlanFee;
 use Closure;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Flex;
@@ -25,6 +26,7 @@ final class OrderSummarySchema
         string|Closure|null $discountLabel = null,
         int|Closure $restrictedCreditAmount = 0,
         int|Closure $creditAmount = 0,
+        int|Closure $paymentPlanFeeAmount = 0,
         int|Closure $total = 0,
         PaymentPlanTemplate|Closure|null $template = null,
         int|Closure|null $amountDueToday = null,
@@ -73,6 +75,16 @@ final class OrderSummarySchema
                 ->grow(false),
         ])
             ->visible(fn (): bool => self::amount($creditAmount) > 0);
+
+        $totalComponents[] = Flex::make([
+            Text::make(PaymentPlanFee::LABEL)
+                ->color('neutral')
+                ->columnSpanFull(),
+            Text::make(fn (): string => format_money(self::amount($paymentPlanFeeAmount)))
+                ->color('neutral')
+                ->grow(false),
+        ])
+            ->visible(fn (): bool => self::amount($paymentPlanFeeAmount) > 0);
 
         $totalComponents[] = Flex::make([
             Text::make('Total')

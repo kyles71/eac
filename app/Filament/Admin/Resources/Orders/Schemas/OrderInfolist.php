@@ -36,6 +36,9 @@ final class OrderInfolist
                             }),
                         TextEntry::make('subtotal')
                             ->moneyCents(),
+                        TextEntry::make('payment_plan_fee')
+                            ->label('Payment Plan Fee')
+                            ->moneyCents(),
                         TextEntry::make('total')
                             ->moneyCents(),
                         TextEntry::make('stripe_payment_intent_id')
