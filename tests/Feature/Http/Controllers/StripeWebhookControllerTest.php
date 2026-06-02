@@ -6,7 +6,6 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
-use App\Enums\PaymentPlanMethod;
 use App\Http\Controllers\StripeWebhookController;
 use App\Models\Installment;
 use App\Models\Order;
@@ -193,7 +192,6 @@ it('creates a payment plan when order has payment plan template', function () {
         'total' => 9000,
         'stripe_payment_intent_id' => 'pi_test_plan',
         'payment_plan_template_id' => $template->id,
-        'payment_plan_method' => PaymentPlanMethod::AutoCharge,
     ]);
 
     OrderItem::factory()->create([
@@ -237,7 +235,6 @@ it('creates a payment plan when order has payment plan template', function () {
     // Verify payment plan was created
     $paymentPlan = PaymentPlan::query()->where('order_id', $order->id)->first();
     expect($paymentPlan)->not->toBeNull()
-        ->and($paymentPlan->method)->toBe(PaymentPlanMethod::AutoCharge)
         ->and($paymentPlan->total_amount)->toBe(9000)
         ->and($paymentPlan->number_of_installments)->toBe(3)
         ->and($paymentPlan->stripe_customer_id)->toBe('cus_test_123');
@@ -283,20 +280,14 @@ it('handles payment_intent.succeeded webhook for installment', function () {
     expect($installment->stripe_payment_intent_id)->toBe('pi_test_inst_success');
 });
 
-it('handles invoice.paid webhook for installment', function () {
-    $plan = PaymentPlan::factory()->manualInvoice()->create();
-    $installment = Installment::factory()->create([
-        'payment_plan_id' => $plan->id,
-        'status' => InstallmentStatus::Pending,
-    ]);
-
+it('ignores invoice webhooks for payment plans', function (string $eventType) {
     $event = new Stripe\Event;
-    $event->type = 'invoice.paid';
+    $event->type = $eventType;
     $event->data = (object) [
         'object' => (object) [
-            'id' => 'inv_test_paid',
+            'id' => 'inv_test',
             'metadata' => (object) [
-                'installment_id' => (string) $installment->id,
+                'installment_id' => '123',
             ],
         ],
     ];
@@ -316,44 +307,10 @@ it('handles invoice.paid webhook for installment', function () {
     $response = $controller($request);
 
     expect($response->getStatusCode())->toBe(200);
-    expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
-    expect($installment->stripe_invoice_id)->toBe('inv_test_paid');
-});
-
-it('handles invoice.payment_failed webhook for installment', function () {
-    $plan = PaymentPlan::factory()->manualInvoice()->create();
-    $installment = Installment::factory()->create([
-        'payment_plan_id' => $plan->id,
-        'status' => InstallmentStatus::Pending,
-        'retry_count' => 0,
+    expect(json_decode((string) $response->getContent(), true))->toBe([
+        'message' => 'Unhandled event type',
     ]);
-
-    $event = new Stripe\Event;
-    $event->type = 'invoice.payment_failed';
-    $event->data = (object) [
-        'object' => (object) [
-            'id' => 'inv_test_failed',
-            'metadata' => (object) [
-                'installment_id' => (string) $installment->id,
-            ],
-        ],
-    ];
-
-    $mockStripeService = Mockery::mock(StripeServiceContract::class);
-    $mockStripeService->shouldReceive('constructWebhookEvent')
-        ->once()
-        ->andReturn($event);
-
-    $this->app->instance(StripeServiceContract::class, $mockStripeService);
-
-    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
-        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
-    ]);
-
-    $controller = app(StripeWebhookController::class);
-    $response = $controller($request);
-
-    expect($response->getStatusCode())->toBe(200);
-    expect($installment->refresh()->status)->toBe(InstallmentStatus::Failed);
-    expect($installment->retry_count)->toBe(1);
-});
+})->with([
+    'paid invoice' => 'invoice.paid',
+    'failed invoice' => 'invoice.payment_failed',
+]);

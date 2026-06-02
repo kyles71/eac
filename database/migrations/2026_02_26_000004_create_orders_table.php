@@ -22,7 +22,6 @@ return new class() extends Migration
             $table->unsignedInteger('restricted_credit_applied')->default(0);
             $table->string('stripe_payment_intent_id')->nullable();
             $table->foreignId('payment_plan_template_id')->nullable()->constrained('payment_plan_templates');
-            $table->string('payment_plan_method')->nullable();
             $table->timestamps();
         });
     }

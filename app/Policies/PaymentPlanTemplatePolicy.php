@@ -29,7 +29,7 @@ final class PaymentPlanTemplatePolicy
 
     public function update(AuthUser $authUser, PaymentPlanTemplate $paymentPlanTemplate): bool
     {
-        return $authUser->can('Update:PaymentPlanTemplate');
+        return $authUser->can('Update:PaymentPlanTemplate') && ! $paymentPlanTemplate->isUsed();
     }
 
     public function delete(AuthUser $authUser, PaymentPlanTemplate $paymentPlanTemplate): bool

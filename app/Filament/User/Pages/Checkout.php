@@ -145,7 +145,7 @@ final class Checkout extends Page
             'order_id' => (string) $this->order->id,
         ];
 
-        $usePaymentPlan = $template !== null && $this->order->payment_plan_method !== null;
+        $usePaymentPlan = $template !== null;
 
         $paymentIntent = $stripeService->createPaymentIntent(
             user: $user,
@@ -272,6 +272,7 @@ final class Checkout extends Page
             discountLabel: $discountLabel,
             restrictedCreditAmount: $this->order->restricted_credit_applied,
             creditAmount: $this->order->credit_applied,
+            paymentPlanFeeAmount: $this->order->payment_plan_fee,
             total: $this->order->total,
             template: $this->order->paymentPlanTemplate,
         );

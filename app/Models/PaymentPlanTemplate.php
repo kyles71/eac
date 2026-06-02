@@ -19,6 +19,7 @@ final class PaymentPlanTemplate extends Model
     protected $casts = [
         'id' => 'integer',
         'product_type' => ProductType::class,
+        'course_semesters' => 'array',
         'min_price' => 'integer',
         'max_price' => 'integer',
         'number_of_installments' => 'integer',
@@ -29,6 +30,12 @@ final class PaymentPlanTemplate extends Model
     public function paymentPlans(): HasMany
     {
         return $this->hasMany(PaymentPlan::class);
+    }
+
+    /** @return HasMany<Order, $this> */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     /**
@@ -54,6 +61,45 @@ final class PaymentPlanTemplate extends Model
             ->where('max_price', '>=', $price);
     }
 
+    public function matchesCartItem(CartItem $cartItem): bool
+    {
+        return $this->matchesProduct($cartItem->product, $cartItem->product->price * $cartItem->quantity);
+    }
+
+    public function matchesProduct(Product $product, int $price): bool
+    {
+        $product->loadMissing('productable');
+
+        $productType = ProductType::fromProductableType($product->productable_type);
+
+        if (! in_array($this->product_type, [ProductType::Any, $productType], true)) {
+            return false;
+        }
+
+        if ($this->min_price > $price || $this->max_price < $price) {
+            return false;
+        }
+
+        return $this->matchesTypeSpecificRestrictions($product);
+    }
+
+    public function isUsed(): bool
+    {
+        return $this->orders()->exists() || $this->paymentPlans()->exists();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function allowedCourseSemesters(): array
+    {
+        if ($this->product_type !== ProductType::Course) {
+            return [];
+        }
+
+        return array_values(array_filter($this->course_semesters ?? []));
+    }
+
     /**
      * Calculate the installment amount (in cents) for a given total.
      * First installment absorbs the rounding remainder.
@@ -69,5 +115,26 @@ final class PaymentPlanTemplate extends Model
             'first' => $baseAmount + $remainder,
             'remaining' => $baseAmount,
         ];
+    }
+
+    private function matchesTypeSpecificRestrictions(Product $product): bool
+    {
+        if ($this->product_type !== ProductType::Course) {
+            return true;
+        }
+
+        $allowedSemesters = $this->allowedCourseSemesters();
+
+        if ($allowedSemesters === []) {
+            return true;
+        }
+
+        if (! $product->productable instanceof Course) {
+            return false;
+        }
+
+        $semester = $product->productable->semester?->value;
+
+        return is_string($semester) && in_array($semester, $allowedSemesters, true);
     }
 }

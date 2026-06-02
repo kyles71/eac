@@ -35,6 +35,9 @@ final class OrderInfolist
                             }),
                         TextEntry::make('subtotal')
                             ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                        TextEntry::make('payment_plan_fee')
+                            ->label('Payment Plan Fee')
+                            ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
                         TextEntry::make('total')
                             ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
                         TextEntry::make('stripe_payment_intent_id')

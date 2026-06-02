@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\OrderStatus;
-use App\Enums\PaymentPlanMethod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 final class Order extends Model
 {
@@ -27,8 +27,9 @@ final class Order extends Model
         'discount_amount' => 'integer',
         'credit_applied' => 'integer',
         'restricted_credit_applied' => 'integer',
+        'payment_plan_fee' => 'integer',
         'payment_plan_template_id' => 'integer',
-        'payment_plan_method' => PaymentPlanMethod::class,
+        'payment_plan_terms_version_id' => 'integer',
     ];
 
     public function user(): BelongsTo
@@ -46,6 +47,11 @@ final class Order extends Model
         return $this->belongsTo(PaymentPlanTemplate::class);
     }
 
+    public function paymentPlanTermsVersion(): BelongsTo
+    {
+        return $this->belongsTo(LegalDocumentVersion::class, 'payment_plan_terms_version_id');
+    }
+
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
@@ -54,6 +60,11 @@ final class Order extends Model
     public function paymentPlan(): HasOne
     {
         return $this->hasOne(PaymentPlan::class);
+    }
+
+    public function legalDocumentAcceptance(): MorphOne
+    {
+        return $this->morphOne(LegalDocumentAcceptance::class, 'acceptable');
     }
 
     /**
@@ -70,6 +81,22 @@ final class Order extends Model
     public function formattedTotal(): string
     {
         return format_money($this->total);
+    }
+
+    public function formattedPaymentPlanFee(): string
+    {
+        return format_money($this->payment_plan_fee);
+    }
+
+    public function amountPaidAtCheckout(): int
+    {
+        if ($this->paymentPlanTemplate === null) {
+            return $this->total;
+        }
+
+        $amounts = $this->paymentPlanTemplate->installmentAmounts($this->total);
+
+        return $amounts['first'];
     }
 
     /**

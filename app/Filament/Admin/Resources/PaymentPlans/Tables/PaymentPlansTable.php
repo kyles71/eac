@@ -32,8 +32,6 @@ final class PaymentPlansTable
                     ->sortable(),
                 TextColumn::make('frequency')
                     ->badge(),
-                TextColumn::make('method')
-                    ->badge(),
                 TextColumn::make('paid_amount')
                     ->label('Paid')
                     ->state(fn (PaymentPlan $record): string => '$'.number_format($record->amountPaid() / 100, 2)),

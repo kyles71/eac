@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
-use App\Enums\PaymentPlanMethod;
 use App\Models\Installment;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -71,11 +70,7 @@ final readonly class ProcessInstallments
         }
 
         try {
-            if ($paymentPlan->method === PaymentPlanMethod::AutoCharge) {
-                return $this->processAutoCharge($installment, $paymentPlan);
-            }
-
-            return $this->processManualInvoice($installment, $paymentPlan);
+            return $this->processAutoCharge($installment, $paymentPlan);
         } catch (Exception $e) {
             Log::error("Failed to process installment #{$installment->id}: {$e->getMessage()}");
             $installment->markFailed();
@@ -120,37 +115,5 @@ final readonly class ProcessInstallments
         $installment->markFailed();
 
         return false;
-    }
-
-    private function processManualInvoice(Installment $installment, \App\Models\PaymentPlan $paymentPlan): bool
-    {
-        if ($paymentPlan->stripe_customer_id === null) {
-            Log::warning("Payment plan #{$paymentPlan->id} missing Stripe customer ID for invoice.");
-            $installment->markFailed();
-
-            return false;
-        }
-
-        $invoice = $this->stripeService->createAndSendInvoice(
-            customerId: $paymentPlan->stripe_customer_id,
-            amount: $installment->amount,
-            description: "Installment #{$installment->installment_number} for Order #{$paymentPlan->order_id}",
-            metadata: [
-                'installment_id' => (string) $installment->id,
-                'payment_plan_id' => (string) $paymentPlan->id,
-                'order_id' => (string) $paymentPlan->order_id,
-            ],
-        );
-
-        $installment->update([
-            'stripe_invoice_id' => $invoice->id,
-        ]);
-
-        Log::info("Invoice sent for installment #{$installment->id}.", [
-            'invoice_id' => $invoice->id,
-        ]);
-
-        // Invoice is sent but not yet paid — webhook will confirm payment
-        return true;
     }
 }

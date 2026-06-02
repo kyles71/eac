@@ -28,8 +28,6 @@ final class PaymentPlanInfolist
                         TextEntry::make('template.name')
                             ->label('Template')
                             ->placeholder('Deleted template'),
-                        TextEntry::make('method')
-                            ->badge(),
                         TextEntry::make('frequency')
                             ->badge(),
                         TextEntry::make('total_amount')

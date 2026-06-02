@@ -58,4 +58,4 @@ it('can mark an installment as paid via header action', function () {
 it('has required table columns', function (string $column) {
     livewire(ListPaymentPlans::class)
         ->assertTableColumnExists($column);
-})->with(['order.id', 'total_amount', 'number_of_installments', 'frequency', 'method']);
+})->with(['order.id', 'total_amount', 'number_of_installments', 'frequency']);

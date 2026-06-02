@@ -7,11 +7,12 @@ namespace App\Actions\Store;
 use App\Contracts\HasCapacity;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderStatus;
-use App\Enums\PaymentPlanMethod;
 use App\Models\DiscountCode;
 use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
 use App\Models\User;
+use App\Support\LegalDocuments\PaymentPlanTerms;
+use App\Support\PaymentPlanFee;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -27,9 +28,16 @@ final class CreateOrder
         ?DiscountCode $discountCode = null,
         int $creditToApply = 0,
         ?PaymentPlanTemplate $paymentPlanTemplate = null,
-        ?PaymentPlanMethod $paymentPlanMethod = null,
     ): Order {
-        return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate, $paymentPlanMethod): Order {
+        return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate): Order {
+            $paymentPlanTermsVersion = $paymentPlanTemplate !== null
+                ? PaymentPlanTerms::currentVersion()
+                : null;
+
+            if ($paymentPlanTemplate !== null && $paymentPlanTermsVersion === null) {
+                throw new InvalidArgumentException('Payment plan terms are not available.');
+            }
+
             // Cancel any existing pending orders for this user to prevent duplicates
             $pendingOrders = $user->orders()->where('status', OrderStatus::Pending)->get();
 
@@ -96,8 +104,9 @@ final class CreateOrder
                 'discount_amount' => 0,
                 'credit_applied' => 0,
                 'restricted_credit_applied' => 0,
+                'payment_plan_fee' => 0,
                 'payment_plan_template_id' => $paymentPlanTemplate?->id,
-                'payment_plan_method' => $paymentPlanMethod?->value,
+                'payment_plan_terms_version_id' => $paymentPlanTermsVersion?->id,
             ]);
 
             foreach ($orderItems as $item) {
@@ -181,6 +190,26 @@ final class CreateOrder
                         'Applied to order #'.$order->id,
                     );
                 }
+            }
+
+            if ($paymentPlanTemplate !== null) {
+                $paymentPlanFee = PaymentPlanFee::calculate($total);
+                $total += $paymentPlanFee;
+
+                $order->update([
+                    'payment_plan_fee' => $paymentPlanFee,
+                    'total' => $total,
+                ]);
+            }
+
+            if ($paymentPlanTermsVersion !== null) {
+                $order->legalDocumentAcceptance()->create([
+                    'legal_document_version_id' => $paymentPlanTermsVersion->id,
+                    'user_id' => $user->id,
+                    'accepted_at' => now(),
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                ]);
             }
 
             // If fully covered by discount + credit, complete immediately

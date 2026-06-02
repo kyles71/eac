@@ -28,9 +28,10 @@ final class OrderFactory extends Factory
             'status' => OrderStatus::Pending,
             'subtotal' => $subtotal,
             'total' => $subtotal,
+            'payment_plan_fee' => 0,
             'stripe_payment_intent_id' => null,
             'payment_plan_template_id' => null,
-            'payment_plan_method' => null,
+            'payment_plan_terms_version_id' => null,
         ];
     }
 

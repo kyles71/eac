@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Enums\CourseSemester;
 use App\Enums\PaymentPlanFrequency;
 use App\Enums\ProductType;
+use App\Models\Course;
 use App\Models\PaymentPlanTemplate;
+use App\Models\Product;
 
 it('can be created with factory', function () {
     $template = PaymentPlanTemplate::factory()->create();
@@ -44,7 +47,7 @@ it('scopes for product by type and price', function () {
     // Course at $75 should match Any + Course templates
     $templates = PaymentPlanTemplate::query()
         ->active()
-        ->forProduct(App\Models\Course::class, 7500)
+        ->forProduct(Course::class, 7500)
         ->get();
 
     expect($templates)->toHaveCount(2);
@@ -86,4 +89,36 @@ it('calculates installment amounts with no remainder', function () {
 
     expect($amounts['first'])->toBe(2500)
         ->and($amounts['remaining'])->toBe(2500);
+});
+
+it('matches course templates by selected semesters', function () {
+    $fallCourse = Course::factory()->create(['semester' => CourseSemester::Fall]);
+    $summerCourse = Course::factory()->create(['semester' => CourseSemester::Summer]);
+
+    $fallProduct = Product::factory()->forCourse($fallCourse)->create(['price' => 5000]);
+    $summerProduct = Product::factory()->forCourse($summerCourse)->create(['price' => 5000]);
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'course_semesters' => [CourseSemester::Fall->value],
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    expect($template->matchesProduct($fallProduct, 5000))->toBeTrue()
+        ->and($template->matchesProduct($summerProduct, 5000))->toBeFalse();
+});
+
+it('allows all course semesters when no semester restriction is selected', function () {
+    $course = Course::factory()->create(['semester' => CourseSemester::Summer]);
+    $product = Product::factory()->forCourse($course)->create(['price' => 5000]);
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'course_semesters' => null,
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    expect($template->matchesProduct($product, 5000))->toBeTrue();
 });
