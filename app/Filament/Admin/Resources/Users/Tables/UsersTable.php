@@ -22,8 +22,8 @@ final class UsersTable
             ->columns([
                 SpatieMediaLibraryImageColumn::make('avatar')
                     ->collection('avatars')
-                    ->disk(MediaDisks::public())
-                    ->visibility('public')
+                    ->disk(MediaDisks::private())
+                    ->visibility('private')
                     // ->conversion('thumb')
                     ->circular(),
                 TextColumn::make('first_name')
@@ -40,7 +40,7 @@ final class UsersTable
                     ->toggleable(),
                 TextColumn::make('credit_balance')
                     ->label('Store Credit')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('email_verified_at')

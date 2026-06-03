@@ -32,11 +32,11 @@ final class PaymentPlanTemplatesTable
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('min_price')
                     ->label('Min Price')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('max_price')
                     ->label('Max Price')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('number_of_installments')
                     ->label('Installments')

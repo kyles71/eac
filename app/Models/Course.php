@@ -247,10 +247,10 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
             ->useDisk(MediaDisks::public());
 
         $this->addMediaCollection('documents')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
 
         $this->addMediaCollection('videos')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
     }
 
     // public function registerMediaConversions(?Media $media = null): void

@@ -58,6 +58,7 @@ it('can create a fixed amount discount code', function () {
     assertDatabaseHas(DiscountCode::class, [
         'code' => 'SAVE10',
         'type' => DiscountType::FixedAmount->value,
+        'value' => 1000,
     ]);
 });
 

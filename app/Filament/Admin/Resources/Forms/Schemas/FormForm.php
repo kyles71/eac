@@ -9,6 +9,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 final class FormForm
@@ -17,14 +18,23 @@ final class FormForm
     {
         return $schema
             ->components([
-                TextInput::make('name')
-                    ->required(),
-                Select::make('form_type')
-                    ->options(FormTypes::class)
-                    ->required(),
-                Toggle::make('can_update')
-                    ->required(),
-                DateTimePicker::make('valid_until'),
+                Section::make('Form')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextInput::make('name')
+                            ->required(),
+                        Select::make('form_type')
+                            ->label('Type')
+                            ->options(FormTypes::class)
+                            ->required(),
+                        Toggle::make('can_update')
+                            ->label('Can Be Updated')
+                            ->default(true)
+                            ->required(),
+                        DateTimePicker::make('valid_until')
+                            ->label('Valid Until'),
+                    ]),
             ]);
     }
 }

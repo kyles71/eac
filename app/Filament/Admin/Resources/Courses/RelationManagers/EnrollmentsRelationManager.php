@@ -36,9 +36,13 @@ final class EnrollmentsRelationManager extends RelationManager
             ->recordTitleAttribute('student.full_name')
             ->columns([
                 TextColumn::make('user.full_name')
-                    ->sortable(),
+                    ->label('User')
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 TextColumn::make('student.full_name')
-                    ->sortable(),
+                    ->label('Student')
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

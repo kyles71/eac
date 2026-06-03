@@ -157,6 +157,26 @@ it('can update a user', function () {
     ]);
 });
 
+it('can update a user without changing their email', function () {
+    $user = User::factory()->create();
+
+    livewire(ViewUser::class, [
+        'record' => $user->id,
+    ])
+        ->callAction(EditAction::class, data: [
+            'first_name' => 'Updated',
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+        ])
+        ->assertNotified();
+
+    assertDatabaseHas(User::class, [
+        'id' => $user->id,
+        'first_name' => 'Updated',
+        'email' => $user->email,
+    ]);
+});
+
 it('can bulk delete users', function () {
     $users = User::factory()->count(5)->create();
 

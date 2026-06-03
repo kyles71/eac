@@ -178,7 +178,7 @@ final class Event extends Model implements HasMedia
             ->useDisk(MediaDisks::public());
 
         $this->addMediaCollection('documents')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
     }
 
     // public function registerMediaConversions(?Media $media = null): void

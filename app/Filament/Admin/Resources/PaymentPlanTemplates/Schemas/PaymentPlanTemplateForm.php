@@ -21,20 +21,13 @@ final class PaymentPlanTemplateForm
     {
         return $schema
             ->components([
-                Section::make('Details')
+                Section::make('Eligibility')
                     ->columns(2)
+                    ->columnSpanFull()
                     ->schema([
                         TextInput::make('name')
                             ->required()
-                            ->maxLength(255)
-                            ->columnSpanFull(),
-                        Toggle::make('is_active')
-                            ->label('Active')
-                            ->default(true),
-                    ]),
-                Section::make('Eligibility')
-                    ->columns(2)
-                    ->schema([
+                            ->maxLength(255),
                         Select::make('product_type')
                             ->label('Product Type')
                             ->options(ProductType::class)
@@ -56,23 +49,16 @@ final class PaymentPlanTemplateForm
                             ->columnSpanFull(),
                         TextInput::make('min_price')
                             ->label('Min Price')
-                            ->numeric()
-                            ->prefix('$')
-                            ->required()
-                            ->minValue(0)
-                            ->formatStateUsing(fn (?int $state): ?string => $state !== null ? number_format($state / 100, 2, '.', '') : null)
-                            ->dehydrateStateUsing(fn (?string $state): ?int => $state !== null && $state !== '' ? (int) round((float) $state * 100) : null),
+                            ->moneyCents()
+                            ->required(),
                         TextInput::make('max_price')
                             ->label('Max Price')
-                            ->numeric()
-                            ->prefix('$')
-                            ->required()
-                            ->minValue(0)
-                            ->formatStateUsing(fn (?int $state): ?string => $state !== null ? number_format($state / 100, 2, '.', '') : null)
-                            ->dehydrateStateUsing(fn (?string $state): ?int => $state !== null && $state !== '' ? (int) round((float) $state * 100) : null),
+                            ->moneyCents()
+                            ->required(),
                     ]),
-                Section::make('Schedule')
-                    ->columns(2)
+                Section::make('Installments')
+                    ->columns(3)
+                    ->columnSpanFull()
                     ->schema([
                         TextInput::make('number_of_installments')
                             ->label('Number of Installments')
@@ -83,6 +69,9 @@ final class PaymentPlanTemplateForm
                         Select::make('frequency')
                             ->options(fn (): array => PaymentPlanFrequency::optionsForEnvironment())
                             ->required(),
+                        Toggle::make('is_active')
+                            ->label('Active')
+                            ->default(true),
                     ]),
             ]);
     }

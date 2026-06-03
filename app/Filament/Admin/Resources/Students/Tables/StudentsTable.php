@@ -24,7 +24,9 @@ final class StudentsTable
                 TextColumn::make('last_name')
                     ->searchable(),
                 TextColumn::make('user.full_name')
-                    ->sortable(),
+                    ->label('Parent / User')
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 SpatieTagsColumn::make('tags')
                     ->label('Student Tags')
                     ->type(Student::GENERAL_TAG_TYPE)
