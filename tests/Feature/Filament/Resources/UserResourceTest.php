@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Filament\Admin\Resources\Users\Pages\ViewUser;
+use App\Models\Calendar;
 use App\Models\User;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
+use Spatie\Tags\Tag;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
@@ -91,6 +94,47 @@ it('can create a user', function () {
     ]);
 });
 
+it('stores calendar audience tags on role-bearing users', function () {
+    $role = Role::findOrCreate('teacher');
+    $audienceTag = Tag::findOrCreate('Staff', Calendar::AUDIENCE_TAG_TYPE);
+
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => 'Avery',
+            'last_name' => 'Stone',
+            'email' => 'avery@example.com',
+            'password' => 'password',
+            'roles' => [$role->id],
+            'calendar_audience_tag_ids' => [$audienceTag->id],
+        ])
+        ->assertNotified();
+
+    $user = User::query()->where('email', 'avery@example.com')->firstOrFail();
+
+    expect($user->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe(['Staff']);
+});
+
+it('does not create calendar audience tags from the user form', function () {
+    $role = Role::findOrCreate('teacher');
+
+    Tag::query()
+        ->where('type', Calendar::AUDIENCE_TAG_TYPE)
+        ->delete();
+
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => 'Riley',
+            'last_name' => 'North',
+            'email' => 'riley@example.com',
+            'password' => 'password',
+            'roles' => [$role->id],
+            'calendar_audience_tag_ids' => [999],
+        ])
+        ->assertHasActionErrors(['calendar_audience_tag_ids.0']);
+
+    expect(Tag::query()->where('type', Calendar::AUDIENCE_TAG_TYPE)->count())->toBe(0);
+});
+
 it('can update a user', function () {
     $user = User::factory()->create();
     $newUserData = User::factory()->make();
@@ -110,6 +154,26 @@ it('can update a user', function () {
         'first_name' => $newUserData->first_name,
         'last_name' => $newUserData->last_name,
         'email' => $newUserData->email,
+    ]);
+});
+
+it('can update a user without changing their email', function () {
+    $user = User::factory()->create();
+
+    livewire(ViewUser::class, [
+        'record' => $user->id,
+    ])
+        ->callAction(EditAction::class, data: [
+            'first_name' => 'Updated',
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+        ])
+        ->assertNotified();
+
+    assertDatabaseHas(User::class, [
+        'id' => $user->id,
+        'first_name' => 'Updated',
+        'email' => $user->email,
     ]);
 });
 

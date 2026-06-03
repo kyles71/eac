@@ -17,6 +17,7 @@ final class PaymentPlanInfolist
         return $schema
             ->components([
                 Section::make('Payment Plan Details')
+                    ->columns(3)
                     ->schema([
                         TextEntry::make('id')
                             ->label('Plan #'),
@@ -28,13 +29,11 @@ final class PaymentPlanInfolist
                         TextEntry::make('template.name')
                             ->label('Template')
                             ->placeholder('Deleted template'),
-                        TextEntry::make('method')
-                            ->badge(),
                         TextEntry::make('frequency')
                             ->badge(),
                         TextEntry::make('total_amount')
                             ->label('Total')
-                            ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                            ->moneyCents(),
                         TextEntry::make('number_of_installments')
                             ->label('Installments'),
                         TextEntry::make('stripe_customer_id')
@@ -53,11 +52,12 @@ final class PaymentPlanInfolist
                     ->schema([
                         RepeatableEntry::make('installments')
                             ->hiddenLabel()
+                            ->grid(6)
                             ->schema([
                                 TextEntry::make('installment_number')
                                     ->label('#'),
                                 TextEntry::make('amount')
-                                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                                    ->moneyCents(),
                                 TextEntry::make('due_date')
                                     ->label('Due Date')
                                     ->date(),

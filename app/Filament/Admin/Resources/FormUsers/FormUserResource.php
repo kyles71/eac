@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Resources\FormUsers;
 
 use App\Filament\Admin\Resources\FormUsers\Pages\ListFormUsers;
@@ -15,7 +17,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
 
-class FormUserResource extends Resource
+final class FormUserResource extends Resource
 {
     protected static ?string $slug = 'user-forms';
 

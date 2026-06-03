@@ -9,8 +9,6 @@ use App\Actions\Store\CreateOrder;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Enums\OrderStatus;
-use App\Enums\PaymentPlanMethod;
-use App\Enums\ProductType;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
@@ -18,6 +16,8 @@ use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\RestrictedCredit;
+use App\Support\LegalDocuments\PaymentPlanTerms;
+use App\Support\PaymentPlanFee;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
@@ -62,8 +62,6 @@ final class Cart extends Page implements HasTable
 
     public string $selectedPaymentOption = self::PAYMENT_OPTION_PAY_IN_FULL;
 
-    public ?string $selectedPaymentPlanMethod = null;
-
     protected static ?string $title = 'Cart';
 
     protected static ?string $slug = 'cart';
@@ -105,7 +103,8 @@ final class Cart extends Page implements HasTable
                                         ->size('sm')
                                         ->action(function (Component $livewire): void {
                                             $livewire->applyCode();
-                                        }),
+                                        })
+                                        ->keyBindings(['enter']),
                                 ),
                             Flex::make([
                                 Text::make(fn (): string => "✓ {$this->appliedDiscountDisplay}")
@@ -248,11 +247,25 @@ final class Cart extends Page implements HasTable
     }
 
     /**
-     * Get the grand total in cents (after discounts/restricted credits/credits).
+     * Get the grand total in cents, including the payment plan fee when applicable.
      */
     public function getGrandTotalProperty(): int
     {
+        return $this->totalBeforePaymentPlanFee + $this->paymentPlanFeeAmount;
+    }
+
+    public function getTotalBeforePaymentPlanFeeProperty(): int
+    {
         return max(0, $this->subtotal - $this->discountAmount - $this->restrictedCreditAmount - $this->creditAmount);
+    }
+
+    public function getPaymentPlanFeeAmountProperty(): int
+    {
+        if ($this->selectedTemplate === null) {
+            return 0;
+        }
+
+        return PaymentPlanFee::calculate($this->totalBeforePaymentPlanFee);
     }
 
     /**
@@ -449,48 +462,62 @@ final class Cart extends Page implements HasTable
 
     public function updatedSelectedPaymentOption(): void
     {
+        unset($this->grandTotal, $this->paymentPlanFeeAmount);
         unset($this->selectedTemplate, $this->amountDueToday);
-
-        $this->syncSelectedPaymentPlanMethod();
-    }
-
-    public function updatedSelectedPaymentPlanMethod(): void
-    {
-        $this->syncSelectedPaymentPlanMethod();
     }
 
     public function checkoutAction(): Action
     {
         return Action::make('checkout')
-            ->label('Proceed to Checkout')
+            ->label(fn (): string => $this->selectedTemplate === null
+                ? 'Proceed to Checkout'
+                : 'Proceed to Payment Plan Terms & Conditions')
             ->icon(Heroicon::OutlinedCreditCard)
             ->color('warning')
             ->size('lg')
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
             ->slideOver(false)
+            ->modalSubmitActionLabel('Agree & Continue to Payment')
             ->modalHidden(fn (): bool => $this->selectedTemplate === null)
             ->schema(function (): array {
                 if ($this->selectedTemplate === null) {
                     return [];
                 }
 
+                $termsVersion = PaymentPlanTerms::currentVersion();
+                $hasTerms = $termsVersion !== null;
+
                 return [
                     Grid::make()
                         ->columns(1)
-                        ->extraAttributes(['x-data' => '{ scrolledToBottom: false }'])
+                        ->extraAttributes([
+                            'x-data' => '{ scrolledToBottom: false, hasTerms: '.($hasTerms ? 'true' : 'false').' }',
+                        ])
                         ->schema([
                             TextEntry::make('terms_and_conditions')
+                                ->hiddenLabel()
                                 ->state(new HtmlString('
                                     <div
                                         class="h-32 overflow-y-scroll"
+                                        x-init="
+                                            $nextTick(() => {
+                                                if (hasTerms && $el.scrollHeight <= $el.clientHeight + 2) {
+                                                    scrolledToBottom = true;
+                                                }
+                                            })
+                                        "
                                         @scroll="
+                                            if (! hasTerms) {
+                                                return;
+                                            }
+
                                             const el = $event.target;
                                             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) {
                                                 scrolledToBottom = true;
                                             }
                                         "
                                     >
-                                    some long list of terms<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah<br>blah blah
+                                    '.($termsVersion?->content ?? '<p>Payment plan terms are not available.</p>').'
                                     </div>')),
                             Checkbox::make('terms')
                                 ->label('I have read and agree to the terms and conditions')
@@ -516,16 +543,11 @@ final class Cart extends Page implements HasTable
 
                     $paymentPlanTemplate = $this->selectedTemplate;
 
-                    $paymentPlanMethod = $paymentPlanTemplate !== null && $this->selectedPaymentPlanMethod !== null
-                        ? PaymentPlanMethod::from($this->selectedPaymentPlanMethod)
-                        : null;
-
                     $order = $createOrder->handle(
                         $user,
                         $discountCode,
                         $creditToApply,
                         $paymentPlanTemplate,
-                        $paymentPlanMethod,
                     );
 
                     if ($order->status === OrderStatus::Completed) {
@@ -568,14 +590,6 @@ final class Cart extends Page implements HasTable
             ->visible(fn (): bool => $this->paymentPlanTemplates->isNotEmpty())
             ->live();
 
-        $components[] = Select::make('selectedPaymentPlanMethod')
-            ->label('Payment Plan Method')
-            ->options(PaymentPlanMethod::class)
-            ->default(PaymentPlanMethod::AutoCharge->value)
-            ->visible(fn (): bool => $this->selectedTemplate !== null)
-            ->required(fn (): bool => $this->selectedTemplate !== null)
-            ->live();
-
         $components = array_merge($components, OrderSummarySchema::make(
             subtotal: fn (): int => $this->subtotal,
             discountAmount: fn (): int => $this->discountAmount,
@@ -588,6 +602,7 @@ final class Cart extends Page implements HasTable
             },
             restrictedCreditAmount: fn (): int => $this->restrictedCreditAmount,
             creditAmount: fn (): int => $this->creditAmount,
+            paymentPlanFeeAmount: fn (): int => $this->paymentPlanFeeAmount,
             total: fn (): int => $this->grandTotal,
             template: fn (): ?PaymentPlanTemplate => $this->selectedTemplate,
             amountDueToday: fn (): ?int => $this->selectedTemplate !== null ? $this->amountDueToday : null,
@@ -673,15 +688,6 @@ final class Cart extends Page implements HasTable
             ]);
     }
 
-    private function syncSelectedPaymentPlanMethod(): void
-    {
-        if ($this->selectedTemplate === null) {
-            $this->selectedPaymentPlanMethod = null;
-        } elseif ($this->selectedPaymentPlanMethod === null) {
-            $this->selectedPaymentPlanMethod = PaymentPlanMethod::AutoCharge->value;
-        }
-    }
-
     private function selectedPaymentPlanTemplateId(): ?int
     {
         if (! str_starts_with($this->selectedPaymentOption, self::PAYMENT_OPTION_TEMPLATE_PREFIX)) {
@@ -700,12 +706,7 @@ final class Cart extends Page implements HasTable
 
     private function paymentPlanTemplateMatchesCartItem(PaymentPlanTemplate $template, CartItem $cartItem): bool
     {
-        $lineTotal = $cartItem->product->price * $cartItem->quantity;
-        $productType = ProductType::fromProductableType($cartItem->product->productable_type);
-
-        return in_array($template->product_type, [ProductType::Any, $productType], true)
-            && $template->min_price <= $lineTotal
-            && $template->max_price >= $lineTotal;
+        return $template->matchesCartItem($cartItem);
     }
 
     private function refreshCartState(): void
@@ -716,6 +717,8 @@ final class Cart extends Page implements HasTable
             'discountAmount',
             'restrictedCreditAmount',
             'creditAmount',
+            'totalBeforePaymentPlanFee',
+            'paymentPlanFeeAmount',
             'grandTotal',
             'pendingOrders',
             'pendingStoreCreditAmount',
@@ -732,8 +735,6 @@ final class Cart extends Page implements HasTable
         if (! $this->selectedPaymentPlanTemplateIsEligible()) {
             $this->selectedPaymentOption = self::PAYMENT_OPTION_PAY_IN_FULL;
         }
-
-        $this->syncSelectedPaymentPlanMethod();
     }
 
     private function selectedPaymentPlanTemplateIsEligible(): bool

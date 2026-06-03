@@ -7,7 +7,6 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
-use App\Enums\PaymentPlanMethod;
 use App\Models\CartItem;
 use App\Models\Costume;
 use App\Models\Course;
@@ -16,16 +15,20 @@ use App\Models\DiscountCode;
 use App\Models\Enrollment;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
+use App\Models\LegalDocumentAcceptance;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\LegalDocuments\PaymentPlanTerms;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
     $this->course = Course::factory()->create(['capacity' => 5]);
     $this->product = Product::factory()->forCourse($this->course)->create(['price' => 5000]);
+
+    publishPaymentPlanTermsForCheckoutTest();
 
     $this->app->instance(StripeServiceContract::class, Mockery::mock(StripeServiceContract::class));
 });
@@ -357,7 +360,7 @@ it('marks course items fulfilled and leaves costume items pending in mixed zero 
     expect(Enrollment::query()->where('course_id', $this->course->id)->count())->toBe(1);
 });
 
-it('stores payment plan template and method on the order', function () {
+it('stores payment plan details and accepted terms on the order', function () {
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->product->id,
@@ -374,16 +377,22 @@ it('stores payment plan template and method on the order', function () {
     $order = $action->handle(
         $this->user,
         paymentPlanTemplate: $template,
-        paymentPlanMethod: PaymentPlanMethod::AutoCharge,
     );
 
     expect($order->status)->toBe(OrderStatus::Pending)
-        ->and($order->total)->toBe(10000)
+        ->and($order->payment_plan_fee)->toBe(300)
+        ->and($order->total)->toBe(10300)
         ->and($order->payment_plan_template_id)->toBe($template->id)
-        ->and($order->payment_plan_method)->toBe(PaymentPlanMethod::AutoCharge);
+        ->and($order->payment_plan_terms_version_id)->not->toBeNull();
+
+    expect(LegalDocumentAcceptance::query()
+        ->where('user_id', $this->user->id)
+        ->where('acceptable_type', $order->getMorphClass())
+        ->where('acceptable_id', $order->id)
+        ->exists())->toBeTrue();
 });
 
-it('combines discount code with payment plan', function () {
+it('combines discount code with auto-charge payment plan', function () {
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->product->id,
@@ -402,14 +411,13 @@ it('combines discount code with payment plan', function () {
         $this->user,
         $discountCode,
         paymentPlanTemplate: $template,
-        paymentPlanMethod: PaymentPlanMethod::ManualInvoice,
     );
 
     expect($order->subtotal)->toBe(10000)
         ->and($order->discount_amount)->toBe(2000)
-        ->and($order->total)->toBe(8000)
-        ->and($order->payment_plan_template_id)->toBe($template->id)
-        ->and($order->payment_plan_method)->toBe(PaymentPlanMethod::ManualInvoice);
+        ->and($order->payment_plan_fee)->toBe(240)
+        ->and($order->total)->toBe(8240)
+        ->and($order->payment_plan_template_id)->toBe($template->id);
 });
 
 it('cancels existing pending orders before creating a new one', function () {
@@ -537,3 +545,15 @@ it('clears cart items when order has zero balance', function () {
     // Cart should be cleared since the order completed immediately
     expect($this->user->cartItems()->count())->toBe(0);
 });
+
+function publishPaymentPlanTermsForCheckoutTest(): void
+{
+    if (PaymentPlanTerms::currentVersion() !== null) {
+        return;
+    }
+
+    PaymentPlanTerms::document()?->publishVersion(
+        title: 'Payment Plan Terms & Conditions',
+        content: '<p>Test payment plan terms.</p>',
+    );
+}

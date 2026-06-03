@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Events\Schemas;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 final class EventInfolist
@@ -15,26 +16,46 @@ final class EventInfolist
     {
         return $schema
             ->components([
-                SpatieMediaLibraryImageEntry::make('images')
-                    ->collection('images')
-                    ->disk(MediaDisks::public())
-                    ->visibility('public')
-                    // ->conversion('thumb')
-                    ->columnSpanFull(),
-                TextEntry::make('name'),
-                TextEntry::make('focus'),
-                TextEntry::make('start_time')
-                    ->dateTime(),
-                TextEntry::make('end_time')
-                    ->dateTime(),
-                TextEntry::make('course.name')
-                    ->label('Course'),
-                TextEntry::make('calendar.name')
-                    ->label('Calendar'),
-                TextEntry::make('created_at')
-                    ->dateTime(),
-                TextEntry::make('updated_at')
-                    ->dateTime(),
+                Section::make('Event')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('name'),
+                        TextEntry::make('focus')
+                            ->placeholder('None'),
+                        TextEntry::make('course.name')
+                            ->label('Course')
+                            ->placeholder('None'),
+                        TextEntry::make('calendar.name')
+                            ->label('Calendar')
+                            ->placeholder('None'),
+                        TextEntry::make('start_time')
+                            ->label('Starts At')
+                            ->dateTime(),
+                        TextEntry::make('end_time')
+                            ->label('Ends At')
+                            ->dateTime(),
+                    ]),
+                Section::make('Media')
+                    ->columnSpanFull()
+                    ->schema([
+                        SpatieMediaLibraryImageEntry::make('images')
+                            ->collection('images')
+                            ->disk(MediaDisks::public())
+                            ->visibility('public')
+                            // ->conversion('thumb')
+                            ->columnSpanFull(),
+                    ]),
+                Section::make('Record')
+                    ->columns(2)
+                    ->collapsed()
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('created_at')
+                            ->dateTime(),
+                        TextEntry::make('updated_at')
+                            ->dateTime(),
+                    ]),
             ]);
     }
 }

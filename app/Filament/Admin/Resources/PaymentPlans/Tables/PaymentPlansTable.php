@@ -25,21 +25,25 @@ final class PaymentPlansTable
                     ->searchable(['first_name', 'last_name']),
                 TextColumn::make('total_amount')
                     ->label('Total')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('number_of_installments')
                     ->label('Installments')
                     ->sortable(),
                 TextColumn::make('frequency')
                     ->badge(),
-                TextColumn::make('method')
-                    ->badge(),
                 TextColumn::make('paid_amount')
                     ->label('Paid')
-                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->amountPaid() / 100, 2)),
+                    ->state(fn (PaymentPlan $record): int => $record->amountPaid())
+                    ->moneyCents()
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('remaining')
                     ->label('Remaining')
-                    ->state(fn (PaymentPlan $record): string => '$'.number_format($record->remainingBalance() / 100, 2)),
+                    ->state(fn (PaymentPlan $record): int => $record->remainingBalance())
+                    ->moneyCents()
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

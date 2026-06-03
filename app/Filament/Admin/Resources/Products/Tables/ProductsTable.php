@@ -30,7 +30,7 @@ final class ProductsTable
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('price')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 IconColumn::make('is_active')
                     ->label('Active')

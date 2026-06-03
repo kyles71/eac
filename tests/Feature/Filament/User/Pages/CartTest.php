@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Enums\PaymentPlanMethod;
+use App\Enums\CourseSemester;
 use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
@@ -11,14 +11,17 @@ use App\Models\Course;
 use App\Models\DiscountCode;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
+use App\Models\LegalDocumentVersion;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\RestrictedCredit;
 use App\Models\User;
+use App\Support\LegalDocuments\PaymentPlanTerms;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Schemas\Schema;
 
 use function Pest\Livewire\livewire;
 
@@ -325,6 +328,36 @@ it('only shows templates eligible for every item in a mixed cart', function () {
         ->assertSee('5 Monthly Payments');
 });
 
+it('filters course payment plan templates by semester', function () {
+    $this->course->update(['semester' => CourseSemester::Fall]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'course_semesters' => [CourseSemester::Summer->value],
+        'min_price' => 1000,
+        'max_price' => 10000,
+        'number_of_installments' => 3,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'course_semesters' => [CourseSemester::Fall->value],
+        'min_price' => 1000,
+        'max_price' => 10000,
+        'number_of_installments' => 4,
+    ]);
+
+    livewire(Cart::class)
+        ->assertDontSee('3 Monthly Payments')
+        ->assertSee('4 Monthly Payments');
+});
+
 it('shows payment plan breakdown when a plan is selected', function () {
     CartItem::factory()->create([
         'user_id' => auth()->id(),
@@ -338,10 +371,52 @@ it('shows payment plan breakdown when a plan is selected', function () {
 
     livewire(Cart::class)
         ->set('selectedPaymentOption', "template:{$template->id}")
-        ->assertSet('selectedPaymentPlanMethod', PaymentPlanMethod::AutoCharge->value)
+        ->assertSet('paymentPlanFeeAmount', 300)
+        ->assertSet('grandTotal', 10300)
         ->assertSee('4 payments of')
+        ->assertSee('Payment Plan Fee (3%)')
+        ->assertSee('$103.00')
         ->assertSee('Amount Due Today')
-        ->assertSee('Payment Plan Method');
+        ->assertSee('Proceed to Payment Plan Terms & Conditions')
+        ->assertDontSee('Payment Plan Method');
+});
+
+it('initializes payment plan terms agreement when terms do not require scrolling', function () {
+    publishPaymentPlanTermsForCartTest();
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $template = PaymentPlanTemplate::factory()->create();
+
+    [$grid, $termsEntry] = checkoutTermsSchema($template);
+
+    expect($grid->getExtraAttributes()['x-data'])->toContain('hasTerms: true')
+        ->and((string) $termsEntry->getState())->toContain('scrollHeight <= $el.clientHeight + 2');
+});
+
+it('keeps payment plan terms agreement unavailable when no terms are published', function () {
+    LegalDocumentVersion::query()->delete();
+
+    try {
+        CartItem::factory()->create([
+            'user_id' => auth()->id(),
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+        ]);
+
+        $template = PaymentPlanTemplate::factory()->create();
+
+        [$grid, $termsEntry] = checkoutTermsSchema($template);
+
+        expect($grid->getExtraAttributes()['x-data'])->toContain('hasTerms: false')
+            ->and((string) $termsEntry->getState())->toContain('Payment plan terms are not available.');
+    } finally {
+        publishPaymentPlanTermsForCartTest();
+    }
 });
 
 it('calculates discount correctly in grand total', function () {
@@ -544,13 +619,13 @@ it('refreshes totals and payment plan eligibility after quantity changes', funct
     livewire(Cart::class)
         ->set('selectedPaymentOption', "template:{$template->id}")
         ->assertSet('subtotal', 5000)
-        ->assertSet('grandTotal', 5000)
+        ->assertSet('paymentPlanFeeAmount', 150)
+        ->assertSet('grandTotal', 5150)
         ->assertSee('3 Monthly Payments')
         ->call('incrementQuantity', $cartItem->id)
         ->assertSet('subtotal', 10000)
         ->assertSet('grandTotal', 10000)
         ->assertSet('selectedPaymentOption', Cart::PAYMENT_OPTION_PAY_IN_FULL)
-        ->assertSet('selectedPaymentPlanMethod', null)
         ->assertDontSee('3 Monthly Payments');
 });
 
@@ -583,3 +658,27 @@ it('cannot remove other users cart items', function () {
 
     expect(CartItem::query()->find($cartItem->id))->not->toBeNull();
 });
+
+function checkoutTermsSchema(PaymentPlanTemplate $template): array
+{
+    $component = livewire(Cart::class)
+        ->set('selectedPaymentOption', "template:{$template->id}");
+
+    $actionSchema = $component
+        ->instance()
+        ->checkoutAction()
+        ->getSchema(Schema::make($component->instance()));
+
+    $grid = $actionSchema->getComponents(withHidden: true)[0];
+    $termsEntry = $grid->getChildSchema()->getComponents(withHidden: true)[0];
+
+    return [$grid, $termsEntry];
+}
+
+function publishPaymentPlanTermsForCartTest(): void
+{
+    PaymentPlanTerms::document()?->publishVersion(
+        title: 'Payment Plan Terms & Conditions',
+        content: '<p>Test payment plan terms.</p>',
+    );
+}

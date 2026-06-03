@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\CourseSemester;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,7 +49,15 @@ final class Enrollment extends Model
             ->join('events', 'events.course_id', '=', 'courses.id')
             ->whereNotNull('enrollments.student_id')
             ->where('courses.start_time', '<', $date)
-            ->where('events.start_time', '>', $date)
+            ->where(function (Builder $query) use ($date): void {
+                $query
+                    ->where('events.end_time', '>=', $date)
+                    ->orWhere(function (Builder $query) use ($date): void {
+                        $query
+                            ->whereNull('events.end_time')
+                            ->where('events.start_time', '>=', $date);
+                    });
+            })
             ->groupBy('enrollments.id');
     }
 
@@ -70,14 +79,21 @@ final class Enrollment extends Model
             $date = Carbon::now();
         }
 
-        $query->join('courses', 'courses.id', '=', 'enrollments.course_id')
-            ->leftJoin('events', function ($join) use ($date): void {
-                $join->on('events.course_id', '=', 'courses.id')
-                    ->where('events.start_time', '>', $date);
-            })
-            ->whereNotNull('enrollments.student_id')
-            ->where('courses.start_time', '<', $date)
-            ->whereNull('events.id')
-            ->groupBy('enrollments.id');
+        $query->whereHas('course', fn (Builder $query): Builder => $query->concluded($date));
+    }
+
+    #[Scope]
+    protected function semester(Builder $query, CourseSemester $semester, ?Carbon $date = null): void
+    {
+        if (! $date instanceof Carbon) {
+            $date = Carbon::now();
+        }
+
+        $query->whereHas(
+            'course',
+            fn (Builder $query): Builder => $query
+                ->where('semester', $semester->value)
+                ->notConcluded($date)
+        );
     }
 }

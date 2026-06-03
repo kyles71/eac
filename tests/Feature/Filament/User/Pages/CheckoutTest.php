@@ -9,6 +9,7 @@ use App\Filament\User\Pages\Checkout;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -88,6 +89,43 @@ it('shows limited use credit in the checkout summary', function () {
         ->assertSee('Limited Use Credit')
         ->assertSee('-$25.00')
         ->assertDontSee('Restricted Credit');
+});
+
+it('charges only the first fee-inclusive installment for payment plan checkout', function () {
+    $template = PaymentPlanTemplate::factory()->create([
+        'number_of_installments' => 4,
+    ]);
+
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+        'subtotal' => 10000,
+        'payment_plan_fee' => 300,
+        'total' => 10300,
+        'payment_plan_template_id' => $template->id,
+    ]);
+
+    OrderItem::factory()->create(['order_id' => $order->id]);
+
+    $paymentIntent = Stripe\PaymentIntent::constructFrom([
+        'id' => 'pi_plan_123',
+        'client_secret' => 'pi_plan_123_secret',
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createPaymentIntent')
+        ->once()
+        ->withArgs(fn (User $user, int $amount, array $metadata, bool $setupFutureUsage): bool => $amount === 2575
+            && $metadata['order_id'] === (string) $order->id
+            && $setupFutureUsage === true)
+        ->andReturn($paymentIntent);
+    $stripeMock->shouldReceive('createCustomerSession')->andReturnNull();
+
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Checkout::class)
+        ->assertOk()
+        ->assertSet('clientSecret', 'pi_plan_123_secret');
 });
 
 it('marks the order as processing', function () {

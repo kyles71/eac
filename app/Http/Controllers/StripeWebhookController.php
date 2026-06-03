@@ -41,8 +41,6 @@ final class StripeWebhookController
         return match ($event->type) {
             'payment_intent.payment_failed' => $this->handlePaymentIntentFailed($event),
             'payment_intent.succeeded' => $this->handlePaymentIntentSucceeded($event),
-            'invoice.paid' => $this->handleInvoicePaid($event),
-            'invoice.payment_failed' => $this->handleInvoicePaymentFailed($event),
             default => response()->json(['message' => 'Unhandled event type']),
         };
     }
@@ -110,21 +108,19 @@ final class StripeWebhookController
         // Create payment plan if configured on the order
         $order->loadMissing('paymentPlanTemplate');
 
-        if ($order->paymentPlanTemplate !== null && $order->payment_plan_method !== null) {
+        if ($order->paymentPlanTemplate !== null) {
             $stripeCustomerId = $paymentIntent->customer ?? null;
 
             $createPaymentPlan = new CreatePaymentPlan;
             $createPaymentPlan->handle(
                 order: $order,
                 template: $order->paymentPlanTemplate,
-                method: $order->payment_plan_method,
                 stripeCustomerId: $stripeCustomerId,
                 stripePaymentMethodId: $stripePaymentMethodId,
             );
 
             Log::info("Payment plan created for order #{$order->id}.", [
                 'template_id' => $order->payment_plan_template_id,
-                'method' => $order->payment_plan_method->value,
             ]);
         }
 
@@ -155,61 +151,5 @@ final class StripeWebhookController
         }
 
         return response()->json(['message' => 'Installment payment processed']);
-    }
-
-    private function handleInvoicePaid(\Stripe\Event $event): JsonResponse
-    {
-        $invoice = $event->data->object;
-        $installmentId = $invoice->metadata->installment_id ?? null;
-
-        if ($installmentId === null) {
-            return response()->json(['message' => 'No installment metadata, skipping']);
-        }
-
-        $installment = Installment::query()->find($installmentId);
-
-        if ($installment === null) {
-            Log::warning("Installment #{$installmentId} not found for invoice.paid.", [
-                'invoice_id' => $invoice->id,
-            ]);
-
-            return response()->json(['error' => 'Installment not found'], 404);
-        }
-
-        if ($installment->status !== InstallmentStatus::Paid) {
-            $installment->markPaid(stripeInvoiceId: $invoice->id);
-            Log::info("Installment #{$installmentId} marked as paid via invoice.", [
-                'invoice_id' => $invoice->id,
-            ]);
-        }
-
-        return response()->json(['message' => 'Invoice payment processed']);
-    }
-
-    private function handleInvoicePaymentFailed(\Stripe\Event $event): JsonResponse
-    {
-        $invoice = $event->data->object;
-        $installmentId = $invoice->metadata->installment_id ?? null;
-
-        if ($installmentId === null) {
-            return response()->json(['message' => 'No installment metadata, skipping']);
-        }
-
-        $installment = Installment::query()->find($installmentId);
-
-        if ($installment === null) {
-            Log::warning("Installment #{$installmentId} not found for invoice.payment_failed.", [
-                'invoice_id' => $invoice->id,
-            ]);
-
-            return response()->json(['error' => 'Installment not found'], 404);
-        }
-
-        $installment->markFailed();
-        Log::info("Installment #{$installmentId} marked as failed via invoice payment failure.", [
-            'invoice_id' => $invoice->id,
-        ]);
-
-        return response()->json(['message' => 'Invoice payment failure handled']);
     }
 }

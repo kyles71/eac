@@ -21,11 +21,13 @@ final class GiftCardTypesTable
                     ->sortable(),
                 TextColumn::make('denomination')
                     ->label('Denomination')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('restriction')
                     ->label('Restriction')
                     ->state(fn (GiftCardType $record): string => $record->restrictionSummary())
+                    ->searchable(false)
+                    ->sortable(false)
                     ->badge()
                     ->color(fn (GiftCardType $record): string => $record->hasRestrictions() ? 'warning' : 'success'),
                 TextColumn::make('created_at')

@@ -36,7 +36,7 @@ it('evaluates order summary amounts when rendered', function () {
     $rows = $grid->getChildSchema()->getComponents(withHidden: true);
 
     $subtotalAmount = $rows[0]->getChildSchema()->getComponents(withHidden: true)[1];
-    $totalAmount = $rows[4]->getChildSchema()->getComponents(withHidden: true)[1];
+    $totalAmount = $rows[5]->getChildSchema()->getComponents(withHidden: true)[1];
 
     expect($subtotalAmount->getContent())->toBe('$50.00')
         ->and($totalAmount->getContent())->toBe('$50.00');

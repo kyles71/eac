@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
+use App\Enums\CourseSemester;
 use App\Enums\FormTypes;
+use App\Enums\ScheduleFrequency;
+use App\Models\Calendar;
+use App\Models\Course;
 use App\Models\Form;
 use App\Models\User;
 use App\Support\MediaDisks;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -15,6 +20,7 @@ use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Spatie\Permission\Models\Role;
@@ -25,48 +31,109 @@ final class CourseForm
     {
         return $schema
             ->components([
-                TextInput::make('name')
-                    ->required(),
-                Textarea::make('description')
-                    ->columnSpanFull(),
-                TextInput::make('capacity')
-                    ->required()
-                    ->numeric()
-                    ->default(10),
-                // SpatieTagsInput::make('tags'),
-                DateTimePicker::make('start_time')
-                    ->required(),
-                TextInput::make('duration')
-                    ->required()
-                    ->numeric()
-                    ->default(60),
-                Select::make('teacher_id')
-                    ->label('Teacher')
-                    ->preload()
-                    ->searchableRelationship(
-                        name: 'teacher',
-                        searchColumns: ['first_name', 'last_name'],
-                        labelFromRecord: fn (User $user): string => $user->fullName,
-                        modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),
-                        orderBy: ['first_name', 'last_name'],
-                    ),
-                TextInput::make('guest_teacher'),
-                Select::make('courseForms')
-                    ->label('Forms')
-                    ->multiple()
-                    ->preload()
-                    ->relationship(
-                        name: 'forms',
-                        titleAttribute: 'name',
-                        modifyQueryUsing: fn (Builder $query) => $query->isActive()->orderBy('name'),
-                    )
-                    ->default(Form::query()
-                        ->isActive()
-                        ->where('form_type', FormTypes::StudentWaiver)
-                        ->orderBy('valid_until', 'desc')
-                        ->first()
-                        ?->id
-                    ),
+                Section::make('Course Details')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextInput::make('name')
+                            ->required(),
+                        Select::make('semester')
+                            ->options(CourseSemester::class)
+                            ->required()
+                            ->default(CourseSemester::Fall->value),
+                        TextInput::make('capacity')
+                            ->required()
+                            ->numeric()
+                            ->default(10),
+                        TextInput::make('duration')
+                            ->label('Duration (minutes)')
+                            ->required()
+                            ->numeric()
+                            ->default(60),
+                        Textarea::make('description')
+                            ->columnSpanFull(),
+                    ]),
+                Section::make('Schedule')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        DateTimePicker::make('start_time')
+                            ->label('Starts At')
+                            ->required(),
+                        Select::make('repeat_frequency')
+                            ->label('Repeat')
+                            ->placeholder('Does not repeat')
+                            ->live()
+                            ->visible(fn (string $operation): bool => $operation === 'create')
+                            ->enum(ScheduleFrequency::class)
+                            ->options(ScheduleFrequency::class),
+                        DatePicker::make('repeat_through')
+                            ->label('Repeat Through')
+                            ->required(fn (Get $get): bool => filled($get('repeat_frequency')))
+                            ->visible(fn (Get $get, string $operation): bool => $operation === 'create' && filled($get('repeat_frequency'))),
+                    ]),
+                Section::make('Enrollment & Visibility')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('calendar_tag_slugs')
+                            ->label('Apply To Calendars')
+                            ->multiple()
+                            ->preload()
+                            ->options(fn (): array => Calendar::query()
+                                ->where('slug', '!=', Calendar::SLUG_MY)
+                                ->orderBy('id')
+                                ->pluck('name', 'slug')
+                                ->all())
+                            ->default([Calendar::SLUG_EAC])
+                            ->loadStateFromRelationshipsUsing(function (Select $component, ?Course $record): void {
+                                $component->state($record?->tagsWithType(Course::CALENDAR_TAG_TYPE)
+                                    ->pluck('name')
+                                    ->all() ?? [Calendar::SLUG_EAC]);
+                            })
+                            ->saveRelationshipsUsing(function (?Course $record, array $state): void {
+                                $calendarSlugs = Calendar::query()
+                                    ->where('slug', '!=', Calendar::SLUG_MY)
+                                    ->whereIn('slug', $state)
+                                    ->pluck('slug')
+                                    ->all();
+
+                                $record?->syncTagsWithType($calendarSlugs, Course::CALENDAR_TAG_TYPE);
+                            })
+                            ->dehydrated(false)
+                            ->columnSpanFull(),
+                        Select::make('teachers')
+                            ->label('Teachers')
+                            ->multiple()
+                            ->preload()
+                            ->searchableRelationship(
+                                name: 'teachers',
+                                searchColumns: ['first_name', 'last_name'],
+                                labelFromRecord: fn (User $user): string => $user->fullName,
+                                modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),
+                                orderBy: ['first_name', 'last_name'],
+                            ),
+                        TextInput::make('guest_teacher')
+                            ->label('Guest Teacher'),
+                        Select::make('courseForms')
+                            ->label('Required Forms')
+                            ->multiple()
+                            ->preload()
+                            ->relationship(
+                                name: 'forms',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn (Builder $query) => $query->isActive()->orderBy('name'),
+                            )
+                            ->default(fn (): array => ($form = Form::query()
+                                ->isActive()
+                                ->where('form_type', FormTypes::StudentWaiver)
+                                ->orderBy('valid_until', 'desc')
+                                ->first()) === null ? [] : [$form->id]),
+                        SpatieTagsInput::make('tags')
+                            ->label('Course Tags')
+                            ->type(Course::GENERAL_TAG_TYPE)
+                            ->columnSpanFull(),
+                    ]),
                 Section::make('Media')
                     ->columns(3)
                     ->collapsed()
@@ -81,8 +148,8 @@ final class CourseForm
                             ->image(),
                         SpatieMediaLibraryFileUpload::make('documents')
                             ->collection('documents')
-                            ->disk(MediaDisks::public())
-                            ->visibility('public')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             ->multiple()
                             ->acceptedFileTypes([
                                 'application/pdf',
@@ -93,8 +160,8 @@ final class CourseForm
                             ]),
                         SpatieMediaLibraryFileUpload::make('videos')
                             ->collection('videos')
-                            ->disk(MediaDisks::public())
-                            ->visibility('public')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             ->multiple()
                             ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
                     ]),

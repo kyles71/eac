@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Actions\Store\CreatePaymentPlan;
 use App\Enums\OrderStatus;
 use App\Filament\User\Pages\CheckoutSuccess;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
@@ -98,4 +100,41 @@ it('reloads the order status while waiting for webhook completion', function () 
         ->call('refreshOrderStatus')
         ->assertSee('Completed')
         ->assertDontSee('Payment Finalizing');
+});
+
+it('shows actual paid amount and payment plan details for payment plan orders', function () {
+    $product = Product::factory()->create(['price' => 10000]);
+    $template = PaymentPlanTemplate::factory()->create([
+        'number_of_installments' => 4,
+    ]);
+
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 10000,
+        'payment_plan_fee' => 300,
+        'total' => 10300,
+        'payment_plan_template_id' => $template->id,
+        'stripe_payment_intent_id' => 'pi_plan',
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'unit_price' => 10000,
+        'total_price' => 10000,
+    ]);
+
+    (new CreatePaymentPlan)->handle($order, $template);
+
+    Livewire::withQueryParams(['order_id' => $order->id])
+        ->test(CheckoutSuccess::class)
+        ->assertOk()
+        ->assertSee('Total Paid')
+        ->assertSee('$25.75')
+        ->assertSee('Payment Plan Details')
+        ->assertSee('4 Monthly payments')
+        ->assertSee('$3.00')
+        ->assertSee('$103.00')
+        ->assertSee('$77.25');
 });

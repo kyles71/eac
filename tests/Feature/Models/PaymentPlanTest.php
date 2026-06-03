@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentPlanFrequency;
-use App\Enums\PaymentPlanMethod;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\PaymentPlan;
@@ -14,7 +13,6 @@ it('can be created with factory', function () {
     $plan = PaymentPlan::factory()->create();
 
     expect($plan)->toBeInstanceOf(PaymentPlan::class)
-        ->and($plan->method)->toBe(PaymentPlanMethod::AutoCharge)
         ->and($plan->frequency)->toBe(PaymentPlanFrequency::Monthly);
 });
 

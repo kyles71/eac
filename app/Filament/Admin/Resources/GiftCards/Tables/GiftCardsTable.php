@@ -23,11 +23,11 @@ final class GiftCardsTable
                     ->copyable(),
                 TextColumn::make('initial_amount')
                     ->label('Initial')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('remaining_amount')
                     ->label('Remaining')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->moneyCents()
                     ->sortable(),
                 TextColumn::make('purchasedBy.email')
                     ->label('Purchased By')

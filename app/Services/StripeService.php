@@ -9,7 +9,6 @@ use App\Models\User;
 use Stripe\Customer;
 use Stripe\Event;
 use Stripe\Exception\SignatureVerificationException;
-use Stripe\Invoice;
 use Stripe\PaymentIntent;
 use Stripe\PaymentMethod;
 use Stripe\Refund;
@@ -128,11 +127,6 @@ final readonly class StripeService implements StripeServiceContract
         return $this->client->paymentMethods->detach($paymentMethodId);
     }
 
-    public function retrieveInvoice(string $invoiceId): Invoice
-    {
-        return $this->client->invoices->retrieve($invoiceId);
-    }
-
     /**
      * @throws SignatureVerificationException
      */
@@ -176,35 +170,6 @@ final readonly class StripeService implements StripeServiceContract
             'off_session' => true,
             'confirm' => true,
         ]);
-    }
-
-    /**
-     * @param  array<string, string>  $metadata
-     */
-    public function createAndSendInvoice(
-        string $customerId,
-        int $amount,
-        string $description = '',
-        array $metadata = [],
-    ): Invoice {
-        // Create an invoice item
-        $this->client->invoiceItems->create([
-            'customer' => $customerId,
-            'amount' => $amount,
-            'currency' => 'usd',
-            'description' => $description,
-        ]);
-
-        // Create and send the invoice
-        $invoice = $this->client->invoices->create([
-            'customer' => $customerId,
-            'auto_advance' => true,
-            'collection_method' => 'send_invoice',
-            'days_until_due' => 7,
-            'metadata' => $metadata,
-        ]);
-
-        return $this->client->invoices->sendInvoice($invoice->id);
     }
 
     public function cancelPaymentIntent(string $paymentIntentId): PaymentIntent

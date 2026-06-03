@@ -41,7 +41,7 @@ final class ViewPaymentPlan extends ViewRecord
 
                             return $installments
                                 ->mapWithKeys(fn (Installment $installment): array => [
-                                    $installment->id => "#{$installment->installment_number} — \${$this->formatCents($installment->amount)} (due {$installment->due_date->format('M j, Y')})",
+                                    $installment->id => "#{$installment->installment_number} — ".format_money($installment->amount)." (due {$installment->due_date->format('M j, Y')})",
                                 ])
                                 ->all();
                         })
@@ -64,10 +64,5 @@ final class ViewPaymentPlan extends ViewRecord
                         ->send();
                 }),
         ];
-    }
-
-    private function formatCents(int $cents): string
-    {
-        return number_format($cents / 100, 2);
     }
 }

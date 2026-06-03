@@ -26,6 +26,8 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
+- Prefer DRY and SOLID design: extract repeated behavior into focused services, helpers, components, traits, or model methods when it has a clear single responsibility and is reused by more than one surface.
+- When implementation details are ambiguous or multiple reasonable product behaviors exist, ask Kyle targeted questions before coding.
 
 ## Verification Scripts
 - Do not create verification scripts or tinker when tests cover that functionality and prove it works. Unit and feature tests are more important.
@@ -582,3 +584,14 @@ livewire(ListUsers::class)
 - **Never assume public file visibility.** File visibility is `private` by default. Always use `->visibility('public')` when public access is needed.
 - **Never assume full-width layout.** `Grid`, `Section`, and `Fieldset` do not span all columns by default. Explicitly set column spans when needed.
 </laravel-boost-guidelines>
+
+## Running Tools
+
+Always use these flags when running CLI tools:
+
+- Tests: `vendor/bin/phpunit --no-progress`
+- PHPStan: `vendor/bin/phpstan analyse --no-progress --error-format=raw`
+- Psalm: `vendor/bin/psalm --no-progress --no-suggestions --output-format=text`
+- phpcs: `vendor/bin/phpcs --report=emacs -q`
+- PHP-CS-Fixer: `vendor/bin/php-cs-fixer fix --show-progress=none -q -n`
+- Rector: `vendor/bin/rector process --no-progress-bar --output-format=github`Copy

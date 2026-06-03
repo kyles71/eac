@@ -1,15 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Admin\Resources\FormUsers\Tables;
 
 use App\Models\FormUser;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class FormUsersTable
+final class FormUsersTable
 {
     public static function configure(Table $table, bool $only_my_forms = false): Table
     {
@@ -22,11 +23,13 @@ class FormUsersTable
             ->columns([
                 TextColumn::make('form.name')
                     ->searchable(),
-                TextColumn::make('user.fullName')
+                TextColumn::make('user.full_name')
+                    ->label('User')
                     ->hidden($only_my_forms)
-                    ->searchable(),
-                TextColumn::make('student.fullName')
-                    ->searchable(),
+                    ->searchable(['first_name', 'last_name']),
+                TextColumn::make('student.full_name')
+                    ->label('Student')
+                    ->searchable(['first_name', 'last_name']),
                 TextColumn::make('signature')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('date_signed')

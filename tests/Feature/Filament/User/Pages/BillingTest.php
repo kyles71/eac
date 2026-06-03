@@ -5,16 +5,19 @@ declare(strict_types=1);
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
-use App\Enums\PaymentPlanMethod;
 use App\Filament\User\Pages\Billing;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
 use App\Models\Installment;
+use App\Models\LegalDocumentVersion;
 use App\Models\Order;
 use App\Models\PaymentPlan;
 use App\Models\RestrictedCredit;
 use App\Models\User;
+use App\Support\LegalDocuments\PaymentPlanTerms;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Schemas\Schema;
 use Stripe\Customer;
 use Stripe\PaymentMethod;
 
@@ -82,6 +85,33 @@ it('shows limited use credit details with an overview shortcut when the user has
         ->assertDontSee('Restricted Credit');
 });
 
+it('keeps billing overview cards on one row with conditional spans', function () {
+    $cards = billingOverviewCards();
+
+    expect(array_map(fn ($card): ?string => $card->getHeading(), $cards))->toBe([
+        'Store Credit',
+        'Next Payment',
+        'Open Seats',
+        'Limited Use Credit',
+    ])
+        ->and($cards[0]->getColumnSpan('md'))->toBe(4)
+        ->and($cards[1]->getColumnSpan('md'))->toBe(4)
+        ->and($cards[2]->getColumnSpan('md'))->toBe(4)
+        ->and($cards[3]->isVisible())->toBeFalse();
+
+    RestrictedCredit::factory()->balance(2500)->create([
+        'user_id' => auth()->id(),
+    ]);
+
+    $cards = billingOverviewCards();
+
+    expect($cards[0]->getColumnSpan('md'))->toBe(3)
+        ->and($cards[1]->getColumnSpan('md'))->toBe(3)
+        ->and($cards[2]->getColumnSpan('md'))->toBe(3)
+        ->and($cards[3]->getColumnSpan('md'))->toBe(3)
+        ->and($cards[3]->isVisible())->toBeTrue();
+});
+
 it('hides cancelled order details from billing tabs', function () {
     $completedOrder = Order::factory()->completed()->create([
         'user_id' => auth()->id(),
@@ -95,7 +125,6 @@ it('hides cancelled order details from billing tabs', function () {
 
     $cancelledPlan = PaymentPlan::factory()->create([
         'order_id' => $cancelledOrder->id,
-        'method' => PaymentPlanMethod::AutoCharge,
     ]);
 
     Installment::factory()->create([
@@ -117,6 +146,33 @@ it('hides cancelled order details from billing tabs', function () {
         ->assertDontSee('Cancelled')
         ->assertDontSee('Reversed credit for cancelled order');
 });
+
+function billingOverviewCards(): array
+{
+    $component = livewire(Billing::class);
+    $method = new ReflectionMethod(Billing::class, 'getOverviewSchema');
+    $method->setAccessible(true);
+
+    $overviewSchema = $method->invoke($component->instance());
+    $schema = Schema::make($component->instance())
+        ->components($overviewSchema);
+    $grid = $schema->getComponents(withHidden: true)[0];
+
+    return array_slice($grid->getChildSchema()->getComponents(withHidden: true), 0, 4);
+}
+
+function paymentPlanTermsVersionForBillingTest(): LegalDocumentVersion
+{
+    $termsVersion = PaymentPlanTerms::currentVersion()
+        ?? PaymentPlanTerms::document()?->publishVersion(
+            title: 'Payment Plan Terms & Conditions',
+            content: '<p>Test payment plan terms.</p>',
+        );
+
+    expect($termsVersion)->not->toBeNull();
+
+    return $termsVersion;
+}
 
 it('sets a saved payment method as default and updates active auto charge plans', function () {
     auth()->user()->update(['stripe_id' => 'cus_test_123']);
@@ -156,7 +212,6 @@ it('sets a saved payment method as default and updates active auto charge plans'
 
     $plan = PaymentPlan::factory()->create([
         'order_id' => $order->id,
-        'method' => PaymentPlanMethod::AutoCharge,
         'stripe_customer_id' => 'cus_test_123',
         'stripe_payment_method_id' => 'pm_old',
     ]);
@@ -208,7 +263,6 @@ it('does not remove payment methods used by active auto charge plans', function 
 
     $plan = PaymentPlan::factory()->create([
         'order_id' => $order->id,
-        'method' => PaymentPlanMethod::AutoCharge,
         'stripe_customer_id' => 'cus_test_123',
         'stripe_payment_method_id' => 'pm_used',
     ]);
@@ -221,4 +275,92 @@ it('does not remove payment methods used by active auto charge plans', function 
     livewire(Billing::class)
         ->call('removePaymentMethod', 'pm_used')
         ->assertNotified('Payment method is in use');
+});
+
+it('shows a printable terms link for payment plans', function () {
+    $termsVersion = paymentPlanTermsVersionForBillingTest();
+
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'payment_plan_terms_version_id' => $termsVersion->id,
+    ]);
+
+    PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+    ]);
+
+    livewire(Billing::class)
+        ->assertSee('All payment plans below have been agreed to under these Terms & Conditions')
+        ->assertSee(route('legal-documents.versions.show', $termsVersion), false);
+});
+
+it('allows users to print terms they accepted', function () {
+    $termsVersion = paymentPlanTermsVersionForBillingTest();
+
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'payment_plan_terms_version_id' => $termsVersion->id,
+    ]);
+
+    $order->legalDocumentAcceptance()->create([
+        'legal_document_version_id' => $termsVersion->id,
+        'user_id' => auth()->id(),
+        'accepted_at' => now(),
+    ]);
+
+    $this->get(route('legal-documents.versions.show', $termsVersion))
+        ->assertOk()
+        ->assertSee('Print')
+        ->assertSee('Payment Plan Terms & Conditions');
+});
+
+it('updates a payment plan saved payment method without method choice', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $paymentMethod = PaymentMethod::constructFrom([
+        'id' => 'pm_new',
+        'card' => [
+            'brand' => 'visa',
+            'last4' => '4242',
+            'exp_month' => 12,
+            'exp_year' => 2030,
+        ],
+    ]);
+
+    $customer = Customer::constructFrom([
+        'id' => 'cus_test_123',
+        'invoice_settings' => [
+            'default_payment_method' => 'pm_old',
+        ],
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod]);
+
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+    ]);
+
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => 'pm_old',
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    livewire(Billing::class)
+        ->callAction(TestAction::make("update_plan_payment_method_{$plan->id}")->schemaComponent(true, 'content'), data: [
+            'stripe_payment_method_id' => 'pm_new',
+        ])
+        ->assertNotified('Payment method updated')
+        ->assertDontSee('Payment Plan Method');
+
+    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_new');
 });

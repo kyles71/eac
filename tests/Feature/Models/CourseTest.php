@@ -6,6 +6,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Product;
+use App\Models\User;
 use Carbon\Carbon;
 
 it('calculates available capacity correctly', function () {
@@ -32,6 +33,37 @@ it('has a product relationship', function () {
 
     expect($course->product)->toBeInstanceOf(Product::class)
         ->and($course->product->id)->toBe($product->id);
+});
+
+it('can have multiple teachers and formats their names', function () {
+    $firstTeacher = User::factory()->create([
+        'first_name' => 'Alvin',
+        'last_name' => 'Ailey',
+    ]);
+    $secondTeacher = User::factory()->create([
+        'first_name' => 'Twyla',
+        'last_name' => 'Tharp',
+    ]);
+    $course = Course::factory()->create(['guest_teacher' => null]);
+
+    $course->teachers()->sync([$secondTeacher->id, $firstTeacher->id]);
+
+    expect($course->refresh()->teachers)
+        ->toHaveCount(2)
+        ->and($course->teacherDisplayName)
+        ->toBe('Alvin Ailey, Twyla Tharp');
+});
+
+it('prefers the guest teacher for the teacher display name', function () {
+    $teacher = User::factory()->create([
+        'first_name' => 'Misty',
+        'last_name' => 'Copeland',
+    ]);
+    $course = Course::factory()->create(['guest_teacher' => 'Guest Artist']);
+
+    $course->teachers()->sync([$teacher->id]);
+
+    expect($course->refresh()->teacherDisplayName)->toBe('Guest Artist');
 });
 
 it('scopes available courses', function () {

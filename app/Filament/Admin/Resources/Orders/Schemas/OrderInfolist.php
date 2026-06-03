@@ -18,6 +18,7 @@ final class OrderInfolist
         return $schema
             ->components([
                 Section::make('Order Information')
+                    ->columns(3)
                     ->schema([
                         TextEntry::make('id')
                             ->label('Order #'),
@@ -34,9 +35,12 @@ final class OrderInfolist
                                 OrderStatus::Refunded => 'gray',
                             }),
                         TextEntry::make('subtotal')
-                            ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                            ->moneyCents(),
+                        TextEntry::make('payment_plan_fee')
+                            ->label('Payment Plan Fee')
+                            ->moneyCents(),
                         TextEntry::make('total')
-                            ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                            ->moneyCents(),
                         TextEntry::make('stripe_payment_intent_id')
                             ->label('Stripe Payment Intent')
                             ->placeholder('N/A')
@@ -49,16 +53,17 @@ final class OrderInfolist
                     ->schema([
                         RepeatableEntry::make('orderItems')
                             ->hiddenLabel()
+                            ->grid(5)
                             ->schema([
                                 TextEntry::make('product.name')
                                     ->label('Product'),
                                 TextEntry::make('quantity'),
                                 TextEntry::make('unit_price')
                                     ->label('Unit Price')
-                                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                                    ->moneyCents(),
                                 TextEntry::make('total_price')
                                     ->label('Total')
-                                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2)),
+                                    ->moneyCents(),
                                 TextEntry::make('status')
                                     ->label('Fulfillment')
                                     ->badge()

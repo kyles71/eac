@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses;
 
+use App\Filament\Admin\Resources\Courses\Pages\CourseAttendance;
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Pages\ViewCourse;
 use App\Filament\Admin\Resources\Courses\RelationManagers\EnrollmentsRelationManager;
@@ -61,6 +62,7 @@ final class CourseResource extends Resource
         return [
             'index' => ListCourses::route('/'),
             'view' => ViewCourse::route('/{record}'),
+            'attendance' => CourseAttendance::route('/{record}/attendance'),
         ];
     }
 }

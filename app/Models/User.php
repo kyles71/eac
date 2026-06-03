@@ -21,17 +21,19 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Jeffgreco13\FilamentBreezy\Traits\TwoFactorAuthenticatable;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Traits\HasRoles;
+use Spatie\Tags\HasTags;
 use Throwable;
 
 final class User extends Authenticatable implements FilamentUser, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, HasRoles, HasTags, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * The attributes that should be hidden for serialization.
@@ -97,6 +99,29 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         return $this->hasMany(Student::class);
     }
 
+    public function studentCalendarAudienceTagIds(): Collection
+    {
+        $this->loadMissing('students.tags');
+
+        return $this->students
+            ->flatMap(
+                fn (Student $student): Collection => $student->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
+            )
+            ->pluck('id')
+            ->unique()
+            ->values();
+    }
+
+    public function calendarAudienceTagIds(): Collection
+    {
+        $this->loadMissing('tags');
+
+        return $this->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
+            ->pluck('id')
+            ->unique()
+            ->values();
+    }
+
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
@@ -107,6 +132,12 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         return $this->morphMany(EventAttendee::class, 'attendee');
     }
 
+    public function excludedEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(Event::class, 'event_exclusions')
+            ->withTimestamps();
+    }
+
     public function forms(): HasMany
     {
         return $this->hasMany(FormUser::class);
@@ -115,6 +146,12 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     public function purchasedCourses(): BelongsToMany
     {
         return $this->belongsToMany(Course::class, 'enrollments');
+    }
+
+    public function teachingCourses(): BelongsToMany
+    {
+        return $this->belongsToMany(Course::class, 'course_teacher', 'teacher_id', 'course_id')
+            ->withTimestamps();
     }
 
     public function orders(): HasMany
@@ -257,11 +294,11 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('avatars')
-            ->useDisk(MediaDisks::public())
+            ->useDisk(MediaDisks::private())
             ->singleFile();
 
         $this->addMediaCollection('staff-photo')
-            ->useDisk(MediaDisks::public())
+            ->useDisk(MediaDisks::private())
             ->singleFile();
     }
 

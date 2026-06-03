@@ -5,17 +5,76 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Admin\Resources\Events\EventResource;
+use App\Services\EventAttendance;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\EmbeddedSchema;
+use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
-final class ViewEvent extends ViewRecord
+final class ViewEvent extends ViewRecord implements HasTable
 {
+    use InteractsWithTable;
+
     protected static string $resource = EventResource::class;
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                EmbeddedSchema::make('infolist'),
+                EmbeddedTable::make(),
+            ]);
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query($this->attendanceQuery())
+            ->heading('Attendance')
+            ->columns([
+                TextColumn::make('attendance_student_name')
+                    ->label('Student')
+                    ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
+                ToggleColumn::make('attended')
+                    ->label('Attended')
+                    ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->getRecord(), $record))
+                    ->updateStateUsing(fn (Model $record, mixed $state): bool => $this->attendance()
+                        ->setRecordStudentAttendance($this->getRecord(), $record, $state)),
+                TextInputColumn::make('notes')
+                    ->label('Notes')
+                    ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->getRecord(), $record))
+                    ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
+                        ->setRecordStudentNotes($this->getRecord(), $record, $state)),
+            ])
+            ->paginated(false);
+    }
 
     protected function getHeaderActions(): array
     {
         return [
             EditAction::make(),
         ];
+    }
+
+    /**
+     * @return Builder<Model>
+     */
+    private function attendanceQuery(): Builder
+    {
+        return $this->attendance()->eventRosterQuery($this->getRecord());
+    }
+
+    private function attendance(): EventAttendance
+    {
+        return app(EventAttendance::class);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use BackedEnum;
@@ -45,13 +46,13 @@ final class CheckoutSuccess extends Page
             $this->order = Order::query()
                 ->where('user_id', auth()->id())
                 ->where('stripe_payment_intent_id', $paymentIntent)
-                ->with('orderItems.product')
+                ->with(['orderItems.product', 'paymentPlan.installments', 'paymentPlanTemplate'])
                 ->first();
         } elseif ($orderId !== null) {
             $this->order = Order::query()
                 ->where('user_id', auth()->id())
                 ->where('id', $orderId)
-                ->with('orderItems.product')
+                ->with(['orderItems.product', 'paymentPlan.installments', 'paymentPlanTemplate'])
                 ->first();
         }
     }
@@ -67,7 +68,7 @@ final class CheckoutSuccess extends Page
         $this->order = Order::query()
             ->where('user_id', auth()->id())
             ->where('id', $this->order->id)
-            ->with('orderItems.product')
+            ->with(['orderItems.product', 'paymentPlan.installments', 'paymentPlanTemplate'])
             ->first();
 
         unset($this->isFinalizingPayment, $this->hasExceededStatusPolling);
@@ -120,12 +121,15 @@ final class CheckoutSuccess extends Page
                         ->badge(),
                     TextEntry::make('total')
                         ->label('Total Paid')
-                        ->state(fn (): string => $this->order->formattedTotal()),
+                        ->state(fn (): string => format_money($this->order->amountPaidAtCheckout())),
                     TextEntry::make('date')
                         ->label('Date')
                         ->state(fn () => $this->order->created_at)
                         ->dateTime('M j, Y g:i A'),
                 ]),
+            Section::make('Payment Plan Details')
+                ->schema($this->getPaymentPlanDetailsSchema())
+                ->visible(fn (): bool => $this->order->paymentPlanTemplate !== null),
             Section::make('Items Purchased')
                 ->schema(
                     $this->order->orderItems->map(
@@ -157,6 +161,48 @@ final class CheckoutSuccess extends Page
                 ->icon(Heroicon::OutlinedShoppingBag)
                 ->color('gray')
                 ->url(Store::getUrl()),
+        ];
+    }
+
+    /**
+     * @return array<\Filament\Schemas\Components\Component>
+     */
+    private function getPaymentPlanDetailsSchema(): array
+    {
+        $template = $this->order?->paymentPlanTemplate;
+
+        if ($template === null || $this->order === null) {
+            return [];
+        }
+
+        $amountPaidToday = $this->order->amountPaidAtCheckout();
+        $remainingBalance = max(0, $this->order->total - $amountPaidToday);
+        $nextInstallment = $this->order->paymentPlan?->installments
+            ->where('status', InstallmentStatus::Pending)
+            ->sortBy('due_date')
+            ->first();
+
+        return [
+            TextEntry::make('payment_plan_schedule')
+                ->label('Schedule')
+                ->state("{$template->number_of_installments} {$template->frequency->value} payments"),
+            TextEntry::make('payment_plan_fee')
+                ->label('Payment Plan Fee')
+                ->state($this->order->formattedPaymentPlanFee()),
+            TextEntry::make('payment_plan_total')
+                ->label('Plan Total')
+                ->state($this->order->formattedTotal()),
+            TextEntry::make('payment_plan_paid_today')
+                ->label('Paid Today')
+                ->state(format_money($amountPaidToday)),
+            TextEntry::make('payment_plan_remaining')
+                ->label('Remaining Balance')
+                ->state(format_money($remainingBalance)),
+            TextEntry::make('payment_plan_next_payment')
+                ->label('Next Payment')
+                ->state($nextInstallment !== null
+                    ? format_money($nextInstallment->amount).' due '.$nextInstallment->due_date->format('M j, Y')
+                    : 'No upcoming payments'),
         ];
     }
 }

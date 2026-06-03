@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\PaymentPlanFrequency;
-use App\Enums\PaymentPlanMethod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +19,6 @@ final class PaymentPlan extends Model
         'id' => 'integer',
         'order_id' => 'integer',
         'payment_plan_template_id' => 'integer',
-        'method' => PaymentPlanMethod::class,
         'total_amount' => 'integer',
         'number_of_installments' => 'integer',
         'frequency' => PaymentPlanFrequency::class,

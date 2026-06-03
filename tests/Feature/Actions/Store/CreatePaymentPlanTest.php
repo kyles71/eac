@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Actions\Store\CreatePaymentPlan;
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentPlanFrequency;
-use App\Enums\PaymentPlanMethod;
 use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
 
@@ -20,7 +19,6 @@ it('creates a payment plan with correct installments', function () {
     $plan = $action->handle(
         order: $order,
         template: $template,
-        method: PaymentPlanMethod::AutoCharge,
         stripeCustomerId: 'cus_test_123',
         stripePaymentMethodId: 'pm_test_123',
     );
@@ -28,7 +26,6 @@ it('creates a payment plan with correct installments', function () {
     expect($plan->total_amount)->toBe(10000)
         ->and($plan->number_of_installments)->toBe(3)
         ->and($plan->frequency)->toBe(PaymentPlanFrequency::Monthly)
-        ->and($plan->method)->toBe(PaymentPlanMethod::AutoCharge)
         ->and($plan->stripe_customer_id)->toBe('cus_test_123')
         ->and($plan->stripe_payment_method_id)->toBe('pm_test_123')
         ->and($plan->installments)->toHaveCount(3);
@@ -41,7 +38,7 @@ it('marks first installment as paid', function () {
     ]);
 
     $action = new CreatePaymentPlan;
-    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
+    $plan = $action->handle($order, $template);
 
     $first = $plan->installments->where('installment_number', 1)->first();
     $second = $plan->installments->where('installment_number', 2)->first();
@@ -58,7 +55,7 @@ it('first installment absorbs remainder', function () {
     ]);
 
     $action = new CreatePaymentPlan;
-    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
+    $plan = $action->handle($order, $template);
 
     $installments = $plan->installments->sortBy('installment_number');
 
@@ -75,7 +72,7 @@ it('sets correct due dates for weekly frequency', function () {
     ]);
 
     $action = new CreatePaymentPlan;
-    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
+    $plan = $action->handle($order, $template);
 
     $installments = $plan->installments->sortBy('installment_number');
     $today = now()->startOfDay();
@@ -93,7 +90,7 @@ it('sets correct due dates for monthly frequency', function () {
     ]);
 
     $action = new CreatePaymentPlan;
-    $plan = $action->handle($order, $template, PaymentPlanMethod::AutoCharge);
+    $plan = $action->handle($order, $template);
 
     $installments = $plan->installments->sortBy('installment_number');
     $today = now()->startOfDay();
@@ -101,4 +98,22 @@ it('sets correct due dates for monthly frequency', function () {
     expect($installments->get(0)->due_date->startOfDay()->equalTo($today))->toBeTrue()
         ->and($installments->get(1)->due_date->startOfDay()->equalTo($today->copy()->addDays(30)))->toBeTrue()
         ->and($installments->get(2)->due_date->startOfDay()->equalTo($today->copy()->addDays(60)))->toBeTrue();
+});
+
+it('sets correct due dates for daily frequency', function () {
+    $order = Order::factory()->create(['total' => 9000]);
+    $template = PaymentPlanTemplate::factory()->create([
+        'number_of_installments' => 3,
+        'frequency' => PaymentPlanFrequency::Daily,
+    ]);
+
+    $action = new CreatePaymentPlan;
+    $plan = $action->handle($order, $template);
+
+    $installments = $plan->installments->sortBy('installment_number');
+    $today = now()->startOfDay();
+
+    expect($installments->get(0)->due_date->startOfDay()->equalTo($today))->toBeTrue()
+        ->and($installments->get(1)->due_date->startOfDay()->equalTo($today->copy()->addDay()))->toBeTrue()
+        ->and($installments->get(2)->due_date->startOfDay()->equalTo($today->copy()->addDays(2)))->toBeTrue();
 });

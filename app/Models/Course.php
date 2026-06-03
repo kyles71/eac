@@ -7,11 +7,13 @@ namespace App\Models;
 use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Enums\CourseSemester;
 use App\Support\MediaDisks;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -19,18 +21,23 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Spatie\Tags\HasTags;
 
 final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
-    use HasFactory, InteractsWithMedia;
+    use HasFactory, HasTags, InteractsWithMedia;
+
+    public const string CALENDAR_TAG_TYPE = 'course-calendar';
+
+    public const string GENERAL_TAG_TYPE = 'course-general';
 
     protected $casts = [
         'id' => 'integer',
+        'semester' => CourseSemester::class,
         'start_time' => 'datetime',
         'capacity' => 'integer',
         'duration' => 'integer',
-        'teacher_id' => 'integer',
     ];
 
     public function events(): HasMany
@@ -73,9 +80,21 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         });
     }
 
-    public function teacher(): BelongsTo
+    public function teacherDisplayName(): Attribute
     {
-        return $this->belongsTo(User::class);
+        return Attribute::make(
+            get: fn (): ?string => filled($this->guest_teacher)
+                ? $this->guest_teacher
+                : $this->formattedTeacherNames()
+        );
+    }
+
+    public function teachers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
+            ->withTimestamps()
+            ->orderBy('first_name')
+            ->orderBy('last_name');
     }
 
     public function courseForms(): HasMany
@@ -135,12 +154,12 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function storefrontDetails(): array
     {
         $availableCapacity = $this->getAvailableCapacity();
-        $teacherName = $this->guest_teacher ?: $this->teacher?->fullName;
 
         return array_filter([
+            'Semester' => $this->semester?->getLabel(),
             'Start Time' => $this->start_time?->format('M j, Y g:i A'),
             'Duration' => "{$this->duration} minutes",
-            'Teacher' => $teacherName,
+            'Teacher' => $this->teacherDisplayName,
             'Available Spots' => $availableCapacity > 0 ? (string) $availableCapacity : 'Sold Out',
         ], fn (?string $value): bool => filled($value));
     }
@@ -158,16 +177,80 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         );
     }
 
+    public function scopeConcluded(Builder $query, ?Carbon $date = null): void
+    {
+        $date ??= Carbon::now();
+
+        $query->where(function (Builder $query) use ($date): void {
+            $query
+                ->where(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereHas('events')
+                        ->whereDoesntHave(
+                            'events',
+                            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+                        );
+                })
+                ->orWhere(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereDoesntHave('events')
+                        ->where('start_time', '<', $date);
+                });
+        });
+    }
+
+    public function scopeNotConcluded(Builder $query, ?Carbon $date = null): void
+    {
+        $date ??= Carbon::now();
+
+        $query->where(function (Builder $query) use ($date): void {
+            $query
+                ->whereHas(
+                    'events',
+                    fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+                )
+                ->orWhere(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereDoesntHave('events')
+                        ->where(function (Builder $query) use ($date): void {
+                            $query
+                                ->whereNull('start_time')
+                                ->orWhere('start_time', '>=', $date);
+                        });
+                });
+        });
+    }
+
+    public function hasConcluded(?Carbon $date = null): bool
+    {
+        $date ??= Carbon::now();
+
+        if ($this->relationLoaded('events')) {
+            if ($this->events->isNotEmpty()) {
+                return ! $this->events->contains(
+                    fn (Event $event): bool => self::eventHasNotPassed($event, $date)
+                );
+            }
+
+            return $this->start_time?->lt($date) ?? false;
+        }
+
+        return ! self::query()
+            ->whereKey($this->getKey())
+            ->notConcluded($date)
+            ->exists();
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('images')
             ->useDisk(MediaDisks::public());
 
         $this->addMediaCollection('documents')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
 
         $this->addMediaCollection('videos')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
     }
 
     // public function registerMediaConversions(?Media $media = null): void
@@ -179,4 +262,51 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     //         ->performOnCollections('images')
     //         ->nonQueued();
     // }
+
+    protected static function booted(): void
+    {
+        self::created(function (Course $course): void {
+            $course->loadMissing('tags');
+
+            if ($course->tagsWithType(self::CALENDAR_TAG_TYPE)->isEmpty()) {
+                $course->attachTag(Calendar::SLUG_EAC, self::CALENDAR_TAG_TYPE);
+            }
+        });
+    }
+
+    private static function applyEventNotPassedConstraint(Builder $query, Carbon $date): Builder
+    {
+        return $query->where(function (Builder $query) use ($date): void {
+            $query
+                ->where('end_time', '>=', $date)
+                ->orWhere(function (Builder $query) use ($date): void {
+                    $query
+                        ->whereNull('end_time')
+                        ->where('start_time', '>=', $date);
+                });
+        });
+    }
+
+    private static function eventHasNotPassed(Event $event, Carbon $date): bool
+    {
+        if ($event->end_time !== null) {
+            return $event->end_time->gte($date);
+        }
+
+        return $event->start_time?->gte($date) ?? false;
+    }
+
+    private function formattedTeacherNames(): ?string
+    {
+        $teachers = $this->relationLoaded('teachers')
+            ? $this->teachers
+            : $this->teachers()->get();
+
+        $teacherNames = $teachers
+            ->pluck('fullName')
+            ->filter()
+            ->join(', ');
+
+        return filled($teacherNames) ? $teacherNames : null;
+    }
 }

@@ -56,7 +56,7 @@ abstract class BasePanelProvider extends PanelProvider
                         'personal_info' => PersonalInfo::class,
                     ])
                     ->enableTwoFactorAuthentication(),
-                FilamentFullCalendarPlugin::make(),
+                FilamentFullCalendarPlugin::make()->timezone(config('app.display_timezone')),
             ])
             ->middleware([
                 EncryptCookies::class,
