@@ -93,6 +93,7 @@ final class EventForm
                 ->schema([
                     Select::make('calendar_id')
                         ->label('Calendar')
+                        ->preload()
                         ->relationship('calendar', 'name', function ($query): void {
                             $user = auth()->user();
 

@@ -103,7 +103,8 @@ final class Cart extends Page implements HasTable
                                         ->size('sm')
                                         ->action(function (Component $livewire): void {
                                             $livewire->applyCode();
-                                        }),
+                                        })
+                                        ->keyBindings(['enter']),
                                 ),
                             Flex::make([
                                 Text::make(fn (): string => "✓ {$this->appliedDiscountDisplay}")
