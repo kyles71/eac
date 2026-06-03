@@ -171,13 +171,13 @@ final class FilamentUiServiceProvider extends ServiceProvider
         // resource forms in this app often need room for media, repeaters, and grouped sections
         EditAction::configureUsing(function (EditAction $action) {
             $action
-                ->modalWidth(Width::FiveExtraLarge);
+                ->slideOver();
         });
 
         // capitalize the model name in a create action label
         CreateAction::configureUsing(function (CreateAction $action) {
             $action
-                ->modalWidth(Width::FiveExtraLarge)
+                ->slideOver()
                 ->label(fn (): string => __('filament-actions::create.single.label', ['label' => ucwords($action->getModelLabel())]));
         });
 
