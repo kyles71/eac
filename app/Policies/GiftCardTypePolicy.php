@@ -34,7 +34,8 @@ final class GiftCardTypePolicy
 
     public function delete(AuthUser $authUser, GiftCardType $giftCardType): bool
     {
-        return $authUser->can('Delete:GiftCardType');
+        return $authUser->can('Delete:GiftCardType')
+            && ($giftCardType->product?->canBeDeleted() ?? true);
     }
 
     public function deleteAny(AuthUser $authUser): bool

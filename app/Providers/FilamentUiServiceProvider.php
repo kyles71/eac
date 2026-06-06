@@ -15,6 +15,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
@@ -166,6 +167,17 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 modifyQueryUsing: $modifyQueryUsing,
                 orderBy: ['first_name', 'last_name'],
             );
+        });
+
+        SpatieMediaLibraryFileUpload::configureUsing(function (SpatieMediaLibraryFileUpload $upload) {
+            return $upload
+                ->maxSize(config('app.file_uploads.max_size_kilobytes'));
+        });
+
+        SpatieMediaLibraryFileUpload::macro('allowVideo', function (): SpatieMediaLibraryFileUpload {
+            return $this
+                ->maxSize(config('app.file_uploads.video_max_size_kilobytes'))
+                ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']);
         });
 
         // resource forms in this app often need room for media, repeaters, and grouped sections

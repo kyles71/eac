@@ -8,6 +8,7 @@ use App\Enums\ProductType;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
+use App\Models\Product;
 use App\Support\MediaDisks;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -69,10 +70,10 @@ final class ProductForm
                                 Costume::class => 'Linked Costume',
                                 default => 'Linked Item',
                             })
-                            ->options(fn (Get $get) => match ($get('productable_type')) {
-                                Course::class => Course::query()->orderBy('name')->pluck('name', 'id'),
-                                GiftCardType::class => GiftCardType::query()->orderBy('name')->pluck('name', 'id'),
-                                Costume::class => Costume::query()->orderBy('name')->pluck('name', 'id'),
+                            ->options(fn (Get $get, ?Product $record) => match ($get('productable_type')) {
+                                Course::class => self::availableProductableOptions(Course::class, $record),
+                                GiftCardType::class => self::availableProductableOptions(GiftCardType::class, $record),
+                                Costume::class => self::availableProductableOptions(Costume::class, $record),
                                 default => [],
                             })
                             ->required(fn (Get $get): bool => $get('productable_type') !== null)
@@ -137,8 +138,27 @@ final class ProductForm
                             ->disk(MediaDisks::private())
                             ->visibility('private')
                             ->multiple()
-                            ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
+                            ->allowVideo(),
                     ]),
             ]);
+    }
+
+    /**
+     * @param  class-string<Costume|Course|GiftCardType>  $productableType
+     * @return array<int, string>
+     */
+    private static function availableProductableOptions(string $productableType, ?Product $currentProduct): array
+    {
+        return $productableType::query()
+            ->where(function (Builder $query) use ($productableType, $currentProduct): void {
+                $query->whereDoesntHave('product');
+
+                if ($currentProduct?->productable_type === $productableType) {
+                    $query->orWhereKey($currentProduct->productable_id);
+                }
+            })
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 }

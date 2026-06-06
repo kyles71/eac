@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
 use App\Filament\Admin\Resources\Courses\Pages\ViewCourse;
 use App\Filament\Admin\Resources\Events\Pages\ViewEvent;
+use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Filament\Admin\Resources\Users\Pages\ViewUser;
@@ -13,7 +14,9 @@ use App\Models\Event;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\MediaDisks;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 
@@ -71,4 +74,22 @@ it('shows media entries on event view page', function () {
         ->assertOk()
         ->assertSchemaComponentExists('images', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::public()
             && $entry->getVisibility() === 'public');
+});
+
+it('applies default upload size limits to image fields', function () {
+    livewire(ListCostumes::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentExists('images', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'));
+
+    livewire(ListUsers::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentExists('avatar', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'))
+        ->assertSchemaComponentExists('staff_photo', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'));
+});
+
+it('applies larger upload size limits to video fields while keeping documents at the default size', function () {
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentExists('documents', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'))
+        ->assertSchemaComponentExists('videos', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.video_max_size_kilobytes'));
 });

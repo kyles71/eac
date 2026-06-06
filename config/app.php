@@ -37,4 +37,9 @@ return [
     ],
 
     'enrollment_unassign_cutoff_days' => (int) env('ENROLLMENT_UNASSIGN_CUTOFF_DAYS', 7),
+
+    'file_uploads' => [
+        'max_size_kilobytes' => 20 * 1024, // 20 MB
+        'video_max_size_kilobytes' => 250 * 1024, // 250 MB
+    ],
 ];

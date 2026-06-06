@@ -34,7 +34,8 @@ final class CoursePolicy
 
     public function delete(AuthUser $authUser, Course $course): bool
     {
-        return $authUser->can('Delete:Course');
+        return $authUser->can('Delete:Course')
+            && ($course->product?->canBeDeleted() ?? true);
     }
 
     public function deleteAny(AuthUser $authUser): bool

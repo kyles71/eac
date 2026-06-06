@@ -163,7 +163,7 @@ final class CourseForm
                             ->disk(MediaDisks::private())
                             ->visibility('private')
                             ->multiple()
-                            ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']),
+                            ->allowVideo(),
                     ]),
             ]);
     }

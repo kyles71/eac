@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\Support\Enums\Platform;
 use Kyle\FilamentThemeBuilder\ThemeBuilderPlugin;
@@ -24,6 +25,9 @@ final class AdminPanelProvider extends BasePanelProvider
             ->brandName('EAC Admin')
             ->strictAuthorization()
             ->viteTheme('resources/css/filament/admin/theme.css')
+            ->pages([
+                Dashboard::class,
+            ])
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')

@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\User\Pages\Auth\Register;
+use App\Filament\User\Pages\Dashboard;
 use App\Http\Middleware\UserBanners;
 use Filament\Panel;
 
@@ -22,6 +23,9 @@ class UserPanelProvider extends BasePanelProvider
             ->registration(Register::class)
             ->middleware([
                 UserBanners::class,
+            ])
+            ->pages([
+                Dashboard::class,
             ])
             ->discoverResources(in: app_path('Filament/User/Resources'), for: 'App\Filament\User\Resources')
             ->discoverPages(in: app_path('Filament/User/Pages'), for: 'App\Filament\User\Pages')

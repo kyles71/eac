@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Tables;
 
+use App\Filament\Actions\DeleteProductableAction;
+use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\Course;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -68,10 +69,11 @@ final class CoursesTable
             ->recordActions([
                 SendEmailAction::make()
                     ->to(fn ($record) => $record->purchasers->pluck('email')->all()),
+                DeleteProductableAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteProductableBulkAction::make(),
                 ]),
             ]);
     }

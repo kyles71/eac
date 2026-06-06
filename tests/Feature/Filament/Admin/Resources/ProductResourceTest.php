@@ -6,9 +6,11 @@ use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Models\Costume;
 use App\Models\Course;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
@@ -79,6 +81,32 @@ it('requires a linked item when a product type is selected', function () {
         ])
         ->assertHasActionErrors(['productable_id' => 'required']);
 });
+
+it('only offers linked items without an existing product', function (string $productableType) {
+    $availableProductable = $productableType::factory()->create();
+    $linkedProductable = $productableType::factory()->create();
+
+    Product::factory()->create([
+        'productable_type' => $productableType,
+        'productable_id' => $linkedProductable->id,
+    ]);
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'productable_type' => $productableType,
+        ])
+        ->assertSchemaComponentExists(
+            'productable_id',
+            checkComponentUsing: fn (Select $select): bool => $select->getOptions() === [
+                $availableProductable->id => $availableProductable->name,
+            ],
+        );
+})->with([
+    Course::class,
+    GiftCardType::class,
+    Costume::class,
+]);
 
 it('can create a linked product that includes linked item images', function () {
     $costume = Costume::factory()->create();
