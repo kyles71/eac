@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Costumes\Tables;
 
+use App\Filament\Actions\DeleteProductableAction;
+use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Support\MediaDisks;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -37,7 +40,12 @@ final class CostumesTable
             ->defaultSort('name')
             ->recordActions([
                 EditAction::make(),
+                DeleteProductableAction::make(),
             ])
-            ->toolbarActions([]);
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteProductableBulkAction::make(),
+                ]),
+            ]);
     }
 }

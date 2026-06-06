@@ -34,7 +34,8 @@ final class ProductPolicy
 
     public function delete(AuthUser $authUser, Product $product): bool
     {
-        return $authUser->can('Delete:Product');
+        return $authUser->can('Delete:Product')
+            && $product->canBeDeleted();
     }
 
     public function deleteAny(AuthUser $authUser): bool

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\GiftCardTypes\Tables;
 
+use App\Filament\Actions\DeleteProductableAction;
+use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Models\GiftCardType;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -40,10 +41,12 @@ final class GiftCardTypesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([])
-            ->recordActions([])
+            ->recordActions([
+                DeleteProductableAction::make(),
+            ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteProductableBulkAction::make(),
                 ]),
             ]);
     }

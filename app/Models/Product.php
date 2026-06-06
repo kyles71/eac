@@ -112,6 +112,11 @@ final class Product extends Model implements HasMedia
             ->exists();
     }
 
+    public function canBeDeleted(): bool
+    {
+        return ! $this->is_active && $this->orderItems()->doesntExist();
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('images')

@@ -34,7 +34,8 @@ final class CostumePolicy
 
     public function delete(AuthUser $authUser, Costume $costume): bool
     {
-        return $authUser->can('Delete:Costume');
+        return $authUser->can('Delete:Costume')
+            && ($costume->product?->canBeDeleted() ?? true);
     }
 
     public function deleteAny(AuthUser $authUser): bool
