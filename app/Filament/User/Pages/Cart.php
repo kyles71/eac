@@ -491,7 +491,19 @@ final class Cart extends Page implements HasTable
                     Grid::make()
                         ->columns(1)
                         ->extraAttributes([
-                            'x-data' => '{ scrolledToBottom: false, hasTerms: '.($hasTerms ? 'true' : 'false').' }',
+                            'x-data' => '{
+                                scrolledToBottom: false,
+                                hasTerms: '.($hasTerms ? 'true' : 'false').',
+                                unlockTermsIfReadable(element) {
+                                    if (! this.hasTerms || element.clientHeight === 0) {
+                                        return;
+                                    }
+
+                                    if (element.scrollHeight <= element.clientHeight + 2 || element.scrollTop + element.clientHeight >= element.scrollHeight - 2) {
+                                        this.scrolledToBottom = true;
+                                    }
+                                },
+                            }',
                         ])
                         ->schema([
                             TextEntry::make('terms_and_conditions')
@@ -500,22 +512,11 @@ final class Cart extends Page implements HasTable
                                     <div
                                         class="h-32 overflow-y-scroll"
                                         x-init="
-                                            $nextTick(() => {
-                                                if (hasTerms && $el.scrollHeight <= $el.clientHeight + 2) {
-                                                    scrolledToBottom = true;
-                                                }
-                                            })
+                                            const observer = new ResizeObserver(() => unlockTermsIfReadable($el));
+                                            observer.observe($el);
+                                            $nextTick(() => unlockTermsIfReadable($el));
                                         "
-                                        @scroll="
-                                            if (! hasTerms) {
-                                                return;
-                                            }
-
-                                            const el = $event.target;
-                                            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) {
-                                                scrolledToBottom = true;
-                                            }
-                                        "
+                                        @scroll="unlockTermsIfReadable($event.target)"
                                     >
                                     '.($termsVersion?->content ?? '<p>Payment plan terms are not available.</p>').'
                                     </div>')),
