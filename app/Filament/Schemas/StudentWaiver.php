@@ -26,8 +26,116 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class StudentWaiver
 {
-    public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema, bool $withRelationships = true): Schema
     {
+        $studentSelection = Grid::make(2)
+            ->columnSpanFull()
+            ->schema([
+                Select::make('student_id')
+                    ->label('Student')
+                    ->disabled(fn (?FormUser $record): bool => $record?->student_id !== null)
+                    ->searchable(false)
+                    ->studentRelationship(
+                        modifyQueryUsing: fn (Builder $query, ?FormUser $record): Builder => $query
+                            ->where('user_id', auth()->id())
+                            ->when(
+                                $record?->student_id !== null,
+                                fn (Builder $query): Builder => $query->whereKey($record->student_id),
+                                fn (Builder $query): Builder => $query->whereDoesntHave(
+                                    'forms',
+                                    fn (Builder $query): Builder => $query->where('form_id', $record?->form_id),
+                                ),
+                            ),
+                    )
+                    ->createOptionForm(fn (Schema $schema): Schema => StudentForm::configure($schema))
+                    ->createOptionUsing(function (array $data): int {
+                        /** @var User $user */
+                        $user = auth()->user();
+
+                        return $user->students()->create($data)->getKey();
+                    })
+                    ->scopedExists(
+                        model: Student::class,
+                        column: 'id',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query->where('user_id', auth()->id()),
+                    )
+                    ->required(),
+            ]);
+
+        $withRelationships
+            ? $studentSelection->relationship('userForm')
+            : $studentSelection->statePath('userForm');
+
+        $emergencyContacts = Repeater::make('emergency_contacts')
+            ->label('Emergency Contacts')
+            ->columnSpanFull()
+            ->columns(2)
+            ->schema([
+                TextInput::make('name')
+                    ->label('Name')
+                    ->maxLength(255)
+                    ->required(),
+                Flex::make([
+                    Select::make('relationship_option')
+                        ->label('Relationship')
+                        ->searchable(false)
+                        ->options([
+                            'Mother' => 'Mother',
+                            'Father' => 'Father',
+                            'Guardian' => 'Guardian',
+                            'Other' => 'Other',
+                        ])
+                        ->live()
+                        ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
+                            'relationship',
+                            $state === 'Other' ? null : $state,
+                        ))
+                        ->required(),
+                    TextInput::make('relationship')
+                        ->label('Other Relationship')
+                        ->maxLength(255)
+                        ->visible(fn (Get $get): bool => $get('relationship_option') === 'Other')
+                        ->required(fn (Get $get): bool => $get('relationship_option') === 'Other'),
+                ]),
+                TextInput::make('phone_number')
+                    ->label('Phone Number')
+                    ->phone()
+                    ->required(),
+                TextInput::make('email')
+                    ->email()
+                    ->maxLength(255)
+                    ->required(),
+                Radio::make('wants_text_updates')
+                    ->label('Enroll this phone number in EAC Text Message Updates?')
+                    ->helperText('Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.')
+                    ->boolean('Yes', 'No')
+                    ->columnSpanFull()
+                    ->required(),
+            ])
+            ->minItems(1)
+            ->defaultItems(2)
+            ->reorderable(false)
+            ->required();
+
+        if ($withRelationships) {
+            $emergencyContacts
+                ->relationship('emergencyContacts')
+                ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
+                    $relationship = $data['relationship'] ?? null;
+                    $data['relationship_option'] = in_array($relationship, ['Mother', 'Father', 'Guardian'], true)
+                        ? $relationship
+                        : 'Other';
+
+                    return $data;
+                })
+                ->mutateRelationshipDataBeforeCreateUsing(
+                    fn (array $data): array => self::normalizeEmergencyContactRelationship($data),
+                )
+                ->mutateRelationshipDataBeforeSaveUsing(
+                    fn (array $data): array => self::normalizeEmergencyContactRelationship($data),
+                );
+        }
+
         return $schema
             ->components([
                 Section::make('EAC Medical Waiver & Media Release Form')
@@ -41,40 +149,7 @@ final class StudentWaiver
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Grid::make(2)
-                            ->columnSpanFull()
-                            ->relationship('userForm')
-                            ->schema([
-                                Select::make('student_id')
-                                    ->label('Student')
-                                    ->disabled(fn (?FormUser $record): bool => $record?->student_id !== null)
-                                    ->searchable(false)
-                                    ->studentRelationship(
-                                        modifyQueryUsing: fn (Builder $query, ?FormUser $record): Builder => $query
-                                            ->where('user_id', auth()->id())
-                                            ->when(
-                                                $record?->student_id !== null,
-                                                fn (Builder $query): Builder => $query->whereKey($record->student_id),
-                                                fn (Builder $query): Builder => $query->whereDoesntHave(
-                                                    'forms',
-                                                    fn (Builder $query): Builder => $query->where('form_id', $record?->form_id),
-                                                ),
-                                            ),
-                                    )
-                                    ->createOptionForm(fn (Schema $schema): Schema => StudentForm::configure($schema))
-                                    ->createOptionUsing(function (array $data): int {
-                                        /** @var User $user */
-                                        $user = auth()->user();
-
-                                        return $user->students()->create($data)->getKey();
-                                    })
-                                    ->scopedExists(
-                                        model: Student::class,
-                                        column: 'id',
-                                        modifyQueryUsing: fn (Builder $query): Builder => $query->where('user_id', auth()->id()),
-                                    )
-                                    ->required(),
-                            ]),
+                        $studentSelection,
                         Select::make('signer_relationship')
                             ->label('What is your relationship to the student?')
                             ->searchable(false)
@@ -91,71 +166,7 @@ final class StudentWaiver
                             ->rows(2)
                             ->columnSpanFull()
                             ->required(),
-                        Repeater::make('emergency_contacts')
-                            ->label('Emergency Contacts')
-                            ->columnSpanFull()
-                            ->columns(2)
-                            ->relationship('emergencyContacts')
-                            ->schema([
-                                TextInput::make('name')
-                                    ->label('Name')
-                                    ->maxLength(255)
-                                    ->required(),
-                                Flex::make([
-                                    Select::make('relationship_option')
-                                        ->label('Relationship')
-                                        ->searchable(false)
-                                        ->options([
-                                            'Mother' => 'Mother',
-                                            'Father' => 'Father',
-                                            'Guardian' => 'Guardian',
-                                            'Other' => 'Other',
-                                        ])
-                                        ->live()
-                                        ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
-                                            'relationship',
-                                            $state === 'Other' ? null : $state,
-                                        ))
-                                        ->required(),
-                                    TextInput::make('relationship')
-                                        ->label('Other Relationship')
-                                        ->maxLength(255)
-                                        ->visible(fn (Get $get): bool => $get('relationship_option') === 'Other')
-                                        ->required(fn (Get $get): bool => $get('relationship_option') === 'Other'),
-                                ]),
-                                TextInput::make('phone_number')
-                                    ->label('Phone Number')
-                                    ->phone()
-                                    ->required(),
-                                TextInput::make('email')
-                                    ->email()
-                                    ->maxLength(255)
-                                    ->required(),
-                                Radio::make('wants_text_updates')
-                                    ->label('Enroll this phone number in EAC Text Message Updates?')
-                                    ->helperText('Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.')
-                                    ->boolean('Yes', 'No')
-                                    ->columnSpanFull()
-                                    ->required(),
-                            ])
-                            ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
-                                $relationship = $data['relationship'] ?? null;
-                                $data['relationship_option'] = in_array($relationship, ['Mother', 'Father', 'Guardian'], true)
-                                    ? $relationship
-                                    : 'Other';
-
-                                return $data;
-                            })
-                            ->mutateRelationshipDataBeforeCreateUsing(
-                                fn (array $data): array => self::normalizeEmergencyContactRelationship($data),
-                            )
-                            ->mutateRelationshipDataBeforeSaveUsing(
-                                fn (array $data): array => self::normalizeEmergencyContactRelationship($data),
-                            )
-                            ->minItems(1)
-                            ->defaultItems(2)
-                            ->reorderable(false)
-                            ->required(),
+                        $emergencyContacts,
                     ]),
 
                 Section::make('Medical Waiver')
@@ -199,14 +210,10 @@ final class StudentWaiver
                             ->helperText('Examples: ADHD, OCD, anxiety, etc.')
                             ->rows(3)
                             ->columnSpanFull(),
-                        DatePicker::make('medical_release_signed_on')
-                            ->label("Today's Date")
-                            ->helperText('Please enter today\'s date to validate your electronic signature.')
-                            ->default(fn (): string => self::today())
-                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
-                                ? $component->state(self::today())
-                                : null)
-                            ->required(),
+                        self::signatureDateField(
+                            'medical_release_signed_on',
+                            'Please enter today\'s date to validate your electronic signature.',
+                        ),
                     ]),
 
                 Section::make('EAC Health & Safety Policy')
@@ -220,14 +227,10 @@ final class StudentWaiver
                             ->accepted()
                             ->columnSpanFull()
                             ->required(),
-                        DatePicker::make('health_safety_policy_signed_on')
-                            ->label("Today's Date")
-                            ->helperText('Please enter today\'s date to validate your electronic signature on the above Health & Safety Policy.')
-                            ->default(fn (): string => self::today())
-                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
-                                ? $component->state(self::today())
-                                : null)
-                            ->required(),
+                        self::signatureDateField(
+                            'health_safety_policy_signed_on',
+                            'Please enter today\'s date to validate your electronic signature on the above Health & Safety Policy.',
+                        ),
                     ]),
 
                 Section::make('Media Release')
@@ -240,14 +243,10 @@ final class StudentWaiver
                             ->label('Media Release Consent')
                             ->boolean('I consent', 'I do not consent')
                             ->required(),
-                        DatePicker::make('media_release_signed_on')
-                            ->label("Today's Date")
-                            ->helperText('Please enter today\'s date to validate your electronic signature.')
-                            ->default(fn (): string => self::today())
-                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
-                                ? $component->state(self::today())
-                                : null)
-                            ->required(),
+                        self::signatureDateField(
+                            'media_release_signed_on',
+                            'Please enter today\'s date to validate your electronic signature.',
+                        ),
                     ]),
             ]);
     }
@@ -255,6 +254,18 @@ final class StudentWaiver
     private static function today(): string
     {
         return now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
+    }
+
+    private static function signatureDateField(string $name, string $helperText): DatePicker
+    {
+        return DatePicker::make($name)
+            ->label("Today's Date")
+            ->helperText($helperText)
+            ->required()
+            ->default(fn (): string => self::today())
+            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
+                ? $component->state(self::today())
+                : null);
     }
 
     /**

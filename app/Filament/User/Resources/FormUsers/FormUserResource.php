@@ -17,6 +17,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 final class FormUserResource extends Resource
 {
@@ -29,6 +31,34 @@ final class FormUserResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     // protected static ?string $recordTitleAttribute = 'form.name';
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('user_id', auth()->id());
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->check();
+    }
+
+    public static function canView(Model $record): bool
+    {
+        return $record instanceof FormUser && $record->user_id === auth()->id();
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        if (! $record instanceof FormUser || $record->user_id !== auth()->id()) {
+            return false;
+        }
+
+        $record->loadMissing('form');
+
+        return $record->form->form_type !== FormTypes::StudentWaiver
+            || ! $record->isCompleted();
+    }
 
     public static function form(Schema $schema, ?FormTypes $form_type = null): Schema
     {
@@ -74,6 +104,7 @@ final class FormUserResource extends Resource
             'index' => ListFormUsers::route('/'),
             'view' => ViewFormUser::route('/{record}'),
             'edit' => EditFormUser::route('/{record}/sign'),
+            'revise' => Pages\ReviseFormUser::route('/{record}/revise'),
         ];
     }
 }

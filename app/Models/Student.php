@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FormTypes;
+use App\Enums\MedicalWaiverStatus;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -37,11 +39,19 @@ final class Student extends Model
         );
     }
 
+    public function age(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): int => $this->birthdate->age,
+        );
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return HasMany<Enrollment, $this> */
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
@@ -57,8 +67,68 @@ final class Student extends Model
         return $this->morphMany(EventAttendee::class, 'attendee');
     }
 
+    /** @return HasMany<FormUser, $this> */
     public function forms(): HasMany
     {
         return $this->hasMany(FormUser::class);
+    }
+
+    /** @return HasMany<StudentEmail, $this> */
+    public function additionalEmails(): HasMany
+    {
+        return $this->hasMany(StudentEmail::class);
+    }
+
+    public function medicalWaiverStatus(): MedicalWaiverStatus
+    {
+        if ($this->latestValidCompletedMedicalWaiver() !== null) {
+            return MedicalWaiverStatus::OnFile;
+        }
+
+        return $this->latestCompletedMedicalWaiver() !== null
+            ? MedicalWaiverStatus::Expired
+            : MedicalWaiverStatus::Missing;
+    }
+
+    public function currentMedicalWaiver(): ?FormUser
+    {
+        return $this->latestCompletedMedicalWaiver();
+    }
+
+    public function latestValidCompletedMedicalWaiver(): ?FormUser
+    {
+        return $this->completedMedicalWaivers()
+            ->whereHas('form', fn ($query) => $query->isActive())
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+    }
+
+    public function latestCompletedMedicalWaiver(): ?FormUser
+    {
+        return $this->completedMedicalWaivers()
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+    }
+
+    public function pendingMedicalWaiver(): ?FormUser
+    {
+        return $this->forms()
+            ->pending()
+            ->whereHas('form', fn ($query) => $query
+                ->where('form_type', FormTypes::StudentWaiver)
+                ->isActive())
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+    }
+
+    /** @return HasMany<FormUser, $this> */
+    private function completedMedicalWaivers(): HasMany
+    {
+        return $this->forms()
+            ->completed()
+            ->whereHas('form', fn ($query) => $query->where('form_type', FormTypes::StudentWaiver));
     }
 }

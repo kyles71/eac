@@ -22,8 +22,8 @@ final class ListFormUsers extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->formIsActive()->pending())
                 ->badge(FormUser::query()->formIsActive()->pending()->where('user_id', auth()->id())->count()),
             'completed' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->formIsActive()->whereNotNull('signature')->whereNotNull('date_signed'))
-                ->badge(FormUser::query()->formIsActive()->whereNotNull('signature')->whereNotNull('date_signed')->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(fn (Builder $query) => $query->formIsActive()->completed()->orderByDesc('date_signed'))
+                ->badge(FormUser::query()->formIsActive()->completed()->where('user_id', auth()->id())->count()),
             'expired' => Tab::make()
                 ->modifyQueryUsing(fn (Builder $query) => $query->formIsExpired())
                 ->badge(FormUser::query()->formIsExpired()->where('user_id', auth()->id())->count()),

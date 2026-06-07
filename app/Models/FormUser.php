@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FormTypes;
 use Database\Factories\FormUserFactory;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,6 +25,7 @@ final class FormUser extends Model
         'date_signed' => 'date',
     ];
 
+    /** @return BelongsTo<Form, $this> */
     public function form(): BelongsTo
     {
         return $this->belongsTo(Form::class);
@@ -43,6 +45,10 @@ final class FormUser extends Model
             return false;
         }
 
+        if ($this->form->form_type === FormTypes::StudentWaiver) {
+            return $this->student?->latestValidCompletedMedicalWaiver()?->is($this) ?? false;
+        }
+
         return true;
     }
 
@@ -51,11 +57,13 @@ final class FormUser extends Model
         return filled($this->signature) && $this->date_signed !== null;
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Student, $this> */
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
@@ -74,6 +82,14 @@ final class FormUser extends Model
                 ->whereNull('signature')
                 ->orWhereNull('date_signed');
         });
+    }
+
+    #[Scope]
+    protected function completed(Builder $query): void
+    {
+        $query
+            ->whereNotNull('signature')
+            ->whereNotNull('date_signed');
     }
 
     #[Scope]

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\User\Resources\Students;
 
 use App\Filament\User\Resources\Students\Pages\CreateStudent;
-use App\Filament\User\Resources\Students\Pages\EditStudent;
 use App\Filament\User\Resources\Students\Pages\ListStudents;
+use App\Filament\User\Resources\Students\Pages\ViewStudent;
 use App\Filament\User\Resources\Students\Schemas\StudentForm;
 use App\Filament\User\Resources\Students\Tables\StudentsTable;
 use App\Models\Student;
@@ -53,6 +53,11 @@ final class StudentResource extends Resource
         return $record instanceof Student && $record->user_id === auth()->id();
     }
 
+    public static function canView(Model $record): bool
+    {
+        return $record instanceof Student && $record->user_id === auth()->id();
+    }
+
     public static function canDelete(Model $record): bool
     {
         return $record instanceof Student
@@ -75,7 +80,7 @@ final class StudentResource extends Resource
         return [
             'index' => ListStudents::route('/'),
             'create' => CreateStudent::route('/create'),
-            'edit' => EditStudent::route('/{record}/edit'),
+            'view' => ViewStudent::route('/{record}'),
         ];
     }
 }

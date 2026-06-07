@@ -12,34 +12,44 @@ use Filament\Schemas\Schema;
 
 final class FormUserForm
 {
-    public static function configure(Schema $schema, ?FormTypes $form_type = null): Schema
+    public static function configure(Schema $schema, ?FormTypes $form_type = null, bool $withRelationships = true): Schema
     {
         $form_inputs = [];
 
         if ($form_type) {
+            $responseable = Grid::make()
+                ->columnSpanFull()
+                ->components(
+                    $form_type->getFormSchemaClass()::configure($schema, $withRelationships)->getComponents()
+                );
+
+            $withRelationships
+                ? $responseable->relationship('responseable', relatedModel: $form_type->value)
+                : $responseable->statePath('responseable');
+
             $form_inputs = [
-                Grid::make()
-                    ->relationship('responseable', relatedModel: $form_type->value)
-                    ->columnSpanFull()
-                    ->components(
-                        $form_type->getFormSchemaClass()::configure($schema)->getComponents() // maybe use clone instead
-                    ),
+                $responseable,
             ];
         }
 
         return $schema
+            ->columns(2)
             ->components([
                 ...$form_inputs,
                 TextInput::make('signature')
                     ->required(),
                 DatePicker::make('date_signed')
                     ->label('Date')
-                    ->default(fn (): string => now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
-                    ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
-                        ? $component->state(now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
-                        : null)
                     ->date()
-                    ->required(),
+                    ->required()
+                    ->when(
+                        $withRelationships,
+                        fn (DatePicker $component): DatePicker => $component
+                            ->default(fn (): string => now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
+                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
+                                ? $component->state(now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
+                                : null),
+                    ),
             ]);
     }
 }

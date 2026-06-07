@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers\Schemas;
 
+use App\Enums\FormTypes;
+use App\Filament\Shared\Schemas\StudentWaiverInfolist;
+use App\Models\FormUser;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 final class FormUserInfolist
@@ -13,25 +17,28 @@ final class FormUserInfolist
     {
         return $schema
             ->components([
-                TextEntry::make('form.name')
-                    ->label('Form'),
-                TextEntry::make('user.id')
-                    ->label('User'),
-                TextEntry::make('student.id')
-                    ->label('Student')
-                    ->placeholder('-'),
-                TextEntry::make('signature')
-                    ->label('Signature'),
-                TextEntry::make('date_signed')
-                    ->label('Date Signed')
-                    ->date()
-                    ->placeholder('-'),
-                TextEntry::make('created_at')
-                    ->dateTime()
-                    ->placeholder('-'),
-                TextEntry::make('updated_at')
-                    ->dateTime()
-                    ->placeholder('-'),
+                Section::make('Form')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('form.name')
+                            ->label('Form'),
+                        TextEntry::make('student.fullName')
+                            ->label('Student')
+                            ->placeholder('-'),
+                        TextEntry::make('signature')
+                            ->label('Signature')
+                            ->placeholder('-'),
+                        TextEntry::make('date_signed')
+                            ->label('Date Signed')
+                            ->date()
+                            ->placeholder('-'),
+                    ]),
+                ...collect(StudentWaiverInfolist::components())
+                    ->each(fn (Section $section) => $section->visible(
+                        fn (FormUser $record): bool => $record->form?->form_type === FormTypes::StudentWaiver
+                    ))
+                    ->all(),
             ]);
     }
 }

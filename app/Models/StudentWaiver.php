@@ -20,6 +20,7 @@ final class StudentWaiver extends Model
         return $this->morphOne(FormUser::class, 'responseable');
     }
 
+    /** @return HasMany<EmergencyContact, $this> */
     public function emergencyContacts(): HasMany
     {
         return $this->hasMany(EmergencyContact::class);

@@ -40,6 +40,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'duration' => 'integer',
     ];
 
+    /** @return HasMany<Event, $this> */
     public function events(): HasMany
     {
         return $this->hasMany(Event::class);

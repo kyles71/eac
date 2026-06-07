@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers\Tables;
 
+use App\Enums\FormTypes;
+use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Models\FormUser;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -43,7 +46,13 @@ final class FormUsersTable
             ->recordActions([
                 EditAction::make('update')
                     ->label('Update')
-                    ->visible(fn (FormUser $record) => $record->formCanBeUpdated()),
+                    ->visible(fn (FormUser $record): bool => $record->form?->form_type !== FormTypes::StudentWaiver
+                        && $record->formCanBeUpdated()),
+                Action::make('reviseWaiver')
+                    ->label('Update')
+                    ->url(fn (FormUser $record): string => FormUserResource::getUrl('revise', ['record' => $record]))
+                    ->visible(fn (FormUser $record): bool => $record->form?->form_type === FormTypes::StudentWaiver
+                        && $record->formCanBeUpdated()),
             ]);
     }
 }

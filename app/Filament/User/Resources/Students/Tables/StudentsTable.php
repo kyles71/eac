@@ -6,7 +6,6 @@ namespace App\Filament\User\Resources\Students\Tables;
 
 use App\Models\Student;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -38,8 +37,8 @@ final class StudentsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->recordUrl(fn (Student $record): string => \App\Filament\User\Resources\Students\StudentResource::getUrl('view', ['record' => $record]))
             ->recordActions([
-                EditAction::make(),
                 DeleteAction::make()
                     ->visible(fn (Student $record): bool => $record->enrollments()->doesntExist())
                     ->successNotification(
