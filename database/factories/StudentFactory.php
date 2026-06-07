@@ -25,6 +25,8 @@ final class StudentFactory extends Factory
         return [
             'first_name' => fake()->firstName(),
             'last_name' => fake()->lastName(),
+            'nickname' => fake()->optional()->firstName(),
+            'birthdate' => fake()->dateTimeBetween('-18 years', '-3 years')->format('Y-m-d'),
             'user_id' => User::factory(),
         ];
     }

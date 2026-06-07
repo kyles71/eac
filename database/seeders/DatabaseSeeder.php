@@ -26,7 +26,6 @@ use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\RestrictedCredit;
-use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
@@ -300,18 +299,16 @@ final class DatabaseSeeder extends Seeder
         // Event attendees — mix of students and users
         $events->each(function (Event $event) use ($students, $allUsers): void {
             $attendeeCount = fake()->numberBetween(2, 5);
+            $studentCount = min(fake()->numberBetween(1, $attendeeCount), $students->count());
+            $userCount = min($attendeeCount - $studentCount, $allUsers->count());
 
-            collect(range(1, $attendeeCount))->each(function () use ($event, $students, $allUsers): void {
-                if (fake()->boolean(70)) {
-                    EventAttendee::factory()->forStudent($students->random())->create([
-                        'event_id' => $event->id,
-                    ]);
-                } else {
-                    EventAttendee::factory()->forUser($allUsers->random())->create([
-                        'event_id' => $event->id,
-                    ]);
-                }
-            });
+            $students->random($studentCount)->each(fn (Student $student) => EventAttendee::factory()
+                ->forStudent($student)
+                ->create(['event_id' => $event->id]));
+
+            $allUsers->random($userCount)->each(fn (User $user) => EventAttendee::factory()
+                ->forUser($user)
+                ->create(['event_id' => $event->id]));
         });
 
         // Restricted credits
@@ -323,47 +320,12 @@ final class DatabaseSeeder extends Seeder
             ]);
         });
 
-        // Student waivers — for students enrolled in waiver courses
-        $waiverStudentIds = Enrollment::whereIn('course_id', $waiverCourses->pluck('id'))
-            ->pluck('student_id')
-            ->unique()
-            ->filter();
-
-        $studentWaivers = $waiverStudentIds->map(function (int $studentId) use ($waiverForm): StudentWaiver {
-            $student = Student::find($studentId);
-            $waiver = StudentWaiver::factory()->create();
-
-            FormUser::factory()->create([
-                'form_id' => $waiverForm->id,
-                'user_id' => $student->user_id,
-                'student_id' => $student->id,
-                'responseable_type' => $waiver->getMorphClass(),
-                'responseable_id' => $waiver->id,
-            ]);
-
-            return $waiver;
-        });
-
-        // Showcase participations — for students in showcase courses
-        $showcaseStudentIds = Enrollment::whereIn('course_id', $showcaseCourses->pluck('id'))
-            ->pluck('student_id')
-            ->unique()
-            ->filter();
-
-        $showcaseParticipations = $showcaseStudentIds->map(function (int $studentId) use ($showcaseForm): ShowcaseParticipation {
-            $student = Student::find($studentId);
-            $participation = ShowcaseParticipation::factory()->create();
-
-            FormUser::factory()->create([
-                'form_id' => $showcaseForm->id,
-                'user_id' => $student->user_id,
-                'student_id' => $student->id,
-                'responseable_type' => $participation->getMorphClass(),
-                'responseable_id' => $participation->id,
-            ]);
-
-            return $participation;
-        });
+        $studentWaivers = FormUser::query()
+            ->where('form_id', $waiverForm->id)
+            ->with('responseable')
+            ->get()
+            ->map(fn (FormUser $formUser) => $formUser->responseable)
+            ->filter(fn ($responseable): bool => $responseable instanceof StudentWaiver);
 
         // ── Tier 4: Depend on Tier 3 ──
 

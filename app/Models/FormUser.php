@@ -18,6 +18,9 @@ final class FormUser extends Model
     use HasFactory;
 
     protected $casts = [
+        'form_id' => 'integer',
+        'user_id' => 'integer',
+        'student_id' => 'integer',
         'date_signed' => 'date',
     ];
 
@@ -43,6 +46,11 @@ final class FormUser extends Model
         return true;
     }
 
+    public function isCompleted(): bool
+    {
+        return filled($this->signature) && $this->date_signed !== null;
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -56,6 +64,16 @@ final class FormUser extends Model
     public function responseable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    #[Scope]
+    protected function pending(Builder $query): void
+    {
+        $query->where(function (Builder $query): void {
+            $query
+                ->whereNull('signature')
+                ->orWhereNull('date_signed');
+        });
     }
 
     #[Scope]

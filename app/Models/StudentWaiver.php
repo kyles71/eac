@@ -31,8 +31,6 @@ final class StudentWaiver extends Model
     protected function casts(): array
     {
         return [
-            'student_birth_date' => 'date',
-            'wants_text_updates' => 'boolean',
             'medical_release_consent' => 'boolean',
             'medical_release_signed_on' => 'date',
             'health_safety_policy_consent' => 'boolean',

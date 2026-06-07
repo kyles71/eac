@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Resources\FormUsers\Pages;
 
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Schema;
 
-class EditFormUser extends EditRecord
+final class EditFormUser extends EditRecord
 {
     protected static string $resource = FormUserResource::class;
 
@@ -16,7 +18,7 @@ class EditFormUser extends EditRecord
 
         $record->loadMissing(['form']);
 
-        return static::getResource()::form($schema, $record->form->form_type);
+        return self::getResource()::form($schema, $record->form->form_type);
     }
 
     protected function mutateFormDataBeforeFill(array $data): array

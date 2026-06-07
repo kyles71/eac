@@ -23,6 +23,10 @@ final class StudentInfolist
                     ->schema([
                         TextEntry::make('first_name'),
                         TextEntry::make('last_name'),
+                        TextEntry::make('nickname')
+                            ->placeholder('-'),
+                        TextEntry::make('birthdate')
+                            ->date(),
                         TextEntry::make('user.full_name')
                             ->label('Parent / User')
                             ->placeholder('None')

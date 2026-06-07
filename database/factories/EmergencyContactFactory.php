@@ -18,6 +18,7 @@ final class EmergencyContactFactory extends Factory
             'name' => fake()->name(),
             'relationship' => fake()->randomElement(['Mother', 'Father', 'Guardian', 'Grandparent', 'Sibling']),
             'phone_number' => fake()->numerify('(###) ###-####'),
+            'wants_text_updates' => fake()->boolean(),
             'email' => fake()->safeEmail(),
         ];
     }

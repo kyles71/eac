@@ -30,10 +30,16 @@ final class FormUserForm
         return $schema
             ->components([
                 ...$form_inputs,
-                TextInput::make('signature'),
+                TextInput::make('signature')
+                    ->required(),
                 DatePicker::make('date_signed')
                     ->label('Date')
-                    ->date(),
+                    ->default(fn (): string => now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
+                    ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
+                        ? $component->state(now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
+                        : null)
+                    ->date()
+                    ->required(),
             ]);
     }
 }

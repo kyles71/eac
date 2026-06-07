@@ -18,4 +18,14 @@ final class EmergencyContact extends Model
     {
         return $this->belongsTo(StudentWaiver::class);
     }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'wants_text_updates' => 'boolean',
+        ];
+    }
 }

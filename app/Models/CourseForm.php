@@ -11,6 +11,8 @@ final class CourseForm extends Pivot
 {
     public $incrementing = true;
 
+    protected $table = 'course_forms';
+
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);

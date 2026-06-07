@@ -4,16 +4,25 @@ declare(strict_types=1);
 
 namespace App\Filament\Schemas;
 
+use App\Filament\User\Resources\Students\Schemas\StudentForm;
+use App\Models\FormUser;
+use App\Models\Student;
+use App\Models\User;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Flex;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 final class StudentWaiver
 {
@@ -32,61 +41,55 @@ final class StudentWaiver
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        TextInput::make('student_name')
-                            ->label('Student Name')
-                            ->helperText('Please enter first and last name of student.')
-                            ->maxLength(255)
-                            ->required(),
-                        DatePicker::make('student_birth_date')
-                            ->label('Student Birth Date')
+                        Grid::make(2)
+                            ->columnSpanFull()
+                            ->relationship('userForm')
+                            ->schema([
+                                Select::make('student_id')
+                                    ->label('Student')
+                                    ->disabled(fn (?FormUser $record): bool => $record?->student_id !== null)
+                                    ->searchable(false)
+                                    ->studentRelationship(
+                                        modifyQueryUsing: fn (Builder $query, ?FormUser $record): Builder => $query
+                                            ->where('user_id', auth()->id())
+                                            ->when(
+                                                $record?->student_id !== null,
+                                                fn (Builder $query): Builder => $query->whereKey($record->student_id),
+                                                fn (Builder $query): Builder => $query->whereDoesntHave(
+                                                    'forms',
+                                                    fn (Builder $query): Builder => $query->where('form_id', $record?->form_id),
+                                                ),
+                                            ),
+                                    )
+                                    ->createOptionForm(fn (Schema $schema): Schema => StudentForm::configure($schema))
+                                    ->createOptionUsing(function (array $data): int {
+                                        /** @var User $user */
+                                        $user = auth()->user();
+
+                                        return $user->students()->create($data)->getKey();
+                                    })
+                                    ->scopedExists(
+                                        model: Student::class,
+                                        column: 'id',
+                                        modifyQueryUsing: fn (Builder $query): Builder => $query->where('user_id', auth()->id()),
+                                    )
+                                    ->required(),
+                            ]),
+                        Select::make('signer_relationship')
+                            ->label('What is your relationship to the student?')
+                            ->searchable(false)
+                            ->options([
+                                'Mother' => 'Mother',
+                                'Father' => 'Father',
+                                'Legal Guardian' => 'Legal Guardian',
+                                'Self - I am 18+' => 'Self - I am 18+',
+                            ])
                             ->required(),
                         Textarea::make('student_home_address')
                             ->label('Student Home Address')
                             ->helperText('Please enter home address of the student.')
                             ->rows(2)
                             ->columnSpanFull()
-                            ->required(),
-                        TextInput::make('student_email')
-                            ->label('Student Email')
-                            ->helperText('Please enter email if applicable.')
-                            ->email()
-                            ->maxLength(255),
-                        TextInput::make('signer_name')
-                            ->label('Your Name')
-                            ->helperText('Please enter your first and last name.')
-                            ->maxLength(255)
-                            ->required(),
-                        Radio::make('signer_relationship')
-                            ->label('What is your relationship to the student?')
-                            ->options([
-                                'Mother' => 'Mother',
-                                'Father' => 'Father',
-                                'Legal Guardian' => 'Legal Guardian',
-                                'Self - I am 18+' => 'Self - I am 18+',
-                                'Other' => 'Other',
-                            ])
-                            ->required(),
-                        TextInput::make('contact_phone')
-                            ->label('Contact Information - Phone Number')
-                            ->helperText('Please enter the best number to reach you at.')
-                            ->phone()
-                            ->required(),
-                        Radio::make('wants_text_updates')
-                            ->label('Would you like to enroll in EAC Text Message Updates?')
-                            ->helperText('Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.')
-                            ->boolean('Yes', 'No')
-                            ->required(),
-                        TextInput::make('text_update_phone')
-                            ->label('Text Message Updates Phone Number')
-                            ->helperText('If you are enrolling in EAC Text Message Updates, please enter phone number for which you would like to receive text messages.')
-                            ->phone()
-                            ->visible(fn (Get $get): bool => (bool) $get('wants_text_updates'))
-                            ->required(fn (Get $get): bool => (bool) $get('wants_text_updates')),
-                        TextInput::make('contact_email')
-                            ->label('Contact Information - Email Address')
-                            ->helperText('Please enter the best email address to reach you at.')
-                            ->email()
-                            ->maxLength(255)
                             ->required(),
                         Repeater::make('emergency_contacts')
                             ->label('Emergency Contacts')
@@ -98,10 +101,28 @@ final class StudentWaiver
                                     ->label('Name')
                                     ->maxLength(255)
                                     ->required(),
-                                TextInput::make('relationship')
-                                    ->label('Relationship')
-                                    ->maxLength(255)
-                                    ->required(),
+                                Flex::make([
+                                    Select::make('relationship_option')
+                                        ->label('Relationship')
+                                        ->searchable(false)
+                                        ->options([
+                                            'Mother' => 'Mother',
+                                            'Father' => 'Father',
+                                            'Guardian' => 'Guardian',
+                                            'Other' => 'Other',
+                                        ])
+                                        ->live()
+                                        ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
+                                            'relationship',
+                                            $state === 'Other' ? null : $state,
+                                        ))
+                                        ->required(),
+                                    TextInput::make('relationship')
+                                        ->label('Other Relationship')
+                                        ->maxLength(255)
+                                        ->visible(fn (Get $get): bool => $get('relationship_option') === 'Other')
+                                        ->required(fn (Get $get): bool => $get('relationship_option') === 'Other'),
+                                ]),
                                 TextInput::make('phone_number')
                                     ->label('Phone Number')
                                     ->phone()
@@ -110,27 +131,30 @@ final class StudentWaiver
                                     ->email()
                                     ->maxLength(255)
                                     ->required(),
+                                Radio::make('wants_text_updates')
+                                    ->label('Enroll this phone number in EAC Text Message Updates?')
+                                    ->helperText('Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.')
+                                    ->boolean('Yes', 'No')
+                                    ->columnSpanFull()
+                                    ->required(),
                             ])
+                            ->mutateRelationshipDataBeforeFillUsing(function (array $data): array {
+                                $relationship = $data['relationship'] ?? null;
+                                $data['relationship_option'] = in_array($relationship, ['Mother', 'Father', 'Guardian'], true)
+                                    ? $relationship
+                                    : 'Other';
+
+                                return $data;
+                            })
+                            ->mutateRelationshipDataBeforeCreateUsing(
+                                fn (array $data): array => self::normalizeEmergencyContactRelationship($data),
+                            )
+                            ->mutateRelationshipDataBeforeSaveUsing(
+                                fn (array $data): array => self::normalizeEmergencyContactRelationship($data),
+                            )
                             ->minItems(1)
                             ->defaultItems(2)
                             ->reorderable(false)
-                            ->required(),
-                        Radio::make('heard_about')
-                            ->label('How did you hear about Elite Arts Company?')
-                            ->options([
-                                "I'm an existing student" => "I'm an existing student",
-                                "I'm a former student" => "I'm a former student",
-                                'Santa Parade' => 'Santa Parade',
-                                'Bring a Friend Day' => 'Bring a Friend Day',
-                                'From a friend' => 'From a friend',
-                                'Facebook' => 'Facebook',
-                                'Instagram' => 'Instagram',
-                                'TikTok' => 'TikTok',
-                                'Radio Advertisement' => 'Radio Advertisement',
-                                'In-person Community Event' => 'In-person Community Event',
-                                'Other' => 'Other',
-                            ])
-                            ->columnSpanFull()
                             ->required(),
                     ]),
 
@@ -178,6 +202,10 @@ final class StudentWaiver
                         DatePicker::make('medical_release_signed_on')
                             ->label("Today's Date")
                             ->helperText('Please enter today\'s date to validate your electronic signature.')
+                            ->default(fn (): string => self::today())
+                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
+                                ? $component->state(self::today())
+                                : null)
                             ->required(),
                     ]),
 
@@ -195,6 +223,10 @@ final class StudentWaiver
                         DatePicker::make('health_safety_policy_signed_on')
                             ->label("Today's Date")
                             ->helperText('Please enter today\'s date to validate your electronic signature on the above Health & Safety Policy.')
+                            ->default(fn (): string => self::today())
+                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
+                                ? $component->state(self::today())
+                                : null)
                             ->required(),
                     ]),
 
@@ -211,8 +243,32 @@ final class StudentWaiver
                         DatePicker::make('media_release_signed_on')
                             ->label("Today's Date")
                             ->helperText('Please enter today\'s date to validate your electronic signature.')
+                            ->default(fn (): string => self::today())
+                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
+                                ? $component->state(self::today())
+                                : null)
                             ->required(),
                     ]),
             ]);
+    }
+
+    private static function today(): string
+    {
+        return now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function normalizeEmergencyContactRelationship(array $data): array
+    {
+        if (($data['relationship_option'] ?? null) !== 'Other') {
+            $data['relationship'] = $data['relationship_option'] ?? null;
+        }
+
+        unset($data['relationship_option']);
+
+        return $data;
     }
 }

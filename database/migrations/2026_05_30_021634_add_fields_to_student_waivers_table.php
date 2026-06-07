@@ -11,17 +11,8 @@ return new class() extends Migration
     public function up(): void
     {
         Schema::table('student_waivers', function (Blueprint $table) {
-            $table->string('student_name')->nullable();
-            $table->date('student_birth_date')->nullable();
             $table->text('student_home_address')->nullable();
-            $table->string('student_email')->nullable();
-            $table->string('signer_name')->nullable();
             $table->string('signer_relationship')->nullable();
-            $table->string('contact_phone')->nullable();
-            $table->boolean('wants_text_updates')->nullable();
-            $table->string('text_update_phone')->nullable();
-            $table->string('contact_email')->nullable();
-            $table->string('heard_about')->nullable();
             $table->text('past_injuries')->nullable();
             $table->text('medications')->nullable();
             $table->boolean('medical_release_consent')->nullable();

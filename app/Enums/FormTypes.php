@@ -30,4 +30,12 @@ enum FormTypes: string implements HasLabel
             self::ShowcaseParticipation => ShowcaseParticipation::class,
         };
     }
+
+    public function getBannerView(): ?string
+    {
+        return match ($this) {
+            self::StudentWaiver => 'filament.banners.waiver-banner',
+            self::ShowcaseParticipation => null,
+        };
+    }
 }

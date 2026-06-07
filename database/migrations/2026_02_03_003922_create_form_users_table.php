@@ -19,6 +19,8 @@ return new class() extends Migration
             $table->string('signature')->nullable();
             $table->date('date_signed')->nullable();
             $table->timestamps();
+
+            $table->unique(['form_id', 'student_id']);
         });
     }
 };

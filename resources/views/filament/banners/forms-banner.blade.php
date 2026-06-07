@@ -1,17 +1,9 @@
 <div class="mt-2">
-    @php
-        $names = $assignments
-            ->pluck('student.first_name')
-            ->filter()
-            ->unique()
-            ->join(', ', ' and ');
-    @endphp
-
     <x-filament::callout
         color="warning"
         icon="heroicon-o-exclamation-triangle"
-        heading="Waivers Needed"
-        :description="'The following students need waivers signed: ' . $names"
+        heading="Forms Needed"
+        :description="'You have ' . $formCount . ' form(s) that need to be completed.'"
     >
         <x-slot name="footer">
             <x-filament::button
@@ -19,7 +11,7 @@
                 tag="a"
                 size="sm"
             >
-                Go to Waivers
+                Go to Forms
             </x-filament::button>
         </x-slot>
     </x-filament::callout>

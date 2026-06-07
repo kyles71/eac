@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Students\Schemas;
 
 use App\Models\Calendar;
 use App\Models\Student;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieTagsInput;
 use Filament\Forms\Components\TextInput;
@@ -27,6 +28,10 @@ final class StudentForm
                             ->required(),
                         TextInput::make('last_name')
                             ->required(),
+                        TextInput::make('nickname'),
+                        DatePicker::make('birthdate')
+                            ->required()
+                            ->maxDate(today()),
                         Select::make('user_id')
                             ->label('Parent / User')
                             ->hidden(fn (): bool => $user_id !== null)

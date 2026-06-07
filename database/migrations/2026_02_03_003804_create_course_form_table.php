@@ -15,6 +15,8 @@ return new class() extends Migration
             $table->foreignId('course_id')->constrained()->onDelete('cascade');
             $table->foreignId('form_id')->constrained()->onDelete('cascade');
             $table->timestamps();
+
+            $table->unique(['course_id', 'form_id']);
         });
     }
 };

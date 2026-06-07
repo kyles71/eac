@@ -27,6 +27,7 @@ final class Student extends Model
     protected $casts = [
         'id' => 'integer',
         'user_id' => 'integer',
+        'birthdate' => 'date',
     ];
 
     public function fullName(): Attribute

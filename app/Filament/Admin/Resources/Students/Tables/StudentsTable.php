@@ -23,6 +23,12 @@ final class StudentsTable
                     ->searchable(),
                 TextColumn::make('last_name')
                     ->searchable(),
+                TextColumn::make('nickname')
+                    ->searchable()
+                    ->placeholder('-'),
+                TextColumn::make('birthdate')
+                    ->date()
+                    ->sortable(),
                 TextColumn::make('user.full_name')
                     ->label('Parent / User')
                     ->searchable(['first_name', 'last_name'])

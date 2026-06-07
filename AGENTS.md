@@ -403,7 +403,7 @@ livewire(ListUsers::class)
 
 Always use these flags when running CLI tools:
 
-- Tests: `vendor/bin/phpunit --no-progress`
+- Tests: `vendor/bin/pest --no-progress`
 - PHPStan: `vendor/bin/phpstan analyse --no-progress --error-format=raw`
 - Psalm: `vendor/bin/psalm --no-progress --no-suggestions --output-format=text`
 - phpcs: `vendor/bin/phpcs --report=emacs -q`

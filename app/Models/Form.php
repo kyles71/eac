@@ -30,7 +30,9 @@ final class Form extends Model
 
     public function courses(): BelongsToMany
     {
-        return $this->belongsToMany(Course::class, 'course_forms');
+        return $this->belongsToMany(Course::class, 'course_forms')
+            ->using(CourseForm::class)
+            ->withTimestamps();
     }
 
     public function courseForms(): HasMany

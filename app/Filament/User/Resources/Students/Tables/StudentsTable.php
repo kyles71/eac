@@ -23,6 +23,12 @@ final class StudentsTable
                 TextColumn::make('last_name')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('nickname')
+                    ->searchable()
+                    ->placeholder('-'),
+                TextColumn::make('birthdate')
+                    ->date()
+                    ->sortable(),
                 TextColumn::make('enrollments_count')
                     ->label('Classes')
                     ->counts('enrollments')

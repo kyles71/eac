@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Resources\FormUsers;
 
 use App\Enums\FormTypes;
-use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
+use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Filament\User\Resources\FormUsers\Pages\ViewFormUser;
 use App\Filament\User\Resources\FormUsers\Schemas\FormUserForm;
 use App\Filament\User\Resources\FormUsers\Schemas\FormUserInfolist;
@@ -16,7 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 
-class FormUserResource extends Resource
+final class FormUserResource extends Resource
 {
     protected static ?string $slug = 'my-forms';
 
@@ -41,6 +43,22 @@ class FormUserResource extends Resource
     public static function table(Table $table): Table
     {
         return FormUsersTable::configure($table);
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = FormUser::query()
+            ->where('user_id', auth()->id())
+            ->pending()
+            ->whereHas('form', fn ($query) => $query->isActive())
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
     }
 
     public static function getRelations(): array

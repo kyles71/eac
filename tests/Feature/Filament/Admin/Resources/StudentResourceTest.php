@@ -17,6 +17,7 @@ it('stores general student tags separately from calendar audience tags', functio
         ->callAction(CreateAction::class, data: [
             'first_name' => 'Avery',
             'last_name' => 'Stone',
+            'birthdate' => '2015-04-12',
             'tags' => ['has sibling'],
             'calendar_audience_tag_ids' => [$audienceTag->id],
         ])
@@ -37,6 +38,7 @@ it('does not create calendar audience tags from the student form', function (): 
         ->callAction(CreateAction::class, data: [
             'first_name' => 'Riley',
             'last_name' => 'North',
+            'birthdate' => '2015-04-12',
             'calendar_audience_tag_ids' => [999],
         ])
         ->assertHasActionErrors(['calendar_audience_tag_ids.0']);
@@ -51,6 +53,7 @@ it('does not allow internal audience tags to be assigned to students', function 
         ->callAction(CreateAction::class, data: [
             'first_name' => 'Morgan',
             'last_name' => 'Vale',
+            'birthdate' => '2015-04-12',
             'calendar_audience_tag_ids' => [$tag->id],
         ])
         ->assertHasActionErrors(['calendar_audience_tag_ids.0']);

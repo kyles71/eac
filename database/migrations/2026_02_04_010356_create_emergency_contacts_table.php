@@ -16,6 +16,7 @@ return new class() extends Migration
             $table->string('name');
             $table->string('relationship');
             $table->string('phone_number');
+            $table->boolean('wants_text_updates');
             $table->string('email')->nullable();
             $table->timestamps();
         });

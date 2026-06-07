@@ -39,12 +39,16 @@ it('can create a student for the authenticated account', function () {
         ->callAction(CreateAction::class, data: [
             'first_name' => 'Avery',
             'last_name' => 'Dancer',
+            'nickname' => 'Ave',
+            'birthdate' => '2015-04-12',
         ])
         ->assertNotified();
 
     assertDatabaseHas(Student::class, [
         'first_name' => 'Avery',
         'last_name' => 'Dancer',
+        'nickname' => 'Ave',
+        'birthdate' => '2015-04-12 00:00:00',
         'user_id' => auth()->id(),
     ]);
 });

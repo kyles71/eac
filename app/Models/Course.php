@@ -104,7 +104,9 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
     public function forms(): BelongsToMany
     {
-        return $this->belongsToMany(Form::class, 'course_forms');
+        return $this->belongsToMany(Form::class, 'course_forms')
+            ->using(CourseForm::class)
+            ->withTimestamps();
     }
 
     public function product(): MorphOne
