@@ -1,14 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\User\Pages\Auth;
 
+use App\Support\LegalDocuments\PortalTerms;
 use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
-class Register extends BaseRegister
+final class Register extends BaseRegister
 {
     public function form(Schema $schema): Schema
     {
@@ -31,11 +35,18 @@ class Register extends BaseRegister
 
     protected function getTermsFormComponent(): Component
     {
+        $portalTerms = PortalTerms::document();
+        $termsVersion = $portalTerms?->currentVersion();
+
         return Checkbox::make('terms')
             ->label('I agree to the terms and conditions')
             ->required()
             ->accepted()
-            ->dehydrated(false);
+            ->dehydrated(false)
+            ->visible($portalTerms !== null)
+            ->helperText($termsVersion === null ? null : new HtmlString(
+                '<a class="fi-link fi-size-sm fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-400" href="'.e(route('legal-documents.versions.show', $termsVersion)).'" target="_blank" rel="noopener noreferrer">View and print the terms and conditions</a>'
+            ));
     }
 
     protected function mutateFormDataBeforeRegister(array $data): array

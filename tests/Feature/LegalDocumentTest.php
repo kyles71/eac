@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\LegalDocument;
 use App\Models\LegalDocumentVersion;
+use App\Support\LegalDocuments\PortalTerms;
 
 it('publishes new versions without mutating the current published terms', function () {
     $document = LegalDocument::factory()->create();
@@ -32,3 +33,30 @@ it('prevents published legal document versions from being edited', function () {
 
     $version->update(['content' => '<p>Mutated terms.</p>']);
 })->throws(LogicException::class, 'Published legal document versions are immutable');
+
+it('allows anyone to view and print published portal terms', function () {
+    auth()->logout();
+
+    $document = LegalDocument::factory()->create([
+        'key' => PortalTerms::KEY,
+    ]);
+
+    $version = LegalDocumentVersion::factory()->create([
+        'legal_document_id' => $document->id,
+        'title' => 'Portal Terms & Conditions',
+    ]);
+
+    $this->get(route('legal-documents.versions.show', $version))
+        ->assertOk()
+        ->assertSee('Print')
+        ->assertSee('Portal Terms & Conditions');
+});
+
+it('does not publicly expose other legal documents', function () {
+    auth()->logout();
+
+    $version = LegalDocumentVersion::factory()->create();
+
+    $this->get(route('legal-documents.versions.show', $version))
+        ->assertForbidden();
+});

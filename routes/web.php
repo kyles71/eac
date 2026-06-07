@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', fn () => redirect(Filament::getPanel('user')->getUrl()));
 
 Route::get('/legal-documents/{legalDocumentVersion}', LegalDocumentVersionController::class)
-    ->middleware('auth')
     ->name('legal-documents.versions.show');
 
 Route::post('/stripe/webhook', StripeWebhookController::class)

@@ -6,12 +6,21 @@ namespace App\Http\Controllers;
 
 use App\Models\LegalDocumentAcceptance;
 use App\Models\LegalDocumentVersion;
+use App\Support\LegalDocuments\PortalTerms;
 use Illuminate\Contracts\View\View;
 
 final class LegalDocumentVersionController
 {
     public function __invoke(LegalDocumentVersion $legalDocumentVersion): View
     {
+        $legalDocumentVersion->loadMissing('document');
+
+        if ($legalDocumentVersion->published_at !== null && $legalDocumentVersion->document?->key === PortalTerms::KEY) {
+            return view('legal-documents.version', [
+                'version' => $legalDocumentVersion,
+            ]);
+        }
+
         $user = auth()->user();
 
         abort_if($user === null, 403);
@@ -23,8 +32,6 @@ final class LegalDocumentVersionController
             ->exists();
 
         abort_if(! $canViewAsAdmin && ! $hasAcceptedVersion, 403);
-
-        $legalDocumentVersion->loadMissing('document');
 
         return view('legal-documents.version', [
             'version' => $legalDocumentVersion,
