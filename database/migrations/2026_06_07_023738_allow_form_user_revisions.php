@@ -11,8 +11,8 @@ return new class() extends Migration
     public function up(): void
     {
         Schema::table('form_users', function (Blueprint $table): void {
-            $table->dropUnique(['form_id', 'student_id']);
             $table->index(['form_id', 'student_id']);
+            $table->dropUnique(['form_id', 'student_id']);
         });
     }
 };
