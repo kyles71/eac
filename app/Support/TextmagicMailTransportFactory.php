@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Mail\Transports\TextmagicTransport;
-use App\Services\Mail\TextmagicEmailCampaignClient;
+use App\Services\Mail\TextmagicEmailService;
 use GuzzleHttp\Client;
 use Symfony\Component\Mailer\Exception\TransportException;
 use TextMagic\Api\TextMagicApi;
@@ -23,7 +23,7 @@ final class TextmagicMailTransportFactory
             ->setPassword(self::requiredServiceConfig('api_key'));
 
         return new TextmagicTransport(
-            client: new TextmagicEmailCampaignClient(
+            client: new TextmagicEmailService(
                 new TextMagicApi(new Client(), $textmagicConfig),
             ),
             emailSenderId: self::senderId($mailerConfig),

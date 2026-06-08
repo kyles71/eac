@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Admin\Resources\Events\EventResource;
-use App\Services\EventAttendance;
+use App\Services\EventAttendanceService;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\EmbeddedSchema;
@@ -73,8 +73,8 @@ final class ViewEvent extends ViewRecord implements HasTable
         return $this->attendance()->eventRosterQuery($this->getRecord());
     }
 
-    private function attendance(): EventAttendance
+    private function attendance(): EventAttendanceService
     {
-        return app(EventAttendance::class);
+        return app(EventAttendanceService::class);
     }
 }

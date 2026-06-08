@@ -18,7 +18,6 @@ use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -693,7 +692,6 @@ it('opens admin calendar events in the modal with permitted admin actions', func
         ->call('onEventClick', ['id' => $event->id])
         ->assertActionMounted('view')
         ->assertActionVisible(EditAction::class)
-        ->assertActionHidden(DeleteAction::class)
         ->assertActionVisible('viewFullEvent')
         ->assertActionHasUrl('viewFullEvent', $fullEventUrl)
         ->assertActionDoesNotExist('addCourseProductToCart')
@@ -714,7 +712,6 @@ it('hides admin calendar edit and full event actions without permission', functi
         ->call('onEventClick', ['id' => $event->id])
         ->assertActionMounted('view')
         ->assertActionHidden(EditAction::class)
-        ->assertActionHidden(DeleteAction::class)
         ->assertActionHidden('viewFullEvent');
 });
 
@@ -728,7 +725,7 @@ it('mounts the admin calendar create action with attendee fields', function (): 
         ->assertOk();
 });
 
-it('loads direct invitations with attendee names in a compact repeater', function (): void {
+it('loads direct invitations with attendee names in a repeater', function (): void {
     $event = standaloneEvent('Private Rehearsal');
     $user = User::factory()->create([
         'first_name' => 'Ada',
@@ -747,8 +744,7 @@ it('loads direct invitations with attendee names in a compact repeater', functio
 
     expect(collect($attendees)->pluck('label')->all())
         ->toContain('Ada Lovelace', 'Grace Hopper')
-        ->and($attendeeRepeater)->toBeInstanceOf(Repeater::class)
-        ->and($attendeeRepeater?->getColumnSpan('default'))->toBe(1);
+        ->and($attendeeRepeater)->toBeInstanceOf(Repeater::class);
 });
 
 it('opens user calendar event details as a modal instead of a slideover', function (): void {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail\Transports;
 
-use App\Services\Mail\TextmagicEmailCampaignClient;
+use App\Services\Mail\TextmagicEmailService;
 use InvalidArgumentException;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mailer\SentMessage;
@@ -20,7 +20,7 @@ use Throwable;
 final class TextmagicTransport extends AbstractTransport
 {
     public function __construct(
-        private readonly TextmagicEmailCampaignClient $client,
+        private readonly TextmagicEmailService $client,
         private readonly ?int $emailSenderId,
         private readonly ?string $fromName,
         private readonly ?string $replyToEmail,

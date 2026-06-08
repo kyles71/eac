@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use App\Mail\Transports\TextmagicTransport;
-use App\Services\Mail\TextmagicEmailCampaignClient;
+use App\Services\Mail\TextmagicEmailService;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mime\Email;
 use TextMagic\Api\TextMagicApi;
@@ -32,7 +32,7 @@ it('creates a Textmagic email campaign from a Symfony email', function (): void 
         }))
         ->andReturn(new CreateEmailCampaignResponse(['id' => 456]));
 
-    $client = new TextmagicEmailCampaignClient($api);
+    $client = new TextmagicEmailService($api);
 
     $transport = new TextmagicTransport(
         client: $client,
@@ -61,7 +61,7 @@ it('uses the email reply-to address when one is set', function (): void {
         ->with(Mockery::on(fn (CreateEmailCampaignRequest $request): bool => $request->getReplyToEmail() === 'message-reply@example.com'))
         ->andReturn(new CreateEmailCampaignResponse(['id' => 789]));
 
-    $client = new TextmagicEmailCampaignClient($api);
+    $client = new TextmagicEmailService($api);
 
     $transport = new TextmagicTransport(
         client: $client,
@@ -89,7 +89,7 @@ it('converts plain text bodies to HTML', function (): void {
         ->with(Mockery::on(fn (CreateEmailCampaignRequest $request): bool => $request->getMessage() === '<p>Hello<br />'."\n".'there</p>'))
         ->andReturn(new CreateEmailCampaignResponse(['id' => 789]));
 
-    $client = new TextmagicEmailCampaignClient($api);
+    $client = new TextmagicEmailService($api);
 
     $transport = new TextmagicTransport(
         client: $client,
@@ -109,7 +109,7 @@ it('converts plain text bodies to HTML', function (): void {
 
 it('fails clearly when a sender id is missing', function (): void {
     $transport = new TextmagicTransport(
-        client: new TextmagicEmailCampaignClient(Mockery::mock(TextMagicApi::class)),
+        client: new TextmagicEmailService(Mockery::mock(TextMagicApi::class)),
         emailSenderId: null,
         fromName: null,
         replyToEmail: null,
@@ -126,7 +126,7 @@ it('fails clearly when a sender id is missing', function (): void {
 
 it('fails clearly for unsupported CC recipients', function (): void {
     $transport = new TextmagicTransport(
-        client: new TextmagicEmailCampaignClient(Mockery::mock(TextMagicApi::class)),
+        client: new TextmagicEmailService(Mockery::mock(TextMagicApi::class)),
         emailSenderId: 123,
         fromName: null,
         replyToEmail: null,

@@ -11,7 +11,7 @@ use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-final class EventAttendance
+final class EventAttendanceService
 {
     /**
      * @return Builder<Enrollment>

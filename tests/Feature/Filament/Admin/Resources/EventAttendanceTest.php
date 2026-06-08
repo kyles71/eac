@@ -9,7 +9,7 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Student;
-use App\Services\EventAttendance;
+use App\Services\EventAttendanceService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
@@ -161,7 +161,7 @@ it('manages attendance on a single course event', function (): void {
 it('updates existing student attendance rows instead of duplicating them', function (): void {
     $student = Student::factory()->create();
     $event = Event::factory()->create();
-    $attendance = app(EventAttendance::class);
+    $attendance = app(EventAttendanceService::class);
 
     $attendance->setStudentAttendance($event, $student, true);
     $attendance->setStudentAttendanceNotes($event, $student, 'Present');

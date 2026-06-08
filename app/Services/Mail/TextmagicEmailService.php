@@ -9,7 +9,7 @@ use TextMagic\Api\TextMagicApi;
 use TextMagic\Models\CreateEmailCampaignRequest;
 use TextMagic\Models\CreateEmailCampaignResponse;
 
-final class TextmagicEmailCampaignClient
+final class TextmagicEmailService
 {
     public function __construct(
         private readonly TextMagicApi $api,

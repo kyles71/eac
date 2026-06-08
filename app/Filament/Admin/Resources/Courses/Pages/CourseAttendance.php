@@ -7,7 +7,7 @@ namespace App\Filament\Admin\Resources\Courses\Pages;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Models\Enrollment;
 use App\Models\Event;
-use App\Services\EventAttendance as EventAttendanceService;
+use App\Services\EventAttendanceService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Pages\ViewRecord;
