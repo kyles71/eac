@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Support\MediaDisks;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -54,7 +54,7 @@ final class Event extends Model implements HasMedia
             ->withTimestamps();
     }
 
-    public function scopeOverlapping(Builder $query, Carbon $startsAt, Carbon $endsAt): Builder
+    public function scopeOverlapping(Builder $query, CarbonInterface $startsAt, CarbonInterface $endsAt): Builder
     {
         return $query->where(function (Builder $query) use ($startsAt, $endsAt): void {
             $query

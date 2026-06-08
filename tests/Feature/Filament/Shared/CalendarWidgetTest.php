@@ -819,8 +819,10 @@ it('adds an event course product to the cart from the user event modal', functio
         ->value('quantity'))->toBe(1);
 });
 
-it('renders calendar events with a pointer cursor', function (): void {
-    expect((new CalendarWidget())->eventDidMount())->toContain("cursor = 'pointer'");
+it('renders regular calendar events with a pointer cursor and holidays with a default cursor', function (): void {
+    expect((new CalendarWidget())->eventDidMount())
+        ->toContain("'pointer'")
+        ->toContain("'default'");
 });
 
 function fetchCalendarEvents(

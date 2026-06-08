@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Traits\HasRecurring;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
+use App\Services\HolidayConflictService;
 use Carbon\CarbonInterface;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
@@ -45,7 +46,13 @@ final class ListCourses extends ListRecords
             return [];
         }
 
-        $events = [Event::query()->create($eventData)];
+        $events = app(HolidayConflictService::class)->conflictingHolidayFor(
+            $eventData['start_time'],
+            $eventData['end_time'],
+            $eventData['course_id'],
+        ) === null
+            ? [Event::query()->create($eventData)]
+            : [];
 
         return [
             ...$events,

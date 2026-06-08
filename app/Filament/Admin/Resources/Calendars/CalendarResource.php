@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Calendars;
 use App\Filament\Admin\Resources\Calendars\Pages\ListCalendars;
 use App\Filament\Admin\Resources\Calendars\Schemas\CalendarForm;
 use App\Filament\Admin\Resources\Calendars\Tables\CalendarsTable;
+use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\Calendar;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -19,6 +20,10 @@ final class CalendarResource extends Resource
     protected static ?string $model = Calendar::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'name';
 

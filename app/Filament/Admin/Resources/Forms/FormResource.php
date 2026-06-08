@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Forms\Pages\ViewForm;
 use App\Filament\Admin\Resources\Forms\Schemas\FormForm;
 use App\Filament\Admin\Resources\Forms\Schemas\FormInfolist;
 use App\Filament\Admin\Resources\Forms\Tables\FormsTable;
+use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\Form;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -21,6 +22,10 @@ final class FormResource extends Resource
     protected static ?string $model = Form::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $recordTitleAttribute = 'name';
 

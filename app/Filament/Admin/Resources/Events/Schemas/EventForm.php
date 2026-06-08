@@ -11,7 +11,9 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\HolidayConflictService;
 use App\Support\MediaDisks;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Hidden;
@@ -69,6 +71,19 @@ final class EventForm
                     DateTimePicker::make('start_time')
                         ->label('Starts At')
                         ->required()
+                        ->rules([
+                            fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                $holiday = app(HolidayConflictService::class)->conflictingHolidayFor(
+                                    $value,
+                                    $get('end_time'),
+                                    $get('course_id'),
+                                );
+
+                                if ($holiday !== null) {
+                                    $fail("This event overlaps the \"{$holiday->name}\" holiday.");
+                                }
+                            },
+                        ])
                         ->timezone(self::displayTimezone()),
                     DateTimePicker::make('end_time')
                         ->label('Ends At')

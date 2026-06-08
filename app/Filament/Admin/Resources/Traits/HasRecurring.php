@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Traits;
 
 use App\Enums\ScheduleFrequency;
+use App\Services\HolidayConflictService;
 use Carbon\Carbon;
 use Closure;
 
@@ -69,7 +70,14 @@ trait HasRecurring
                     ->toDateTimeString();
             }
 
-            $return[] = $create_method($data);
+            if (app(HolidayConflictService::class)->conflictingHolidayFor(
+                $data[$start_field],
+                $data[$end_field] ?? null,
+                $data['course_id'] ?? null,
+            ) === null) {
+                $return[] = $create_method($data);
+            }
+
             $nextStart = $this->nextOccurrenceStart($nextStart, $repeat_frequency);
         }
 

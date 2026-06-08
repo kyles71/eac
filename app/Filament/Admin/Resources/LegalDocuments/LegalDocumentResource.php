@@ -6,12 +6,12 @@ namespace App\Filament\Admin\Resources\LegalDocuments;
 
 use App\Filament\Admin\Resources\LegalDocuments\Pages\ListLegalDocuments;
 use App\Filament\Admin\Resources\LegalDocuments\Tables\LegalDocumentsTable;
+use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\LegalDocument;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use UnitEnum;
 
 final class LegalDocumentResource extends Resource
 {
@@ -19,7 +19,9 @@ final class LegalDocumentResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $navigationLabel = 'Legal Documents';
 

@@ -13,6 +13,7 @@ use App\Filament\User\Pages\ProductDetails;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
+use App\Models\Holiday;
 use App\Models\Product;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -63,8 +64,8 @@ final class CalendarWidget extends FullCalendarWidget
     public function eventDidMount(): string
     {
         return <<<'JS'
-            function ({ el }) {
-                el.style.cursor = 'pointer'
+            function ({ el, event }) {
+                el.style.cursor = event.extendedProps.isHoliday ? 'default' : 'pointer'
             }
         JS;
     }
@@ -113,7 +114,7 @@ final class CalendarWidget extends FullCalendarWidget
         $endsAt = Carbon::parse($fetchInfo['end']);
         $accessibleCalendars = $this->accessibleCalendars();
 
-        return Event::query()
+        $events = Event::query()
             ->with(['calendar', 'course.tags'])
             ->overlapping($startsAt, $endsAt)
             ->visibleOnCalendar($calendar, $user)
@@ -134,6 +135,11 @@ final class CalendarWidget extends FullCalendarWidget
                 }
             )
             ->toArray();
+
+        return [
+            ...$events,
+            ...$this->holidayEvents($startsAt, $endsAt),
+        ];
     }
 
     public function selectCalendar(int $calendarId): void
@@ -151,6 +157,10 @@ final class CalendarWidget extends FullCalendarWidget
 
     public function onEventClick(array $event): void
     {
+        if (($event['extendedProps']['isHoliday'] ?? false) === true) {
+            return;
+        }
+
         if ($this->isAdminPanel()) {
             parent::onEventClick($event);
 
@@ -336,6 +346,43 @@ final class CalendarWidget extends FullCalendarWidget
         return $dateTime?->copy()
             ->timezone($this->displayTimezone())
             ->toIso8601String();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function holidayEvents(CarbonInterface $startsAt, CarbonInterface $endsAt): array
+    {
+        $startsOn = $startsAt->copy()
+            ->timezone($this->displayTimezone())
+            ->toDateString();
+        $endsOn = $endsAt->copy()
+            ->subMicrosecond()
+            ->timezone($this->displayTimezone())
+            ->toDateString();
+
+        return Holiday::query()
+            ->whereDate('starts_on', '<=', $endsOn)
+            ->whereDate('ends_on', '>=', $startsOn)
+            ->orderBy('starts_on')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Holiday $holiday): array => [
+                'id' => "holiday-{$holiday->id}",
+                'title' => $holiday->name,
+                'start' => $holiday->starts_on->toDateString(),
+                'end' => $holiday->ends_on->copy()->addDay()->toDateString(),
+                'allDay' => true,
+                'backgroundColor' => '#dc2626',
+                'borderColor' => '#dc2626',
+                'editable' => false,
+                'startEditable' => false,
+                'durationEditable' => false,
+                'extendedProps' => [
+                    'isHoliday' => true,
+                ],
+            ])
+            ->all();
     }
 
     private function isAdminPanel(): bool

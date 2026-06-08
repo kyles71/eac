@@ -27,6 +27,7 @@ use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 it('seeds the development database with all models', function (): void {
@@ -59,5 +60,7 @@ it('seeds the development database with all models', function (): void {
         ->and(ShowcaseParticipation::count())->toBeGreaterThanOrEqual(1)
         ->and(EmergencyContact::count())->toBeGreaterThanOrEqual(2)
         ->and(FormUser::count())->toBeGreaterThanOrEqual(2)
-        ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(5);
+        ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(5)
+        ->and(Role::findByName('super_admin')->hasPermissionTo('ViewAny:Holiday'))->toBeTrue()
+        ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue();
 });
