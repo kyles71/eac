@@ -55,6 +55,10 @@ final class CheckoutSuccess extends Page
                 ->with(['orderItems.product', 'paymentPlan.installments', 'paymentPlanTemplate'])
                 ->first();
         }
+
+        if ($this->redirectStatus === 'succeeded' && $this->order?->status === OrderStatus::Processing) {
+            $this->order->clearPurchasedCartItems();
+        }
     }
 
     public function refreshOrderStatus(): void

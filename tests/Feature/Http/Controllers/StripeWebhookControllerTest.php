@@ -7,6 +7,7 @@ use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
 use App\Http\Controllers\StripeWebhookController;
+use App\Models\CartItem;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -39,6 +40,12 @@ it('handles payment_intent.succeeded webhook for order completion', function () 
         'total_price' => 5000,
     ]);
 
+    CartItem::factory()->create([
+        'user_id' => $user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
     $event = new Stripe\Event;
     $event->type = 'payment_intent.succeeded';
     $event->data = (object) [
@@ -69,7 +76,9 @@ it('handles payment_intent.succeeded webhook for order completion', function () 
     expect($response->getStatusCode())->toBe(200);
     expect($response->getData(true))->toBe(['message' => 'Order processed']);
 
-    expect($order->refresh()->status)->toBe(OrderStatus::Completed);
+    expect($order->refresh()->status)->toBe(OrderStatus::Completed)
+        ->and($order->cart_items_cleared_at)->not->toBeNull()
+        ->and(CartItem::query()->where('user_id', $user->id)->count())->toBe(0);
 });
 
 it('returns 400 for invalid webhook signature', function () {

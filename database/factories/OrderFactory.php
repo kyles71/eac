@@ -32,6 +32,7 @@ final class OrderFactory extends Factory
             'stripe_payment_intent_id' => null,
             'payment_plan_template_id' => null,
             'payment_plan_terms_version_id' => null,
+            'cart_items_cleared_at' => null,
         ];
     }
 

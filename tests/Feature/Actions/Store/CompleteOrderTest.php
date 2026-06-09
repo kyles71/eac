@@ -93,6 +93,7 @@ it('clears only cart items for products on the order', function () {
 
     expect($this->user->cartItems()->count())->toBe(1);
     expect($this->user->cartItems()->first()->product_id)->toBe($otherProduct->id);
+    expect($order->refresh()->cart_items_cleared_at)->not->toBeNull();
 });
 
 it('decrements cart item quantity when cart has more than ordered', function () {
@@ -123,6 +124,39 @@ it('decrements cart item quantity when cart has more than ordered', function () 
     expect($this->user->cartItems()->first()->quantity)->toBe(2);
 });
 
+it('clears purchased cart items only once', function () {
+    $order = Order::factory()->create([
+        'user_id' => $this->user->id,
+        'status' => OrderStatus::Processing,
+        'subtotal' => 5000,
+        'total' => 5000,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    $this->user->cartItems()->create([
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $order->clearPurchasedCartItems();
+
+    $newCartItem = $this->user->cartItems()->create([
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+    ]);
+
+    $order->clearPurchasedCartItems();
+
+    expect($newCartItem->refresh()->quantity)->toBe(2);
+});
+
 it('fails and refunds when capacity is exceeded at completion time', function () {
     $order = Order::factory()->create([
         'user_id' => $this->user->id,
@@ -138,6 +172,11 @@ it('fails and refunds when capacity is exceeded at completion time', function ()
         'quantity' => 3,
         'unit_price' => 5000,
         'total_price' => 15000,
+    ]);
+
+    $this->user->cartItems()->create([
+        'product_id' => $this->product->id,
+        'quantity' => 3,
     ]);
 
     // Fill 4 of 5 spots (only 1 remaining, but order wants 3)
@@ -156,7 +195,9 @@ it('fails and refunds when capacity is exceeded at completion time', function ()
     $result = $action->handle($order);
 
     expect($result)->toBeFalse();
-    expect($order->refresh()->status)->toBe(OrderStatus::Failed);
+    expect($order->refresh()->status)->toBe(OrderStatus::Failed)
+        ->and($order->cart_items_cleared_at)->not->toBeNull()
+        ->and($this->user->cartItems()->count())->toBe(0);
 
     // No enrollments should have been created
     $enrollments = Enrollment::query()

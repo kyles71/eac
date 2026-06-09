@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Store\CreatePaymentPlan;
 use App\Enums\OrderStatus;
 use App\Filament\User\Pages\CheckoutSuccess;
+use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
@@ -60,6 +61,7 @@ it('reassures users while a successful stripe redirect is finalizing', function 
 
     Livewire::withQueryParams([
         'order_id' => $order->id,
+        'payment_intent' => 'pi_processing',
         'redirect_status' => 'succeeded',
     ])
         ->test(CheckoutSuccess::class)
@@ -67,6 +69,109 @@ it('reassures users while a successful stripe redirect is finalizing', function 
         ->assertSee('Payment Finalizing')
         ->assertSee('Your payment was submitted successfully')
         ->assertSee('Processing');
+});
+
+it('clears purchased cart items on a successful stripe return', function () {
+    $product = Product::factory()->create(['price' => 5000]);
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Processing,
+        'subtotal' => 5000,
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_processing',
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ]);
+
+    Livewire::withQueryParams([
+        'order_id' => $order->id,
+        'payment_intent' => 'pi_processing',
+        'redirect_status' => 'succeeded',
+    ])
+        ->test(CheckoutSuccess::class)
+        ->assertOk();
+
+    expect(CartItem::query()->where('user_id', auth()->id())->count())->toBe(0)
+        ->and($order->refresh()->cart_items_cleared_at)->not->toBeNull();
+});
+
+it('does not clear cart items without a successful stripe return', function () {
+    $product = Product::factory()->create(['price' => 5000]);
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Processing,
+        'subtotal' => 5000,
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_processing',
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ]);
+
+    Livewire::withQueryParams(['order_id' => $order->id])
+        ->test(CheckoutSuccess::class)
+        ->assertOk();
+
+    expect($cartItem->refresh()->quantity)->toBe(1)
+        ->and($order->refresh()->cart_items_cleared_at)->toBeNull();
+});
+
+it('does not clear cart items for a pending order', function () {
+    $product = Product::factory()->create(['price' => 5000]);
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+        'subtotal' => 5000,
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_pending',
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ]);
+
+    Livewire::withQueryParams([
+        'order_id' => $order->id,
+        'redirect_status' => 'succeeded',
+    ])
+        ->test(CheckoutSuccess::class)
+        ->assertOk();
+
+    expect($cartItem->refresh()->quantity)->toBe(1)
+        ->and($order->refresh()->cart_items_cleared_at)->toBeNull();
 });
 
 it('reloads the order status while waiting for webhook completion', function () {

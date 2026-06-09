@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Facades\DB;
 
 final class Order extends Model
 {
@@ -30,6 +31,7 @@ final class Order extends Model
         'payment_plan_fee' => 'integer',
         'payment_plan_template_id' => 'integer',
         'payment_plan_terms_version_id' => 'integer',
+        'cart_items_cleared_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -100,34 +102,46 @@ final class Order extends Model
     }
 
     /**
-     * Clear matching cart items for the user, scoped to products on this order.
+     * Clear matching cart items for the user once, scoped to products on this order.
      *
      * If the cart item quantity is less than or equal to the ordered quantity, it is deleted.
      * If the cart item has more quantity than was ordered, it is decremented.
      */
     public function clearPurchasedCartItems(): void
     {
-        $this->loadMissing('orderItems', 'user');
+        DB::transaction(function (): void {
+            /** @var self|null $order */
+            $order = self::query()
+                ->lockForUpdate()
+                ->find($this->getKey());
 
-        /** @var User $user */
-        $user = $this->user;
-
-        /** @var OrderItem $orderItem */
-        foreach ($this->orderItems as $orderItem) {
-            /** @var CartItem|null $cartItem */
-            $cartItem = $user->cartItems()
-                ->where('product_id', $orderItem->product_id)
-                ->first();
-
-            if ($cartItem === null) {
-                continue;
+            if ($order === null || $order->cart_items_cleared_at !== null) {
+                return;
             }
 
-            if ($cartItem->quantity <= $orderItem->quantity) {
-                $cartItem->delete();
-            } else {
-                $cartItem->update(['quantity' => $cartItem->quantity - $orderItem->quantity]);
+            $order->loadMissing('orderItems');
+
+            /** @var OrderItem $orderItem */
+            foreach ($order->orderItems as $orderItem) {
+                /** @var CartItem|null $cartItem */
+                $cartItem = CartItem::query()
+                    ->where('user_id', $order->user_id)
+                    ->where('product_id', $orderItem->product_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($cartItem === null) {
+                    continue;
+                }
+
+                if ($cartItem->quantity <= $orderItem->quantity) {
+                    $cartItem->delete();
+                } else {
+                    $cartItem->update(['quantity' => $cartItem->quantity - $orderItem->quantity]);
+                }
             }
-        }
+
+            $order->update(['cart_items_cleared_at' => now()]);
+        });
     }
 }
