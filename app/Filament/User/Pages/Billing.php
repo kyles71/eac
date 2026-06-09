@@ -17,6 +17,7 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\RestrictedCredit;
 use App\Models\User;
+use App\Services\DashboardAccountSummaryService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -216,23 +217,13 @@ final class Billing extends Page
      */
     private function getOverviewSchema(): array
     {
-        $creditBalance = (int) User::query()
-            ->whereKey(auth()->id())
-            ->value('credit_balance');
-
-        $restrictedCreditBalance = (int) RestrictedCredit::query()
-            ->where('user_id', auth()->id())
-            ->sum('balance');
-
-        $openEnrollments = auth()->user()?->enrollments()->open()->count() ?? 0;
-
-        $nextInstallment = Installment::query()
-            ->where('status', InstallmentStatus::Pending)
-            ->whereHas('paymentPlan.order', fn ($query) => $query
-                ->where('user_id', auth()->id())
-                ->where('status', '!=', OrderStatus::Cancelled))
-            ->orderBy('due_date')
-            ->first();
+        /** @var User $user */
+        $user = auth()->user();
+        $accountSummary = app(DashboardAccountSummaryService::class)->for($user);
+        $creditBalance = $accountSummary['store_credit'];
+        $restrictedCreditBalance = $accountSummary['limited_use_credit'];
+        $openEnrollments = $accountSummary['open_enrollments'];
+        $nextInstallment = $accountSummary['next_installment'];
 
         $summaryColumnSpan = ['default' => 1, 'md' => $restrictedCreditBalance > 0 ? 3 : 4];
 

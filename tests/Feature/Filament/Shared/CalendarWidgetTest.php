@@ -321,12 +321,12 @@ it('shows owner calendars through default user audience tags', function (string 
     Calendar::SLUG_COMP,
 ]);
 
-it('does not grant admin panel access from calendar visibility permissions alone', function (): void {
+it('grants admin panel access through admin permissions rather than calendar visibility alone', function (): void {
     $owner = User::factory()->isOwner()->create();
     $customCalendarUser = User::factory()->create();
     $customCalendarUser->attachTag('Company', Calendar::AUDIENCE_TAG_TYPE);
 
-    expect($owner->canAccessPanel(Filament::getPanel('admin')))->toBeFalse()
+    expect($owner->canAccessPanel(Filament::getPanel('admin')))->toBeTrue()
         ->and($owner->canAccessPanel(Filament::getPanel('user')))->toBeTrue()
         ->and($customCalendarUser->canAccessPanel(Filament::getPanel('admin')))->toBeFalse();
 });

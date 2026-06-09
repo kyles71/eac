@@ -62,5 +62,7 @@ it('seeds the development database with all models', function (): void {
         ->and(FormUser::count())->toBeGreaterThanOrEqual(2)
         ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(5)
         ->and(Role::findByName('super_admin')->hasPermissionTo('ViewAny:Holiday'))->toBeTrue()
-        ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue();
+        ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue()
+        ->and(Role::findByName('super_admin')->hasPermissionTo('Manage:DashboardAppearance'))->toBeTrue()
+        ->and(Role::findByName('owner')->hasPermissionTo('Manage:DashboardAppearance'))->toBeTrue();
 });

@@ -232,6 +232,7 @@ return [
     */
 
     'custom_permissions' => [
+        'Manage:DashboardAppearance' => 'Manage Dashboard Appearance',
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
     ],
 

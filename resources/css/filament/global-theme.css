@@ -1,6 +1,8 @@
 @import '../../../vendor/filament/filament/resources/css/theme.css';
 @import '../../../vendor/saade/filament-fullcalendar/resources/css/filament-fullcalendar.css';
 
+@source '../../../app/Filament/Shared/**/*';
+@source '../../../resources/views/filament/shared/**/*';
 @source '../../../vendor/bezhansalleh/filament-panel-switch/resources/views/**/*.blade.php';
 @source '../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 @source '../../../vendor/jeffgreco13/filament-breezy/resources/**/*';

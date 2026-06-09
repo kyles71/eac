@@ -11,12 +11,10 @@ use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
 use App\Filament\User\Pages\ProductDetails;
 use App\Models\Calendar;
-use App\Models\Course;
 use App\Models\Event;
-use App\Models\Holiday;
 use App\Models\Product;
 use App\Models\User;
-use Carbon\CarbonInterface;
+use App\Services\DashboardScheduleService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
@@ -42,6 +40,8 @@ final class CalendarWidget extends FullCalendarWidget
     public Model|string|null $model = Event::class;
 
     public ?int $selectedCalendarId = null;
+
+    protected int|string|array $columnSpan = 'full';
 
     public function mount(): void
     {
@@ -112,34 +112,8 @@ final class CalendarWidget extends FullCalendarWidget
 
         $startsAt = Carbon::parse($fetchInfo['start']);
         $endsAt = Carbon::parse($fetchInfo['end']);
-        $accessibleCalendars = $this->accessibleCalendars();
 
-        $events = Event::query()
-            ->with(['calendar', 'course.tags'])
-            ->overlapping($startsAt, $endsAt)
-            ->visibleOnCalendar($calendar, $user)
-            ->orderBy('events.start_time')
-            ->get()
-            ->map(
-                function (Event $event) use ($accessibleCalendars, $calendar): array {
-                    $displayCalendar = $this->displayCalendarForEvent($event, $calendar, $accessibleCalendars);
-
-                    return [
-                        'id' => $event->id,
-                        'title' => $event->name,
-                        'start' => $this->calendarTimestamp($event->start_time),
-                        'end' => $this->calendarTimestamp($event->end_time),
-                        'backgroundColor' => $displayCalendar?->background_color,
-                        'borderColor' => $displayCalendar?->background_color,
-                    ];
-                }
-            )
-            ->toArray();
-
-        return [
-            ...$events,
-            ...$this->holidayEvents($startsAt, $endsAt),
-        ];
+        return app(DashboardScheduleService::class)->fullCalendarEvents($user, $calendar, $startsAt, $endsAt);
     }
 
     public function selectCalendar(int $calendarId): void
@@ -292,11 +266,7 @@ final class CalendarWidget extends FullCalendarWidget
             return new EloquentCollection();
         }
 
-        return Calendar::query()
-            ->with('tags')
-            ->visibleTo($user)
-            ->orderBy('id')
-            ->get();
+        return app(DashboardScheduleService::class)->accessibleCalendars($user);
     }
 
     private function canViewEvent(int $eventId): bool
@@ -312,77 +282,6 @@ final class CalendarWidget extends FullCalendarWidget
             ->whereKey($eventId)
             ->visibleOnCalendar($calendar, $user)
             ->exists();
-    }
-
-    /**
-     * @param  EloquentCollection<int, Calendar>  $accessibleCalendars
-     */
-    private function displayCalendarForEvent(Event $event, Calendar $selectedCalendar, EloquentCollection $accessibleCalendars): ?Calendar
-    {
-        if (! $selectedCalendar->isMyCalendar()) {
-            return $selectedCalendar;
-        }
-
-        if ($event->course instanceof Course) {
-            $courseCalendarSlugs = $event->course
-                ->tags
-                ->where('type', Course::CALENDAR_TAG_TYPE)
-                ->pluck('name');
-
-            $routedCalendar = $accessibleCalendars
-                ->where('slug', '!=', Calendar::SLUG_MY)
-                ->first(fn (Calendar $calendar): bool => $courseCalendarSlugs->contains($calendar->slug));
-
-            if ($routedCalendar instanceof Calendar) {
-                return $routedCalendar;
-            }
-        }
-
-        return $event->calendar;
-    }
-
-    private function calendarTimestamp(?CarbonInterface $dateTime): ?string
-    {
-        return $dateTime?->copy()
-            ->timezone($this->displayTimezone())
-            ->toIso8601String();
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function holidayEvents(CarbonInterface $startsAt, CarbonInterface $endsAt): array
-    {
-        $startsOn = $startsAt->copy()
-            ->timezone($this->displayTimezone())
-            ->toDateString();
-        $endsOn = $endsAt->copy()
-            ->subMicrosecond()
-            ->timezone($this->displayTimezone())
-            ->toDateString();
-
-        return Holiday::query()
-            ->whereDate('starts_on', '<=', $endsOn)
-            ->whereDate('ends_on', '>=', $startsOn)
-            ->orderBy('starts_on')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Holiday $holiday): array => [
-                'id' => "holiday-{$holiday->id}",
-                'title' => $holiday->name,
-                'start' => $holiday->starts_on->toDateString(),
-                'end' => $holiday->ends_on->copy()->addDay()->toDateString(),
-                'allDay' => true,
-                'backgroundColor' => '#dc2626',
-                'borderColor' => '#dc2626',
-                'editable' => false,
-                'startEditable' => false,
-                'durationEditable' => false,
-                'extendedProps' => [
-                    'isHoliday' => true,
-                ],
-            ])
-            ->all();
     }
 
     private function isAdminPanel(): bool
