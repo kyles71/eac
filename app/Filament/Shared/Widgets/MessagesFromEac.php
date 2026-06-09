@@ -10,13 +10,22 @@ use App\Settings\DashboardAppearanceSettings;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Concerns\RestrictsFileUploadsToSchemaComponents;
+use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Widgets\Widget;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
 
-final class MessagesFromEac extends Widget implements HasActions
+final class MessagesFromEac extends Widget implements HasActions, HasSchemas
 {
     use InteractsWithActions;
+    use InteractsWithSchemas, RestrictsFileUploadsToSchemaComponents {
+        RestrictsFileUploadsToSchemaComponents::_finishUpload insteadof InteractsWithSchemas;
+        RestrictsFileUploadsToSchemaComponents::_removeUpload insteadof InteractsWithSchemas;
+        RestrictsFileUploadsToSchemaComponents::_startUpload insteadof InteractsWithSchemas;
+        RestrictsFileUploadsToSchemaComponents::_uploadErrored insteadof InteractsWithSchemas;
+    }
 
     protected string $view = 'filament.shared.widgets.messages-from-eac';
 

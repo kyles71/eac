@@ -156,6 +156,13 @@ it('renders dashboard communication and action widgets without exposing audience
         ->assertSeeHtml('class="max-h-72 overflow-y-auto pr-2"')
         ->assertDontSeeHtml('border border-gray-200');
 
+    livewire(MessagesFromEac::class)
+        ->mountAction('viewAll')
+        ->assertActionMounted('viewAll')
+        ->assertSee('Messages From EAC')
+        ->assertSee('Enrollment closes Friday.')
+        ->assertSeeHtml('src="'.$settings->messagesBulletImageUrl().'"');
+
     livewire(QuickLinks::class)
         ->assertSee('Studio Website')
         ->assertDontSee('Owner Audience')
