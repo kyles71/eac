@@ -50,7 +50,6 @@ return [
 
         'handcrafted' => [
             'transport' => env('MAIL_HANDCRAFTED_TRANSPORT', 'log'),
-            'delivery_mode' => env('MAIL_HANDCRAFTED_DELIVERY_MODE', 'individual'),
             'archive_to' => env('MAIL_HANDCRAFTED_ARCHIVE_TO', ''),
             'textmagic' => [
                 'sender_id' => env('TEXTMAGIC_HANDCRAFTED_EMAIL_SENDER_ID'),

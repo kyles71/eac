@@ -55,7 +55,7 @@ final class StudentsTable
             ])
             ->recordActions([
                 SendEmailAction::make()
-                    ->to(fn ($record) => [$record->user->email]),
+                    ->to(fn (Student $record): array => [$record]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

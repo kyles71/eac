@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Actions;
 
 use App\Actions\Mail\QueueHandcraftedEmail;
+use App\Models\Student;
+use App\Models\User;
+use App\Support\HandcraftedEmailRecipients;
 use Closure;
 use Filament\Actions\Action;
-use Filament\Forms\Components\TagsInput;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -17,31 +20,17 @@ use Filament\Support\Icons\Heroicon;
  * Filament action for composing and queueing handcrafted emails.
  *
  * Usage options:
- * - to(array|Closure $to): Sets the default recipient addresses shown in the modal.
- * - deliveryMode(string|Closure $mode): Overrides the configured delivery mode for this action instance.
- *       Use SendEmailAction::DELIVERY_MODE_INDIVIDUAL to queue one message per recipient, or
- *       SendEmailAction::DELIVERY_MODE_GROUPED to queue one message to all recipients.
+ * - to(array|Closure $to): Sets the default recipients shown in the modal.
  * - archiveTo(array|Closure|null $recipients): Overrides the configured archive/self-copy recipients.
  *       Textmagic sends archive recipients as a separate message; other mailers receive archive copies by BCC.
  * - withoutArchiveCopy(): Disables archive/self-copy recipients for this action instance.
- *
- * Defaults come from mail.mailers.handcrafted.delivery_mode and mail.mailers.handcrafted.archive_to.
  */
 final class SendEmailAction extends Action
 {
-    public const string DELIVERY_MODE_GROUPED = QueueHandcraftedEmail::DELIVERY_MODE_GROUPED;
-
-    public const string DELIVERY_MODE_INDIVIDUAL = QueueHandcraftedEmail::DELIVERY_MODE_INDIVIDUAL;
-
     /**
-     * @var array<int, string>|Closure(): array<int, string>
+     * @var array<int, Student|User|string>|Closure
      */
     protected array|Closure $defaultTo = [];
-
-    /**
-     * @var string|Closure(): string|null
-     */
-    protected string|Closure|null $deliveryMode = null;
 
     /**
      * @var array<int, string>|Closure(): array<int, string>|null
@@ -61,11 +50,22 @@ final class SendEmailAction extends Action
             ->icon(Heroicon::OutlinedEnvelope)
             ->slideOver(false)
             ->schema(fn (): array => [
-                TagsInput::make('to')
+                Select::make('to')
                     ->label('To')
-                    ->default($this->getDefaultTo())
-                    ->nestedRecursiveRules(['email'])
-                    ->placeholder('Add email address')
+                    ->multiple()
+                    ->searchable()
+                    ->searchDebounce(500)
+                    ->searchPrompt('Type at least 3 characters to search students or teachers, or enter a complete email address.')
+                    ->searchingMessage('Searching recipients...')
+                    ->noSearchResultsMessage('No matching students, teachers, or email address.')
+                    ->getSearchResultsUsing(
+                        fn (string $search): array => app(HandcraftedEmailRecipients::class)->search($search)
+                    )
+                    ->getOptionLabelsUsing(
+                        fn (array $values): array => app(HandcraftedEmailRecipients::class)->labels($values)
+                    )
+                    ->default(app(HandcraftedEmailRecipients::class)->defaultValues($this->getDefaultTo()))
+                    ->placeholder('Add recipients')
                     ->required(),
                 TextInput::make('subject')
                     ->label('Subject')
@@ -85,29 +85,19 @@ final class SendEmailAction extends Action
             });
     }
 
-    public static function getDefaultName(): ?string
+    public static function getDefaultName(): string
     {
         return 'sendEmail';
     }
 
     /**
-     * Set the default recipient addresses shown in the action form.
+     * Set the default recipients shown in the action form.
      *
-     * @param  array<int, string>|Closure(): array<int, string>  $to
+     * @param  array<int, Student|User|string>|Closure  $to
      */
     public function to(array|Closure $to): static
     {
         $this->defaultTo = $to;
-
-        return $this;
-    }
-
-    /**
-     * Override the configured delivery mode for this action instance.
-     */
-    public function deliveryMode(string|Closure $mode): static
-    {
-        $this->deliveryMode = $mode;
 
         return $this;
     }
@@ -136,7 +126,7 @@ final class SendEmailAction extends Action
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, Student|User|string>
      */
     protected function getDefaultTo(): array
     {
@@ -149,19 +139,12 @@ final class SendEmailAction extends Action
     private function queueEmails(array $data): void
     {
         app(QueueHandcraftedEmail::class)->handle(
-            recipients: $data['to'] ?? [],
+            recipients: app(HandcraftedEmailRecipients::class)->resolve($data['to'] ?? []),
             subject: (string) ($data['subject'] ?? ''),
             body: (string) ($data['body'] ?? ''),
-            deliveryMode: $this->getDeliveryMode(),
+            deliveryMode: QueueHandcraftedEmail::DELIVERY_MODE_INDIVIDUAL,
             archiveTo: $this->getArchiveTo(),
         );
-    }
-
-    private function getDeliveryMode(): mixed
-    {
-        return $this->deliveryMode === null
-            ? config('mail.mailers.handcrafted.delivery_mode', self::DELIVERY_MODE_INDIVIDUAL)
-            : $this->evaluate($this->deliveryMode);
     }
 
     private function getArchiveTo(): mixed
@@ -171,7 +154,11 @@ final class SendEmailAction extends Action
         }
 
         if ($this->hasArchiveToOverride) {
-            return $this->evaluate($this->archiveTo) ?? [];
+            if ($this->archiveTo === null) {
+                return [];
+            }
+
+            return $this->evaluate($this->archiveTo);
         }
 
         return config('mail.mailers.handcrafted.archive_to', []);
