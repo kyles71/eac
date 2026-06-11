@@ -6,18 +6,27 @@ use App\Actions\Store\ProcessInstallments;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Models\Installment;
+use App\Models\Order;
 use App\Models\PaymentPlan;
 use Stripe\PaymentIntent;
 
 beforeEach(function () {
     $this->mockStripe = Mockery::mock(StripeServiceContract::class);
+    $this->mockStripe->shouldReceive('getDefaultPaymentMethodId')->byDefault()->andReturnNull();
     $this->app->instance(StripeServiceContract::class, $this->mockStripe);
 });
 
-it('processes due auto-charge installments successfully', function () {
+it('processes due installments using the payment method assigned to the plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_account_default']);
+
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+    ]);
+
     $plan = PaymentPlan::factory()->create([
-        'stripe_customer_id' => 'cus_test_123',
-        'stripe_payment_method_id' => 'pm_test_123',
+        'order_id' => $order->id,
+        'stripe_customer_id' => 'cus_legacy',
+        'stripe_payment_method_id' => 'pm_plan',
     ]);
 
     $installment = Installment::factory()->dueToday()->create([
@@ -30,6 +39,13 @@ it('processes due auto-charge installments successfully', function () {
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->once()
+        ->withArgs(fn (
+            string $customerId,
+            string $paymentMethodId,
+            int $amount,
+        ): bool => $customerId === 'cus_account_default'
+            && $paymentMethodId === 'pm_plan'
+            && $amount === 3333)
         ->andReturn($paymentIntent);
 
     $action = app(ProcessInstallments::class);
@@ -42,6 +58,64 @@ it('processes due auto-charge installments successfully', function () {
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Paid)
         ->and($installment->stripe_payment_intent_id)->toBe('pi_result_123');
+});
+
+it('uses the account default when a legacy plan has no assigned payment method', function () {
+    $plan = PaymentPlan::factory()->create([
+        'stripe_customer_id' => 'cus_test_123',
+        'stripe_payment_method_id' => null,
+    ]);
+
+    Installment::factory()->dueToday()->create([
+        'payment_plan_id' => $plan->id,
+        'amount' => 3333,
+    ]);
+
+    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_legacy_123', 'status' => 'succeeded']);
+
+    $this->mockStripe
+        ->shouldReceive('getDefaultPaymentMethodId')
+        ->once()
+        ->with('cus_test_123')
+        ->andReturn('pm_default');
+
+    $this->mockStripe
+        ->shouldReceive('chargePaymentMethod')
+        ->once()
+        ->withArgs(fn (
+            string $customerId,
+            string $paymentMethodId,
+        ): bool => $customerId === 'cus_test_123' && $paymentMethodId === 'pm_default')
+        ->andReturn($paymentIntent);
+
+    $result = app(ProcessInstallments::class)->handle();
+
+    expect($result['succeeded'])->toBe(1);
+});
+
+it('retrieves each customer default only once for legacy plans without assignments', function () {
+    $plans = PaymentPlan::factory()->count(2)->create([
+        'stripe_customer_id' => 'cus_shared',
+        'stripe_payment_method_id' => null,
+    ]);
+
+    $plans->each(fn (PaymentPlan $plan) => Installment::factory()->dueToday()->create([
+        'payment_plan_id' => $plan->id,
+    ]));
+
+    $this->mockStripe
+        ->shouldReceive('getDefaultPaymentMethodId')
+        ->once()
+        ->with('cus_shared')
+        ->andReturn('pm_default');
+    $this->mockStripe
+        ->shouldReceive('chargePaymentMethod')
+        ->twice()
+        ->andReturn(PaymentIntent::constructFrom(['id' => 'pi_result', 'status' => 'succeeded']));
+
+    $result = app(ProcessInstallments::class)->handle();
+
+    expect($result['succeeded'])->toBe(2);
 });
 
 it('marks installment as failed when auto-charge fails', function () {

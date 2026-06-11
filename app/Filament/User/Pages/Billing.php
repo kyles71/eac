@@ -8,6 +8,7 @@ use App\Actions\Store\UpdatePaymentPlanPaymentMethod;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentPlanStatus;
 use App\Filament\Actions\RedeemGiftCardAction;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
@@ -33,16 +34,18 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use InvalidArgumentException;
 use Throwable;
 
 final class Billing extends Page
 {
     public ?string $setupIntentClientSecret = null;
 
-    public ?string $customerSessionClientSecret = null;
-
     public ?string $defaultPaymentMethodId = null;
+
+    public ?int $paymentMethodTargetPlanId = null;
 
     /**
      * @var list<array{id: string, brand: string, last4: string, expires: string, is_default: bool}>
@@ -59,6 +62,10 @@ final class Billing extends Page
 
     public function mount(): void
     {
+        if ($this->completeRedirectedPaymentMethodSetup()) {
+            return;
+        }
+
         $this->refreshPaymentMethods();
     }
 
@@ -88,24 +95,31 @@ final class Billing extends Page
             ]);
     }
 
-    public function startAddingPaymentMethod(): void
+    public function startAddingPaymentMethod(?int $paymentPlanId = null): void
     {
         try {
             /** @var User $user */
             $user = auth()->user();
 
-            $stripeService = $this->stripeService();
-            $setupIntent = $stripeService->createSetupIntent($user, [
+            $paymentPlan = $paymentPlanId === null
+                ? null
+                : $this->activePaymentPlanForUser($paymentPlanId);
+
+            $metadata = [
                 'user_id' => (string) $user->id,
-            ]);
+            ];
+
+            if ($paymentPlan !== null) {
+                $metadata['payment_plan_id'] = (string) $paymentPlan->id;
+            }
+
+            $stripeService = $this->stripeService();
+            $setupIntent = $stripeService->createSetupIntent($user, $metadata);
 
             $user->refresh();
 
+            $this->paymentMethodTargetPlanId = $paymentPlan?->id;
             $this->setupIntentClientSecret = $setupIntent->client_secret;
-            $stripeId = $this->stripeIdForUser($user);
-            $this->customerSessionClientSecret = $stripeId !== null
-                ? $stripeService->createCustomerSession($stripeId)->client_secret
-                : null;
         } catch (Throwable $exception) {
             Notification::make()
                 ->title('Could not start payment method setup')
@@ -115,17 +129,21 @@ final class Billing extends Page
         }
     }
 
-    public function paymentMethodSetupCompleted(): void
-    {
-        $this->setupIntentClientSecret = null;
-        $this->customerSessionClientSecret = null;
-
-        $this->refreshPaymentMethods(notifyOnError: true);
-
-        Notification::make()
-            ->title('Payment method saved')
-            ->success()
-            ->send();
+    public function paymentMethodSetupCompleted(
+        string $setupIntentId,
+        string $paymentMethodId,
+        bool $makeDefault = false,
+    ): void {
+        try {
+            $this->completePaymentMethodSetup($setupIntentId, $paymentMethodId, $makeDefault);
+            $this->unmountAction();
+        } catch (Throwable $exception) {
+            Notification::make()
+                ->title('Could not save payment method')
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 
     public function makeDefaultPaymentMethod(string $paymentMethodId): void
@@ -150,17 +168,11 @@ final class Billing extends Page
 
             $this->stripeService()->setDefaultPaymentMethod($stripeId, $paymentMethodId);
 
-            PaymentPlan::query()
-                ->whereHas('order', fn ($query) => $query
-                    ->where('user_id', $user->id)
-                    ->where('status', '!=', OrderStatus::Cancelled))
-                ->whereHas('installments', fn ($query) => $query->where('status', InstallmentStatus::Pending))
-                ->update(['stripe_payment_method_id' => $paymentMethodId]);
-
-            $this->refreshPaymentMethods(notifyOnError: true);
+            $this->refreshBillingContent();
 
             Notification::make()
                 ->title('Default payment method updated')
+                ->body('This does not change payment methods already assigned to payment plans.')
                 ->success()
                 ->send();
         } catch (Throwable $exception) {
@@ -186,9 +198,11 @@ final class Billing extends Page
         $activePlansUsingMethod = $this->activeAutoChargePlansUsing($paymentMethodId);
 
         if ($activePlansUsingMethod > 0) {
+            $planLabel = $activePlansUsingMethod === 1 ? 'plan' : 'plans';
+
             Notification::make()
                 ->title('Payment method is in use')
-                ->body('Change any active auto-charge payment plans to another saved method before removing this one.')
+                ->body("This payment method is assigned to {$activePlansUsingMethod} active payment {$planLabel}. Change those plans before removing it.")
                 ->danger()
                 ->send();
 
@@ -197,7 +211,7 @@ final class Billing extends Page
 
         try {
             $this->stripeService()->detachPaymentMethod($paymentMethodId);
-            $this->refreshPaymentMethods(notifyOnError: true);
+            $this->refreshBillingContent();
 
             Notification::make()
                 ->title('Payment method removed')
@@ -449,16 +463,21 @@ final class Billing extends Page
             ];
         }
 
+        $hasMultipleTermsVersions = $plans
+            ->pluck('order.paymentPlanTermsVersion.id')
+            ->filter()
+            ->unique()
+            ->count() > 1;
+
         return [
             ...$this->paymentPlanTermsLinkSchema($plans),
             ...$plans
                 ->map(fn (PaymentPlan $plan): Section => Section::make("Order #{$plan->order_id}")
                     ->schema([
-                        Grid::make()
-                            ->columns([
-                                'default' => 1,
-                                'md' => 3,
-                            ])
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 3,
+                        ])
                             ->schema([
                                 TextEntry::make("plan_{$plan->id}_total")
                                     ->label('Total')
@@ -469,9 +488,26 @@ final class Billing extends Page
                                 TextEntry::make("plan_{$plan->id}_remaining")
                                     ->label('Remaining')
                                     ->state(format_money($plan->remainingBalance())),
+                                TextEntry::make("plan_{$plan->id}_status")
+                                    ->label('Status')
+                                    ->state(fn (): PaymentPlanStatus => PaymentPlanStatus::forPaymentPlan($plan))
+                                    ->badge(),
+                                TextEntry::make("plan_{$plan->id}_payment_method")
+                                    ->label('Payment Method')
+                                    ->state(fn (): string => $this->paymentMethodLabel($plan->stripe_payment_method_id)),
+                                TextEntry::make("plan_{$plan->id}_terms")
+                                    ->label('Terms & Conditions')
+                                    ->state($plan->order?->paymentPlanTermsVersion?->versionLabel())
+                                    ->color('primary')
+                                    ->icon(Heroicon::OutlinedDocumentText)
+                                    ->url(fn (): ?string => $plan->order?->paymentPlanTermsVersion === null
+                                        ? null
+                                        : route('legal-documents.versions.show', $plan->order->paymentPlanTermsVersion))
+                                    ->openUrlInNewTab()
+                                    ->visible($hasMultipleTermsVersions),
                             ]),
                         Actions::make([
-                            $this->updatePaymentPlanPaymentMethodAction($plan),
+                            $this->changePaymentMethodAction($plan),
                             $this->installmentsAction($plan),
                         ]),
                     ])
@@ -480,28 +516,58 @@ final class Billing extends Page
         ];
     }
 
-    private function updatePaymentPlanPaymentMethodAction(PaymentPlan $plan): Action
+    private function changePaymentMethodAction(PaymentPlan $plan): Action
     {
-        return Action::make("update_plan_payment_method_{$plan->id}")
-            ->label('Update Payment Method')
+        return Action::make("change_plan_payment_method_{$plan->id}")
+            ->label('Change Payment Method')
             ->icon(Heroicon::OutlinedArrowPath)
             ->visible(fn (): bool => ! $plan->isFullyPaid())
+            ->modalDescription('This changes the card used for future installments on this payment plan only.')
+            ->fillForm(fn (): array => [
+                'stripe_payment_method_id' => $this->availablePaymentMethodId(
+                    $plan->stripe_payment_method_id ?? $this->defaultPaymentMethodId,
+                ),
+            ])
             ->schema([
                 Select::make('stripe_payment_method_id')
                     ->label('Saved Payment Method')
                     ->options(fn (): array => $this->paymentMethodOptions())
-                    ->default($plan->stripe_payment_method_id)
                     ->required(),
+            ])
+            ->extraModalFooterActions([
+                Action::make('addNewPaymentMethod')
+                    ->label('Add New Payment Method')
+                    ->icon(Heroicon::OutlinedPlus)
+                    ->modal()
+                    ->modalHeading('Add New Payment Method')
+                    ->mountUsing(function () use ($plan): void {
+                        $this->startAddingPaymentMethod($plan->id);
+                    })
+                    ->modalContent(fn (): ViewContract => view(
+                        'filament.user.pages.billing-add-plan-payment-method',
+                        ['paymentPlanId' => $plan->id],
+                    ))
+                    ->modalSubmitAction(false)
+                    ->cancelParentActions(),
             ])
             ->action(function (array $data) use ($plan): void {
                 try {
+                    $paymentMethodId = $data['stripe_payment_method_id'] ?? null;
+
+                    if (! is_string($paymentMethodId) || ! $this->paymentMethodBelongsToUser($paymentMethodId)) {
+                        throw new InvalidArgumentException('Choose a saved payment method.');
+                    }
+
                     app(UpdatePaymentPlanPaymentMethod::class)->handle(
-                        $plan,
-                        $data['stripe_payment_method_id'],
+                        $this->activePaymentPlanForUser($plan->id),
+                        $paymentMethodId,
                     );
+
+                    $this->refreshBillingContent();
 
                     Notification::make()
                         ->title('Payment method updated')
+                        ->body('Future installments for this payment plan will use the selected card.')
                         ->success()
                         ->send();
                 } catch (Throwable $exception) {
@@ -712,68 +778,70 @@ final class Billing extends Page
      */
     private function getPaymentMethodsSchema(): array
     {
-        $components = [
-            Actions::make([
-                Action::make('addPaymentMethod')
-                    ->label('Add Payment Method')
-                    ->icon(Heroicon::OutlinedPlus)
-                    ->action('startAddingPaymentMethod'),
-            ]),
-            View::make('filament.user.pages.billing-payment-methods')
-                ->visible(fn (): bool => $this->setupIntentClientSecret !== null),
-        ];
+        $savedPaymentMethods = collect($this->paymentMethods)
+            ->map(fn (array $paymentMethod): Flex => Flex::make([
+                TextEntry::make("payment_method_{$paymentMethod['id']}")
+                    ->hiddenLabel()
+                    ->state($this->paymentMethodDescription($paymentMethod)
+                        .($paymentMethod['is_default'] ? ' (Default)' : ''))
+                    ->columnSpanFull(),
+                Actions::make([
+                    Action::make("default_payment_method_{$paymentMethod['id']}")
+                        ->label('Make Default')
+                        ->icon(Heroicon::OutlinedStar)
+                        ->iconButton()
+                        ->visible(! $paymentMethod['is_default'])
+                        ->action(function () use ($paymentMethod): void {
+                            $this->makeDefaultPaymentMethod($paymentMethod['id']);
+                        }),
+                    Action::make("remove_payment_method_{$paymentMethod['id']}")
+                        ->label('Remove')
+                        ->icon(Heroicon::OutlinedTrash)
+                        ->iconButton()
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->action(function () use ($paymentMethod): void {
+                            $this->removePaymentMethod($paymentMethod['id']);
+                        }),
+                ])
+                    ->grow(false),
+            ])->from('md'))
+            ->all();
 
-        if ($this->paymentMethods === []) {
-            $components[] = Section::make('Saved Payment Methods')
-                ->schema([
-                    TextEntry::make('payment_methods_empty')
-                        ->hiddenLabel()
-                        ->state('No saved payment methods.'),
-                ]);
-
-            return $components;
+        if ($savedPaymentMethods === []) {
+            $savedPaymentMethods[] = TextEntry::make('payment_methods_empty')
+                ->hiddenLabel()
+                ->state('No saved payment methods.');
         }
 
-        $components[] = Section::make('Saved Payment Methods')
-            ->schema(
-                collect($this->paymentMethods)
-                    ->map(fn (array $paymentMethod): Section => Section::make($paymentMethod['brand'].' ending in '.$paymentMethod['last4'])
-                        ->schema([
-                            Grid::make()
-                                ->columns([
-                                    'default' => 1,
-                                    'md' => 3,
-                                ])
-                                ->schema([
-                                    TextEntry::make("payment_method_{$paymentMethod['id']}_brand")
-                                        ->label('Brand')
-                                        ->state($paymentMethod['brand']),
-                                    TextEntry::make("payment_method_{$paymentMethod['id']}_last4")
-                                        ->label('Last 4')
-                                        ->state($paymentMethod['last4']),
-                                    TextEntry::make("payment_method_{$paymentMethod['id']}_expires")
-                                        ->label('Expires')
-                                        ->state($paymentMethod['expires']),
-                                ]),
-                            Actions::make([
-                                Action::make("default_payment_method_{$paymentMethod['id']}")
-                                    ->label('Make Default')
-                                    ->icon(Heroicon::OutlinedStar)
-                                    ->visible(! $paymentMethod['is_default'])
-                                    ->action(fn (): mixed => $this->makeDefaultPaymentMethod($paymentMethod['id'])),
-                                Action::make("remove_payment_method_{$paymentMethod['id']}")
-                                    ->label('Remove')
-                                    ->icon(Heroicon::OutlinedTrash)
-                                    ->color('danger')
-                                    ->requiresConfirmation()
-                                    ->action(fn (): mixed => $this->removePaymentMethod($paymentMethod['id'])),
-                            ]),
-                        ])
-                        ->compact())
-                    ->all()
-            );
+        $savedPaymentMethods[] = Actions::make([
+            Action::make('addPaymentMethod')
+                ->label('Add Payment Method')
+                ->icon(Heroicon::OutlinedPlus)
+                ->action('startAddingPaymentMethod'),
+        ]);
 
-        return $components;
+        return [
+            TextEntry::make('payment_methods_help')
+                ->hiddenLabel()
+                ->state('Your account default is preferred during new checkouts. Each payment plan can use a different payment method.'),
+            Grid::make([
+                'default' => 1,
+                'lg' => 2,
+            ])
+                ->schema([
+                    Section::make('Saved Payment Methods')
+                        ->schema($savedPaymentMethods)
+                        ->columnSpan(1),
+                    Section::make('Add Payment Method')
+                        ->schema([
+                            View::make('filament.user.pages.billing-payment-methods'),
+                        ])
+                        ->visible(fn (): bool => $this->setupIntentClientSecret !== null
+                            && $this->paymentMethodTargetPlanId === null)
+                        ->columnSpan(1),
+                ]),
+        ];
     }
 
     private function refreshPaymentMethods(bool $notifyOnError = false): void
@@ -806,7 +874,7 @@ final class Billing extends Page
                     'id' => (string) data_get($paymentMethod, 'id'),
                     'brand' => ucfirst((string) data_get($paymentMethod, 'card.brand', 'Card')),
                     'last4' => (string) data_get($paymentMethod, 'card.last4', '0000'),
-                    'expires' => data_get($paymentMethod, 'card.exp_month', '??').'/'.data_get($paymentMethod, 'card.exp_year', '????'),
+                    'expires' => $this->paymentMethodExpiration($paymentMethod),
                     'is_default' => data_get($paymentMethod, 'id') === $this->defaultPaymentMethodId,
                 ])
                 ->all();
@@ -824,11 +892,15 @@ final class Billing extends Page
         }
     }
 
+    private function refreshBillingContent(): void
+    {
+        $this->refreshPaymentMethods(notifyOnError: true);
+        $this->cacheSchema('content', null);
+    }
+
     private function paymentMethodBelongsToUser(string $paymentMethodId): bool
     {
-        if ($this->paymentMethods === []) {
-            $this->refreshPaymentMethods(notifyOnError: true);
-        }
+        $this->refreshPaymentMethods(notifyOnError: true);
 
         return collect($this->paymentMethods)
             ->contains(fn (array $paymentMethod): bool => $paymentMethod['id'] === $paymentMethodId);
@@ -840,8 +912,15 @@ final class Billing extends Page
             ->whereHas('order', fn ($query) => $query
                 ->where('user_id', auth()->id())
                 ->where('status', '!=', OrderStatus::Cancelled))
-            ->where('stripe_payment_method_id', $paymentMethodId)
-            ->whereHas('installments', fn ($query) => $query->where('status', InstallmentStatus::Pending))
+            ->where(function ($query) use ($paymentMethodId): void {
+                $query->where('stripe_payment_method_id', $paymentMethodId);
+
+                if ($paymentMethodId === $this->defaultPaymentMethodId) {
+                    $query->orWhereNull('stripe_payment_method_id');
+                }
+            })
+            ->whereHas('installments', fn ($query) => $query
+                ->where('status', '!=', InstallmentStatus::Paid->value))
             ->count();
     }
 
@@ -904,6 +983,101 @@ final class Billing extends Page
             ->url(fn (): string => self::getUrl(['tab' => 'credits']).'#limited-use-credit-details');
     }
 
+    private function completeRedirectedPaymentMethodSetup(): bool
+    {
+        $setupIntentId = request()->query('setup_intent');
+
+        if (! is_string($setupIntentId) || $setupIntentId === '') {
+            return false;
+        }
+
+        $paymentPlanId = null;
+
+        try {
+            $paymentPlanId = $this->completePaymentMethodSetup(
+                setupIntentId: $setupIntentId,
+                makeDefault: request()->boolean('make_default'),
+            );
+        } catch (Throwable $exception) {
+            Notification::make()
+                ->title('Could not save payment method')
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+        }
+
+        $this->redirect(self::getUrl([
+            'tab' => $paymentPlanId !== null ? 'payment-plans' : 'payment-methods',
+        ]));
+
+        return true;
+    }
+
+    private function completePaymentMethodSetup(
+        string $setupIntentId,
+        ?string $paymentMethodId = null,
+        bool $makeDefault = false,
+    ): ?int {
+        /** @var User $user */
+        $user = auth()->user();
+        $stripeId = $this->stripeIdForUser($user);
+
+        if ($stripeId === null) {
+            throw new InvalidArgumentException('Stripe customer not found.');
+        }
+
+        $setupIntent = $this->stripeService()->retrieveSetupIntent($setupIntentId);
+        $setupIntentCustomerId = data_get($setupIntent, 'customer.id', data_get($setupIntent, 'customer'));
+        $setupIntentPaymentMethodId = data_get($setupIntent, 'payment_method.id', data_get($setupIntent, 'payment_method'));
+        $setupIntentUserId = data_get($setupIntent, 'metadata.user_id');
+        $setupIntentPaymentPlanId = data_get($setupIntent, 'metadata.payment_plan_id');
+
+        if ($setupIntent->status !== 'succeeded'
+            || $setupIntentCustomerId !== $stripeId
+            || $setupIntentUserId !== (string) $user->id
+            || ! is_string($setupIntentPaymentMethodId)
+            || ($paymentMethodId !== null && $setupIntentPaymentMethodId !== $paymentMethodId)) {
+            throw new InvalidArgumentException('Payment method setup could not be verified.');
+        }
+
+        if (! $this->paymentMethodBelongsToUser($setupIntentPaymentMethodId)) {
+            throw new InvalidArgumentException('Payment method not found.');
+        }
+
+        $paymentPlan = is_string($setupIntentPaymentPlanId) && ctype_digit($setupIntentPaymentPlanId)
+            ? $this->activePaymentPlanForUser((int) $setupIntentPaymentPlanId)
+            : null;
+
+        if ($paymentPlan !== null) {
+            app(UpdatePaymentPlanPaymentMethod::class)->handle($paymentPlan, $setupIntentPaymentMethodId);
+        }
+
+        if ($makeDefault) {
+            $this->stripeService()->setDefaultPaymentMethod($stripeId, $setupIntentPaymentMethodId);
+        }
+
+        $this->setupIntentClientSecret = null;
+        $this->paymentMethodTargetPlanId = null;
+        $this->refreshBillingContent();
+
+        $notificationTitle = match (true) {
+            $paymentPlan !== null && $makeDefault => 'Payment method assigned and made default',
+            $paymentPlan !== null => 'Payment method assigned',
+            $makeDefault => 'Payment method saved and made default',
+            default => 'Payment method saved',
+        };
+
+        Notification::make()
+            ->title($notificationTitle)
+            ->body($paymentPlan !== null
+                ? "Future installments for Order #{$paymentPlan->order_id} will use this payment method."
+                : ($makeDefault ? 'This does not change payment methods already assigned to payment plans.' : null))
+            ->success()
+            ->send();
+
+        return $paymentPlan?->id;
+    }
+
     /**
      * @return array<string, string>
      */
@@ -915,9 +1089,79 @@ final class Billing extends Page
 
         return collect($this->paymentMethods)
             ->mapWithKeys(fn (array $paymentMethod): array => [
-                $paymentMethod['id'] => $paymentMethod['brand'].' ending in '.$paymentMethod['last4'],
+                $paymentMethod['id'] => $this->paymentMethodDescription($paymentMethod)
+                    .($paymentMethod['is_default'] ? ' (Account Default)' : ''),
             ])
             ->all();
+    }
+
+    private function paymentMethodLabel(?string $paymentMethodId): string
+    {
+        if ($paymentMethodId === null) {
+            $defaultPaymentMethod = collect($this->paymentMethods)
+                ->firstWhere('id', $this->defaultPaymentMethodId);
+
+            return is_array($defaultPaymentMethod)
+                ? $this->paymentMethodDescription($defaultPaymentMethod).' (Account default fallback)'
+                : 'No payment method assigned';
+        }
+
+        $paymentMethod = collect($this->paymentMethods)->firstWhere('id', $paymentMethodId);
+
+        return is_array($paymentMethod)
+            ? $this->paymentMethodDescription($paymentMethod)
+            : 'Assigned payment method unavailable - choose another card';
+    }
+
+    /**
+     * @param  array{id: string, brand: string, last4: string, expires: string, is_default: bool}  $paymentMethod
+     */
+    private function paymentMethodDescription(array $paymentMethod): string
+    {
+        return $paymentMethod['brand'].' ending in '.$paymentMethod['last4'].' Exp '.$paymentMethod['expires'];
+    }
+
+    private function availablePaymentMethodId(?string $paymentMethodId): ?string
+    {
+        if ($paymentMethodId === null) {
+            return null;
+        }
+
+        return collect($this->paymentMethods)->contains(
+            fn (array $paymentMethod): bool => $paymentMethod['id'] === $paymentMethodId
+        )
+            ? $paymentMethodId
+            : null;
+    }
+
+    private function paymentMethodExpiration(mixed $paymentMethod): string
+    {
+        $month = data_get($paymentMethod, 'card.exp_month');
+        $year = data_get($paymentMethod, 'card.exp_year');
+
+        if (! is_numeric($month) || ! is_numeric($year)) {
+            return '??/??';
+        }
+
+        return sprintf('%02d/%02d', (int) $month, (int) $year % 100);
+    }
+
+    private function activePaymentPlanForUser(int $paymentPlanId): PaymentPlan
+    {
+        $paymentPlan = PaymentPlan::query()
+            ->whereKey($paymentPlanId)
+            ->whereHas('order', fn ($query) => $query
+                ->where('user_id', auth()->id())
+                ->where('status', '!=', OrderStatus::Cancelled))
+            ->whereHas('installments', fn ($query) => $query
+                ->where('status', '!=', InstallmentStatus::Paid->value))
+            ->first();
+
+        if ($paymentPlan === null) {
+            throw new InvalidArgumentException('Active payment plan not found.');
+        }
+
+        return $paymentPlan;
     }
 
     private function stripeService(): StripeServiceContract

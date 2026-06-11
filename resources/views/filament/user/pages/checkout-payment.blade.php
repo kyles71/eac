@@ -51,13 +51,20 @@
 
         await $wire.markOrderProcessing()
 
-        const returnUrl = @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl() . '?order_id=' . $this->order->id)
+        const returnUrl = @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl() . '?order_id=' . $this->order->id);
+        const confirmParams = {
+            return_url: returnUrl,
+        }
+
+        if (@js($this->order->paymentPlanTemplate !== null)) {
+            confirmParams.payment_method_data = {
+                allow_redisplay: 'always',
+            }
+        }
 
         const { error } = await this.stripe.confirmPayment({
             elements: this.elements,
-            confirmParams: {
-                return_url: returnUrl,
-            },
+            confirmParams: confirmParams,
             redirect: 'if_required',
         })
 

@@ -1,5 +1,8 @@
 @php
-    $returnUrl = \App\Filament\User\Pages\Billing::getUrl(['tab' => 'payment-methods']);
+    $isForPaymentPlan = $this->paymentMethodTargetPlanId !== null;
+    $returnUrl = \App\Filament\User\Pages\Billing::getUrl([
+        'tab' => $isForPaymentPlan ? 'payment-plans' : 'payment-methods',
+    ]);
 @endphp
 
 <div
@@ -9,6 +12,7 @@
         ready: false,
         processing: false,
         error: null,
+        makeDefault: false,
 
         init() {
             if (! @js($this->setupIntentClientSecret)) {
@@ -32,10 +36,6 @@
                 clientSecret: @js($this->setupIntentClientSecret),
             }
 
-            if (@js($this->customerSessionClientSecret)) {
-                options.customerSessionClientSecret = @js($this->customerSessionClientSecret)
-            }
-
             this.elements = this.stripe.elements(options)
 
             const paymentElement = this.elements.create('payment')
@@ -53,10 +53,13 @@
             this.processing = true
             this.error = null
 
-            const { error } = await this.stripe.confirmSetup({
+            const returnUrl = new URL(@js($returnUrl), window.location.origin)
+            returnUrl.searchParams.set('make_default', this.makeDefault ? '1' : '0')
+
+            const { error, setupIntent } = await this.stripe.confirmSetup({
                 elements: this.elements,
                 confirmParams: {
-                    return_url: @js($returnUrl),
+                    return_url: returnUrl.toString(),
                 },
                 redirect: 'if_required',
             })
@@ -68,13 +71,44 @@
                 return
             }
 
-            await $wire.paymentMethodSetupCompleted()
+            if (! setupIntent || ! setupIntent.payment_method) {
+                this.error = 'Payment method setup could not be verified.'
+                this.processing = false
+
+                return
+            }
+
+            const paymentMethodId = typeof setupIntent.payment_method === 'string'
+                ? setupIntent.payment_method
+                : setupIntent.payment_method.id
+
+            await $wire.paymentMethodSetupCompleted(setupIntent.id, paymentMethodId, this.makeDefault)
             this.processing = false
         },
     }"
     class="space-y-4"
 >
+    @if ($isForPaymentPlan)
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+            This new payment method will be assigned to this payment plan after it is saved.
+        </p>
+    @endif
+
     <div id="billing-payment-element"></div>
+
+    <label class="flex items-start gap-3 text-sm">
+        <input
+            type="checkbox"
+            x-model="makeDefault"
+            class="fi-checkbox-input mt-0.5 rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-600"
+        >
+        <span>
+            <span class="font-medium">Make this my account default payment method</span>
+            <span class="block text-gray-500 dark:text-gray-400">
+                This does not change payment methods already assigned to payment plans.
+            </span>
+        </span>
+    </label>
 
     <p x-show="error" x-text="error" class="text-sm text-danger-600 dark:text-danger-400"></p>
 

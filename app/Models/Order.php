@@ -34,31 +34,37 @@ final class Order extends Model
         'cart_items_cleared_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<DiscountCode, $this> */
     public function discountCode(): BelongsTo
     {
         return $this->belongsTo(DiscountCode::class);
     }
 
+    /** @return BelongsTo<PaymentPlanTemplate, $this> */
     public function paymentPlanTemplate(): BelongsTo
     {
         return $this->belongsTo(PaymentPlanTemplate::class);
     }
 
+    /** @return BelongsTo<LegalDocumentVersion, $this> */
     public function paymentPlanTermsVersion(): BelongsTo
     {
         return $this->belongsTo(LegalDocumentVersion::class, 'payment_plan_terms_version_id');
     }
 
+    /** @return HasMany<OrderItem, $this> */
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
     }
 
+    /** @return HasOne<PaymentPlan, $this> */
     public function paymentPlan(): HasOne
     {
         return $this->hasOne(PaymentPlan::class);

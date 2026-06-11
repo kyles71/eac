@@ -26,6 +26,7 @@ final class RestrictedCredit extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<GiftCardType, $this> */
     public function giftCardType(): BelongsTo
     {
         return $this->belongsTo(GiftCardType::class);

@@ -6,13 +6,19 @@ namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
 use App\Models\Installment;
+use App\Models\PaymentPlan;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
-final readonly class ProcessInstallments
+final class ProcessInstallments
 {
+    /**
+     * @var array<string, string|null>
+     */
+    private array $defaultPaymentMethodIds = [];
+
     public function __construct(
-        private StripeServiceContract $stripeService,
+        private readonly StripeServiceContract $stripeService,
     ) {}
 
     /**
@@ -29,13 +35,13 @@ final readonly class ProcessInstallments
         // Get due installments (pending + due date <= today)
         $dueInstallments = Installment::query()
             ->due()
-            ->with('paymentPlan')
+            ->with('paymentPlan.order.user')
             ->get();
 
         // Get retryable installments (failed + retry_count < 3)
         $retryableInstallments = Installment::query()
             ->retryable()
-            ->with('paymentPlan')
+            ->with('paymentPlan.order.user')
             ->get();
 
         $allInstallments = $dueInstallments->merge($retryableInstallments);
@@ -79,18 +85,30 @@ final readonly class ProcessInstallments
         }
     }
 
-    private function processAutoCharge(Installment $installment, \App\Models\PaymentPlan $paymentPlan): bool
+    private function processAutoCharge(Installment $installment, PaymentPlan $paymentPlan): bool
     {
-        if ($paymentPlan->stripe_customer_id === null || $paymentPlan->stripe_payment_method_id === null) {
+        $customerId = $paymentPlan->order->user->stripe_id ?? $paymentPlan->stripe_customer_id;
+
+        if ($customerId === null) {
             Log::warning("Payment plan #{$paymentPlan->id} missing Stripe credentials for auto-charge.");
             $installment->markFailed();
 
             return false;
         }
 
+        $paymentMethodId = $paymentPlan->stripe_payment_method_id
+            ?? $this->defaultPaymentMethodId($customerId);
+
+        if ($paymentMethodId === null) {
+            Log::warning("Payment plan #{$paymentPlan->id} has no assigned or default Stripe payment method.");
+            $installment->markFailed();
+
+            return false;
+        }
+
         $paymentIntent = $this->stripeService->chargePaymentMethod(
-            customerId: $paymentPlan->stripe_customer_id,
-            paymentMethodId: $paymentPlan->stripe_payment_method_id,
+            customerId: $customerId,
+            paymentMethodId: $paymentMethodId,
             amount: $installment->amount,
             description: "Installment #{$installment->installment_number} for Order #{$paymentPlan->order_id}",
             metadata: [
@@ -115,5 +133,14 @@ final readonly class ProcessInstallments
         $installment->markFailed();
 
         return false;
+    }
+
+    private function defaultPaymentMethodId(string $customerId): ?string
+    {
+        if (! array_key_exists($customerId, $this->defaultPaymentMethodIds)) {
+            $this->defaultPaymentMethodIds[$customerId] = $this->stripeService->getDefaultPaymentMethodId($customerId);
+        }
+
+        return $this->defaultPaymentMethodIds[$customerId];
     }
 }

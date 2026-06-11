@@ -97,31 +97,55 @@ final class StripeWebhookController
             return response()->json(['error' => 'Order not found'], 404);
         }
 
-        if ($order->status !== OrderStatus::Processing) {
-            return response()->json(['message' => 'Order already processed']);
+        if ($order->stripe_payment_intent_id !== $paymentIntent->id) {
+            Log::warning("PaymentIntent {$paymentIntent->id} does not match order #{$order->id}.", [
+                'expected_payment_intent_id' => $order->stripe_payment_intent_id,
+            ]);
+
+            return response()->json(['message' => 'Payment intent does not match order']);
         }
 
-        $this->completeOrder->handle($order);
+        if (! in_array($order->status, [OrderStatus::Processing, OrderStatus::Completed], true)) {
+            return response()->json(['message' => 'Order cannot be processed']);
+        }
+
+        if ($order->status === OrderStatus::Processing) {
+            $this->completeOrder->handle($order);
+        }
 
         $stripePaymentMethodId = $paymentIntent->payment_method ?? null;
+        $stripeCustomerId = $paymentIntent->customer ?? null;
 
-        // Create payment plan if configured on the order
-        $order->loadMissing('paymentPlanTemplate');
+        $order->loadMissing(['paymentPlan', 'paymentPlanTemplate']);
 
         if ($order->paymentPlanTemplate !== null) {
-            $stripeCustomerId = $paymentIntent->customer ?? null;
+            if ($order->paymentPlan === null) {
+                $createPaymentPlan = new CreatePaymentPlan;
+                $createPaymentPlan->handle(
+                    order: $order,
+                    template: $order->paymentPlanTemplate,
+                    stripeCustomerId: is_string($stripeCustomerId) ? $stripeCustomerId : null,
+                    stripePaymentMethodId: is_string($stripePaymentMethodId) ? $stripePaymentMethodId : null,
+                );
 
-            $createPaymentPlan = new CreatePaymentPlan;
-            $createPaymentPlan->handle(
-                order: $order,
-                template: $order->paymentPlanTemplate,
-                stripeCustomerId: $stripeCustomerId,
-                stripePaymentMethodId: $stripePaymentMethodId,
-            );
+                Log::info("Payment plan created for order #{$order->id}.", [
+                    'template_id' => $order->payment_plan_template_id,
+                ]);
+            } else {
+                $paymentPlanUpdates = [];
 
-            Log::info("Payment plan created for order #{$order->id}.", [
-                'template_id' => $order->payment_plan_template_id,
-            ]);
+                if ($order->paymentPlan->stripe_customer_id === null && is_string($stripeCustomerId)) {
+                    $paymentPlanUpdates['stripe_customer_id'] = $stripeCustomerId;
+                }
+
+                if ($order->paymentPlan->stripe_payment_method_id === null && is_string($stripePaymentMethodId)) {
+                    $paymentPlanUpdates['stripe_payment_method_id'] = $stripePaymentMethodId;
+                }
+
+                if ($paymentPlanUpdates !== []) {
+                    $order->paymentPlan->update($paymentPlanUpdates);
+                }
+            }
         }
 
         Log::info("Order #{$order->id} completed via payment_intent.succeeded.", [

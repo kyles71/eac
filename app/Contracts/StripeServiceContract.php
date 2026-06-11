@@ -31,7 +31,10 @@ interface StripeServiceContract
     /**
      * Create a Customer Session for Payment Element saved-card features.
      */
-    public function createCustomerSession(string $customerId): \Stripe\CustomerSession;
+    public function createCustomerSession(
+        string $customerId,
+        bool $allowPaymentMethodSave = true,
+    ): \Stripe\CustomerSession;
 
     /**
      * Create a SetupIntent for saving a reusable off-session payment method.
@@ -40,12 +43,18 @@ interface StripeServiceContract
      */
     public function createSetupIntent(User $user, array $metadata = []): SetupIntent;
 
+    public function retrieveSetupIntent(string $setupIntentId): SetupIntent;
+
     /**
      * @return list<PaymentMethod>
      */
     public function listPaymentMethods(string $customerId, string $type = 'card'): array;
 
+    public function getDefaultPaymentMethodId(string $customerId): ?string;
+
     public function setDefaultPaymentMethod(string $customerId, string $paymentMethodId): Customer;
+
+    public function makePaymentMethodRedisplayable(string $paymentMethodId): PaymentMethod;
 
     public function detachPaymentMethod(string $paymentMethodId): PaymentMethod;
 

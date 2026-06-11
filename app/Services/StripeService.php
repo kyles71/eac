@@ -69,19 +69,27 @@ final readonly class StripeService implements StripeServiceContract
         return $this->client->paymentIntents->create($params);
     }
 
-    public function createCustomerSession(string $customerId): \Stripe\CustomerSession
-    {
+    public function createCustomerSession(
+        string $customerId,
+        bool $allowPaymentMethodSave = true,
+    ): \Stripe\CustomerSession {
+        $features = [
+            'payment_method_redisplay' => 'enabled',
+            'payment_method_allow_redisplay_filters' => ['always', 'limited', 'unspecified'],
+            'payment_method_save' => $allowPaymentMethodSave ? 'enabled' : 'disabled',
+            'payment_method_remove' => 'disabled',
+        ];
+
+        if ($allowPaymentMethodSave) {
+            $features['payment_method_save_usage'] = 'off_session';
+        }
+
         return $this->client->customerSessions->create([
             'customer' => $customerId,
             'components' => [
                 'payment_element' => [
                     'enabled' => true,
-                    'features' => [
-                        'payment_method_redisplay' => 'enabled',
-                        'payment_method_save' => 'enabled',
-                        'payment_method_save_usage' => 'off_session',
-                        'payment_method_remove' => 'enabled',
-                    ],
+                    'features' => $features,
                 ],
             ],
         ]);
@@ -102,6 +110,11 @@ final readonly class StripeService implements StripeServiceContract
         ]);
     }
 
+    public function retrieveSetupIntent(string $setupIntentId): SetupIntent
+    {
+        return $this->client->setupIntents->retrieve($setupIntentId);
+    }
+
     /**
      * @return list<PaymentMethod>
      */
@@ -113,12 +126,32 @@ final readonly class StripeService implements StripeServiceContract
         ])->data;
     }
 
+    public function getDefaultPaymentMethodId(string $customerId): ?string
+    {
+        $customer = $this->client->customers->retrieve($customerId);
+        $defaultPaymentMethod = data_get($customer, 'invoice_settings.default_payment_method');
+        $defaultPaymentMethodId = data_get($defaultPaymentMethod, 'id');
+
+        if (is_string($defaultPaymentMethod)) {
+            return $defaultPaymentMethod;
+        }
+
+        return is_string($defaultPaymentMethodId) ? $defaultPaymentMethodId : null;
+    }
+
     public function setDefaultPaymentMethod(string $customerId, string $paymentMethodId): Customer
     {
         return $this->client->customers->update($customerId, [
             'invoice_settings' => [
                 'default_payment_method' => $paymentMethodId,
             ],
+        ]);
+    }
+
+    public function makePaymentMethodRedisplayable(string $paymentMethodId): PaymentMethod
+    {
+        return $this->client->paymentMethods->update($paymentMethodId, [
+            'allow_redisplay' => 'always',
         ]);
     }
 

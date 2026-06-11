@@ -9,6 +9,7 @@ use App\Filament\User\Pages\Checkout;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\User;
@@ -30,7 +31,6 @@ beforeEach(function () {
     $stripeMock = Mockery::mock(StripeServiceContract::class);
     $stripeMock->shouldReceive('createPaymentIntent')->andReturn($paymentIntent);
     $stripeMock->shouldReceive('createCustomerSession')->andReturnNull();
-
     $this->app->instance(StripeServiceContract::class, $stripeMock);
 });
 
@@ -92,6 +92,9 @@ it('shows limited use credit in the checkout summary', function () {
 });
 
 it('charges only the first fee-inclusive installment for payment plan checkout', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
     $template = PaymentPlanTemplate::factory()->create([
         'number_of_installments' => 4,
     ]);
@@ -119,13 +122,75 @@ it('charges only the first fee-inclusive installment for payment plan checkout',
             && $metadata['order_id'] === (string) $order->id
             && $setupFutureUsage === true)
         ->andReturn($paymentIntent);
-    $stripeMock->shouldReceive('createCustomerSession')->andReturnNull();
+    $stripeMock->shouldReceive('createCustomerSession')
+        ->once()
+        ->with('cus_test_123', false)
+        ->andReturn(Stripe\CustomerSession::constructFrom([
+            'client_secret' => 'cuss_test_secret',
+        ]));
 
     $this->app->instance(StripeServiceContract::class, $stripeMock);
 
     livewire(Checkout::class)
         ->assertOk()
-        ->assertSet('clientSecret', 'pi_plan_123_secret');
+        ->assertSet('clientSecret', 'pi_plan_123_secret')
+        ->assertSee('the payment method used today will be securely saved in Stripe for future installments and purchases')
+        ->assertSee("?order_id={$order->id}';", false)
+        ->assertSee("allow_redisplay: 'always'", false);
+});
+
+it('makes attached payment plan methods redisplayable during checkout', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $existingOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    PaymentPlan::factory()->create([
+        'order_id' => $existingOrder->id,
+        'stripe_payment_method_id' => 'pm_plan',
+    ]);
+
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+    ]);
+
+    OrderItem::factory()->create(['order_id' => $order->id]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createPaymentIntent')
+        ->once()
+        ->andReturn(Stripe\PaymentIntent::constructFrom([
+            'id' => 'pi_test_123',
+            'client_secret' => 'pi_test_123_secret',
+        ]));
+    $stripeMock->shouldReceive('listPaymentMethods')
+        ->once()
+        ->with('cus_test_123')
+        ->andReturn([
+            Stripe\PaymentMethod::constructFrom([
+                'id' => 'pm_plan',
+                'allow_redisplay' => 'limited',
+            ]),
+            Stripe\PaymentMethod::constructFrom([
+                'id' => 'pm_other',
+                'allow_redisplay' => 'always',
+            ]),
+        ]);
+    $stripeMock->shouldReceive('makePaymentMethodRedisplayable')
+        ->once()
+        ->with('pm_plan');
+    $stripeMock->shouldReceive('createCustomerSession')
+        ->once()
+        ->with('cus_test_123', true)
+        ->andReturn(Stripe\CustomerSession::constructFrom([
+            'client_secret' => 'cuss_test_secret',
+        ]));
+
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Checkout::class)
+        ->assertOk()
+        ->assertSet('clientSecret', 'pi_test_123_secret');
 });
 
 it('marks the order as processing', function () {

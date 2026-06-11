@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentPlanStatus;
 use App\Filament\User\Pages\Billing;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
@@ -18,8 +19,11 @@ use App\Support\LegalDocuments\PaymentPlanTerms;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Livewire\Livewire;
 use Stripe\Customer;
 use Stripe\PaymentMethod;
+use Stripe\SetupIntent;
 
 use function Pest\Livewire\livewire;
 
@@ -174,7 +178,7 @@ function paymentPlanTermsVersionForBillingTest(): LegalDocumentVersion
     return $termsVersion;
 }
 
-it('sets a saved payment method as default and updates active auto charge plans', function () {
+it('sets a saved payment method as the account default without rewriting active plans', function () {
     auth()->user()->update(['stripe_id' => 'cus_test_123']);
     auth()->user()->refresh();
 
@@ -225,10 +229,10 @@ it('sets a saved payment method as default and updates active auto charge plans'
         ->call('makeDefaultPaymentMethod', 'pm_new')
         ->assertNotified('Default payment method updated');
 
-    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_new');
+    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_old');
 });
 
-it('does not remove payment methods used by active auto charge plans', function () {
+it('does not remove payment methods assigned to active payment plans', function () {
     auth()->user()->update(['stripe_id' => 'cus_test_123']);
     auth()->user()->refresh();
 
@@ -251,7 +255,7 @@ it('does not remove payment methods used by active auto charge plans', function 
 
     $stripeMock = Mockery::mock(StripeServiceContract::class);
     $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
-    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod]);
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod], [$paymentMethod], []);
     $stripeMock->shouldReceive('detachPaymentMethod')->never();
 
     $this->app->instance(StripeServiceContract::class, $stripeMock);
@@ -277,6 +281,74 @@ it('does not remove payment methods used by active auto charge plans', function 
         ->assertNotified('Payment method is in use');
 });
 
+it('does not remove the account default while a legacy active plan depends on it', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $paymentMethod = billingPaymentMethod();
+    $customer = Customer::constructFrom([
+        'id' => 'cus_test_123',
+        'invoice_settings' => [
+            'default_payment_method' => 'pm_new',
+        ],
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod]);
+    $stripeMock->shouldReceive('detachPaymentMethod')->never();
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => null,
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    livewire(Billing::class)
+        ->call('removePaymentMethod', 'pm_new')
+        ->assertNotified('Payment method is in use');
+});
+
+it('allows removing a payment method not assigned to an active payment plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $paymentMethod = billingPaymentMethod();
+    $customer = Customer::constructFrom([
+        'id' => 'cus_test_123',
+        'invoice_settings' => [
+            'default_payment_method' => 'pm_default',
+        ],
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod], [$paymentMethod], []);
+    $stripeMock->shouldReceive('detachPaymentMethod')->once()->with('pm_new');
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => 'pm_other',
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    livewire(Billing::class)
+        ->call('removePaymentMethod', 'pm_new')
+        ->assertNotified('Payment method removed')
+        ->assertDontSee('Visa ending in 4242 Exp 12/30');
+});
+
 it('shows a printable terms link for payment plans', function () {
     $termsVersion = paymentPlanTermsVersionForBillingTest();
 
@@ -292,6 +364,103 @@ it('shows a printable terms link for payment plans', function () {
     livewire(Billing::class)
         ->assertSee('All payment plans below have been agreed to under these Terms & Conditions')
         ->assertSee(route('legal-documents.versions.show', $termsVersion), false);
+});
+
+it('shows plan totals before status and payment method', function () {
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create(['order_id' => $order->id]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $component = livewire(Billing::class)
+        ->assertSeeInOrder(['Total', 'Paid', 'Remaining', 'Status', 'Payment Method']);
+
+    $method = new ReflectionMethod(Billing::class, 'getPaymentPlansSchema');
+    $method->setAccessible(true);
+    $schema = Schema::make($component->instance())
+        ->components($method->invoke($component->instance()));
+    $planSection = collect($schema->getComponents(withHidden: true))
+        ->first(fn ($component): bool => $component instanceof \Filament\Schemas\Components\Section
+            && $component->getHeading() === "Order #{$order->id}");
+    $planRows = $planSection->getChildSchema()->getComponents(withHidden: true);
+
+    expect($planRows[0]->getColumns('md'))->toBe(3)
+        ->and($planRows[0]->getColumns('lg'))->toBeNull()
+        ->and($planRows[1]->getColumns('md'))->toBe(2)
+        ->and($planRows[1]->getColumns('lg'))->toBeNull();
+});
+
+it('derives payment plan statuses with problem and terminal precedence', function () {
+    $activeOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $activePlan = PaymentPlan::factory()->create(['order_id' => $activeOrder->id]);
+    Installment::factory()->create([
+        'payment_plan_id' => $activePlan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $paidOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $paidPlan = PaymentPlan::factory()->create(['order_id' => $paidOrder->id]);
+    Installment::factory()->paid()->create(['payment_plan_id' => $paidPlan->id]);
+
+    $failedOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $failedPlan = PaymentPlan::factory()->create(['order_id' => $failedOrder->id]);
+    Installment::factory()->failed()->create(['payment_plan_id' => $failedPlan->id]);
+
+    $overdueOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $overduePlan = PaymentPlan::factory()->create(['order_id' => $overdueOrder->id]);
+    Installment::factory()->failed()->create(['payment_plan_id' => $overduePlan->id]);
+    Installment::factory()->overdue()->create(['payment_plan_id' => $overduePlan->id]);
+
+    $refundedOrder = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Refunded,
+    ]);
+    $refundedPlan = PaymentPlan::factory()->create(['order_id' => $refundedOrder->id]);
+    Installment::factory()->overdue()->create(['payment_plan_id' => $refundedPlan->id]);
+
+    expect(PaymentPlanStatus::forPaymentPlan($activePlan))->toBe(PaymentPlanStatus::Active)
+        ->and(PaymentPlanStatus::forPaymentPlan($paidPlan))->toBe(PaymentPlanStatus::Paid)
+        ->and(PaymentPlanStatus::forPaymentPlan($failedPlan))->toBe(PaymentPlanStatus::PaymentFailed)
+        ->and(PaymentPlanStatus::forPaymentPlan($overduePlan))->toBe(PaymentPlanStatus::Overdue)
+        ->and(PaymentPlanStatus::forPaymentPlan($refundedPlan))->toBe(PaymentPlanStatus::Refunded)
+        ->and(PaymentPlanStatus::PaymentFailed->getLabel())->toBe('Payment Failed')
+        ->and(PaymentPlanStatus::PaymentFailed->getColor())->toBe('danger')
+        ->and(PaymentPlanStatus::Refunded->getColor())->toBe('gray');
+});
+
+it('shows terms on each plan card only when multiple versions are represented', function () {
+    $firstVersion = paymentPlanTermsVersionForBillingTest();
+    $secondVersion = $firstVersion->document()->firstOrFail()->publishVersion(
+        title: 'Updated Payment Plan Terms & Conditions',
+        content: '<p>Updated test payment plan terms.</p>',
+    );
+
+    $plans = collect([$firstVersion, $secondVersion])->map(function (LegalDocumentVersion $version): PaymentPlan {
+        $order = Order::factory()->completed()->create([
+            'user_id' => auth()->id(),
+            'payment_plan_terms_version_id' => $version->id,
+        ]);
+
+        return PaymentPlan::factory()->create(['order_id' => $order->id]);
+    });
+
+    $component = livewire(Billing::class)
+        ->assertSee("View Terms & Conditions {$firstVersion->versionLabel()}")
+        ->assertSee("View Terms & Conditions {$secondVersion->versionLabel()}");
+
+    $method = new ReflectionMethod(Billing::class, 'getPaymentPlansSchema');
+    $method->setAccessible(true);
+    $schema = Schema::make($component->instance())
+        ->components($method->invoke($component->instance()));
+    $termsEntry = $schema->getComponent("plan_{$plans->first()->id}_terms", withHidden: true);
+
+    expect(mb_substr_count($component->html(), route('legal-documents.versions.show', $firstVersion)))->toBeGreaterThanOrEqual(2)
+        ->and(mb_substr_count($component->html(), route('legal-documents.versions.show', $secondVersion)))->toBeGreaterThanOrEqual(2)
+        ->and($termsEntry?->getColor($firstVersion->versionLabel()))->toBe('primary')
+        ->and($termsEntry?->getIcon($firstVersion->versionLabel()))->toBe(Heroicon::OutlinedDocumentText);
 });
 
 it('allows users to print terms they accepted', function () {
@@ -314,37 +483,67 @@ it('allows users to print terms they accepted', function () {
         ->assertSee('Payment Plan Terms & Conditions');
 });
 
-it('updates a payment plan saved payment method without method choice', function () {
+it('shows the assigned card and payment method actions on active plans', function () {
     auth()->user()->update(['stripe_id' => 'cus_test_123']);
     auth()->user()->refresh();
 
-    $paymentMethod = PaymentMethod::constructFrom([
-        'id' => 'pm_new',
-        'card' => [
-            'brand' => 'visa',
-            'last4' => '4242',
-            'exp_month' => 12,
-            'exp_year' => 2030,
-        ],
-    ]);
-
-    $customer = Customer::constructFrom([
-        'id' => 'cus_test_123',
-        'invoice_settings' => [
-            'default_payment_method' => 'pm_old',
-        ],
-    ]);
-
     $stripeMock = Mockery::mock(StripeServiceContract::class);
-    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
-    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod]);
-
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
     $this->app->instance(StripeServiceContract::class, $stripeMock);
 
     $order = Order::factory()->completed()->create([
         'user_id' => auth()->id(),
     ]);
 
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => 'pm_new',
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $component = livewire(Billing::class)
+        ->assertSee('Visa ending in 4242 Exp 12/30')
+        ->assertSee('Change Payment Method')
+        ->assertDontSee('Add New Payment Method')
+        ->assertDontSee('Manage Payment Method');
+
+    $component
+        ->mountAction(TestAction::make("change_plan_payment_method_{$plan->id}")->schemaComponent(true, 'content'))
+        ->assertActionDataSet(['stripe_payment_method_id' => 'pm_new']);
+
+    $method = new ReflectionMethod(Billing::class, 'changePaymentMethodAction');
+    $method->setAccessible(true);
+    $action = $method->invoke($component->instance(), $plan);
+    $action->livewire($component->instance());
+
+    $optionsMethod = new ReflectionMethod(Billing::class, 'paymentMethodOptions');
+    $optionsMethod->setAccessible(true);
+
+    $addNewPaymentMethodAction = $action->getExtraModalFooterActions()['addNewPaymentMethod'] ?? null;
+
+    expect($addNewPaymentMethodAction?->getLabel())->toBe('Add New Payment Method')
+        ->and($addNewPaymentMethodAction?->getModalSubmitAction())->toBeNull()
+        ->and($addNewPaymentMethodAction?->shouldCancelAllParentActions())->toBeTrue()
+        ->and($optionsMethod->invoke($component->instance()))->toBe([
+            'pm_new' => 'Visa ending in 4242 Exp 12/30',
+        ]);
+});
+
+it('changes the saved payment method for one active plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
     $plan = PaymentPlan::factory()->create([
         'order_id' => $order->id,
         'stripe_payment_method_id' => 'pm_old',
@@ -356,11 +555,366 @@ it('updates a payment plan saved payment method without method choice', function
     ]);
 
     livewire(Billing::class)
-        ->callAction(TestAction::make("update_plan_payment_method_{$plan->id}")->schemaComponent(true, 'content'), data: [
+        ->assertSee('Assigned payment method unavailable - choose another card')
+        ->callAction(TestAction::make("change_plan_payment_method_{$plan->id}")->schemaComponent(true, 'content'), data: [
             'stripe_payment_method_id' => 'pm_new',
         ])
         ->assertNotified('Payment method updated')
-        ->assertDontSee('Payment Plan Method');
+        ->assertSee('Visa ending in 4242 Exp 12/30')
+        ->assertDontSee('Assigned payment method unavailable - choose another card');
 
     expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_new');
 });
+
+it('rejects a forged payment method when changing an active plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => 'pm_old',
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    livewire(Billing::class)
+        ->set('paymentMethods', [[
+            'id' => 'pm_forged',
+            'brand' => 'Visa',
+            'last4' => '0000',
+            'expires' => '12/2030',
+            'is_default' => false,
+        ]])
+        ->callAction(TestAction::make("change_plan_payment_method_{$plan->id}")->schemaComponent(true, 'content'), data: [
+            'stripe_payment_method_id' => 'pm_forged',
+        ])
+        ->assertNotified('Could not update payment method');
+
+    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_old');
+});
+
+it('opens a new modal with a contextual setup intent for an active payment plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create(['order_id' => $order->id]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('createSetupIntent')
+        ->once()
+        ->withArgs(fn (User $user, array $metadata): bool => $user->is(auth()->user())
+            && $metadata === [
+                'user_id' => (string) auth()->id(),
+                'payment_plan_id' => (string) $plan->id,
+            ])
+        ->andReturn(SetupIntent::constructFrom([
+            'id' => 'seti_pending',
+            'client_secret' => 'seti_pending_secret',
+        ]));
+    $stripeMock->shouldReceive('retrieveSetupIntent')
+        ->once()
+        ->with('seti_pending')
+        ->andReturn(billingSetupIntent([
+            'id' => 'seti_pending',
+            'metadata' => [
+                'user_id' => (string) auth()->id(),
+                'payment_plan_id' => (string) $plan->id,
+            ],
+        ]));
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    $changePaymentMethodAction = TestAction::make("change_plan_payment_method_{$plan->id}")
+        ->schemaComponent(true, 'content');
+
+    livewire(Billing::class)
+        ->mountAction([
+            $changePaymentMethodAction,
+            'addNewPaymentMethod',
+        ])
+        ->assertActionMounted([
+            $changePaymentMethodAction,
+            'addNewPaymentMethod',
+        ])
+        ->assertSet('paymentMethodTargetPlanId', $plan->id)
+        ->assertSet('setupIntentClientSecret', 'seti_pending_secret')
+        ->assertMountedActionModalSee('This new payment method will be assigned to this payment plan after it is saved.')
+        ->assertMountedActionModalSee('Save Payment Method')
+        ->call('paymentMethodSetupCompleted', 'seti_pending', 'pm_new', false)
+        ->assertActionNotMounted()
+        ->assertNotified('Payment method assigned');
+
+    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_new');
+});
+
+it('shows the general add payment method form beside saved methods after starting setup', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('createSetupIntent')
+        ->once()
+        ->withArgs(fn (User $user, array $metadata): bool => $user->is(auth()->user())
+            && $metadata === ['user_id' => (string) auth()->id()])
+        ->andReturn(SetupIntent::constructFrom([
+            'id' => 'seti_pending',
+            'client_secret' => 'seti_pending_secret',
+        ]));
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->assertSee('Visa ending in 4242 Exp 12/30')
+        ->assertDontSee('Make this my account default payment method')
+        ->call('startAddingPaymentMethod')
+        ->assertSet('paymentMethodTargetPlanId', null)
+        ->assertSee('Make this my account default payment method');
+});
+
+it('saves a completed setup intent without changing the default', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $paymentMethod = billingPaymentMethod();
+    $customer = billingStripeCustomer();
+    $setupIntent = billingSetupIntent();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod]);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->with('seti_test_123')->andReturn($setupIntent);
+    $stripeMock->shouldReceive('setDefaultPaymentMethod')->never();
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->call('paymentMethodSetupCompleted', 'seti_test_123', 'pm_new', false)
+        ->assertNotified('Payment method saved');
+});
+
+it('can make a newly saved payment method the account default', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $paymentMethod = billingPaymentMethod();
+    $customer = billingStripeCustomer();
+    $setupIntent = billingSetupIntent();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn($customer);
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([$paymentMethod]);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->with('seti_test_123')->andReturn($setupIntent);
+    $stripeMock->shouldReceive('setDefaultPaymentMethod')->once()->with('cus_test_123', 'pm_new');
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->call('paymentMethodSetupCompleted', 'seti_test_123', 'pm_new', true)
+        ->assertNotified('Payment method saved and made default');
+});
+
+it('assigns a newly saved payment method to its target payment plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => 'pm_old',
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->andReturn(billingSetupIntent([
+        'metadata' => [
+            'user_id' => (string) auth()->id(),
+            'payment_plan_id' => (string) $plan->id,
+        ],
+    ]));
+    $stripeMock->shouldReceive('setDefaultPaymentMethod')->never();
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->assertSee('Assigned payment method unavailable - choose another card')
+        ->call('paymentMethodSetupCompleted', 'seti_test_123', 'pm_new', false)
+        ->assertNotified('Payment method assigned')
+        ->assertSee('Visa ending in 4242 Exp 12/30')
+        ->assertDontSee('Assigned payment method unavailable - choose another card');
+
+    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_new');
+});
+
+it('rejects a setup intent targeting another users payment plan', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $otherOrder = Order::factory()->completed()->create(['user_id' => User::factory()]);
+    $otherPlan = PaymentPlan::factory()->create([
+        'order_id' => $otherOrder->id,
+        'stripe_payment_method_id' => 'pm_old',
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $otherPlan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->andReturn(billingSetupIntent([
+        'metadata' => [
+            'user_id' => (string) auth()->id(),
+            'payment_plan_id' => (string) $otherPlan->id,
+        ],
+    ]));
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->call('paymentMethodSetupCompleted', 'seti_test_123', 'pm_new', false)
+        ->assertNotified('Could not save payment method');
+
+    expect($otherPlan->refresh()->stripe_payment_method_id)->toBe('pm_old');
+});
+
+it('rejects a setup intent that belongs to another Stripe customer', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->andReturn(billingSetupIntent([
+        'customer' => 'cus_other',
+    ]));
+    $stripeMock->shouldReceive('setDefaultPaymentMethod')->never();
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->call('paymentMethodSetupCompleted', 'seti_test_123', 'pm_new', true)
+        ->assertNotified('Could not save payment method');
+});
+
+it('rejects a forged payment method id for a valid setup intent', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->andReturn(billingSetupIntent());
+    $stripeMock->shouldReceive('setDefaultPaymentMethod')->never();
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Billing::class)
+        ->call('paymentMethodSetupCompleted', 'seti_test_123', 'pm_forged', true)
+        ->assertNotified('Could not save payment method');
+});
+
+it('preserves the make default choice after a setup intent redirect', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->with('seti_test_123')->andReturn(billingSetupIntent());
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $stripeMock->shouldReceive('setDefaultPaymentMethod')->once()->with('cus_test_123', 'pm_new');
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    Livewire::withQueryParams([
+        'setup_intent' => 'seti_test_123',
+        'make_default' => '1',
+    ])
+        ->test(Billing::class)
+        ->assertRedirect(Billing::getUrl(['tab' => 'payment-methods']));
+});
+
+it('assigns a redirected setup intent and returns to payment plans', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'stripe_payment_method_id' => 'pm_old',
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('retrieveSetupIntent')->once()->with('seti_test_123')->andReturn(billingSetupIntent([
+        'metadata' => [
+            'user_id' => (string) auth()->id(),
+            'payment_plan_id' => (string) $plan->id,
+        ],
+    ]));
+    $stripeMock->shouldReceive('createOrGetCustomer')->andReturn(billingStripeCustomer());
+    $stripeMock->shouldReceive('listPaymentMethods')->andReturn([billingPaymentMethod()]);
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    Livewire::withQueryParams(['setup_intent' => 'seti_test_123'])
+        ->test(Billing::class)
+        ->assertRedirect(Billing::getUrl(['tab' => 'payment-plans']));
+
+    expect($plan->refresh()->stripe_payment_method_id)->toBe('pm_new');
+});
+
+function billingPaymentMethod(): PaymentMethod
+{
+    return PaymentMethod::constructFrom([
+        'id' => 'pm_new',
+        'card' => [
+            'brand' => 'visa',
+            'last4' => '4242',
+            'exp_month' => 12,
+            'exp_year' => 2030,
+        ],
+    ]);
+}
+
+function billingStripeCustomer(): Customer
+{
+    return Customer::constructFrom([
+        'id' => 'cus_test_123',
+        'invoice_settings' => [
+            'default_payment_method' => 'pm_old',
+        ],
+    ]);
+}
+
+/**
+ * @param  array<string, mixed>  $overrides
+ */
+function billingSetupIntent(array $overrides = []): SetupIntent
+{
+    return SetupIntent::constructFrom([
+        'id' => 'seti_test_123',
+        'status' => 'succeeded',
+        'customer' => 'cus_test_123',
+        'payment_method' => 'pm_new',
+        'metadata' => [
+            'user_id' => (string) auth()->id(),
+        ],
+        ...$overrides,
+    ]);
+}

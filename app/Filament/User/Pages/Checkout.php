@@ -8,6 +8,7 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\Order;
+use App\Models\PaymentPlan;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -173,9 +174,38 @@ final class Checkout extends Page
         /** @var StripeServiceContract $stripeService */
         $stripeService = app(StripeServiceContract::class);
 
-        $customerSession = $stripeService->createCustomerSession($user->stripe_id);
+        $this->makePlanPaymentMethodsRedisplayable($stripeService, $user->stripe_id);
+
+        $customerSession = $stripeService->createCustomerSession(
+            customerId: $user->stripe_id,
+            allowPaymentMethodSave: $this->order?->paymentPlanTemplate === null,
+        );
 
         $this->customerSessionClientSecret = $customerSession->client_secret;
+    }
+
+    private function makePlanPaymentMethodsRedisplayable(StripeServiceContract $stripeService, string $customerId): void
+    {
+        $assignedPaymentMethodIds = PaymentPlan::query()
+            ->whereHas('order', fn ($query) => $query->where('user_id', auth()->id()))
+            ->whereNotNull('stripe_payment_method_id')
+            ->pluck('stripe_payment_method_id')
+            ->unique()
+            ->all();
+
+        if ($assignedPaymentMethodIds === []) {
+            return;
+        }
+
+        $paymentMethodIdsToUpdate = collect($stripeService->listPaymentMethods($customerId))
+            ->filter(fn (mixed $paymentMethod): bool => data_get($paymentMethod, 'allow_redisplay') !== 'always')
+            ->pluck('id')
+            ->filter(fn (mixed $paymentMethodId): bool => is_string($paymentMethodId))
+            ->all();
+
+        foreach (array_intersect($assignedPaymentMethodIds, $paymentMethodIdsToUpdate) as $paymentMethodId) {
+            $stripeService->makePaymentMethodRedisplayable($paymentMethodId);
+        }
     }
 
     /**
@@ -284,6 +314,9 @@ final class Checkout extends Page
     private function getPaymentSchema(): array
     {
         return [
+            Text::make('Because this order uses a payment plan, the payment method used today will be securely saved in Stripe for future installments and purchases.')
+                ->color('neutral')
+                ->visible($this->order->paymentPlanTemplate !== null),
             View::make('filament.user.pages.checkout-payment'),
         ];
     }

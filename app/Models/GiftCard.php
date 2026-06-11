@@ -26,6 +26,7 @@ final class GiftCard extends Model
         'redeemed_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<GiftCardType, $this> */
     public function giftCardType(): BelongsTo
     {
         return $this->belongsTo(GiftCardType::class);

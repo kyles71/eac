@@ -63,7 +63,6 @@ it('handles payment_intent.succeeded webhook for order completion', function () 
     $mockStripeService->shouldReceive('constructWebhookEvent')
         ->once()
         ->andReturn($event);
-
     $this->app->instance(StripeServiceContract::class, $mockStripeService);
 
     $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
@@ -109,7 +108,6 @@ it('handles unrecognized event types gracefully', function () {
     $mockStripeService->shouldReceive('constructWebhookEvent')
         ->once()
         ->andReturn($event);
-
     $this->app->instance(StripeServiceContract::class, $mockStripeService);
 
     $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
@@ -144,7 +142,6 @@ it('handles payment intent failed webhook', function () {
     $mockStripeService->shouldReceive('constructWebhookEvent')
         ->once()
         ->andReturn($event);
-
     $this->app->instance(StripeServiceContract::class, $mockStripeService);
 
     $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
@@ -184,6 +181,40 @@ it('handles payment_intent.succeeded without order or installment metadata grace
 
     expect($response->getStatusCode())->toBe(200);
     expect($response->getData(true))->toBe(['message' => 'No order or installment metadata, skipping']);
+});
+
+it('does not process an order from a different payment intent with matching metadata', function () {
+    $order = Order::factory()->create([
+        'status' => OrderStatus::Processing,
+        'stripe_payment_intent_id' => 'pi_expected',
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'payment_intent.succeeded';
+    $event->data = (object) [
+        'object' => (object) [
+            'id' => 'pi_wrong_account_or_environment',
+            'payment_method' => 'pm_wrong',
+            'customer' => 'cus_wrong',
+            'metadata' => (object) [
+                'order_id' => (string) $order->id,
+            ],
+        ],
+    ];
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $mockStripeService->shouldReceive('constructWebhookEvent')->once()->andReturn($event);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    $response = app(StripeWebhookController::class)($request);
+
+    expect($response->getData(true))->toBe(['message' => 'Payment intent does not match order'])
+        ->and($order->refresh()->status)->toBe(OrderStatus::Processing)
+        ->and($order->paymentPlan()->exists())->toBeFalse();
 });
 
 it('creates a payment plan when order has payment plan template', function () {
@@ -228,7 +259,6 @@ it('creates a payment plan when order has payment plan template', function () {
     $mockStripeService->shouldReceive('constructWebhookEvent')
         ->once()
         ->andReturn($event);
-
     $this->app->instance(StripeServiceContract::class, $mockStripeService);
 
     $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
@@ -246,10 +276,107 @@ it('creates a payment plan when order has payment plan template', function () {
     expect($paymentPlan)->not->toBeNull()
         ->and($paymentPlan->total_amount)->toBe(9000)
         ->and($paymentPlan->number_of_installments)->toBe(3)
-        ->and($paymentPlan->stripe_customer_id)->toBe('cus_test_123');
+        ->and($paymentPlan->stripe_customer_id)->toBe('cus_test_123')
+        ->and($paymentPlan->stripe_payment_method_id)->toBe('pm_test_plan');
 
     // Verify installments were created
     expect($paymentPlan->installments)->toHaveCount(3);
+});
+
+it('idempotently creates a missing plan for an already completed order', function () {
+    $user = User::factory()->create(['stripe_id' => 'cus_test_123']);
+    $template = PaymentPlanTemplate::factory()->create();
+    $order = Order::factory()->completed()->create([
+        'user_id' => $user->id,
+        'payment_plan_template_id' => $template->id,
+        'stripe_payment_intent_id' => 'pi_test_plan_retry',
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'payment_intent.succeeded';
+    $event->data = (object) [
+        'object' => (object) [
+            'id' => 'pi_test_plan_retry',
+            'payment_method' => 'pm_test_plan',
+            'customer' => 'cus_test_123',
+            'metadata' => (object) [
+                'order_id' => (string) $order->id,
+            ],
+        ],
+    ];
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $mockStripeService->shouldReceive('constructWebhookEvent')->once()->andReturn($event);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    $response = app(StripeWebhookController::class)($request);
+
+    expect($response->getStatusCode())->toBe(200)
+        ->and($order->paymentPlan()->exists())->toBeTrue()
+        ->and($order->paymentPlan()->first()->installments)->toHaveCount($template->number_of_installments)
+        ->and($order->paymentPlan()->first()->stripe_payment_method_id)->toBe('pm_test_plan');
+});
+
+it('idempotently repairs missing stripe ids without overwriting a selected plan card', function () {
+    $user = User::factory()->create(['stripe_id' => 'cus_test_123']);
+    $template = PaymentPlanTemplate::factory()->create();
+
+    $missingMethodOrder = Order::factory()->completed()->create([
+        'user_id' => $user->id,
+        'payment_plan_template_id' => $template->id,
+        'stripe_payment_intent_id' => 'pi_test_plan_retry_missing',
+    ]);
+    $missingMethodPlan = PaymentPlan::factory()->create([
+        'order_id' => $missingMethodOrder->id,
+        'stripe_customer_id' => null,
+        'stripe_payment_method_id' => null,
+    ]);
+
+    $selectedMethodOrder = Order::factory()->completed()->create([
+        'user_id' => $user->id,
+        'payment_plan_template_id' => $template->id,
+        'stripe_payment_intent_id' => 'pi_test_plan_retry_selected',
+    ]);
+    $selectedMethodPlan = PaymentPlan::factory()->create([
+        'order_id' => $selectedMethodOrder->id,
+        'stripe_payment_method_id' => 'pm_user_selected',
+    ]);
+
+    foreach ([
+        [$missingMethodOrder, 'pi_test_plan_retry_missing'],
+        [$selectedMethodOrder, 'pi_test_plan_retry_selected'],
+    ] as [$order, $paymentIntentId]) {
+        $event = new Stripe\Event;
+        $event->type = 'payment_intent.succeeded';
+        $event->data = (object) [
+            'object' => (object) [
+                'id' => $paymentIntentId,
+                'payment_method' => 'pm_checkout',
+                'customer' => 'cus_test_123',
+                'metadata' => (object) [
+                    'order_id' => (string) $order->id,
+                ],
+            ],
+        ];
+
+        $mockStripeService = Mockery::mock(StripeServiceContract::class);
+        $mockStripeService->shouldReceive('constructWebhookEvent')->once()->andReturn($event);
+        $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+        $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+            'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+        ]);
+
+        expect(app(StripeWebhookController::class)($request)->getStatusCode())->toBe(200);
+    }
+
+    expect($missingMethodPlan->refresh()->stripe_customer_id)->toBe('cus_test_123')
+        ->and($missingMethodPlan->stripe_payment_method_id)->toBe('pm_checkout')
+        ->and($selectedMethodPlan->refresh()->stripe_payment_method_id)->toBe('pm_user_selected');
 });
 
 it('handles payment_intent.succeeded webhook for installment', function () {

@@ -36,6 +36,7 @@ final class PaymentPlan extends Model
         return $this->belongsTo(PaymentPlanTemplate::class, 'payment_plan_template_id');
     }
 
+    /** @return HasMany<Installment, $this> */
     public function installments(): HasMany
     {
         return $this->hasMany(Installment::class);
