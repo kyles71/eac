@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
+use App\Filament\Shared\Schemas\CompetitionMembershipHistory;
 use App\Models\Calendar;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -55,6 +56,7 @@ final class UserInfolist
                             ->visibility('private'),
                         // ->conversion('thumb'),
                     ]),
+                CompetitionMembershipHistory::make(),
                 Section::make('Security & Record')
                     ->columns(2)
                     ->collapsed()

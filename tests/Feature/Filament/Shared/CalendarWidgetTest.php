@@ -8,6 +8,8 @@ use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Models\Calendar;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
@@ -22,6 +24,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Illuminate\Support\Carbon;
 use Saade\FilamentFullCalendar\Actions\CreateAction as CalendarCreateAction;
 use Spatie\Permission\Models\Role;
@@ -210,7 +213,7 @@ it('serializes event times in the display timezone', function (): void {
 
 it('uses the routed calendar color for visible course events on my calendar', function (): void {
     $user = User::factory()->create();
-    $user->attachTag(Calendar::AUDIENCE_TAG_COMP, Calendar::AUDIENCE_TAG_TYPE);
+    assignStudentToCurrentCompetition($user);
     $course = Course::factory()->create(['name' => 'Competition Line']);
     $course->syncTagsWithType([Calendar::SLUG_COMP], Course::CALENDAR_TAG_TYPE);
     $storedCalendar = calendarBySlug(Calendar::SLUG_EAC);
@@ -318,7 +321,6 @@ it('shows owner calendars through default user audience tags', function (string 
 })->with([
     Calendar::SLUG_OWNERS,
     Calendar::SLUG_STAFF,
-    Calendar::SLUG_COMP,
 ]);
 
 it('grants admin panel access through admin permissions rather than calendar visibility alone', function (): void {
@@ -414,7 +416,7 @@ it('routes course events to calendars through course calendar tags', function ()
         'end_time' => Carbon::parse('2027-01-15 19:00:00'),
     ]);
 
-    $user->attachTag(Calendar::AUDIENCE_TAG_COMP, Calendar::AUDIENCE_TAG_TYPE);
+    assignStudentToCurrentCompetition($user);
 
     $this->actingAs($user);
 
@@ -442,15 +444,13 @@ it('can reapply the calendar access migration after rollback without duplicating
         ->and(calendarBySlug(Calendar::SLUG_EAC)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
         ->and(calendarBySlug(Calendar::SLUG_OWNERS)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_OWNERS)
         ->and(calendarBySlug(Calendar::SLUG_STAFF)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_STAFF)
-        ->and(calendarBySlug(Calendar::SLUG_COMP)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_COMP);
+        ->and(calendarBySlug(Calendar::SLUG_COMP)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe([]);
 });
 
-it('shows comp calendar when an owned student has a matching audience tag', function (): void {
+it('shows comp calendar when an owned student is on a current competition team', function (): void {
     $user = User::factory()->create();
-    $student = Student::factory()->create(['user_id' => $user->id]);
+    assignStudentToCurrentCompetition($user);
     $calendar = calendarBySlug(Calendar::SLUG_COMP);
-    $calendar->attachTag('Comp 25', Calendar::AUDIENCE_TAG_TYPE);
-    $student->attachTag('Comp 25', Calendar::AUDIENCE_TAG_TYPE);
     $event = standaloneEvent('Comp Rehearsal', $calendar);
 
     $this->actingAs($user);
@@ -460,10 +460,10 @@ it('shows comp calendar when an owned student has a matching audience tag', func
     expect($events->pluck('id')->all())->toContain($event->id);
 });
 
-it('shows comp calendar when the user has a matching audience tag', function (): void {
-    $user = User::factory()->create();
+it('shows comp calendar when staff is on a current competition team', function (): void {
+    $user = User::factory()->isTeacher()->create();
     $calendar = calendarBySlug(Calendar::SLUG_COMP);
-    $user->attachTag(Calendar::AUDIENCE_TAG_COMP, Calendar::AUDIENCE_TAG_TYPE);
+    currentCompetitionTeam()->staff()->attach($user);
     $event = standaloneEvent('Comp Staff Rehearsal', $calendar);
 
     $this->actingAs($user);
@@ -471,6 +471,31 @@ it('shows comp calendar when the user has a matching audience tag', function ():
     $events = fetchCalendarEvents($calendar);
 
     expect($events->pluck('id')->all())->toContain($event->id);
+});
+
+it('uses current competition accounts in the comp calendar exclusion picker', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $parent = User::factory()->create();
+    $student = Student::factory()->for($parent)->create();
+    $staff = User::factory()->isTeacher()->create();
+    $unrelatedTeacher = User::factory()->isTeacher()->create();
+    $team = currentCompetitionTeam();
+    $student->competitionTeams()->attach($team);
+    $staff->competitionTeams()->attach($team);
+
+    livewire(CalendarWidget::class)
+        ->mountAction(CalendarCreateAction::class)
+        ->fillForm(['calendar_id' => calendarBySlug(Calendar::SLUG_COMP)->id])
+        ->assertSchemaComponentExists(
+            'excluded_user_ids',
+            checkComponentUsing: function (Select $select) use ($parent, $staff, $unrelatedTeacher): bool {
+                $options = $select->getOptions();
+
+                return isset($options[$parent->id], $options[$staff->id])
+                    && ! isset($options[$unrelatedTeacher->id]);
+            },
+        );
 });
 
 it('does not show internal calendars when only an owned student has the matching audience tag', function (string $slug, string $tag): void {
@@ -580,7 +605,6 @@ it('uses seeded audience tags for restricted system calendar visibility', functi
 })->with([
     [Calendar::SLUG_OWNERS, Calendar::AUDIENCE_TAG_OWNERS],
     [Calendar::SLUG_STAFF, Calendar::AUDIENCE_TAG_STAFF],
-    [Calendar::SLUG_COMP, Calendar::AUDIENCE_TAG_COMP],
 ]);
 
 it('prevents required system calendars from being deleted', function (): void {
@@ -608,7 +632,7 @@ it('does not show the internal slug on the admin calendar table', function (): v
         ->assertTableColumnDoesNotExist('slug');
 });
 
-it('does not allow audience tags to be changed on system calendars', function (string $slug, string $expectedAudienceTag): void {
+it('does not allow audience tags to be changed on system calendars', function (string $slug, array $expectedAudienceTags): void {
     Filament::setCurrentPanel('admin');
 
     $calendar = calendarBySlug($slug);
@@ -623,13 +647,13 @@ it('does not allow audience tags to be changed on system calendars', function (s
         ->assertNotified();
 
     expect($calendar->refresh()->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())
-        ->toBe([$expectedAudienceTag]);
+        ->toBe($expectedAudienceTags);
 })->with([
-    [Calendar::SLUG_MY, Calendar::AUDIENCE_TAG_PUBLIC],
-    [Calendar::SLUG_EAC, Calendar::AUDIENCE_TAG_PUBLIC],
-    [Calendar::SLUG_OWNERS, Calendar::AUDIENCE_TAG_OWNERS],
-    [Calendar::SLUG_STAFF, Calendar::AUDIENCE_TAG_STAFF],
-    [Calendar::SLUG_COMP, Calendar::AUDIENCE_TAG_COMP],
+    [Calendar::SLUG_MY, [Calendar::AUDIENCE_TAG_PUBLIC]],
+    [Calendar::SLUG_EAC, [Calendar::AUDIENCE_TAG_PUBLIC]],
+    [Calendar::SLUG_OWNERS, [Calendar::AUDIENCE_TAG_OWNERS]],
+    [Calendar::SLUG_STAFF, [Calendar::AUDIENCE_TAG_STAFF]],
+    [Calendar::SLUG_COMP, []],
 ]);
 
 it('hides excluded events from otherwise eligible users', function (): void {
@@ -943,5 +967,21 @@ function seedSystemCalendarAudienceTags(): void
     calendarBySlug(Calendar::SLUG_EAC)->attachTag(Calendar::AUDIENCE_TAG_PUBLIC, Calendar::AUDIENCE_TAG_TYPE);
     calendarBySlug(Calendar::SLUG_OWNERS)->attachTag(Calendar::AUDIENCE_TAG_OWNERS, Calendar::AUDIENCE_TAG_TYPE);
     calendarBySlug(Calendar::SLUG_STAFF)->attachTag(Calendar::AUDIENCE_TAG_STAFF, Calendar::AUDIENCE_TAG_TYPE);
-    calendarBySlug(Calendar::SLUG_COMP)->attachTag(Calendar::AUDIENCE_TAG_COMP, Calendar::AUDIENCE_TAG_TYPE);
+}
+
+function currentCompetitionTeam(): CompetitionTeam
+{
+    return CompetitionTeam::query()
+        ->current()
+        ->first() ?? CompetitionTeam::factory()
+        ->for(CompetitionSeason::factory()->current(), 'season')
+        ->create();
+}
+
+function assignStudentToCurrentCompetition(User $user): Student
+{
+    $student = Student::factory()->for($user)->create();
+    $student->competitionTeams()->attach(currentCompetitionTeam());
+
+    return $student;
 }

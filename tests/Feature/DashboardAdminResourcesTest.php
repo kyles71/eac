@@ -60,6 +60,43 @@ it('manages dashboard messages from settings', function (): void {
         ->assertTableFilterExists('status');
 });
 
+it('uses enum-backed dashboard audience presentation and base-10 priorities', function (): void {
+    $expectedOptions = [
+        DashboardAudience::Eac->value => 'EAC Audience',
+        DashboardAudience::Semester->value => 'Semester Audience',
+        DashboardAudience::CompTeam->value => 'Comp Team Audience',
+        DashboardAudience::Teacher->value => 'Teacher Audience',
+        DashboardAudience::Owner->value => 'Owner Audience',
+    ];
+
+    expect(DashboardAudience::cases())
+        ->toBe([
+            DashboardAudience::Eac,
+            DashboardAudience::Semester,
+            DashboardAudience::CompTeam,
+            DashboardAudience::Teacher,
+            DashboardAudience::Owner,
+        ])
+        ->and(DashboardAudience::CompTeam->getLabel())->toBe('Comp Team Audience')
+        ->and(DashboardAudience::CompTeam->getColor())->toBe('primary')
+        ->and(array_map(
+            fn (DashboardAudience $audience): int => $audience->priority(),
+            DashboardAudience::cases(),
+        ))->toBe([50, 40, 30, 20, 10]);
+
+    livewire(CreateDashboardMessage::class)
+        ->assertSchemaComponentExists(
+            'audience',
+            checkComponentUsing: fn (Select $select): bool => $select->getOptions() === $expectedOptions,
+        );
+
+    livewire(CreateDashboardQuickLink::class)
+        ->assertSchemaComponentExists(
+            'audience',
+            checkComponentUsing: fn (Select $select): bool => $select->getOptions() === $expectedOptions,
+        );
+});
+
 it('manages internal and external dashboard quick links', function (): void {
     livewire(CreateDashboardQuickLink::class)
         ->fillForm([

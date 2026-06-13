@@ -11,12 +11,19 @@ enum DashboardAudience: string implements HasColor, HasLabel
 {
     case Eac = 'EAC';
     case Semester = 'Semester';
+    case CompTeam = 'Comp Team';
     case Teacher = 'Teacher';
     case Owner = 'Owner';
 
     public function getLabel(): string
     {
-        return "{$this->value} Audience";
+        return match ($this) {
+            self::Eac => 'EAC Audience',
+            self::Semester => 'Semester Audience',
+            self::CompTeam => 'Comp Team Audience',
+            self::Teacher => 'Teacher Audience',
+            self::Owner => 'Owner Audience',
+        };
     }
 
     public function getColor(): string
@@ -24,6 +31,7 @@ enum DashboardAudience: string implements HasColor, HasLabel
         return match ($this) {
             self::Eac => 'gray',
             self::Semester => 'info',
+            self::CompTeam => 'primary',
             self::Teacher => 'warning',
             self::Owner => 'success',
         };
@@ -32,10 +40,11 @@ enum DashboardAudience: string implements HasColor, HasLabel
     public function priority(): int
     {
         return match ($this) {
-            self::Owner => 1,
-            self::Teacher => 2,
-            self::Semester => 3,
-            self::Eac => 4,
+            self::Owner => 10,
+            self::Teacher => 20,
+            self::CompTeam => 30,
+            self::Semester => 40,
+            self::Eac => 50,
         };
     }
 }

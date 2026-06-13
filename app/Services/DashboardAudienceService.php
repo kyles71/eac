@@ -20,6 +20,7 @@ final class DashboardAudienceService
         $audiences = [DashboardAudience::Eac];
         $isOwner = $user->hasAnyRole(['owner', 'super_admin']);
         $isTeacher = $isOwner || $user->hasRole('teacher');
+        $isCompTeam = app(CompetitionRosterService::class)->isCurrentMember($user);
 
         $hasCurrentOrFutureEnrollment = $user->enrollments()
             ->with('course.events')
@@ -29,6 +30,10 @@ final class DashboardAudienceService
 
         if ($isTeacher || $hasCurrentOrFutureEnrollment) {
             $audiences[] = DashboardAudience::Semester;
+        }
+
+        if ($isCompTeam) {
+            $audiences[] = DashboardAudience::CompTeam;
         }
 
         if ($isTeacher) {
@@ -54,8 +59,20 @@ final class DashboardAudienceService
 
     public function applyAudienceOrder(Builder $query): Builder
     {
-        return $query->orderByRaw(
-            "CASE audience WHEN 'Owner' THEN 1 WHEN 'Teacher' THEN 2 WHEN 'Semester' THEN 3 WHEN 'EAC' THEN 4 ELSE 5 END"
-        );
+        $sql = 'CASE audience';
+        $bindings = [];
+        $fallbackPriority = 0;
+
+        foreach (DashboardAudience::cases() as $audience) {
+            $sql .= ' WHEN ? THEN ?';
+            $bindings[] = $audience->value;
+            $bindings[] = $audience->priority();
+            $fallbackPriority = max($fallbackPriority, $audience->priority());
+        }
+
+        $sql .= ' ELSE ? END';
+        $bindings[] = $fallbackPriority + 10;
+
+        return $query->orderByRaw($sql, $bindings);
     }
 }

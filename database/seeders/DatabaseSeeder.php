@@ -8,6 +8,8 @@ use App\Enums\CreditTransactionType;
 use App\Enums\FormTypes;
 use App\Models\Calendar;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\DiscountCode;
@@ -29,6 +31,7 @@ use App\Models\RestrictedCredit;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Spatie\Tags\Tag;
 
@@ -82,7 +85,6 @@ final class DatabaseSeeder extends Seeder
             Calendar::SLUG_EAC => Calendar::AUDIENCE_TAG_PUBLIC,
             Calendar::SLUG_OWNERS => Calendar::AUDIENCE_TAG_OWNERS,
             Calendar::SLUG_STAFF => Calendar::AUDIENCE_TAG_STAFF,
-            Calendar::SLUG_COMP => Calendar::AUDIENCE_TAG_COMP,
         ];
     }
 
@@ -91,12 +93,10 @@ final class DatabaseSeeder extends Seeder
         $this->grantCalendarAudienceTagsToRole('super_admin', [
             Calendar::AUDIENCE_TAG_OWNERS,
             Calendar::AUDIENCE_TAG_STAFF,
-            Calendar::AUDIENCE_TAG_COMP,
         ]);
         $this->grantCalendarAudienceTagsToRole('owner', [
             Calendar::AUDIENCE_TAG_OWNERS,
             Calendar::AUDIENCE_TAG_STAFF,
-            Calendar::AUDIENCE_TAG_COMP,
         ]);
         $this->grantCalendarAudienceTagsToRole('teacher', [
             Calendar::AUDIENCE_TAG_STAFF,
@@ -128,7 +128,24 @@ final class DatabaseSeeder extends Seeder
             ->assignRole('super_admin');
 
         $users = User::factory(15)->create();
-        $allUsers = $users->push($adminUser);
+        $competitionStaff = User::factory(3)->isTeacher()->sequence(
+            [
+                'first_name' => 'Jordan',
+                'last_name' => 'Competition Director',
+                'email' => 'competition.director@example.com',
+            ],
+            [
+                'first_name' => 'Morgan',
+                'last_name' => 'Mini Coach',
+                'email' => 'mini.coach@example.com',
+            ],
+            [
+                'first_name' => 'Riley',
+                'last_name' => 'Senior Coach',
+                'email' => 'senior.coach@example.com',
+            ],
+        )->create();
+        $allUsers = $users->merge($competitionStaff)->push($adminUser);
 
         $calendars = Calendar::all();
 
@@ -164,6 +181,8 @@ final class DatabaseSeeder extends Seeder
         $students = Student::factory(15)->sequence(
             ...collect(range(0, 14))->map(fn (int $i) => ['user_id' => $allUsers->random()->id])->all()
         )->create();
+
+        $this->seedCompetitionData($students, $competitionStaff);
 
         $courses = Course::factory(10)->create();
         $courses->each(fn (Course $course): array => $course->teachers()->sync(
@@ -384,5 +403,36 @@ final class DatabaseSeeder extends Seeder
             ->each(function (GiftCardType $type) use ($allProducts): void {
                 $type->products()->attach($allProducts->random(2)->pluck('id'));
             });
+    }
+
+    /**
+     * @param  Collection<int, Student>  $students
+     * @param  Collection<int, User>  $competitionStaff
+     */
+    private function seedCompetitionData(Collection $students, Collection $competitionStaff): void
+    {
+        $currentSeason = CompetitionSeason::factory()->current()->create([
+            'name' => 'Current Competition Season',
+        ]);
+        $upcomingSeason = CompetitionSeason::query()->create([
+            'name' => 'Upcoming Competition Season',
+            'starts_on' => $currentSeason->ends_on->addDay()->toDateString(),
+            'ends_on' => $currentSeason->ends_on->addYear()->toDateString(),
+        ]);
+
+        $miniTeam = CompetitionTeam::factory()->for($currentSeason, 'season')->create(['name' => 'Mini']);
+        $juniorTeam = CompetitionTeam::factory()->for($currentSeason, 'season')->create(['name' => 'Junior']);
+        $seniorTeam = CompetitionTeam::factory()->for($currentSeason, 'season')->create(['name' => 'Senior']);
+        $upcomingTeam = CompetitionTeam::factory()->for($upcomingSeason, 'season')->create(['name' => 'Elite']);
+
+        $miniTeam->students()->attach($students->take(6)->pluck('id')->all());
+        $juniorTeam->students()->attach($students->slice(5, 6)->pluck('id')->all());
+        $seniorTeam->students()->attach($students->take(-5)->pluck('id')->all());
+        $upcomingTeam->students()->attach($students->take(3)->pluck('id')->all());
+
+        $miniTeam->staff()->attach($competitionStaff->take(2)->pluck('id')->all());
+        $juniorTeam->staff()->attach($competitionStaff->take(1)->pluck('id')->all());
+        $seniorTeam->staff()->attach($competitionStaff->take(-2)->pluck('id')->all());
+        $upcomingTeam->staff()->attach($competitionStaff->pluck('id')->all());
     }
 }

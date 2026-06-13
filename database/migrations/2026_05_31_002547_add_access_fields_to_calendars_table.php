@@ -234,7 +234,6 @@ return new class() extends Migration
             'eac' => 'Public',
             'owners' => 'Owners',
             'staff' => 'Staff',
-            'comp' => 'Comp',
         ];
     }
 
@@ -244,8 +243,8 @@ return new class() extends Migration
             return;
         }
 
-        $this->grantAudienceTagsToRoleUsers('super_admin', ['Owners', 'Staff', 'Comp']);
-        $this->grantAudienceTagsToRoleUsers('owner', ['Owners', 'Staff', 'Comp']);
+        $this->grantAudienceTagsToRoleUsers('super_admin', ['Owners', 'Staff']);
+        $this->grantAudienceTagsToRoleUsers('owner', ['Owners', 'Staff']);
         $this->grantAudienceTagsToRoleUsers('teacher', ['Staff']);
     }
 

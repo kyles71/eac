@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\CompetitionRosterService;
 use ArrayAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -44,8 +45,6 @@ final class Calendar extends Model
 
     public const string AUDIENCE_TAG_STAFF = 'Staff';
 
-    public const string AUDIENCE_TAG_COMP = 'Comp';
-
     public const array PUBLIC_SYSTEM_SLUGS = [
         self::SLUG_MY,
         self::SLUG_EAC,
@@ -54,10 +53,6 @@ final class Calendar extends Model
     public const array INTERNAL_SYSTEM_SLUGS = [
         self::SLUG_OWNERS,
         self::SLUG_STAFF,
-    ];
-
-    public const array AUDIENCE_SYSTEM_SLUGS = [
-        self::SLUG_COMP,
     ];
 
     public const array SYSTEM_SLUGS = [
@@ -134,9 +129,9 @@ final class Calendar extends Model
         return in_array($this->slug, self::INTERNAL_SYSTEM_SLUGS, true);
     }
 
-    public function isAudienceSystemCalendar(): bool
+    public function isCompetitionCalendar(): bool
     {
-        return in_array($this->slug, self::AUDIENCE_SYSTEM_SLUGS, true);
+        return $this->slug === self::SLUG_COMP;
     }
 
     public function attachTag(string|Tag $tag, ?string $type = null): static
@@ -181,14 +176,19 @@ final class Calendar extends Model
             ->unique()
             ->values();
         $publicAudienceTagId = Tag::findFromString(self::AUDIENCE_TAG_PUBLIC, self::AUDIENCE_TAG_TYPE)?->id;
+        $isCompetitionMember = app(CompetitionRosterService::class)->isCurrentMember($user);
 
-        return $query->where(function (Builder $query) use ($allAudienceTagIds, $publicAudienceTagId, $userAudienceTagIds): void {
+        return $query->where(function (Builder $query) use ($allAudienceTagIds, $isCompetitionMember, $publicAudienceTagId, $userAudienceTagIds): void {
             $query->whereRaw('0 = 1');
 
             if ($publicAudienceTagId !== null) {
                 $query->orWhereHas('tags', fn (Builder $query): Builder => $query
                     ->where('type', self::AUDIENCE_TAG_TYPE)
                     ->whereKey($publicAudienceTagId));
+            }
+
+            if ($isCompetitionMember) {
+                $query->orWhere('slug', self::SLUG_COMP);
             }
 
             $query
@@ -198,13 +198,6 @@ final class Calendar extends Model
                         ->whereHas('tags', fn (Builder $query): Builder => $query
                             ->where('type', self::AUDIENCE_TAG_TYPE)
                             ->whereIn('tags.id', $userAudienceTagIds));
-                })
-                ->orWhere(function (Builder $query) use ($allAudienceTagIds): void {
-                    $query
-                        ->whereIn('slug', self::AUDIENCE_SYSTEM_SLUGS)
-                        ->whereHas('tags', fn (Builder $query): Builder => $query
-                            ->where('type', self::AUDIENCE_TAG_TYPE)
-                            ->whereIn('tags.id', $allAudienceTagIds));
                 })
                 ->orWhere(function (Builder $query) use ($allAudienceTagIds): void {
                     $query
@@ -222,7 +215,7 @@ final class Calendar extends Model
             return $query;
         }
 
-        return $query->visibleTo($user);
+        return $this->scopeVisibleTo($query, $user);
     }
 
     protected static function booted(): void

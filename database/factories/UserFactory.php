@@ -50,7 +50,7 @@ final class UserFactory extends Factory
     /**
      * Give the user the super admin role.
      */
-    public function isSuperAdmin(): Factory
+    public function isSuperAdmin(): static
     {
         return $this->afterMaking(function (User $user) {
             $user->assignRole('super_admin');
@@ -59,7 +59,6 @@ final class UserFactory extends Factory
             $user->attachTags([
                 Calendar::AUDIENCE_TAG_OWNERS,
                 Calendar::AUDIENCE_TAG_STAFF,
-                Calendar::AUDIENCE_TAG_COMP,
             ], Calendar::AUDIENCE_TAG_TYPE);
         });
     }
@@ -67,7 +66,7 @@ final class UserFactory extends Factory
     /**
      * Give the user the owner role.
      */
-    public function isOwner(): Factory
+    public function isOwner(): static
     {
         return $this->afterMaking(function (User $user) {
             $user->assignRole('owner');
@@ -76,7 +75,6 @@ final class UserFactory extends Factory
             $user->attachTags([
                 Calendar::AUDIENCE_TAG_OWNERS,
                 Calendar::AUDIENCE_TAG_STAFF,
-                Calendar::AUDIENCE_TAG_COMP,
             ], Calendar::AUDIENCE_TAG_TYPE);
         });
     }
@@ -84,7 +82,7 @@ final class UserFactory extends Factory
     /**
      * Give the user the teacher role.
      */
-    public function isTeacher(): Factory
+    public function isTeacher(): static
     {
         return $this->afterMaking(function (User $user) {
             $user->assignRole('teacher');

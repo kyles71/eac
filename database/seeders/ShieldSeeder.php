@@ -42,6 +42,7 @@ final class ShieldSeeder extends Seeder
                                     {"name":"owner","guard_name":"web","permissions":["Manage:DashboardAppearance"]},
                                     {"name":"teacher","guard_name":"web","permissions":[]}
                                 ]';
+        $rolesWithPermissions = self::withCompetitionPermissions($rolesWithPermissions);
         $directPermissions = '[]';
 
         // 1. Seed tenants first (if present)
@@ -209,5 +210,38 @@ final class ShieldSeeder extends Seeder
                 $role->syncPermissions($permissionModels);
             }
         }
+    }
+
+    private static function withCompetitionPermissions(string $rolesWithPermissions): string
+    {
+        $roles = json_decode($rolesWithPermissions, true, flags: JSON_THROW_ON_ERROR);
+        $competitionPermissions = collect(['CompetitionSeason', 'CompetitionTeam'])
+            ->flatMap(fn (string $resource): array => [
+                "ViewAny:{$resource}",
+                "View:{$resource}",
+                "Create:{$resource}",
+                "Update:{$resource}",
+                "Delete:{$resource}",
+                "DeleteAny:{$resource}",
+                "Restore:{$resource}",
+                "ForceDelete:{$resource}",
+                "ForceDeleteAny:{$resource}",
+                "RestoreAny:{$resource}",
+                "Replicate:{$resource}",
+                "Reorder:{$resource}",
+            ])
+            ->all();
+
+        foreach ($roles as &$role) {
+            if ($role['name'] === 'super_admin') {
+                $role['permissions'] = array_values(array_unique([
+                    ...$role['permissions'],
+                    ...$competitionPermissions,
+                ]));
+            }
+        }
+        unset($role);
+
+        return json_encode($roles, JSON_THROW_ON_ERROR);
     }
 }

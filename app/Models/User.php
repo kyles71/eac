@@ -94,9 +94,18 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         return true;
     }
 
+    /** @return HasMany<Student, $this> */
     public function students(): HasMany
     {
         return $this->hasMany(Student::class);
+    }
+
+    /** @return BelongsToMany<CompetitionTeam, $this, CompetitionTeamStaff, 'pivot'> */
+    public function competitionTeams(): BelongsToMany
+    {
+        return $this->belongsToMany(CompetitionTeam::class, 'competition_team_user')
+            ->using(CompetitionTeamStaff::class)
+            ->withTimestamps();
     }
 
     public function studentCalendarAudienceTagIds(): Collection

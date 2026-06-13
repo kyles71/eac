@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\FormTypes;
 use App\Enums\MedicalWaiverStatus;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -46,6 +47,11 @@ final class Student extends Model
         );
     }
 
+    public function ageOn(CarbonInterface $date): int
+    {
+        return (int) $this->birthdate->diffInYears($date);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -60,6 +66,14 @@ final class Student extends Model
     public function courses(): BelongsToMany
     {
         return $this->belongsToMany(Course::class, 'enrollments');
+    }
+
+    /** @return BelongsToMany<CompetitionTeam, $this, CompetitionTeamStudent, 'pivot'> */
+    public function competitionTeams(): BelongsToMany
+    {
+        return $this->belongsToMany(CompetitionTeam::class)
+            ->using(CompetitionTeamStudent::class)
+            ->withTimestamps();
     }
 
     public function events(): MorphMany

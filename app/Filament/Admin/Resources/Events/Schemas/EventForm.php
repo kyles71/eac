@@ -11,6 +11,7 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\CompetitionRosterService;
 use App\Services\HolidayConflictService;
 use App\Support\MediaDisks;
 use Closure;
@@ -139,8 +140,13 @@ final class EventForm
                                 return;
                             }
 
-                            $userIds = User::query()
-                                ->whereHas('roles')
+                            $calendar = $record->calendar;
+
+                            if (! $calendar instanceof Calendar) {
+                                return;
+                            }
+
+                            $userIds = self::excludedUserQuery($calendar)
                                 ->whereIn('id', $state)
                                 ->pluck('id')
                                 ->all();
@@ -282,18 +288,32 @@ final class EventForm
             ->with('tags')
             ->find($calendarId);
 
-        $query = User::query()
-            ->whereHas('roles')
+        return self::excludedUserQuery($calendar)
             ->orderBy('first_name')
-            ->orderBy('last_name');
+            ->orderBy('last_name')
+            ->get()
+            ->mapWithKeys(fn (User $user): array => [$user->id => $user->getFilamentName()])
+            ->all();
+    }
+
+    /** @return Builder<User> */
+    private static function excludedUserQuery(?Calendar $calendar): Builder
+    {
+        $query = User::query();
+
+        if ($calendar?->isCompetitionCalendar()) {
+            return app(CompetitionRosterService::class)->applyCurrentAccountScope($query);
+        }
+
+        $query->whereHas('roles');
 
         if ($calendar instanceof Calendar && ! $calendar->isPublicSystemCalendar()) {
             $audienceTagIds = $calendar->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
                 ->pluck('id');
 
-            if ($calendar->isInternalSystemCalendar() || $calendar->isAudienceSystemCalendar() || $audienceTagIds->isNotEmpty()) {
+            if ($calendar->isInternalSystemCalendar() || $audienceTagIds->isNotEmpty()) {
                 if ($audienceTagIds->isEmpty()) {
-                    return [];
+                    return $query->whereRaw('0 = 1');
                 }
 
                 $query->whereHas('tags', fn (Builder $query): Builder => $query
@@ -302,10 +322,7 @@ final class EventForm
             }
         }
 
-        return $query
-            ->get()
-            ->mapWithKeys(fn (User $user): array => [$user->id => $user->fullName])
-            ->all();
+        return $query;
     }
 
     /**

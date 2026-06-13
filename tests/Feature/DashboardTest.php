@@ -14,6 +14,8 @@ use App\Filament\User\Widgets\ComingUp;
 use App\Filament\User\Widgets\NeedsAttention;
 use App\Filament\User\Widgets\NextPayment;
 use App\Models\Calendar;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\DashboardMessage;
 use App\Models\DashboardQuickLink;
@@ -23,6 +25,7 @@ use App\Models\Holiday;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\PaymentPlan;
+use App\Models\Student;
 use App\Models\User;
 use App\Services\DashboardAudienceService;
 use App\Settings\DashboardAppearanceSettings;
@@ -46,9 +49,15 @@ it('keeps the full calendar on the dashboard', function (): void {
 
 it('resolves inherited dashboard audiences for families teachers and owners', function (): void {
     $family = User::factory()->create();
+    $compFamily = User::factory()->create();
     $teacher = User::factory()->isTeacher()->create();
     $owner = User::factory()->isOwner()->create();
     $course = Course::factory()->create(['start_time' => now()->addDay()]);
+    $compStudent = Student::factory()->create(['user_id' => $compFamily->id]);
+    $compTeam = CompetitionTeam::factory()
+        ->for(CompetitionSeason::factory()->current(), 'season')
+        ->create();
+    $compStudent->competitionTeams()->attach($compTeam);
 
     Enrollment::factory()->create([
         'user_id' => $family->id,
@@ -60,6 +69,9 @@ it('resolves inherited dashboard audiences for families teachers and owners', fu
 
     expect($service->audiencesFor($family))->toBe([
         DashboardAudience::Semester,
+        DashboardAudience::Eac,
+    ])->and($service->audiencesFor($compFamily))->toBe([
+        DashboardAudience::CompTeam,
         DashboardAudience::Eac,
     ])->and($service->audiencesFor($teacher))->toBe([
         DashboardAudience::Teacher,
@@ -75,11 +87,16 @@ it('resolves inherited dashboard audiences for families teachers and owners', fu
 
 it('orders active messages by inherited audience then newest first', function (): void {
     $owner = User::factory()->isOwner()->create();
+    $team = CompetitionTeam::factory()
+        ->for(CompetitionSeason::factory()->current(), 'season')
+        ->create();
+    $owner->competitionTeams()->attach($team);
     $this->actingAs($owner);
 
     DashboardMessage::factory()->create(['message' => 'EAC message', 'audience' => DashboardAudience::Eac]);
     DashboardMessage::factory()->create(['message' => 'Semester older', 'audience' => DashboardAudience::Semester, 'created_at' => now()->subDay()]);
     DashboardMessage::factory()->create(['message' => 'Semester newer', 'audience' => DashboardAudience::Semester]);
+    DashboardMessage::factory()->create(['message' => 'Comp Team message', 'audience' => DashboardAudience::CompTeam]);
     DashboardMessage::factory()->create(['message' => 'Teacher message', 'audience' => DashboardAudience::Teacher]);
     DashboardMessage::factory()->create(['message' => 'Owner message', 'audience' => DashboardAudience::Owner]);
     DashboardMessage::factory()->create(['message' => 'Expired message', 'expires_at' => now()->subMinute()]);
@@ -95,6 +112,7 @@ it('orders active messages by inherited audience then newest first', function ()
     expect($messages)->toBe([
         'Owner message',
         'Teacher message',
+        'Comp Team message',
         'Semester newer',
         'Semester older',
         'EAC message',
@@ -103,6 +121,10 @@ it('orders active messages by inherited audience then newest first', function ()
 
 it('orders visible quick links by audience then manual order and resolves destinations', function (): void {
     $owner = User::factory()->isOwner()->create();
+    $team = CompetitionTeam::factory()
+        ->for(CompetitionSeason::factory()->current(), 'season')
+        ->create();
+    $owner->competitionTeams()->attach($team);
     $this->actingAs($owner);
 
     DashboardQuickLink::factory()->create([
@@ -122,11 +144,16 @@ it('orders visible quick links by audience then manual order and resolves destin
         'external_url' => null,
         'sort_order' => 1,
     ]);
+    DashboardQuickLink::factory()->create([
+        'label' => 'Comp Team',
+        'audience' => DashboardAudience::CompTeam,
+        'sort_order' => 1,
+    ]);
     DashboardQuickLink::factory()->create(['label' => 'Inactive', 'is_active' => false]);
 
     $links = DashboardQuickLink::query()->active()->visibleTo($owner)->audienceOrdered()->get();
 
-    expect($links->pluck('label')->all())->toBe(['Owner first', 'Owner second', 'EAC'])
+    expect($links->pluck('label')->all())->toBe(['Owner first', 'Owner second', 'Comp Team', 'EAC'])
         ->and($links->first()->resolvedUrl())->toContain('/dancefam/store')
         ->and($links->first()->opensInNewTab())->toBeFalse()
         ->and($links->last()->opensInNewTab())->toBeTrue();

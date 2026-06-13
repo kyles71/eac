@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Models\Calendar;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CreditTransaction;
@@ -27,6 +29,7 @@ use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
@@ -35,8 +38,17 @@ it('seeds the development database with all models', function (): void {
 
     expect(User::count())->toBeGreaterThanOrEqual(16)
         ->and(Student::count())->toBeGreaterThanOrEqual(15)
+        ->and(CompetitionSeason::count())->toBe(2)
+        ->and(CompetitionSeason::query()->current()->count())->toBe(1)
+        ->and(CompetitionTeam::count())->toBe(4)
+        ->and(CompetitionTeam::query()->current()->count())->toBe(3)
+        ->and(DB::table('competition_team_student')->count())->toBe(20)
+        ->and(DB::table('competition_team_user')->count())->toBe(8)
+        ->and(Student::query()->whereHas('competitionTeams', fn ($query) => $query->current(), '>=', 2)->exists())->toBeTrue()
+        ->and(User::query()->whereHas('competitionTeams')->whereDoesntHave('roles')->exists())->toBeFalse()
         ->and(Calendar::count())->toBe(5)
-        ->and(Tag::query()->where('type', Calendar::AUDIENCE_TAG_TYPE)->count())->toBeGreaterThanOrEqual(4)
+        ->and(Tag::query()->where('type', Calendar::AUDIENCE_TAG_TYPE)->count())->toBeGreaterThanOrEqual(3)
+        ->and(Tag::findFromString('Comp', Calendar::AUDIENCE_TAG_TYPE))->toBeNull()
         ->and(Calendar::query()->where('slug', Calendar::SLUG_MY)->first()?->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
         ->and(Calendar::query()->where('slug', Calendar::SLUG_EAC)->first()?->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
         ->and(Form::count())->toBe(2)

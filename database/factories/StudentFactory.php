@@ -8,12 +8,15 @@ use App\Models\Student;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * @extends Factory<Student>
+ */
 final class StudentFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.
      *
-     * @var string
+     * @var class-string<Student>
      */
     protected $model = Student::class;
 
