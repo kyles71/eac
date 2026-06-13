@@ -47,6 +47,26 @@ it('keeps the full calendar on the dashboard', function (): void {
         ->not->toContain('App\\Filament\\User\\Widgets\\AccountOverview');
 });
 
+it('only shows needs attention when there are tasks', function (): void {
+    expect(NeedsAttention::canView())->toBeFalse();
+
+    $this->get(Dashboard::getUrl())
+        ->assertOk()
+        ->assertDontSeeLivewire(NeedsAttention::class);
+
+    Enrollment::factory()->create([
+        'user_id' => auth()->id(),
+        'course_id' => Course::factory()->create(['start_time' => now()->addDay()]),
+        'student_id' => null,
+    ]);
+
+    expect(NeedsAttention::canView())->toBeTrue();
+
+    $this->get(Dashboard::getUrl())
+        ->assertOk()
+        ->assertSeeLivewire(NeedsAttention::class);
+});
+
 it('resolves inherited dashboard audiences for families teachers and owners', function (): void {
     $family = User::factory()->create();
     $compFamily = User::factory()->create();
@@ -198,9 +218,6 @@ it('renders dashboard communication and action widgets without exposing audience
         ->assertDontSeeHtml('border border-gray-200')
         ->assertSeeHtml('target="_blank"')
         ->assertSeeHtml('class="fi-icon fi-size-md h-4 w-4 shrink-0"');
-
-    livewire(NeedsAttention::class)
-        ->assertSee('You are all caught up');
 
     livewire(Dashboard::class)
         ->assertSee('Hello,')

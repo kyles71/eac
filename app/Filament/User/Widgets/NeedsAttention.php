@@ -21,6 +21,11 @@ final class NeedsAttention extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
+    public static function canView(): bool
+    {
+        return (new self)->tasks() !== [];
+    }
+
     /**
      * @return list<array{title: string, description: string, url: string, action: string, color: string}>
      */
