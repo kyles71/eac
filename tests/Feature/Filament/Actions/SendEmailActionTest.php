@@ -99,6 +99,16 @@ it('always queues SendEmailAction recipients individually', function (): void {
     Mail::assertQueued(HandcraftedEmail::class, 2);
 });
 
+it('does not offer a per-email layout selection', function (): void {
+    $user = User::factory()->create();
+
+    livewire(ListUsers::class)
+        ->loadTable()
+        ->mountAction(TestAction::make('sendEmail')->table($user))
+        ->assertSchemaComponentDoesNotExist('layout_mode', 'mountedActionSchema0')
+        ->assertSchemaComponentDoesNotExist('layout_id', 'mountedActionSchema0');
+});
+
 it('queues one private email to every address associated with a student', function (): void {
     Mail::fake();
 

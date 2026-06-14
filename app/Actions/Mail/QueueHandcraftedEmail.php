@@ -6,6 +6,7 @@ namespace App\Actions\Mail;
 
 use App\Mail\HandcraftedEmail;
 use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\MailManager;
 
 final class QueueHandcraftedEmail
 {
@@ -19,7 +20,11 @@ final class QueueHandcraftedEmail
         string $body,
         mixed $deliveryMode,
         mixed $archiveTo,
-    ): void {
+    ): bool {
+        if (! app(MailManager::class)->isEnabled('handcrafted')) {
+            return false;
+        }
+
         $recipients = $this->normalizeRecipients($recipients);
         $archiveRecipients = $this->normalizeRecipients($archiveTo);
 
@@ -30,7 +35,12 @@ final class QueueHandcraftedEmail
                 $body,
                 $this->archiveRecipientsFor($recipients, $archiveRecipients),
             ),
-            default => $this->queueIndividualEmails($recipients, $subject, $body, $archiveRecipients),
+            default => $this->queueIndividualEmails(
+                $recipients,
+                $subject,
+                $body,
+                $archiveRecipients,
+            ),
         };
 
         $separateArchiveRecipients = $this->archiveRecipientsFor($recipients, $archiveRecipients);
@@ -38,14 +48,20 @@ final class QueueHandcraftedEmail
         if ($this->usesSeparateArchiveEmail($separateArchiveRecipients)) {
             $this->queueEmail($separateArchiveRecipients, $subject, $body);
         }
+
+        return true;
     }
 
     /**
      * @param  array<int, string>  $recipients
      * @param  array<int, string>  $archiveRecipients
      */
-    private function queueIndividualEmails(array $recipients, string $subject, string $body, array $archiveRecipients): void
-    {
+    private function queueIndividualEmails(
+        array $recipients,
+        string $subject,
+        string $body,
+        array $archiveRecipients,
+    ): void {
         foreach ($recipients as $recipient) {
             $this->queueEmail(
                 [$recipient],
@@ -60,8 +76,12 @@ final class QueueHandcraftedEmail
      * @param  array<int, string>  $recipients
      * @param  array<int, string>  $archiveRecipients
      */
-    private function queueGroupedEmail(array $recipients, string $subject, string $body, array $archiveRecipients): void
-    {
+    private function queueGroupedEmail(
+        array $recipients,
+        string $subject,
+        string $body,
+        array $archiveRecipients,
+    ): void {
         $this->queueEmail($recipients, $subject, $body, $archiveRecipients);
     }
 
@@ -69,8 +89,12 @@ final class QueueHandcraftedEmail
      * @param  array<int, string>  $recipients
      * @param  array<int, string>  $bcc
      */
-    private function queueEmail(array $recipients, string $subject, string $body, array $bcc = []): void
-    {
+    private function queueEmail(
+        array $recipients,
+        string $subject,
+        string $body,
+        array $bcc = [],
+    ): void {
         $pendingMail = Mail::mailer('handcrafted')
             ->to($recipients);
 

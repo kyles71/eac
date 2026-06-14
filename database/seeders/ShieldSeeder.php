@@ -43,7 +43,9 @@ final class ShieldSeeder extends Seeder
                                     {"name":"teacher","guard_name":"web","permissions":[]}
                                 ]';
         $rolesWithPermissions = self::withCompetitionPermissions($rolesWithPermissions);
-        $directPermissions = '[]';
+        $directPermissions = '[
+                                {"name":"Manage:MailManager","guard_name":"web"}
+                             ]';
 
         // 1. Seed tenants first (if present)
         if (! blank($tenants) && $tenants !== '[]') {

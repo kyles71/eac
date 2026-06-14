@@ -8,6 +8,7 @@ use App\Filament\Admin\Pages\Dashboard;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Panel;
 use Filament\Support\Enums\Platform;
+use Kyle\FilamentMailManager\FilamentMailManagerPlugin;
 use Kyle\FilamentThemeBuilder\ThemeBuilderPlugin;
 
 final class AdminPanelProvider extends BasePanelProvider
@@ -51,6 +52,9 @@ final class AdminPanelProvider extends BasePanelProvider
                     ]),
                 ThemeBuilderPlugin::make()
                     ->authorizeUsing('Manage:ThemeBuilder'),
+                FilamentMailManagerPlugin::make()
+                    ->emailTypeEditActionSlideOver()
+                    ->navigationGroup('Email'),
             ])
             ->globalSearchFieldSuffix(fn (): ?string => match (Platform::detect()) {
                 Platform::Windows, Platform::Linux => 'CTRL + K',

@@ -4,33 +4,33 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
-use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Content;
-use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
+use Kyle\FilamentMailManager\Data\RenderedEmail;
+use Kyle\FilamentMailManager\Mail\ManagedMailable;
+use Kyle\FilamentMailManager\MailManager;
 
-final class HandcraftedEmail extends Mailable implements ShouldQueue
+final class HandcraftedEmail extends ManagedMailable implements ShouldQueue
 {
-    use Queueable, SerializesModels;
-
     public function __construct(
         public readonly string $emailSubject,
         public readonly string $emailBody,
     ) {}
 
-    public function envelope(): Envelope
+    protected function renderManagedEmail(): RenderedEmail
     {
-        return new Envelope(
-            subject: $this->emailSubject,
+        return app(MailManager::class)->render(
+            emailTypeKey: 'handcrafted',
+            tokens: [
+                'email.subject' => $this->emailSubject,
+            ],
+            slots: [
+                'content' => $this->emailBody,
+            ],
         );
     }
 
-    public function content(): Content
+    protected function shouldSendManagedEmail(): bool
     {
-        return new Content(
-            htmlString: $this->emailBody,
-        );
+        return app(MailManager::class)->isEnabled('handcrafted');
     }
 }

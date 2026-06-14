@@ -76,12 +76,11 @@ final class SendEmailAction extends Action
                     ->required(),
             ])
             ->action(function (array $data): void {
-                $this->queueEmails($data);
+                $queued = $this->queueEmails($data);
+                $notification = Notification::make()
+                    ->title($queued ? 'Email queued' : 'Handcrafted email is disabled');
 
-                Notification::make()
-                    ->title('Email queued')
-                    ->success()
-                    ->send();
+                ($queued ? $notification->success() : $notification->warning())->send();
             });
     }
 
@@ -136,9 +135,9 @@ final class SendEmailAction extends Action
     /**
      * @param  array{to?: mixed, subject?: mixed, body?: mixed}  $data
      */
-    private function queueEmails(array $data): void
+    private function queueEmails(array $data): bool
     {
-        app(QueueHandcraftedEmail::class)->handle(
+        return app(QueueHandcraftedEmail::class)->handle(
             recipients: app(HandcraftedEmailRecipients::class)->resolve($data['to'] ?? []),
             subject: (string) ($data['subject'] ?? ''),
             body: (string) ($data['body'] ?? ''),

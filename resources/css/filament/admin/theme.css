@@ -1,5 +1,9 @@
 @import '../global-theme.css';
+@import '../../../../vendor/awcodes/mason/resources/css/plugin.css';
+@import '../../../../packages/kyle/filament-mail-manager/resources/css/plugin.css';
 
 @source '../../../../app/Filament/Admin/**/*';
 @source '../../../../resources/views/filament/admin/**/*';
 @source '../../../../vendor/charlieetienne/filament-font-picker/resources/**/*.blade.php';
+@source '../../../../vendor/awcodes/mason/resources/**/*.blade.php';
+@source '../../../../packages/kyle/filament-mail-manager/resources/**/*.blade.php';

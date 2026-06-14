@@ -1,0 +1,28 @@
+.fi-mail-manager-rich-editor.fi-fo-rich-editor {
+    .fi-fo-rich-editor-main {
+        flex-direction: column-reverse;
+    }
+
+    .fi-fo-rich-editor-content,
+    .tiptap {
+        min-height: 16rem;
+    }
+
+    .fi-fo-rich-editor-panels {
+        min-width: 0;
+        max-width: 100%;
+        border-inline-start-width: 0;
+        border-bottom-width: 1px;
+        border-end-end-radius: 0;
+    }
+
+    .fi-fo-rich-editor-merge-tags-list {
+        max-height: 8rem;
+        overflow-y: auto;
+    }
+
+    .fi-fo-rich-editor-merge-tag-btn span[data-type='mergeTag'] {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}

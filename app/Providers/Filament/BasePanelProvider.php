@@ -29,6 +29,7 @@ abstract class BasePanelProvider extends PanelProvider
     {
         return $panel
             ->login(Login::class)
+            ->passwordReset()
             ->bootUsing(function (): void {
                 Livewire::component('personal_info', PersonalInfo::class);
             })
