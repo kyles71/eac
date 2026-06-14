@@ -20,7 +20,7 @@
         "filament/spatie-laravel-settings-plugin": "^5.0",
         "filament/spatie-laravel-tags-plugin": "^5.0",
         "jeffgreco13/filament-breezy": "^3.0",
-        "kyle/filament-mail-manager": "dev-main",
+        "kyle/filament-mail-manager": "^0.1.0",
         "kyle/filament-theme-builder": "^0.1.0",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
@@ -54,7 +54,7 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "git@github.com:kyles71/filament-mail-manager",
+            "url": "git@github.com:kyles71/filament-mail-manager.git"
         },
         {
             "type": "vcs",
