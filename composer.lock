@@ -3145,16 +3145,16 @@
         },
         {
             "name": "kyle/filament-mail-manager",
-            "version": "v0.1.0",
+            "version": "v0.1.1",
             "source": {
                 "type": "git",
                 "url": "git@github.com:kyles71/filament-mail-manager.git",
-                "reference": "264be7a401da33c569a41591e19f172e77c64d03"
+                "reference": "7910671adb5ea9f30dd528d076d23dc9ac2f6727"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kyles71/filament-mail-manager/zipball/264be7a401da33c569a41591e19f172e77c64d03",
-                "reference": "264be7a401da33c569a41591e19f172e77c64d03",
+                "url": "https://api.github.com/repos/kyles71/filament-mail-manager/zipball/7910671adb5ea9f30dd528d076d23dc9ac2f6727",
+                "reference": "7910671adb5ea9f30dd528d076d23dc9ac2f6727",
                 "shasum": ""
             },
             "require": {
@@ -3203,10 +3203,10 @@
             ],
             "description": "Registry-driven managed email templates and reusable layouts for Filament.",
             "support": {
-                "source": "https://github.com/kyles71/filament-mail-manager/tree/v0.1.0",
+                "source": "https://github.com/kyles71/filament-mail-manager/tree/v0.1.1",
                 "issues": "https://github.com/kyles71/filament-mail-manager/issues"
             },
-            "time": "2026-06-14T14:14:06+00:00"
+            "time": "2026-06-14T15:33:45+00:00"
         },
         {
             "name": "kyle/filament-theme-builder",
@@ -4869,16 +4869,16 @@
         },
         {
             "name": "nesbot/carbon",
-            "version": "3.11.4",
+            "version": "3.12.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/CarbonPHP/carbon.git",
-                "reference": "e890471a3494740f7d9326d72ce6a8c559ffee60"
+                "reference": "25963f9ecbba8ea636b73de74a4e0d9b375bce4e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/CarbonPHP/carbon/zipball/e890471a3494740f7d9326d72ce6a8c559ffee60",
-                "reference": "e890471a3494740f7d9326d72ce6a8c559ffee60",
+                "url": "https://api.github.com/repos/CarbonPHP/carbon/zipball/25963f9ecbba8ea636b73de74a4e0d9b375bce4e",
+                "reference": "25963f9ecbba8ea636b73de74a4e0d9b375bce4e",
                 "shasum": ""
             },
             "require": {
@@ -4970,7 +4970,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-07T09:57:54+00:00"
+            "time": "2026-06-14T14:20:55+00:00"
         },
         {
             "name": "nette/php-generator",
