@@ -7,7 +7,7 @@ namespace App\Filament\Admin\Resources\CompetitionTeams\Tables;
 use App\Filament\Actions\SendEmailAction;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
 use App\Models\CompetitionTeam;
-use App\Services\CompetitionEmailRecipients;
+use App\Services\CompetitionEmailRecipientsService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -51,7 +51,7 @@ final class CompetitionTeamsTable
             ])
             ->recordActions([
                 SendEmailAction::make()
-                    ->to(fn (CompetitionTeam $record): array => app(CompetitionEmailRecipients::class)->forTeam($record)),
+                    ->to(fn (CompetitionTeam $record): array => app(CompetitionEmailRecipientsService::class)->forTeam($record)),
             ])
             ->recordUrl(fn (CompetitionTeam $record): string => CompetitionTeamResource::getUrl('view', ['record' => $record]))
             ->toolbarActions([

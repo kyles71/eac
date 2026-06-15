@@ -9,7 +9,7 @@ use App\Models\CompetitionTeam;
 use App\Models\Student;
 use App\Models\User;
 
-final class CompetitionEmailRecipients
+final class CompetitionEmailRecipientsService
 {
     /**
      * @return array<int, Student|User>

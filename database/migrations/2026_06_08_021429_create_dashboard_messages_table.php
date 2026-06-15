@@ -21,4 +21,9 @@ return new class() extends Migration
             $table->index(['audience', 'published_at', 'expires_at']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('dashboard_messages');
+    }
 };

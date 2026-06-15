@@ -20,4 +20,9 @@ return new class() extends Migration
             $table->unique(['student_id', 'email']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('student_emails');
+    }
 };

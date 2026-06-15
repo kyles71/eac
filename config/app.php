@@ -36,6 +36,8 @@ return [
         'password' => env('DEFAULT_USER_PASSWORD', 'password'),
     ],
 
+    'seed_demo_data' => env('SEED_DEMO_DATA', false),
+
     'enrollment_unassign_cutoff_days' => (int) env('ENROLLMENT_UNASSIGN_CUTOFF_DAYS', 7),
 
     'file_uploads' => [

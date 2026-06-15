@@ -19,4 +19,9 @@ return new class() extends Migration
             $table->unique(['discount_code_id', 'product_id']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('discount_code_product');
+    }
 };

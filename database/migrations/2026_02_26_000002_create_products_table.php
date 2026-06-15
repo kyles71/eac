@@ -16,11 +16,17 @@ return new class() extends Migration
             $table->text('description')->nullable();
             $table->unsignedInteger('price')->default(0);
             $table->boolean('is_active')->default(true);
+            $table->boolean('include_productable_images')->default(false);
             $table->foreignId('requires_course_id')->nullable()->constrained('courses')->nullOnDelete();
             $table->nullableMorphs('productable');
             $table->timestamps();
 
             $table->unique(['productable_type', 'productable_id']);
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('products');
     }
 };

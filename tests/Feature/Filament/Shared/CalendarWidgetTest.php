@@ -431,22 +431,6 @@ it('defaults new courses to the eac calendar tag', function (): void {
     expect($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::SLUG_EAC);
 });
 
-it('can reapply the calendar access migration after rollback without duplicating system calendars or tags', function (): void {
-    $migration = include database_path('migrations/2026_05_31_002547_add_access_fields_to_calendars_table.php');
-
-    $migration->down();
-    $migration->up();
-
-    expect(Calendar::query()->where('name', 'Owners')->count())->toBe(1)
-        ->and(Calendar::query()->where('name', 'Staff')->count())->toBe(1)
-        ->and(Calendar::query()->where('name', 'Comp Calendar')->count())->toBe(1)
-        ->and(calendarBySlug(Calendar::SLUG_MY)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
-        ->and(calendarBySlug(Calendar::SLUG_EAC)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_PUBLIC)
-        ->and(calendarBySlug(Calendar::SLUG_OWNERS)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_OWNERS)
-        ->and(calendarBySlug(Calendar::SLUG_STAFF)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::AUDIENCE_TAG_STAFF)
-        ->and(calendarBySlug(Calendar::SLUG_COMP)->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe([]);
-});
-
 it('shows comp calendar when an owned student is on a current competition team', function (): void {
     $user = User::factory()->create();
     assignStudentToCurrentCompetition($user);

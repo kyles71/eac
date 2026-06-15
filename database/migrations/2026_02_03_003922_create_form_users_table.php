@@ -20,7 +20,12 @@ return new class() extends Migration
             $table->date('date_signed')->nullable();
             $table->timestamps();
 
-            $table->unique(['form_id', 'student_id']);
+            $table->index(['form_id', 'student_id']);
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('form_users');
     }
 };

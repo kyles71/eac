@@ -22,6 +22,7 @@ use App\Models\FormUser;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Installment;
+use App\Models\LegalDocument;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlan;
@@ -48,8 +49,32 @@ final class DatabaseSeeder extends Seeder
         Form::factory()
             ->create(['name' => 'Student Waiver 25-26', 'form_type' => FormTypes::StudentWaiver->value]);
 
-        if (config('app.env') !== 'production') {
-            $this->seedDevData();
+        LegalDocument::query()->firstOrCreate(
+            ['key' => 'payment_plan_terms'],
+            [
+                'name' => 'Payment Plan Terms & Conditions',
+                'description' => 'Terms accepted before purchasing with a payment plan.',
+            ],
+        );
+
+        LegalDocument::factory()->create([
+            'key' => 'portal_terms',
+            'name' => 'Portal Terms & Conditions',
+            'description' => 'Terms accepted before creating an account.',
+        ]);
+
+        $adminUser = User::firstOrCreate(
+            ['email' => config('app.default_user.email')],
+            [
+                'first_name' => config('app.default_user.first_name'),
+                'last_name' => config('app.default_user.last_name'),
+                'password' => bcrypt(config('app.default_user.password')),
+            ],
+        )
+            ->assignRole('super_admin');
+
+        if (config('app.env') !== 'production' && config('app.seed_demo_data')) {
+            $this->seedDevData($adminUser);
         }
 
         $this->grantDefaultCalendarAudienceTags();
@@ -113,19 +138,9 @@ final class DatabaseSeeder extends Seeder
             ->each(fn (User $user): User => $user->attachTags($tagNames, Calendar::AUDIENCE_TAG_TYPE));
     }
 
-    private function seedDevData(): void
+    private function seedDevData(User $adminUser): void
     {
         // ── Tier 0: Root entities ──
-
-        $adminUser = User::firstOrCreate(
-            ['email' => config('app.default_user.email')],
-            [
-                'first_name' => config('app.default_user.first_name'),
-                'last_name' => config('app.default_user.last_name'),
-                'password' => bcrypt(config('app.default_user.password')),
-            ],
-        )
-            ->assignRole('super_admin');
 
         $users = User::factory(15)->create();
         $competitionStaff = User::factory(3)->isTeacher()->sequence(

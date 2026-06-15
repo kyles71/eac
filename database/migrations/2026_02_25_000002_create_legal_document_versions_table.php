@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class() extends Migration
@@ -22,16 +21,6 @@ return new class() extends Migration
 
             $table->unique(['legal_document_id', 'version']);
         });
-
-        $now = now();
-
-        DB::table('legal_documents')->insert([
-            'key' => 'payment_plan_terms',
-            'name' => 'Payment Plan Terms & Conditions',
-            'description' => 'Terms accepted before purchasing with a payment plan.',
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
     }
 
     public function down(): void

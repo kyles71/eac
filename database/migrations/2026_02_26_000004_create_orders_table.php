@@ -20,9 +20,17 @@ return new class() extends Migration
             $table->unsignedInteger('discount_amount')->default(0);
             $table->unsignedInteger('credit_applied')->default(0);
             $table->unsignedInteger('restricted_credit_applied')->default(0);
+            $table->unsignedInteger('payment_plan_fee')->default(0);
             $table->string('stripe_payment_intent_id')->nullable();
             $table->foreignId('payment_plan_template_id')->nullable()->constrained('payment_plan_templates');
+            $table->foreignId('payment_plan_terms_version_id')->nullable()->constrained('legal_document_versions')->nullOnDelete();
+            $table->timestamp('cart_items_cleared_at')->nullable();
             $table->timestamps();
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('orders');
     }
 };

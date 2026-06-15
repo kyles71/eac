@@ -19,4 +19,9 @@ return new class() extends Migration
             $table->unique(['gift_card_type_id', 'product_id']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('gift_card_type_product');
+    }
 };

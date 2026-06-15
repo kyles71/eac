@@ -19,4 +19,9 @@ return new class() extends Migration
             $table->unique(['course_id', 'form_id']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('course_forms');
+    }
 };

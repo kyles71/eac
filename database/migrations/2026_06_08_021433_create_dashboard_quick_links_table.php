@@ -23,4 +23,9 @@ return new class() extends Migration
             $table->index(['audience', 'is_active', 'sort_order']);
         });
     }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('dashboard_quick_links');
+    }
 };

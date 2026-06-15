@@ -14,6 +14,7 @@ return new class() extends Migration
             $table->id();
             $table->string('name');
             $table->string('product_type');
+            $table->json('course_semesters')->nullable();
             $table->unsignedInteger('min_price');
             $table->unsignedInteger('max_price');
             $table->unsignedSmallInteger('number_of_installments');
@@ -21,5 +22,10 @@ return new class() extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('payment_plan_templates');
     }
 };

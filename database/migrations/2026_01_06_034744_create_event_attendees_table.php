@@ -17,6 +17,16 @@ return new class() extends Migration
             $table->boolean('attended')->default(0);
             $table->text('notes')->nullable();
             $table->timestamps();
+
+            $table->unique(
+                ['event_id', 'attendee_type', 'attendee_id'],
+                'event_attendees_event_attendee_unique',
+            );
         });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('event_attendees');
     }
 };
