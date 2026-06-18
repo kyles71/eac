@@ -14,6 +14,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
@@ -120,6 +121,13 @@ final class FilamentUiServiceProvider extends ServiceProvider
             }
 
             return $entry;
+        });
+
+        RichEditor::configureUsing(function (RichEditor $editor) {
+            return $editor
+                ->extraInputAttributes([
+                    'style' => 'max-height: min(55vh, 40rem); min-height: 8rem; overflow-y: auto;',
+                ]);
         });
 
         Select::macro('searchableRelationship', function (

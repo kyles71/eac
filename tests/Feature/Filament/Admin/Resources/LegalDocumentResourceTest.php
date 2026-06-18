@@ -9,6 +9,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\RichEditor;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
@@ -91,6 +92,33 @@ it('can publish a new legal document version', function () {
         'title' => 'Updated Terms',
         'content' => '<p>Updated payment plan terms.</p>',
     ]);
+});
+
+it('allows nested rich editor payload updates in the publish version action', function () {
+    $document = LegalDocument::factory()->create();
+    $richEditorLinkTargetPath = 'mountedActions.0.data.content.content.69.content.0.content.0.content.0.content.1.marks.0.attrs.target';
+    $richEditorLinkTargetPathDepth = count(explode('.', $richEditorLinkTargetPath));
+
+    expect($richEditorLinkTargetPathDepth)
+        ->toBeGreaterThan(10)
+        ->toBeLessThanOrEqual(config('livewire.payload.max_nesting_depth'));
+
+    livewire(ListLegalDocuments::class)
+        ->mountAction(TestAction::make('publishVersion')->table($document))
+        ->set($richEditorLinkTargetPath, '_blank')
+        ->assertSet($richEditorLinkTargetPath, '_blank');
+});
+
+it('keeps the publish version rich editor body scrollable inside the modal', function () {
+    $document = LegalDocument::factory()->create();
+
+    livewire(ListLegalDocuments::class)
+        ->mountAction(TestAction::make('publishVersion')->table($document))
+        ->assertSchemaComponentExists(
+            'content',
+            null,
+            fn (RichEditor $component): bool => ($component->getExtraInputAttributes()['style'] ?? null) === 'max-height: min(55vh, 40rem); min-height: 8rem; overflow-y: auto;',
+        );
 });
 
 it('has required table columns', function (string $column) {
