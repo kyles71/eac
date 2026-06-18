@@ -8,6 +8,7 @@ use App\Contracts\HasCapacity;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\ProductAvailabilityService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -16,16 +17,10 @@ final readonly class AddToCart
     public function handle(User $user, Product $product, int $quantity = 1): CartItem
     {
         return DB::transaction(function () use ($user, $product, $quantity): CartItem {
-            if (! $product->is_active) {
-                throw new InvalidArgumentException('This product is not available for purchase.');
-            }
+            $availability = app(ProductAvailabilityService::class)->resultFor($product, $user);
 
-            if ($product->price <= 0) {
-                throw new InvalidArgumentException('This product does not have a valid price.');
-            }
-
-            if (! $product->canBePurchasedBy($user)) {
-                throw new InvalidArgumentException('This product requires an existing course enrollment.');
+            if (! $availability->isPurchasable()) {
+                throw new InvalidArgumentException($availability->message());
             }
 
             $cartItem = CartItem::query()

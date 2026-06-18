@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\DashboardAudience;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -29,6 +32,8 @@ final class ProductFactory extends Factory
             'is_active' => true,
             'include_productable_images' => false,
             'requires_course_id' => null,
+            'available_from' => null,
+            'available_until' => null,
             'productable_type' => null,
             'productable_id' => null,
         ];
@@ -75,6 +80,31 @@ final class ProductFactory extends Factory
         return $this->state(fn (array $attributes): array => [
             'is_active' => false,
         ]);
+    }
+
+    public function availableFrom(CarbonInterface|string $availableFrom): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'available_from' => $availableFrom,
+        ]);
+    }
+
+    public function availableUntil(CarbonInterface|string $availableUntil): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'available_until' => $availableUntil,
+        ]);
+    }
+
+    public function withEarlyAccessAudience(DashboardAudience $audience): static
+    {
+        return $this->afterCreating(function (Product $product) use ($audience): void {
+            ProductEarlyAccessWindow::factory()
+                ->for($product)
+                ->create([
+                    'audiences' => [$audience->value],
+                ]);
+        });
     }
 
     /**

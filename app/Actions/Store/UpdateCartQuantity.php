@@ -7,6 +7,7 @@ namespace App\Actions\Store;
 use App\Contracts\HasCapacity;
 use App\Models\CartItem;
 use App\Models\User;
+use App\Services\ProductAvailabilityService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -32,8 +33,10 @@ final readonly class UpdateCartQuantity
             /** @var \App\Models\Product $product */
             $product = $cartItem->product;
 
-            if (! $product->canBePurchasedBy($user)) {
-                throw new InvalidArgumentException('This product requires an existing course enrollment.');
+            $availability = app(ProductAvailabilityService::class)->resultFor($product, $user);
+
+            if (! $availability->isPurchasable()) {
+                throw new InvalidArgumentException($availability->message());
             }
 
             if ($product->productable instanceof HasCapacity) {

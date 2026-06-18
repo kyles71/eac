@@ -8,6 +8,7 @@ use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
@@ -101,6 +102,37 @@ it('redirects products without a valid price back to the store', function () {
 
     $this->get(ProductDetails::getUrl(['product' => $product], false))
         ->assertRedirect(Store::getUrl());
+});
+
+it('redirects products outside their availability window back to the store', function () {
+    $scheduledProduct = Product::factory()->availableFrom(now()->addDay())->create(['price' => 5000]);
+    $expiredProduct = Product::factory()->availableUntil(now()->subMinute())->create(['price' => 5000]);
+
+    $this->get(ProductDetails::getUrl(['product' => $scheduledProduct], false))
+        ->assertRedirect(Store::getUrl());
+
+    $this->get(ProductDetails::getUrl(['product' => $expiredProduct], false))
+        ->assertRedirect(Store::getUrl());
+});
+
+it('renders early access product details for directly granted users', function () {
+    $product = Product::factory()
+        ->availableFrom(now()->addDay())
+        ->create([
+            'description' => 'Early registration window.',
+            'price' => 5000,
+        ]);
+
+    ProductEarlyAccessWindow::factory()
+        ->for($product)
+        ->create()
+        ->users()
+        ->attach(auth()->user());
+
+    livewire(ProductDetails::class, ['product' => $product])
+        ->assertOk()
+        ->assertSee('Early registration window.')
+        ->assertSee('$50.00');
 });
 
 it('redirects enrollment restricted products back to the store', function () {

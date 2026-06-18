@@ -20,6 +20,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 
@@ -61,6 +62,47 @@ it('fails when cart is empty', function () {
     $action = app(CreateOrder::class);
     $action->handle($this->user);
 })->throws(InvalidArgumentException::class, 'Your cart is empty.');
+
+it('fails when a cart product became unavailable before checkout', function () {
+    $this->product->update(['name' => 'Jazz Shoes']);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $this->product->update(['available_until' => now()->subMinute()]);
+
+    $action = app(CreateOrder::class);
+    $action->handle($this->user);
+})->throws(InvalidArgumentException::class, '"Jazz Shoes" is no longer available for purchase.');
+
+it('checks early access window timing at checkout', function () {
+    $this->product->update([
+        'name' => 'Early Window Course',
+        'available_from' => now()->addDay(),
+    ]);
+    $window = ProductEarlyAccessWindow::factory()
+        ->for($this->product)
+        ->create([
+            'available_from' => now()->subHour(),
+            'available_until' => now()->addHour(),
+        ]);
+    $window->users()->attach($this->user);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    expect(app(CreateOrder::class)->handle($this->user))->toBeInstanceOf(Order::class);
+
+    $window->update(['available_until' => now()->subMinute()]);
+
+    app(CreateOrder::class)->handle($this->user);
+})->throws(InvalidArgumentException::class, '"Early Window Course" is not available yet.');
 
 it('fails when course capacity is insufficient at checkout', function () {
     CartItem::factory()->create([

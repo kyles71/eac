@@ -48,7 +48,7 @@ final class ProductDetails extends Page
             $product->productable->loadMissing('media');
         }
 
-        if (! $product->is_active || $product->price <= 0 || ! $product->canBePurchasedBy($user)) {
+        if (! $product->canBePurchasedBy($user)) {
             Notification::make()
                 ->title('Product unavailable')
                 ->body('That product is not available for purchase.')
@@ -68,17 +68,6 @@ final class ProductDetails extends Page
     public function getTitle(): string|Htmlable
     {
         return $this->product?->name ?? self::$title ?? 'Product Details';
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('backToCart')
-                ->label('Back to Store')
-                ->icon(Heroicon::OutlinedArrowLeft)
-                ->color('gray')
-                ->url(Store::getUrl()),
-        ];
     }
 
     public function content(Schema $schema): Schema
@@ -139,6 +128,17 @@ final class ProductDetails extends Page
                         ->send();
                 }
             });
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('backToCart')
+                ->label('Back to Store')
+                ->icon(Heroicon::OutlinedArrowLeft)
+                ->color('gray')
+                ->url(Store::getUrl()),
+        ];
     }
 
     /**

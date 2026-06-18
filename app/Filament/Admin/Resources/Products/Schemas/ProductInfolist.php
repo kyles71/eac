@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Products\Schemas;
 
+use App\Enums\DashboardAudience;
+use App\Enums\ProductAvailabilityStatus;
 use App\Enums\ProductType;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
 use App\Support\MediaDisks;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -30,9 +34,43 @@ final class ProductInfolist
                             ->badge()
                             ->formatStateUsing(fn (bool $state): string => $state ? 'Active' : 'Inactive')
                             ->color(fn (bool $state): string => $state ? 'success' : 'danger'),
+                        TextEntry::make('availability_status')
+                            ->label('Availability')
+                            ->state(fn (Product $record): ProductAvailabilityStatus => $record->availabilityStatus())
+                            ->badge()
+                            ->formatStateUsing(fn (ProductAvailabilityStatus $state): string => $state->getLabel())
+                            ->color(fn (ProductAvailabilityStatus $state): string => $state->getColor()),
                         TextEntry::make('description')
                             ->columnSpanFull()
                             ->placeholder('None'),
+                    ]),
+                Section::make('Availability')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('available_from')
+                            ->dateTime()
+                            ->placeholder('Immediately'),
+                        TextEntry::make('available_until')
+                            ->dateTime()
+                            ->placeholder('Never'),
+                        RepeatableEntry::make('earlyAccessWindows')
+                            ->label('Early Access Windows')
+                            ->schema([
+                                TextEntry::make('available_from')
+                                    ->dateTime(),
+                                TextEntry::make('available_until')
+                                    ->dateTime()
+                                    ->placeholder('No window end'),
+                                TextEntry::make('audiences')
+                                    ->state(fn (ProductEarlyAccessWindow $record): string => self::formatAudienceValues($record->audiences ?? []))
+                                    ->placeholder('None'),
+                                TextEntry::make('users')
+                                    ->state(fn (ProductEarlyAccessWindow $record): string => self::formatWindowUsers($record))
+                                    ->placeholder('None'),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                     ]),
                 Section::make('Linked Item')
                     ->columns(2)
@@ -77,5 +115,26 @@ final class ProductInfolist
                             ->dateTime(),
                     ]),
             ]);
+    }
+
+    /**
+     * @param  array<int, string>  $audienceValues
+     */
+    private static function formatAudienceValues(array $audienceValues): string
+    {
+        return collect($audienceValues)
+            ->map(fn (string $audience): ?string => DashboardAudience::tryFrom($audience)?->getLabel())
+            ->filter()
+            ->join(', ');
+    }
+
+    private static function formatWindowUsers(ProductEarlyAccessWindow $window): string
+    {
+        return $window->users()
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn ($user): string => $user->fullName)
+            ->join(', ');
     }
 }

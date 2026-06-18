@@ -823,6 +823,29 @@ it('adds an event course product to the cart from the user event modal', functio
         ->value('quantity'))->toBe(1);
 });
 
+it('hides event course product actions when the product is scheduled for later', function (): void {
+    $user = User::factory()->create();
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $course = Course::factory()->create(['capacity' => 5]);
+    Product::factory()
+        ->forCourse($course)
+        ->availableFrom(now()->addDay())
+        ->create(['price' => 5000]);
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'calendar_id' => $calendar->id,
+        'start_time' => Carbon::parse('2027-01-15 18:00:00'),
+        'end_time' => Carbon::parse('2027-01-15 19:00:00'),
+    ]);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->assertActionHidden('addCourseProductToCart')
+        ->assertActionHidden('viewCourseProductInStore');
+});
+
 it('renders regular calendar events with a pointer cursor and holidays with a default cursor', function (): void {
     expect((new CalendarWidget())->eventDidMount())
         ->toContain("'pointer'")

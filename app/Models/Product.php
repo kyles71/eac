@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Enums\ProductAvailabilityStatus;
+use App\Services\ProductAvailabilityService;
 use App\Support\MediaDisks;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +31,8 @@ final class Product extends Model implements HasMedia
         'is_active' => 'boolean',
         'include_productable_images' => 'boolean',
         'requires_course_id' => 'integer',
+        'available_from' => 'datetime',
+        'available_until' => 'datetime',
     ];
 
     public function productable(): MorphTo
@@ -38,6 +43,12 @@ final class Product extends Model implements HasMedia
     public function requiresCourse(): BelongsTo
     {
         return $this->belongsTo(Course::class, 'requires_course_id');
+    }
+
+    /** @return HasMany<ProductEarlyAccessWindow, $this> */
+    public function earlyAccessWindows(): HasMany
+    {
+        return $this->hasMany(ProductEarlyAccessWindow::class);
     }
 
     public function cartItems(): HasMany
@@ -51,20 +62,21 @@ final class Product extends Model implements HasMedia
     }
 
     /**
-     * Scope to only include active products with a valid price.
+     * Scope to only include active products with a valid price and open schedule.
      */
-    public function scopeAvailable(Builder $query): void
+    public function scopeAvailable(Builder $query, ?CarbonInterface $at = null): void
     {
-        $query->where('is_active', true)
-            ->where('price', '>', 0);
+        app(ProductAvailabilityService::class)->applyNormallyAvailableToQuery($query, $at);
     }
 
-    public function scopePurchasableBy(Builder $query, User $user): void
+    public function scopeVisibleTo(Builder $query, User $user, ?CarbonInterface $at = null): void
     {
-        $query->where(function (Builder $query) use ($user): void {
-            $query->whereNull('requires_course_id')
-                ->orWhereIn('requires_course_id', $user->enrollments()->select('course_id'));
-        });
+        app(ProductAvailabilityService::class)->applyVisibleToQuery($query, $user, $at);
+    }
+
+    public function scopePurchasableBy(Builder $query, User $user, ?CarbonInterface $at = null): void
+    {
+        $this->scopeVisibleTo($query, $user, $at);
     }
 
     /**
@@ -101,15 +113,21 @@ final class Product extends Model implements HasMedia
         return $this->productable->storefrontDetails();
     }
 
-    public function canBePurchasedBy(User $user): bool
+    public function availabilityFor(?User $user = null, ?CarbonInterface $at = null): ProductAvailabilityStatus
     {
-        if ($this->requires_course_id === null) {
-            return true;
-        }
+        return app(ProductAvailabilityService::class)->resultFor($this, $user, $at);
+    }
 
-        return $user->enrollments()
-            ->where('course_id', $this->requires_course_id)
-            ->exists();
+    public function availabilityStatus(?CarbonInterface $at = null): ProductAvailabilityStatus
+    {
+        return app(ProductAvailabilityService::class)->adminStatusFor($this, $at);
+    }
+
+    public function canBePurchasedBy(User $user, ?CarbonInterface $at = null): bool
+    {
+        return app(ProductAvailabilityService::class)
+            ->resultFor($this, $user, $at)
+            ->isPurchasable();
     }
 
     public function canBeDeleted(): bool

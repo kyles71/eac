@@ -7,10 +7,13 @@ namespace App\Actions\Store;
 use App\Contracts\HasCapacity;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderStatus;
+use App\Enums\ProductAvailabilityStatus;
 use App\Models\DiscountCode;
 use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
+use App\Models\Product;
 use App\Models\User;
+use App\Services\ProductAvailabilityService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlanFee;
 use Illuminate\Support\Facades\DB;
@@ -55,13 +58,13 @@ final class CreateOrder
             // Soft capacity pre-check
             /** @var \App\Models\CartItem $cartItem */
             foreach ($cartItems as $cartItem) {
-                /** @var \App\Models\Product $product */
+                /** @var Product $product */
                 $product = $cartItem->product;
 
-                if (! $product->canBePurchasedBy($user)) {
-                    throw new InvalidArgumentException(
-                        "\"{$product->name}\" requires an existing course enrollment."
-                    );
+                $availability = app(ProductAvailabilityService::class)->resultFor($product, $user);
+
+                if (! $availability->isPurchasable()) {
+                    throw new InvalidArgumentException($this->cartItemUnavailableMessage($product, $availability));
                 }
 
                 if ($product->productable instanceof HasCapacity) {
@@ -81,7 +84,7 @@ final class CreateOrder
 
             /** @var \App\Models\CartItem $cartItem */
             foreach ($cartItems as $cartItem) {
-                /** @var \App\Models\Product $product */
+                /** @var Product $product */
                 $product = $cartItem->product;
                 $unitPrice = $product->price;
                 $totalPrice = $unitPrice * $cartItem->quantity;
@@ -139,7 +142,7 @@ final class CreateOrder
                     break;
                 }
 
-                /** @var \App\Models\Product $product */
+                /** @var Product $product */
                 $product = $orderItem->product;
                 $itemTotal = $orderItem->total_price;
 
@@ -219,5 +222,16 @@ final class CreateOrder
 
             return $order;
         });
+    }
+
+    private function cartItemUnavailableMessage(Product $product, ProductAvailabilityStatus $availability): string
+    {
+        return match ($availability) {
+            ProductAvailabilityStatus::EnrollmentRequired => "\"{$product->name}\" requires an existing course enrollment.",
+            ProductAvailabilityStatus::InvalidPrice => "\"{$product->name}\" does not have a valid price.",
+            ProductAvailabilityStatus::Scheduled => "\"{$product->name}\" is not available yet.",
+            ProductAvailabilityStatus::Expired => "\"{$product->name}\" is no longer available for purchase.",
+            default => "\"{$product->name}\" is not available for purchase.",
+        };
     }
 }

@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Enums\DashboardAudience;
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
+use App\Models\User;
 use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 
@@ -44,7 +48,7 @@ it('can list products', function () {
 it('has required columns', function (string $column) {
     livewire(ListProducts::class)
         ->assertTableColumnExists($column);
-})->with(['name', 'price', 'is_active', 'productable_type', 'created_at', 'updated_at']);
+})->with(['name', 'price', 'is_active', 'availability_status', 'productable_type', 'available_from', 'available_until', 'created_at', 'updated_at']);
 
 it('has an include linked item images field on the product form', function () {
     livewire(ListProducts::class)
@@ -108,6 +112,26 @@ it('only offers linked items without an existing product', function (string $pro
     Costume::class,
 ]);
 
+it('keeps the current linked item available when editing a product', function () {
+    $currentCourse = Course::factory()->create(['name' => 'Current Linked Course']);
+    $availableCourse = Course::factory()->create(['name' => 'Available Course']);
+    $otherLinkedCourse = Course::factory()->create(['name' => 'Other Linked Course']);
+    $product = Product::factory()->forCourse($currentCourse)->create();
+    Product::factory()->forCourse($otherLinkedCourse)->create();
+
+    livewire(ViewProduct::class, [
+        'record' => $product->id,
+    ])
+        ->mountAction(EditAction::class)
+        ->assertSchemaComponentExists(
+            'productable_id',
+            checkComponentUsing: fn (Select $select): bool => $select->getOptions() === [
+                $availableCourse->id => 'Available Course',
+                $currentCourse->id => 'Current Linked Course',
+            ],
+        );
+});
+
 it('can create a linked product that includes linked item images', function () {
     $costume = Costume::factory()->create();
 
@@ -130,6 +154,169 @@ it('can create a linked product that includes linked item images', function () {
         'productable_id' => $costume->id,
         'include_productable_images' => true,
     ]);
+});
+
+it('can create a product with scheduled availability and early access controls', function () {
+    $earlyAccessUser = User::factory()->create([
+        'first_name' => 'Early',
+        'last_name' => 'Access',
+    ]);
+    $secondEarlyAccessUser = User::factory()->create([
+        'first_name' => 'Second',
+        'last_name' => 'Access',
+    ]);
+    $windowStart = now()->subHour();
+    $windowEnd = now()->addDay();
+
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Competition Signup',
+            'description' => null,
+            'price' => '75.00',
+            'is_active' => true,
+            'available_from' => now()->addDay()->format('Y-m-d H:i:s'),
+            'available_until' => now()->addMonth()->format('Y-m-d H:i:s'),
+            'earlyAccessWindows' => [
+                [
+                    'available_from' => $windowStart->format('Y-m-d H:i:s'),
+                    'available_until' => $windowEnd->format('Y-m-d H:i:s'),
+                    'audiences' => [DashboardAudience::CompTeam->value, DashboardAudience::Teacher->value],
+                    'users' => [$earlyAccessUser->id, $secondEarlyAccessUser->id],
+                ],
+            ],
+            'productable_type' => null,
+            'productable_id' => null,
+        ])
+        ->assertNotified();
+
+    $product = Product::query()->where('name', 'Competition Signup')->firstOrFail();
+    $window = $product->earlyAccessWindows()->firstOrFail();
+
+    expect($product->price)->toBe(7500)
+        ->and($product->available_from)->not->toBeNull()
+        ->and($product->available_until)->not->toBeNull()
+        ->and($window->audiences)->toBe([DashboardAudience::CompTeam->value, DashboardAudience::Teacher->value])
+        ->and($window->available_from)->not->toBeNull()
+        ->and($window->available_until)->not->toBeNull()
+        ->and($window->users()->pluck('users.id')->sort()->values()->all())
+        ->toBe([$earlyAccessUser->id, $secondEarlyAccessUser->id]);
+});
+
+it('can edit product early access windows', function () {
+    $product = Product::factory()
+        ->availableFrom(now()->addDay())
+        ->create(['price' => 5000]);
+    $earlyAccessUser = User::factory()->create();
+    $replacementUser = User::factory()->create();
+    $window = ProductEarlyAccessWindow::factory()
+        ->for($product)
+        ->create([
+            'audiences' => [DashboardAudience::CompTeam->value],
+        ]);
+    $window->users()->attach($earlyAccessUser);
+
+    $component = livewire(ViewProduct::class, [
+        'record' => $product->id,
+    ])
+        ->mountAction(EditAction::class);
+
+    $windowStateKey = array_key_first($component->instance()->mountedActions[0]['data']['earlyAccessWindows']);
+
+    expect($windowStateKey)->toBe("record-{$window->id}");
+
+    $component
+        ->setActionData([
+            'name' => $product->name,
+            'description' => $product->description,
+            'price' => '50.00',
+            'is_active' => true,
+            'available_from' => now()->addDay()->format('Y-m-d H:i:s'),
+            'available_until' => null,
+            'earlyAccessWindows' => [
+                $windowStateKey => [
+                    'available_from' => now()->subMinutes(30)->format('Y-m-d H:i:s'),
+                    'available_until' => null,
+                    'audiences' => [DashboardAudience::Teacher->value],
+                    'users' => [$replacementUser->id],
+                ],
+            ],
+            'productable_type' => null,
+            'productable_id' => null,
+            'include_productable_images' => false,
+            'requires_course_id' => null,
+        ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    $window->refresh();
+
+    expect($window->audiences)->toBe([DashboardAudience::Teacher->value])
+        ->and($window->users()->pluck('users.id')->all())->toBe([$replacementUser->id]);
+});
+
+it('requires available until to be after available from', function () {
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Invalid Window',
+            'description' => null,
+            'price' => '75.00',
+            'is_active' => true,
+            'available_from' => now()->addDay()->format('Y-m-d H:i:s'),
+            'available_until' => now()->format('Y-m-d H:i:s'),
+            'productable_type' => null,
+            'productable_id' => null,
+        ])
+        ->assertHasActionErrors(['available_until' => 'after']);
+});
+
+it('requires an early access window to target at least one audience or user', function () {
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Untargeted Window',
+            'description' => null,
+            'price' => '75.00',
+            'is_active' => true,
+            'available_from' => now()->addDay()->format('Y-m-d H:i:s'),
+            'available_until' => null,
+            'earlyAccessWindows' => [
+                [
+                    'available_from' => now()->format('Y-m-d H:i:s'),
+                    'available_until' => null,
+                    'audiences' => [],
+                    'users' => [],
+                ],
+            ],
+            'productable_type' => null,
+            'productable_id' => null,
+        ])
+        ->assertHasActionErrors([
+            'earlyAccessWindows.0.audiences' => 'required',
+            'earlyAccessWindows.0.users' => 'required',
+        ]);
+});
+
+it('requires an early access window end to be after its start', function () {
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Invalid Early Window',
+            'description' => null,
+            'price' => '75.00',
+            'is_active' => true,
+            'available_from' => now()->addDay()->format('Y-m-d H:i:s'),
+            'available_until' => null,
+            'earlyAccessWindows' => [
+                [
+                    'available_from' => now()->addHour()->format('Y-m-d H:i:s'),
+                    'available_until' => now()->format('Y-m-d H:i:s'),
+                    'audiences' => [DashboardAudience::CompTeam->value],
+                    'users' => [],
+                ],
+            ],
+            'productable_type' => null,
+            'productable_id' => null,
+        ])
+        ->assertHasActionErrors(['earlyAccessWindows.0.available_until' => 'after']);
 });
 
 it('formats product type labels', function () {

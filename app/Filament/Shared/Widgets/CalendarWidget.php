@@ -300,8 +300,9 @@ final class CalendarWidget extends FullCalendarWidget
         $record->loadMissing('course.product');
 
         $product = $record->course?->product;
+        $user = auth()->user();
 
-        if (! $product instanceof Product || ! $product->is_active || $product->price <= 0) {
+        if (! $product instanceof Product || ! $user instanceof User || ! $product->canBePurchasedBy($user)) {
             return null;
         }
 

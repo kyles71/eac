@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Products\Schemas;
 
+use App\Enums\DashboardAudience;
 use App\Enums\ProductType;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Support\MediaDisks;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
@@ -41,9 +45,61 @@ final class ProductForm
                             ->required(),
                         Toggle::make('is_active')
                             ->label('Active')
+                            ->helperText('Draft products never appear in the store, even when scheduled or granted early access.')
                             ->default(true),
                         Textarea::make('description')
                             ->label('Store Description')
+                            ->columnSpanFull(),
+                    ]),
+                Section::make('Availability')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        DateTimePicker::make('available_from')
+                            ->label('Available From')
+                            ->timezone(self::displayTimezone())
+                            ->helperText('Leave blank to make this product available immediately when active.'),
+                        DateTimePicker::make('available_until')
+                            ->label('Available Until')
+                            ->timezone(self::displayTimezone())
+                            ->after('available_from')
+                            ->helperText('Leave blank to keep this product available indefinitely while active.'),
+                        Repeater::make('earlyAccessWindows')
+                            ->label('Early Access Windows')
+                            ->relationship()
+                            ->table([
+                                TableColumn::make('Available From'),
+                                TableColumn::make('Available Until'),
+                                TableColumn::make('Audiences'),
+                                TableColumn::make('Users'),
+                            ])
+                            ->compact()
+                            ->schema([
+                                DateTimePicker::make('available_from')
+                                    ->label('Available From')
+                                    ->timezone(self::displayTimezone())
+                                    ->required(),
+                                DateTimePicker::make('available_until')
+                                    ->label('Available Until')
+                                    ->timezone(self::displayTimezone())
+                                    ->after('available_from'),
+                                Select::make('audiences')
+                                    ->label('Audiences')
+                                    ->options(DashboardAudience::class)
+                                    ->multiple()
+                                    ->required(fn (Get $get): bool => blank($get('users')) && blank($get('audiences')))
+                                    ->dehydrateStateUsing(fn (?array $state): array => array_values($state ?? [])),
+                                Select::make('users')
+                                    ->label('Users')
+                                    ->multiple()
+                                    ->userRelationship('users')
+                                    ->required(fn (Get $get): bool => blank($get('audiences')) && blank($get('users'))),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add early access window')
+                            ->reorderable(false)
+                            ->collapsible()
                             ->columnSpanFull(),
                     ]),
                 Section::make('Linked Item')
@@ -154,11 +210,16 @@ final class ProductForm
                 $query->whereDoesntHave('product');
 
                 if ($currentProduct?->productable_type === $productableType) {
-                    $query->orWhereKey($currentProduct->productable_id);
+                    $query->orWhere('id', $currentProduct->productable_id);
                 }
             })
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    private static function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 }

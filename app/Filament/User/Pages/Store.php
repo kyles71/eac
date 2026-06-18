@@ -37,8 +37,7 @@ final class Store extends TablePage
         return $this->makeBaseTable()
             ->query(
                 Product::query()
-                    ->available()
-                    ->purchasableBy($user)
+                    ->visibleTo($user)
                     ->with('productable')
             )
             ->recordUrl(fn (Product $record): string => ProductDetails::getUrl(['product' => $record]))

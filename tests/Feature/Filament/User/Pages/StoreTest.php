@@ -8,6 +8,7 @@ use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
@@ -47,6 +48,32 @@ it('does not display products with zero price', function () {
         ->loadTable()
         ->assertCanSeeTableRecords([$this->product])
         ->assertCanNotSeeTableRecords([$freeProduct]);
+});
+
+it('does not display products outside their availability window', function () {
+    $scheduledProduct = Product::factory()->availableFrom(now()->addDay())->create(['price' => 5000]);
+    $expiredProduct = Product::factory()->availableUntil(now()->subMinute())->create(['price' => 5000]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$this->product])
+        ->assertCanNotSeeTableRecords([$scheduledProduct, $expiredProduct]);
+});
+
+it('displays early access products to directly granted users', function () {
+    $earlyAccessProduct = Product::factory()
+        ->availableFrom(now()->addDay())
+        ->create(['price' => 5000]);
+
+    ProductEarlyAccessWindow::factory()
+        ->for($earlyAccessProduct)
+        ->create()
+        ->users()
+        ->attach(auth()->user());
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$this->product, $earlyAccessProduct]);
 });
 
 it('does not display products that require an unpurchased enrollment', function () {

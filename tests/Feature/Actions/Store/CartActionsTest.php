@@ -9,6 +9,7 @@ use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -83,6 +84,28 @@ it('rejects adding a product with no price', function () {
     $action->handle($this->user, $this->product->refresh());
 })->throws(InvalidArgumentException::class, 'This product does not have a valid price.');
 
+it('rejects adding a product outside its availability window', function () {
+    $this->product->update(['available_from' => now()->addDay()]);
+
+    $action = new AddToCart;
+    $action->handle($this->user, $this->product->refresh());
+})->throws(InvalidArgumentException::class, 'This product is not available yet.');
+
+it('allows directly granted early access users to add a scheduled product', function () {
+    $this->product->update(['available_from' => now()->addDay()]);
+
+    ProductEarlyAccessWindow::factory()
+        ->for($this->product)
+        ->create()
+        ->users()
+        ->attach($this->user);
+
+    $action = new AddToCart;
+    $cartItem = $action->handle($this->user, $this->product->refresh());
+
+    expect($cartItem->product_id)->toBe($this->product->id);
+});
+
 it('rejects adding a product that requires an unpurchased enrollment', function () {
     $requiredCourse = Course::factory()->create();
     $restrictedProduct = Product::factory()->create([
@@ -147,6 +170,18 @@ it('rejects updating quantity beyond course capacity', function () {
     $action = new UpdateCartQuantity;
     $action->handle($this->user, $cartItem->id, 5); // Only 2 available
 })->throws(InvalidArgumentException::class, 'Only 2 spot(s) remaining for this course.');
+
+it('rejects updating a stale cart item whose product became unavailable', function () {
+    $cartItem = CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+    $this->product->update(['available_until' => now()->subMinute()]);
+
+    $action = new UpdateCartQuantity;
+    $action->handle($this->user, $cartItem->id, 2);
+})->throws(InvalidArgumentException::class, 'This product is no longer available for purchase.');
 
 it('rejects updating quantity to less than 1', function () {
     $cartItem = CartItem::factory()->create([
