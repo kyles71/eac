@@ -36,7 +36,7 @@ final class ListCourses extends ListRecords
     {
         $record = $action->getRecord();
 
-        if (! $record instanceof Course || $this->repeat_frequency === null || $this->repeat_through === null) {
+        if (! $record instanceof Course) {
             return [];
         }
 
@@ -75,7 +75,7 @@ final class ListCourses extends ListRecords
         }
 
         return [
-            'name' => "{$course->name} Class",
+            'name' => $course->name,
             'description' => $course->description,
             'start_time' => $course->start_time->toDateTimeString(),
             'end_time' => $course->start_time->copy()->addMinutes($course->duration)->toDateTimeString(),

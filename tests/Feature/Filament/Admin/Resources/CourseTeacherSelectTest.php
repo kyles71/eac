@@ -166,6 +166,35 @@ it('stores general course tags separately from calendar course tags', function (
         ->and($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toBe([Calendar::SLUG_COMP]);
 });
 
+it('creates a single class event when creating a course that does not repeat', function (): void {
+    livewire(ListCourses::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Tap Basics',
+            'description' => 'Foundations and rhythm',
+            'semester' => CourseSemester::Fall->value,
+            'capacity' => 12,
+            'start_time' => '2027-02-03 17:30:00',
+            'duration' => 45,
+            'calendar_tag_slugs' => [Calendar::SLUG_EAC],
+            'teachers' => [],
+            'guest_teacher' => null,
+            'tags' => [],
+            'courseForms' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    $course = Course::query()->where('name', 'Tap Basics')->firstOrFail();
+    $calendar = Calendar::query()->where('slug', Calendar::SLUG_EAC)->firstOrFail();
+    $events = $course->events()->get();
+
+    expect($events)->toHaveCount(1)
+        ->and($events->first()?->name)->toBe('Tap Basics')
+        ->and($events->first()?->description)->toBe('Foundations and rhythm')
+        ->and($events->first()?->start_time->toDateTimeString())->toBe('2027-02-03 22:30:00')
+        ->and($events->first()?->end_time->toDateTimeString())->toBe('2027-02-03 23:15:00')
+        ->and($events->first()?->calendar_id)->toBe($calendar->id);
+});
+
 it('creates recurring class events when creating a course', function (): void {
     livewire(ListCourses::class)
         ->callAction(CreateAction::class, data: [
@@ -191,9 +220,9 @@ it('creates recurring class events when creating a course', function (): void {
 
     expect($events)->toHaveCount(3)
         ->and($events->pluck('name')->all())->toBe([
-            'Modern 2 Class',
-            'Modern 2 Class',
-            'Modern 2 Class',
+            'Modern 2',
+            'Modern 2',
+            'Modern 2',
         ])
         ->and($events->pluck('start_time')->map->toDateTimeString()->all())->toBe([
             '2027-01-01 15:00:00',
