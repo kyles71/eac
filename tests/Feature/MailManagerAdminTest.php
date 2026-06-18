@@ -11,6 +11,7 @@ use Kyle\FilamentMailManager\Filament\Pages\CompareEmailTemplateVersions;
 use Kyle\FilamentMailManager\Filament\Pages\ManageEmailTypes;
 use Kyle\FilamentMailManager\Filament\Pages\ManageLayoutSettings;
 use Kyle\FilamentMailManager\Filament\Resources\MailLayouts\Pages\ListMailLayouts;
+use Kyle\FilamentMailManager\Models\ManagedEmailTemplate;
 use Kyle\FilamentMailManager\Repositories\ManagedTemplateRepository;
 use Spatie\Permission\Models\Permission;
 
@@ -74,6 +75,28 @@ it('only allows layout and enabled status to be configured for handcrafted email
         ->assertSchemaComponentDoesNotExist('subject', 'mountedActionSchema0')
         ->assertSchemaComponentDoesNotExist('body', 'mountedActionSchema0')
         ->assertSchemaComponentDoesNotExist('email_theme_id', 'mountedActionSchema0');
+});
+
+it('saves email type edits from array backed table records', function (): void {
+    livewire(ManageEmailTypes::class)
+        ->loadTable()
+        ->callAction(TestAction::make('edit')->table('user-password-reset'), [
+            'subject' => 'Reset your portal password',
+            'body' => '<p>Use the secure reset link.</p>{{ slot.action }}',
+            'is_active' => true,
+            'layout_mode' => LayoutMode::None->value,
+            'mail_layout_id' => null,
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified();
+
+    $template = ManagedEmailTemplate::query()
+        ->where('key', 'user-password-reset')
+        ->firstOrFail();
+
+    expect($template)
+        ->subject->toBe('Reset your portal password')
+        ->layout_mode->toBe(LayoutMode::None);
 });
 
 it('denies a super admin mail manager access without the explicit mail manager permission', function (): void {
