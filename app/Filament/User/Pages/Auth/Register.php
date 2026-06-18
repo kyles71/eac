@@ -9,6 +9,7 @@ use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 
@@ -18,6 +19,8 @@ final class Register extends BaseRegister
     {
         return parent::form($schema)
             ->components([
+                Text::make('Welcome to the EAC Plié Portal! Please create your account using the parent/guardian\'s name and email address. After your account is created, you\'ll have a designated place to add your dancer\'s information.')
+                    ->columnSpanFull(),
                 TextInput::make('first_name')
                     ->required()
                     ->maxLength(255)
