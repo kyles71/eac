@@ -16,6 +16,8 @@ return new class() extends Migration
             $table->text('description')->nullable();
             $table->unsignedInteger('price')->default(0);
             $table->boolean('is_active')->default(true);
+            $table->dateTime('available_from')->nullable()->index();
+            $table->dateTime('available_until')->nullable()->index();
             $table->boolean('include_productable_images')->default(false);
             $table->foreignId('requires_course_id')->nullable()->constrained('courses')->nullOnDelete();
             $table->nullableMorphs('productable');
