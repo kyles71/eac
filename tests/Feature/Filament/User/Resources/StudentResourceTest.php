@@ -8,6 +8,7 @@ use App\Filament\User\Resources\Students\StudentResource;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
+use App\Models\EventAttendee;
 use App\Models\Student;
 use App\Models\StudentEmail;
 use App\Models\User;
@@ -215,12 +216,12 @@ it('shows current classes and progressively loads past enrollment history', func
         'name' => 'Current Ballet',
         'start_time' => now()->subWeek(),
     ]);
-    Event::factory()->create([
+    $currentEvent = Event::factory()->create([
         'course_id' => $currentCourse->id,
         'start_time' => now()->addDay(),
         'end_time' => now()->addDay()->addHour(),
     ]);
-    $currentEnrollment = Enrollment::factory()->withStudent($student)->create([
+    Enrollment::factory()->withStudent($student)->create([
         'course_id' => $currentCourse->id,
         'user_id' => auth()->id(),
     ]);
@@ -245,25 +246,55 @@ it('shows current classes and progressively loads past enrollment history', func
 
     livewire(ViewStudent::class, ['record' => $student->id])
         ->loadTable()
-        ->assertCanSeeTableRecords([$currentEnrollment])
+        ->assertCanSeeTableRecords([$currentEvent])
         ->assertSee('Current Ballet')
         ->assertSee('Past Course 1')
         ->assertSee('Past Course 5')
         ->assertSee($pastMeetingWithoutEnd
             ->timezone((string) config('app.display_timezone', config('app.timezone')))
             ->format('M j, Y g:i A'))
-        ->assertDontSee('Past Course 6')
         ->assertSee('Show additional')
         ->call('loadMoreHistory')
         ->assertSet('automaticHistoryLoading', true)
-        ->assertSee('Past Course 6');
+        ->assertSet('historyLimit', 10);
 
     livewire(ViewStudent::class, ['record' => $student->id])
         ->loadTable()
-        ->mountAction(TestAction::make('viewCourseDetails')->table($currentEnrollment))
-        ->assertActionMounted(TestAction::make('viewCourseDetails')->table($currentEnrollment))
-        ->assertActionDataSet(fn (array $data): bool => $data['name'] === 'Current Ballet'
-            && $data['student'] === $student->fullName
-            && $data['meetings'] === 1
-            && $data['status'] === 'Active');
+        ->mountAction(TestAction::make('viewStudentEventDetails')->table($currentEvent))
+        ->assertActionMounted(TestAction::make('viewStudentEventDetails')->table($currentEvent))
+        ->assertActionDataSet(fn (array $data): bool => $data['name'] === $currentEvent->name
+            && $data['course_name'] === 'Current Ballet'
+            && $data['teacher'] === $currentCourse->teacherDisplayName);
+});
+
+it('shows direct student event invitations on the courses and events table', function () {
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $otherStudent = Student::factory()->create(['user_id' => auth()->id()]);
+
+    $directInvite = Event::factory()->create([
+        'name' => 'Private Rehearsal',
+        'course_id' => null,
+        'start_time' => now()->subDay(),
+        'end_time' => now()->subDay()->addHour(),
+    ]);
+    $otherInvite = Event::factory()->create([
+        'name' => 'Other Rehearsal',
+        'course_id' => null,
+        'start_time' => now()->subDay(),
+        'end_time' => now()->subDay()->addHour(),
+    ]);
+
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $directInvite->id]);
+    EventAttendee::factory()->forStudent($otherStudent)->create(['event_id' => $otherInvite->id]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$directInvite])
+        ->assertCanNotSeeTableRecords([$otherInvite])
+        ->assertSee('Private Rehearsal')
+        ->assertDontSee('Other Rehearsal')
+        ->mountAction(TestAction::make('viewStudentEventDetails')->table($directInvite))
+        ->assertActionMounted(TestAction::make('viewStudentEventDetails')->table($directInvite))
+        ->assertActionDataSet(fn (array $data): bool => $data['name'] === 'Private Rehearsal'
+            && $data['course_name'] === null);
 });

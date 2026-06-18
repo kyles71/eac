@@ -5,18 +5,22 @@ declare(strict_types=1);
 namespace App\Filament\User\Resources\Students\Pages;
 
 use App\Actions\Students\UpdateStudentContactDetails;
-use App\Filament\Shared\Actions\ViewCourseDetailsAction;
 use App\Filament\Shared\Schemas\ProgressiveList;
 use App\Filament\Shared\Schemas\StudentContactForm;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\Students\StudentResource;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Student;
 use App\Models\StudentEmail;
 use App\Models\User;
 use App\Support\EnrollmentStatus;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
@@ -103,49 +107,34 @@ final class ViewStudent extends ViewRecord implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                Enrollment::query()
-                    ->where('student_id', $this->student()->id)
-                    ->where('user_id', auth()->id())
-                    ->whereHas('course', fn (Builder $query): Builder => $query->notConcluded())
-                    ->with(['course.events', 'course.teachers', 'student'])
-            )
+            ->query($this->studentEventsQuery())
             ->reorderableColumns(false)
-            ->recordTitle(fn (Enrollment $record): string => $record->course?->name ?? 'Enrollment')
+            ->recordTitle(fn (Event $record): string => $record->name)
             ->columns([
-                TextColumn::make('course.name')
-                    ->label('Course'),
-                TextColumn::make('course.semester')
-                    ->label('Semester')
-                    ->badge(),
+                TextColumn::make('name')
+                    ->label('Event'),
                 TextColumn::make('teacher')
-                    ->state(fn (Enrollment $record): ?string => $record->course?->teacherDisplayName)
+                    ->state(fn (Event $record): ?string => $record->course?->teacherDisplayName)
                     ->searchable(false)
                     ->sortable(false)
                     ->placeholder('-'),
-                TextColumn::make('status')
-                    ->state(fn (Enrollment $record): string => EnrollmentStatus::for($record))
-                    ->badge()
-                    ->color(fn (Enrollment $record): string => EnrollmentStatus::color($record))
-                    ->searchable(false)
-                    ->sortable(false),
-                TextColumn::make('next_meeting')
-                    ->label('Next Meeting')
-                    ->state(fn (Enrollment $record): ?CarbonInterface => $this->enrollmentMeetingTime($record))
+                TextColumn::make('start_time')
+                    ->label('Starts At')
                     ->dateTime('M j, Y g:i A')
                     ->timezone((string) config('app.display_timezone', config('app.timezone')))
                     ->searchable(false)
                     ->sortable(false)
                     ->placeholder('-'),
             ])
-            ->recordAction('viewCourseDetails')
+            ->recordAction('viewStudentEventDetails')
             ->recordActions([
-                ViewCourseDetailsAction::make(),
+                $this->viewStudentEventDetailsAction(),
             ])
             ->paginated(false)
             ->searchable(false)
-            ->emptyStateHeading('No current or future classes')
-            ->emptyStateDescription('Assigned classes will appear here.');
+            ->defaultSort('start_time')
+            ->emptyStateHeading('No events')
+            ->emptyStateDescription('Assigned classes and direct invitations will appear here.');
     }
 
     public function saveContactDetails(): void
@@ -322,6 +311,70 @@ final class ViewStudent extends ViewRecord implements HasTable
             ->filter(fn ($event): bool => $event->start_time?->gte(now()) ?? false)
             ->sortBy('start_time')
             ->first()?->start_time ?? $course->start_time;
+    }
+
+    private function studentEventsQuery(): Builder
+    {
+        $student = $this->student();
+        $studentMorphClass = $student->getMorphClass();
+
+        return Event::query()
+            ->whereDoesntHave(
+                'excludedUsers',
+                fn (Builder $query): Builder => $query->whereKey(auth()->id())
+            )
+            ->where(function (Builder $query) use ($student, $studentMorphClass): void {
+                $query
+                    ->whereHas('course.enrollments', fn (Builder $query): Builder => $query
+                        ->where('student_id', $student->id)
+                        ->where('user_id', auth()->id()))
+                    ->orWhereHas('attendees', fn (Builder $query): Builder => $query
+                        ->where('attendee_type', $studentMorphClass)
+                        ->where('attendee_id', $student->id));
+            })
+            ->with(['calendar', 'course.teachers']);
+    }
+
+    private function viewStudentEventDetailsAction(): ViewAction
+    {
+        return ViewAction::make('viewStudentEventDetails')
+            ->label('View Details')
+            ->modalHeading(fn (Event $record): string => $record->name)
+            ->modalWidth('lg')
+            ->slideOver(false)
+            ->schema([
+                Section::make('Event')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('name')
+                            ->label('Event'),
+                        TextInput::make('calendar_name')
+                            ->label('Calendar'),
+                        TextInput::make('course_name')
+                            ->label('Course'),
+                        TextInput::make('teacher'),
+                        DateTimePicker::make('start_time')
+                            ->label('Starts At')
+                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                        DateTimePicker::make('end_time')
+                            ->label('Ends At')
+                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                        TextInput::make('focus')
+                            ->label('Focus / Theme'),
+                        Textarea::make('description')
+                            ->columnSpanFull(),
+                    ]),
+            ])
+            ->fillForm(fn (Event $record): array => [
+                'name' => $record->name,
+                'calendar_name' => $record->calendar?->name,
+                'course_name' => $record->course?->name,
+                'teacher' => $record->course?->teacherDisplayName,
+                'start_time' => $record->start_time,
+                'end_time' => $record->end_time,
+                'focus' => $record->focus,
+                'description' => $record->description,
+            ]);
     }
 
     private function student(): Student
