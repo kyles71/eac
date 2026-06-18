@@ -52,6 +52,36 @@ it('creates a Textmagic email campaign from a Symfony email', function (): void 
     expect($sentMessage?->getMessageId())->toBe('456');
 });
 
+it('sends non-ASCII HTML body characters as numeric HTML entities', function (): void {
+    $api = Mockery::mock(TextMagicApi::class);
+
+    $api
+        ->shouldReceive('createEmailCampaign')
+        ->once()
+        ->with(Mockery::on(function (CreateEmailCampaignRequest $request): bool {
+            return $request->getSubject() === '=?UTF-8?B?Q2Fmw6kgcmVjaXRhbCDwn5mC?='
+                && $request->getMessage() === '<p>Caf&#233; calltime &#128578; &amp; d&#233;j&#224; vu</p>';
+        }))
+        ->andReturn(new CreateEmailCampaignResponse(['id' => 789]));
+
+    $client = new TextmagicEmailService($api);
+
+    $transport = new TextmagicTransport(
+        client: $client,
+        emailSenderId: 123,
+        fromName: 'Admin Team',
+        replyToEmail: 'reply@example.com',
+    );
+
+    $transport->send(
+        (new Email())
+            ->from('admin@example.com')
+            ->to('recipient@example.com')
+            ->subject('Café recital 🙂')
+            ->html('<p>Café calltime 🙂 &amp; déjà vu</p>'),
+    );
+});
+
 it('uses the email reply-to address when one is set', function (): void {
     $api = Mockery::mock(TextMagicApi::class);
 

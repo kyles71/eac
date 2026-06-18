@@ -19,6 +19,11 @@ use Throwable;
 
 final class TextmagicTransport extends AbstractTransport
 {
+    /**
+     * @var array{0: int, 1: int, 2: int, 3: int}
+     */
+    private const array NON_ASCII_HTML_ENTITY_MAP = [0x80, 0x10FFFF, 0, 0xFFFFFF];
+
     public function __construct(
         private readonly TextmagicEmailService $client,
         private readonly ?int $emailSenderId,
@@ -108,7 +113,7 @@ final class TextmagicTransport extends AbstractTransport
             throw new TransportException('Textmagic email campaigns require a subject.');
         }
 
-        return $subject;
+        return $this->encodeNonAsciiSubjectCharacters($subject);
     }
 
     private function htmlBody(Email $email): string
@@ -116,7 +121,7 @@ final class TextmagicTransport extends AbstractTransport
         $html = $this->bodyToString($email->getHtmlBody());
 
         if (is_string($html) && mb_trim($html) !== '') {
-            return $html;
+            return $this->encodeNonAsciiHtmlCharacters($html);
         }
 
         $text = $this->bodyToString($email->getTextBody());
@@ -125,7 +130,9 @@ final class TextmagicTransport extends AbstractTransport
             throw new TransportException('Textmagic email campaigns require an HTML or text body.');
         }
 
-        return '<p>'.nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')).'</p>';
+        return $this->encodeNonAsciiHtmlCharacters(
+            '<p>'.nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')).'</p>',
+        );
     }
 
     /**
@@ -171,5 +178,23 @@ final class TextmagicTransport extends AbstractTransport
         }
 
         return (string) $body;
+    }
+
+    private function encodeNonAsciiHtmlCharacters(string $html): string
+    {
+        return mb_encode_numericentity($html, self::NON_ASCII_HTML_ENTITY_MAP, 'UTF-8');
+    }
+
+    private function encodeNonAsciiSubjectCharacters(string $subject): string
+    {
+        if (preg_match('/[^\x00-\x7F]/', $subject) !== 1) {
+            return $subject;
+        }
+
+        return preg_replace(
+            '/\r\n[ \t]*/',
+            ' ',
+            mb_encode_mimeheader($subject, 'UTF-8', 'B', "\r\n"),
+        ) ?? $subject;
     }
 }
