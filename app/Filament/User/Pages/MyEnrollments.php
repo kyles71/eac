@@ -12,6 +12,7 @@ use App\Filament\User\Resources\Students\Schemas\StudentForm;
 use App\Models\Enrollment;
 use App\Models\Student;
 use App\Support\EnrollmentStatus;
+use App\Support\UserAttention;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -151,6 +152,9 @@ final class MyEnrollments extends TablePage
 
                             app(AssignStudentToEnrollmentAction::class)->handle($record, $student, $user);
 
+                            $this->dispatch(UserAttention::UPDATED_EVENT);
+                            $this->dispatch('refresh-sidebar');
+
                             Notification::make()
                                 ->title('Enrollment updated')
                                 ->success()
@@ -175,6 +179,9 @@ final class MyEnrollments extends TablePage
                             $user = auth()->user();
 
                             app(UnassignStudentFromEnrollmentAction::class)->handle($record, $user);
+
+                            $this->dispatch(UserAttention::UPDATED_EVENT);
+                            $this->dispatch('refresh-sidebar');
 
                             Notification::make()
                                 ->title('Student removed from enrollment')

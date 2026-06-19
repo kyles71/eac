@@ -17,10 +17,24 @@ final class Enrollment extends Model
     /** @use HasFactory<\Database\Factories\EnrollmentFactory> */
     use HasFactory;
 
+    protected $casts = [
+        'id' => 'integer',
+        'course_id' => 'integer',
+        'user_id' => 'integer',
+        'order_item_id' => 'integer',
+        'student_id' => 'integer',
+    ];
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    /** @return BelongsTo<OrderItem, $this> */
+    public function orderItem(): BelongsTo
+    {
+        return $this->belongsTo(OrderItem::class);
     }
 
     /** @return BelongsTo<Student, $this> */

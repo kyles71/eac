@@ -144,6 +144,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
             Enrollment::query()->create([
                 'course_id' => $this->id,
                 'user_id' => $purchaser->id,
+                'order_item_id' => $orderItem->id,
                 'student_id' => null,
             ]);
         }

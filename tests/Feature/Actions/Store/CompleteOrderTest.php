@@ -31,7 +31,7 @@ it('creates enrollments and marks order as completed', function () {
         'stripe_payment_intent_id' => 'pi_test_123',
     ]);
 
-    OrderItem::factory()->create([
+    $orderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
         'product_id' => $this->product->id,
         'quantity' => 2,
@@ -55,7 +55,8 @@ it('creates enrollments and marks order as completed', function () {
         ->get();
 
     expect($enrollments)->toHaveCount(2);
-    expect($enrollments->every(fn ($e) => $e->student_id === null))->toBeTrue();
+    expect($enrollments->every(fn ($e) => $e->student_id === null))->toBeTrue()
+        ->and($enrollments->pluck('order_item_id')->unique()->all())->toBe([$orderItem->id]);
 });
 
 it('clears only cart items for products on the order', function () {

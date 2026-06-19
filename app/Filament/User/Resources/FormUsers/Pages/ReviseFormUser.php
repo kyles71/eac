@@ -9,6 +9,7 @@ use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\FormUsers\Schemas\FormUserForm;
 use App\Models\FormUser;
 use App\Models\User;
+use App\Support\UserAttention;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
@@ -54,6 +55,9 @@ final class ReviseFormUser extends EditRecord
                 ->success()
                 ->send();
         }
+
+        $this->dispatch(UserAttention::UPDATED_EVENT);
+        $this->dispatch('refresh-sidebar');
 
         if ($shouldRedirect) {
             $this->redirect(FormUserResource::getUrl('view', ['record' => $revision]));
