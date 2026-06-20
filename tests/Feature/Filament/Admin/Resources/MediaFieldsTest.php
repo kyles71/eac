@@ -19,6 +19,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
+use Spatie\Permission\Models\Role;
 
 use function Pest\Livewire\livewire;
 
@@ -44,9 +45,20 @@ it('shows avatar on user view page', function () {
     livewire(ViewUser::class, ['record' => $user->id])
         ->assertOk()
         ->assertSchemaComponentExists('avatar', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::private()
-            && $entry->getVisibility() === 'private')
-        ->assertSchemaComponentExists('staff_photo', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::private()
             && $entry->getVisibility() === 'private');
+});
+
+it('shows staff photo on user view page only if user is a staff member', function () {
+    $staff = User::factory()->isTeacher()->create();
+    $user = User::factory()->create();
+
+    livewire(ViewUser::class, ['record' => $user->id])
+        ->assertOk()
+        ->assertSchemaComponentHidden('staff_photo', 'infolist');
+
+    livewire(ViewUser::class, ['record' => $staff->id])
+        ->assertOk()
+        ->assertSchemaComponentVisible('staff_photo', 'infolist');
 });
 
 it('shows media entries on product view page', function () {
@@ -77,12 +89,15 @@ it('shows media entries on event view page', function () {
 });
 
 it('applies default upload size limits to image fields', function () {
+    $teacherRole = Role::findOrCreate('teacher');
+
     livewire(ListCostumes::class)
         ->mountAction(CreateAction::class)
         ->assertSchemaComponentExists('images', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'));
 
     livewire(ListUsers::class)
         ->mountAction(CreateAction::class)
+        ->fillForm(['roles' => [$teacherRole->id]])
         ->assertSchemaComponentExists('avatar', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'))
         ->assertSchemaComponentExists('staff_photo', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'));
 });

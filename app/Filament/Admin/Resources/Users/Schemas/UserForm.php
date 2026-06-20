@@ -9,12 +9,14 @@ use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 final class UserForm
@@ -102,6 +104,7 @@ final class UserForm
                 Section::make('Staff Profile')
                     ->collapsed()
                     ->columnSpanFull()
+                    ->visible(fn (Get $get, ?User $record): bool => self::hasSelectedStaffRole($get('roles'), $record))
                     ->schema([
                         SpatieMediaLibraryFileUpload::make('staff_photo')
                             ->label('Staff Photo')
@@ -109,6 +112,10 @@ final class UserForm
                             ->disk(MediaDisks::private())
                             ->visibility('private')
                             ->image()
+                            ->columnSpanFull(),
+                        Textarea::make('staff_bio')
+                            ->label('Staff Bio')
+                            ->rows(6)
                             ->columnSpanFull(),
                     ]),
             ]);
@@ -121,5 +128,17 @@ final class UserForm
         }
 
         return $record instanceof User && $record->roles()->exists();
+    }
+
+    private static function hasSelectedStaffRole(mixed $roles, ?User $record): bool
+    {
+        if (is_array($roles)) {
+            return Role::query()
+                ->whereKey($roles)
+                ->whereIn('name', User::STAFF_ROLE_NAMES)
+                ->exists();
+        }
+
+        return $record?->isStaffMember() ?? false;
     }
 }

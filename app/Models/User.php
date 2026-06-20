@@ -35,6 +35,8 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, HasTags, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
 
+    public const array STAFF_ROLE_NAMES = ['owner', 'teacher'];
+
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -92,6 +94,11 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         }
 
         return true;
+    }
+
+    public function isStaffMember(): bool
+    {
+        return $this->hasAnyRole(self::STAFF_ROLE_NAMES);
     }
 
     /** @return HasMany<Student, $this> */
@@ -193,6 +200,7 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
         return $this->hasMany(CreditTransaction::class);
     }
 
+    /** @return HasMany<RestrictedCredit, $this> */
     public function restrictedCredits(): HasMany
     {
         return $this->hasMany(RestrictedCredit::class);

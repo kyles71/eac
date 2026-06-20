@@ -94,6 +94,50 @@ it('can create a user', function () {
     ]);
 });
 
+it('only shows the staff profile fields for owner and teacher roles', function (string $staffRoleName) {
+    $staffRole = Role::findOrCreate($staffRoleName);
+    $nonStaffRole = Role::findOrCreate('advisor');
+
+    livewire(ListUsers::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentHidden('staff_bio')
+        ->fillForm(['roles' => [$nonStaffRole->id]])
+        ->assertSchemaComponentHidden('staff_bio')
+        ->fillForm(['roles' => [$staffRole->id]])
+        ->assertSchemaComponentVisible('staff_bio');
+})->with(['owner', 'teacher']);
+
+it('stores a staff bio for a staff member', function () {
+    $teacherRole = Role::findOrCreate('teacher');
+
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => 'Martha',
+            'last_name' => 'Graham',
+            'email' => 'martha@example.com',
+            'password' => 'password',
+            'roles' => [$teacherRole->id],
+            'staff_bio' => 'Martha teaches modern dance.',
+        ])
+        ->assertNotified();
+
+    assertDatabaseHas(User::class, [
+        'email' => 'martha@example.com',
+        'staff_bio' => 'Martha teaches modern dance.',
+    ]);
+});
+
+it('only shows the staff profile on staff member view pages', function () {
+    $staffMember = User::factory()->isTeacher()->create();
+    $nonStaffMember = User::factory()->create();
+
+    livewire(ViewUser::class, ['record' => $staffMember->id])
+        ->assertSchemaComponentVisible('staff_bio', 'infolist');
+
+    livewire(ViewUser::class, ['record' => $nonStaffMember->id])
+        ->assertSchemaComponentHidden('staff_bio', 'infolist');
+});
+
 it('stores calendar audience tags on role-bearing users', function () {
     $role = Role::findOrCreate('teacher');
     $audienceTag = Tag::findOrCreate('Staff', Calendar::AUDIENCE_TAG_TYPE);

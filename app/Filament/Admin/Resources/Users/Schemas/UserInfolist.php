@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Users\Schemas;
 
 use App\Filament\Shared\Schemas\CompetitionMembershipHistory;
 use App\Models\Calendar;
+use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\SpatieTagsEntry;
@@ -48,6 +49,7 @@ final class UserInfolist
                 Section::make('Staff Profile')
                     ->collapsed()
                     ->columnSpanFull()
+                    ->visible(fn (?User $record): bool => $record?->isStaffMember() ?? false)
                     ->schema([
                         SpatieMediaLibraryImageEntry::make('staff_photo')
                             ->label('Staff Photo')
@@ -55,6 +57,10 @@ final class UserInfolist
                             ->disk(MediaDisks::private())
                             ->visibility('private'),
                         // ->conversion('thumb'),
+                        TextEntry::make('staff_bio')
+                            ->label('Staff Bio')
+                            ->placeholder('-')
+                            ->columnSpanFull(),
                     ]),
                 CompetitionMembershipHistory::make(),
                 Section::make('Security & Record')
