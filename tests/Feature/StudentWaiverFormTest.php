@@ -6,6 +6,7 @@ use App\Enums\FormTypes;
 use App\Enums\MedicalWaiverStatus;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
+use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Filament\User\Resources\FormUsers\Pages\ReviseFormUser;
 use App\Filament\User\Resources\FormUsers\Pages\ViewFormUser;
 use App\Filament\User\Resources\Students\Pages\ViewStudent;
@@ -16,6 +17,7 @@ use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 
 use function Pest\Laravel\assertDatabaseCount;
@@ -316,6 +318,30 @@ it('shows only the waiver links allowed by status and form state', function (): 
         ->assertSee('Complete Medical Waiver')
         ->assertSee(FormUserResource::getUrl('edit', ['record' => $pendingFormUser]), false)
         ->assertDontSee('View current medical waiver');
+});
+
+it('shows the my forms update action for the owning user without admin form permissions', function (): void {
+    $user = User::factory()->create();
+    $student = Student::factory()->create(['user_id' => $user->id]);
+    $form = Form::factory()->create([
+        'form_type' => FormTypes::ShowcaseParticipation,
+        'can_update' => true,
+        'valid_until' => now()->addMonth(),
+    ]);
+    $showcase = ShowcaseParticipation::query()->create();
+    $formUser = FormUser::factory()->forStudent($student)->create([
+        'form_id' => $form->id,
+        'user_id' => $user->id,
+        'responseable_type' => $showcase->getMorphClass(),
+        'responseable_id' => $showcase->id,
+    ]);
+
+    $this->actingAs($user);
+
+    livewire(ListFormUsers::class)
+        ->loadTable()
+        ->assertActionVisible(TestAction::make('update')->table($formUser))
+        ->assertSee(FormUserResource::getUrl('edit', ['record' => $formUser]), false);
 });
 
 it('uses the newest completed waiver for viewing while updating only the newest valid waiver', function (): void {

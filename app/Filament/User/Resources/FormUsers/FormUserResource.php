@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -38,26 +39,25 @@ final class FormUserResource extends Resource
             ->where('user_id', auth()->id());
     }
 
-    public static function canViewAny(): bool
+    public static function getViewAnyAuthorizationResponse(): Response
     {
-        return auth()->check();
+        return auth()->check()
+            ? Response::allow()
+            : Response::deny();
     }
 
-    public static function canView(Model $record): bool
+    public static function getViewAuthorizationResponse(Model $record): Response
     {
-        return $record instanceof FormUser && $record->user_id === auth()->id();
+        return self::ownsFormUser($record)
+            ? Response::allow()
+            : Response::deny();
     }
 
-    public static function canEdit(Model $record): bool
+    public static function getEditAuthorizationResponse(Model $record): Response
     {
-        if (! $record instanceof FormUser || $record->user_id !== auth()->id()) {
-            return false;
-        }
-
-        $record->loadMissing('form');
-
-        return $record->form->form_type !== FormTypes::StudentWaiver
-            || ! $record->isCompleted();
+        return self::canEditFormUser($record)
+            ? Response::allow()
+            : Response::deny();
     }
 
     public static function form(Schema $schema, ?FormTypes $form_type = null): Schema
@@ -106,5 +106,23 @@ final class FormUserResource extends Resource
             'edit' => EditFormUser::route('/{record}/sign'),
             'revise' => Pages\ReviseFormUser::route('/{record}/revise'),
         ];
+    }
+
+    private static function ownsFormUser(Model $record): bool
+    {
+        return $record instanceof FormUser
+            && $record->user_id === auth()->id();
+    }
+
+    private static function canEditFormUser(Model $record): bool
+    {
+        if (! self::ownsFormUser($record)) {
+            return false;
+        }
+
+        $record->loadMissing('form');
+
+        return $record->form->form_type !== FormTypes::StudentWaiver
+            || ! $record->isCompleted();
     }
 }

@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -38,31 +39,39 @@ final class StudentResource extends Resource
             ->where('user_id', auth()->id());
     }
 
-    public static function canViewAny(): bool
+    public static function getViewAnyAuthorizationResponse(): Response
     {
-        return auth()->check();
+        return auth()->check()
+            ? Response::allow()
+            : Response::deny();
     }
 
-    public static function canCreate(): bool
+    public static function getCreateAuthorizationResponse(): Response
     {
-        return auth()->check();
+        return auth()->check()
+            ? Response::allow()
+            : Response::deny();
     }
 
-    public static function canEdit(Model $record): bool
+    public static function getEditAuthorizationResponse(Model $record): Response
     {
-        return $record instanceof Student && $record->user_id === auth()->id();
+        return self::ownsStudent($record)
+            ? Response::allow()
+            : Response::deny();
     }
 
-    public static function canView(Model $record): bool
+    public static function getViewAuthorizationResponse(Model $record): Response
     {
-        return $record instanceof Student && $record->user_id === auth()->id();
+        return self::ownsStudent($record)
+            ? Response::allow()
+            : Response::deny();
     }
 
-    public static function canDelete(Model $record): bool
+    public static function getDeleteAuthorizationResponse(Model $record): Response
     {
-        return $record instanceof Student
-            && $record->user_id === auth()->id()
-            && $record->enrollments()->doesntExist();
+        return self::canDeleteStudent($record)
+            ? Response::allow()
+            : Response::deny();
     }
 
     public static function form(Schema $schema): Schema
@@ -82,5 +91,17 @@ final class StudentResource extends Resource
             'create' => CreateStudent::route('/create'),
             'view' => ViewStudent::route('/{record}'),
         ];
+    }
+
+    private static function ownsStudent(Model $record): bool
+    {
+        return $record instanceof Student
+            && $record->user_id === auth()->id();
+    }
+
+    private static function canDeleteStudent(Model $record): bool
+    {
+        return self::ownsStudent($record)
+            && $record->enrollments()->doesntExist();
     }
 }

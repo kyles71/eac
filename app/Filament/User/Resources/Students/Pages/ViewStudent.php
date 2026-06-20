@@ -338,6 +338,7 @@ final class ViewStudent extends ViewRecord implements HasTable
     private function viewStudentEventDetailsAction(): ViewAction
     {
         return ViewAction::make('viewStudentEventDetails')
+            ->authorize(true)
             ->label('View Details')
             ->modalHeading(fn (Event $record): string => $record->name)
             ->modalWidth('lg')

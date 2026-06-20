@@ -166,7 +166,12 @@ it('validates the additional student email limit and duplicates', function () {
 });
 
 it('can create a student for the authenticated account', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
     livewire(ListStudents::class)
+        ->assertActionVisible(CreateAction::class)
         ->callAction(CreateAction::class, data: [
             'first_name' => 'Avery',
             'last_name' => 'Dancer',
@@ -180,14 +185,18 @@ it('can create a student for the authenticated account', function () {
         'last_name' => 'Dancer',
         'nickname' => 'Ave',
         'birthdate' => '2015-04-12 00:00:00',
-        'user_id' => auth()->id(),
+        'user_id' => $user->id,
     ]);
 });
 
 it('can delete a student without enrollments', function () {
-    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $user = User::factory()->create();
+    $student = Student::factory()->create(['user_id' => $user->id]);
+
+    $this->actingAs($user);
 
     livewire(ListStudents::class)
+        ->assertActionVisible(TestAction::make(DeleteAction::class)->table($student))
         ->callAction(TestAction::make(DeleteAction::class)->table($student))
         ->assertNotified();
 
