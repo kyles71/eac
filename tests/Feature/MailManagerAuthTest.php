@@ -54,7 +54,8 @@ it('queues the managed welcome email after registration', function (): void {
     Mail::assertQueued(
         ManagedMail::class,
         fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'user-welcome'
-            && $mail->hasTo($user->email),
+            && $mail->hasTo($user->email)
+            && $mail->usesMailer('handcrafted'),
     );
 });
 

@@ -73,7 +73,7 @@ final class MailManagerServiceProvider extends ServiceProvider
                 return;
             }
 
-            Mail::to($user)->queue(
+            Mail::mailer('handcrafted')->to($user)->queue(
                 ManagedMail::make('user-welcome')
                     ->tokens($this->userTokens($user)),
             );
