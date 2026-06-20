@@ -9,7 +9,6 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\RichEditor;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
@@ -110,15 +109,14 @@ it('allows nested rich editor payload updates in the publish version action', fu
 });
 
 it('keeps the publish version rich editor body scrollable inside the modal', function () {
-    $document = LegalDocument::factory()->create();
+    $globalTheme = file_get_contents(resource_path('css/filament/global-theme.css'));
 
-    livewire(ListLegalDocuments::class)
-        ->mountAction(TestAction::make('publishVersion')->table($document))
-        ->assertSchemaComponentExists(
-            'content',
-            null,
-            fn (RichEditor $component): bool => ($component->getExtraInputAttributes()['style'] ?? null) === 'max-height: min(55vh, 40rem); min-height: 8rem; overflow-y: auto;',
-        );
+    expect($globalTheme)
+        ->toContain('.fi-fo-rich-editor-content')
+        ->toContain('flex-basis: auto')
+        ->toContain('min-height: 8rem')
+        ->toContain('max-height: min(55vh, 40rem)')
+        ->toContain('overflow-y: auto');
 });
 
 it('has required table columns', function (string $column) {

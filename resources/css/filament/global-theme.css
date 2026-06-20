@@ -15,6 +15,13 @@
     border-right: 1px solid #18181B;
 }
 
+.fi-fo-rich-editor-content {
+    flex-basis: auto;
+    min-height: 8rem;
+    max-height: min(55vh, 40rem);
+    overflow-y: auto;
+}
+
 @media (max-width: 639px) {
     .filament-fullcalendar .fc-header-toolbar {
         display: flex;
