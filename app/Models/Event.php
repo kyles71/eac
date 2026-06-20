@@ -21,26 +21,53 @@ final class Event extends Model implements HasMedia
 {
     use HasFactory, InteractsWithMedia;
 
-    /**
-     * The attributes that should be cast to native types.
-     *
-     * @var array
-     */
+    /** @var array<string, string> */
     protected $casts = [
         'id' => 'integer',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'course_id' => 'integer',
+        'cancelled_at' => 'datetime',
+        'cancelled_by_user_id' => 'integer',
+        'reminder_processed_at' => 'datetime',
     ];
 
+    /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
     }
 
+    /** @return BelongsTo<Calendar, $this> */
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function canBeCancelledAt(?CarbonInterface $dateTime = null): bool
+    {
+        if ($this->isCancelled()) {
+            return false;
+        }
+
+        $dateTime ??= now();
+
+        if ($this->end_time !== null) {
+            return $dateTime->lt($this->end_time);
+        }
+
+        return $this->start_time !== null && $dateTime->lt($this->start_time);
     }
 
     public function attendees(): HasMany

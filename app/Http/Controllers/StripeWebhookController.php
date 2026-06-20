@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreatePaymentPlan;
+use App\Actions\Store\SendInstallmentPaymentEmail;
+use App\Actions\Store\SendOrderReceipt;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
@@ -21,6 +23,8 @@ final class StripeWebhookController
     public function __construct(
         private readonly StripeServiceContract $stripeService,
         private readonly CompleteOrder $completeOrder,
+        private readonly SendOrderReceipt $sendOrderReceipt,
+        private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -48,6 +52,11 @@ final class StripeWebhookController
     private function handlePaymentIntentFailed(\Stripe\Event $event): JsonResponse
     {
         $paymentIntent = $event->data->object;
+        $installmentId = $paymentIntent->metadata->installment_id ?? null;
+
+        if ($installmentId !== null) {
+            return $this->handleInstallmentPaymentFailed($paymentIntent, (string) $installmentId);
+        }
 
         $order = Order::query()
             ->where('stripe_payment_intent_id', $paymentIntent->id)
@@ -68,18 +77,19 @@ final class StripeWebhookController
     {
         $paymentIntent = $event->data->object;
 
+        // Installment PaymentIntents also carry order metadata. Handle the
+        // more specific installment lifecycle before checkout completion.
+        $installmentId = $paymentIntent->metadata->installment_id ?? null;
+
+        if ($installmentId !== null) {
+            return $this->handleInstallmentPaymentSucceeded($paymentIntent, (string) $installmentId);
+        }
+
         // Handle order completion (checkout via Stripe Elements)
         $orderId = $paymentIntent->metadata->order_id ?? null;
 
         if ($orderId !== null) {
             return $this->handleOrderPaymentSucceeded($paymentIntent, $orderId);
-        }
-
-        // Handle installment payment
-        $installmentId = $paymentIntent->metadata->installment_id ?? null;
-
-        if ($installmentId !== null) {
-            return $this->handleInstallmentPaymentSucceeded($paymentIntent, $installmentId);
         }
 
         return response()->json(['message' => 'No order or installment metadata, skipping']);
@@ -148,6 +158,8 @@ final class StripeWebhookController
             }
         }
 
+        $this->sendOrderReceipt->handle($order);
+
         Log::info("Order #{$order->id} completed via payment_intent.succeeded.", [
             'payment_intent_id' => $paymentIntent->id,
         ]);
@@ -169,11 +181,67 @@ final class StripeWebhookController
 
         if ($installment->status !== InstallmentStatus::Paid) {
             $installment->markPaid(stripePaymentIntentId: $paymentIntent->id);
+            $this->sendInstallmentPaymentEmail->handle(
+                installment: $installment,
+                successful: true,
+                stripeStatus: 'succeeded',
+                stripePaymentIntentId: $this->stringValue($paymentIntent->id ?? null),
+                stripeCustomerId: $this->stringValue($paymentIntent->customer ?? null),
+                stripePaymentMethodId: $this->stringValue($paymentIntent->payment_method ?? null),
+            );
             Log::info("Installment #{$installmentId} marked as paid via webhook.", [
                 'payment_intent_id' => $paymentIntent->id,
             ]);
         }
 
         return response()->json(['message' => 'Installment payment processed']);
+    }
+
+    private function handleInstallmentPaymentFailed(object $paymentIntent, string $installmentId): JsonResponse
+    {
+        $installment = Installment::query()->find($installmentId);
+
+        if ($installment === null) {
+            Log::warning("Installment #{$installmentId} not found for payment_intent.payment_failed.", [
+                'payment_intent_id' => $paymentIntent->id ?? null,
+            ]);
+
+            return response()->json(['error' => 'Installment not found'], 404);
+        }
+
+        if (! in_array($installment->status, [
+            InstallmentStatus::Paid,
+            InstallmentStatus::Failed,
+            InstallmentStatus::Overdue,
+        ], true)) {
+            $installment->markFailed();
+            $lastPaymentError = $paymentIntent->last_payment_error ?? null;
+            $failureReason = $this->stringValue($lastPaymentError->message ?? null)
+                ?? 'We could not process this payment. Please review the payment method on your account.';
+            $failureCode = $this->stringValue($lastPaymentError->decline_code ?? null)
+                ?? $this->stringValue($lastPaymentError->code ?? null);
+
+            $this->sendInstallmentPaymentEmail->handle(
+                installment: $installment,
+                successful: false,
+                stripeStatus: 'failed',
+                stripePaymentIntentId: $this->stringValue($paymentIntent->id ?? null),
+                stripeCustomerId: $this->stringValue($paymentIntent->customer ?? null),
+                stripePaymentMethodId: $this->stringValue($paymentIntent->payment_method ?? null),
+                failureReason: $failureReason,
+                failureCode: $failureCode,
+            );
+
+            Log::info("Installment #{$installmentId} marked as failed via webhook.", [
+                'payment_intent_id' => $paymentIntent->id ?? null,
+            ]);
+        }
+
+        return response()->json(['message' => 'Installment payment failure processed']);
+    }
+
+    private function stringValue(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

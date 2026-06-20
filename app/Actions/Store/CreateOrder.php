@@ -24,6 +24,7 @@ final class CreateOrder
     public function __construct(
         private readonly CompleteOrder $completeOrder,
         private readonly CancelOrder $cancelOrder,
+        private readonly SendOrderReceipt $sendOrderReceipt,
     ) {}
 
     public function handle(
@@ -217,7 +218,9 @@ final class CreateOrder
 
             // If fully covered by discount + credit, complete immediately
             if ($total === 0) {
-                $this->completeOrder->handle($order);
+                if ($this->completeOrder->handle($order)) {
+                    $this->sendOrderReceipt->handle($order);
+                }
             }
 
             return $order;

@@ -38,6 +38,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'start_time' => 'datetime',
         'capacity' => 'integer',
         'duration' => 'integer',
+        'event_reminder_processed_at' => 'datetime',
     ];
 
     /** @return HasMany<Event, $this> */

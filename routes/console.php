@@ -5,11 +5,41 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('installments:process')
-    ->daily()
+    ->dailyAt('00:01')
+    ->timezone('America/New_York')
     ->name('process-installments')
     ->description('Process due and retryable payment plan installments');
 
 Schedule::command('orders:cancel-abandoned')
-    ->daily()
+    ->dailyAt('00:01')
+    ->timezone('America/New_York')
     ->name('cancel-abandoned-orders')
     ->description('Cancel pending orders abandoned for more than 24 hours');
+
+Schedule::command('installments:send-past-due-notifications')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-past-due-installment-notifications')
+    ->description('Notify administrators about newly past-due payment plan installments');
+
+Schedule::command('events:send-reminders')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-event-reminders')
+    ->description('Send reminders for events occurring in two weeks');
+
+Schedule::command('enrollments:send-open-reminders')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-open-enrollment-reminders')
+    ->description('Remind users to assign students to open enrollments');
+
+Schedule::command('cart:send-abandoned-reminders')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-abandoned-cart-reminders')
+    ->description('Remind users about available cart items left for at least 24 hours');

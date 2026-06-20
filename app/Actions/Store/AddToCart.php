@@ -42,7 +42,10 @@ final readonly class AddToCart
             }
 
             if ($cartItem !== null) {
-                $cartItem->increment('quantity', $quantity);
+                $cartItem->update([
+                    'quantity' => $cartItem->quantity + $quantity,
+                    'reminder_sent_at' => null,
+                ]);
 
                 return $cartItem->refresh();
             }

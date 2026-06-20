@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Actions\Store\SendOrderReceipt;
 use App\Actions\Store\UpdatePaymentPlanPaymentMethod;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
@@ -369,6 +370,7 @@ final class Billing extends Page
                         ]),
                     Actions::make([
                         $this->receiptAction($order),
+                        $this->resendReceiptAction($order),
                     ]),
                 ])
                 ->compact())
@@ -384,6 +386,30 @@ final class Billing extends Page
             ->schema($this->receiptSchema($order))
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close');
+    }
+
+    private function resendReceiptAction(Order $order): Action
+    {
+        return Action::make("resend_receipt_{$order->id}")
+            ->label('Resend Receipt')
+            ->icon(Heroicon::OutlinedEnvelope)
+            ->visible($order->status === OrderStatus::Completed)
+            ->action(function () use ($order): void {
+                try {
+                    $queued = app(SendOrderReceipt::class)->handle($order, resend: true);
+
+                    $notification = Notification::make()
+                        ->title($queued ? 'Receipt email queued' : 'Receipt email is disabled');
+
+                    ($queued ? $notification->success() : $notification->warning())->send();
+                } catch (Throwable $exception) {
+                    Notification::make()
+                        ->title('Could not resend receipt')
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+                }
+            });
     }
 
     /**

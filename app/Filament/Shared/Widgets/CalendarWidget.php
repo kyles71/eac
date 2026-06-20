@@ -6,6 +6,7 @@ namespace App\Filament\Shared\Widgets;
 
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
+use App\Filament\Actions\CancelEventAction;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -73,7 +74,10 @@ final class CalendarWidget extends FullCalendarWidget
     public function getFormSchema(): array
     {
         if ($this->isAdminPanel()) {
-            return EventForm::components();
+            return [
+                ...EventForm::components(),
+                $this->cancellationSection(),
+            ];
         }
 
         return [
@@ -98,6 +102,7 @@ final class CalendarWidget extends FullCalendarWidget
                         ->label('Description')
                         ->columnSpanFull(),
                 ]),
+            $this->cancellationSection(),
         ];
     }
 
@@ -177,7 +182,7 @@ final class CalendarWidget extends FullCalendarWidget
                     }),
             ] : []),
             ActionGroup::make($calendars)
-                ->label(fn (): string => $this->selectedCalendar()?->name ?? 'Calendar')
+                ->label(fn (): string => $this->selectedCalendar()->name ?? 'Calendar')
                 ->button()
                 ->icon(Heroicon::OutlinedCalendar),
         ];
@@ -185,6 +190,12 @@ final class CalendarWidget extends FullCalendarWidget
 
     protected function modalActions(): array
     {
+        $cancelEventAction = CancelEventAction::make()
+            ->after(function (): void {
+                $this->refreshRecords();
+                $this->dispatch('$refresh');
+            });
+
         if (! $this->isAdminPanel()) {
             return [
                 Action::make('addCourseProductToCart')
@@ -204,12 +215,15 @@ final class CalendarWidget extends FullCalendarWidget
                     ->url(fn (): ?string => ($product = $this->courseEventProduct()) instanceof Product
                         ? ProductDetails::getUrl(['product' => $product])
                         : null),
+                $cancelEventAction,
             ];
         }
 
         return [
             EditAction::make()
-                ->authorize('update'),
+                ->authorize('update')
+                ->visible(fn (Event $record): bool => ! $record->isCancelled()),
+            $cancelEventAction,
             Action::make('viewFullEvent')
                 ->label('View Full Event')
                 ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
@@ -293,13 +307,13 @@ final class CalendarWidget extends FullCalendarWidget
     {
         $record = $this->getRecord();
 
-        if (! $record instanceof Event) {
+        if (! $record instanceof Event || $record->isCancelled()) {
             return null;
         }
 
         $record->loadMissing('course.product');
 
-        $product = $record->course?->product;
+        $product = $record->course?->getRelation('product');
         $user = auth()->user();
 
         if (! $product instanceof Product || ! $user instanceof User || ! $product->canBePurchasedBy($user)) {
@@ -366,5 +380,20 @@ final class CalendarWidget extends FullCalendarWidget
     private function displayTimezone(): string
     {
         return (string) config('app.display_timezone', config('app.timezone'));
+    }
+
+    private function cancellationSection(): Section
+    {
+        return Section::make('Cancellation')
+            ->visible(fn (?Event $record): bool => $record instanceof Event && $record->isCancelled())
+            ->columns(2)
+            ->schema([
+                DateTimePicker::make('cancelled_at')
+                    ->label('Cancelled At')
+                    ->timezone($this->displayTimezone()),
+                Textarea::make('cancellation_reason')
+                    ->label('Reason')
+                    ->columnSpanFull(),
+            ]);
     }
 }

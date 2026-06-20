@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Pages;
 
+use App\Filament\Actions\CancelEventAction;
 use App\Filament\Admin\Resources\Events\EventResource;
+use App\Models\Event;
 use App\Services\EventAttendanceService;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
@@ -19,6 +21,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use LogicException;
 
 final class ViewEvent extends ViewRecord implements HasTable
 {
@@ -46,14 +49,14 @@ final class ViewEvent extends ViewRecord implements HasTable
                     ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
                 ToggleColumn::make('attended')
                     ->label('Attended')
-                    ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->getRecord(), $record))
+                    ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): bool => $this->attendance()
-                        ->setRecordStudentAttendance($this->getRecord(), $record, $state)),
+                        ->setRecordStudentAttendance($this->event(), $record, $state)),
                 TextInputColumn::make('notes')
                     ->label('Notes')
-                    ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->getRecord(), $record))
+                    ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
-                        ->setRecordStudentNotes($this->getRecord(), $record, $state)),
+                        ->setRecordStudentNotes($this->event(), $record, $state)),
             ])
             ->paginated(false);
     }
@@ -61,7 +64,9 @@ final class ViewEvent extends ViewRecord implements HasTable
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            CancelEventAction::make(),
+            EditAction::make()
+                ->visible(fn (): bool => ! $this->event()->isCancelled()),
         ];
     }
 
@@ -70,11 +75,22 @@ final class ViewEvent extends ViewRecord implements HasTable
      */
     private function attendanceQuery(): Builder
     {
-        return $this->attendance()->eventRosterQuery($this->getRecord());
+        return $this->attendance()->eventRosterQuery($this->event());
     }
 
     private function attendance(): EventAttendanceService
     {
         return app(EventAttendanceService::class);
+    }
+
+    private function event(): Event
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Event) {
+            throw new LogicException('The event record is unavailable.');
+        }
+
+        return $record;
     }
 }

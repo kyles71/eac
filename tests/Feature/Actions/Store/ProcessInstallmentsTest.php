@@ -8,9 +8,12 @@ use App\Enums\InstallmentStatus;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\PaymentPlan;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 use Stripe\PaymentIntent;
 
 beforeEach(function () {
+    Mail::fake();
     $this->mockStripe = Mockery::mock(StripeServiceContract::class);
     $this->mockStripe->shouldReceive('getDefaultPaymentMethodId')->byDefault()->andReturnNull();
     $this->app->instance(StripeServiceContract::class, $this->mockStripe);
@@ -58,6 +61,18 @@ it('processes due installments using the payment method assigned to the plan', f
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Paid)
         ->and($installment->stripe_payment_intent_id)->toBe('pi_result_123');
+
+    Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail) use ($order): bool {
+        $rendered = $mail->getRenderedEmail();
+
+        return $mail->emailTypeKey === 'payment-plan-installment-succeeded'
+            && $mail->hasTo($order->user->email)
+            && $mail->usesMailer('transactional')
+            && $rendered->subject === "Payment received for order #{$order->id}"
+            && str_contains($rendered->html, 'pi_result_123')
+            && str_contains($rendered->html, 'Installment')
+            && str_contains($rendered->html, 'Order #');
+    });
 });
 
 it('uses the account default when a legacy plan has no assigned payment method', function () {
@@ -144,6 +159,15 @@ it('marks installment as failed when auto-charge fails', function () {
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Failed)
         ->and($installment->retry_count)->toBe(1);
+
+    Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
+        $rendered = $mail->getRenderedEmail();
+
+        return $mail->emailTypeKey === 'payment-plan-installment-failed'
+            && $mail->usesMailer('transactional')
+            && str_contains($rendered->html, 'We could not process this payment')
+            && ! str_contains($rendered->html, 'Card declined');
+    });
 });
 
 it('retries failed installments', function () {
@@ -171,6 +195,38 @@ it('retries failed installments', function () {
 
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Paid);
+});
+
+it('does not consume more than one failed retry per eastern calendar day', function () {
+    $this->travelTo('2026-06-19 12:00:00');
+    $plan = PaymentPlan::factory()->create([
+        'stripe_customer_id' => 'cus_daily_retry',
+        'stripe_payment_method_id' => 'pm_daily_retry',
+    ]);
+    $installment = Installment::factory()->failed(1)->create([
+        'payment_plan_id' => $plan->id,
+        'last_attempted_at' => now()->subDay(),
+    ]);
+
+    $this->mockStripe
+        ->shouldReceive('chargePaymentMethod')
+        ->twice()
+        ->andThrow(new Exception('Card declined'));
+
+    expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(1)
+        ->and($installment->refresh()->retry_count)->toBe(2)
+        ->and(app(ProcessInstallments::class)->handle()['processed'])->toBe(0)
+        ->and($installment->refresh()->retry_count)->toBe(2);
+
+    $this->travelTo('2026-06-20 12:00:00');
+
+    expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(1)
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Overdue)
+        ->and($installment->retry_count)->toBe(3)
+        ->and($installment->past_due_notification_sent_at)->not->toBeNull();
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'payment-plan-past-due'
+        && $mail->hasTo('eacdance@outlook.com'));
 });
 
 it('does not process overdue installments', function () {

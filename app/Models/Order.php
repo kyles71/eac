@@ -32,6 +32,7 @@ final class Order extends Model
         'payment_plan_template_id' => 'integer',
         'payment_plan_terms_version_id' => 'integer',
         'cart_items_cleared_at' => 'datetime',
+        'receipt_queued_at' => 'datetime',
     ];
 
     /** @return BelongsTo<User, $this> */
@@ -143,7 +144,10 @@ final class Order extends Model
                 if ($cartItem->quantity <= $orderItem->quantity) {
                     $cartItem->delete();
                 } else {
-                    $cartItem->update(['quantity' => $cartItem->quantity - $orderItem->quantity]);
+                    $cartItem->update([
+                        'quantity' => $cartItem->quantity - $orderItem->quantity,
+                        'reminder_sent_at' => null,
+                    ]);
                 }
             }
 

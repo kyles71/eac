@@ -52,6 +52,7 @@ final class Student extends Model
         return (int) $this->birthdate->diffInYears($date);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

@@ -23,6 +23,7 @@ final class Enrollment extends Model
         'user_id' => 'integer',
         'order_item_id' => 'integer',
         'student_id' => 'integer',
+        'assignment_reminder_sent_at' => 'datetime',
     ];
 
     /** @return BelongsTo<Course, $this> */

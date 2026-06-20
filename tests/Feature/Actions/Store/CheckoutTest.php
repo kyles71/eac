@@ -23,6 +23,8 @@ use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -230,6 +232,7 @@ it('applies store credit to reduce the order total', function () {
 });
 
 it('completes order immediately when credit covers full amount', function () {
+    Mail::fake();
     $this->user->update(['credit_balance' => 15000]);
 
     CartItem::factory()->create([
@@ -240,10 +243,14 @@ it('completes order immediately when credit covers full amount', function () {
 
     $action = app(CreateOrder::class);
     $order = $action->handle($this->user, creditToApply: 15000);
+    $order->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->credit_applied)->toBe(5000)
-        ->and($order->total)->toBe(0);
+        ->and($order->total)->toBe(0)
+        ->and($order->receipt_queued_at)->not->toBeNull();
+
+    Mail::assertQueued(ManagedMail::class, 1);
 
     // Verify credit was debited (only what was needed, not the full 15000)
     expect($this->user->refresh()->credit_balance)->toBe(10000);

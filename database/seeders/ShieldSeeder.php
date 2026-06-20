@@ -43,6 +43,7 @@ final class ShieldSeeder extends Seeder
                                     {"name":"teacher","guard_name":"web","permissions":[]}
                                 ]';
         $rolesWithPermissions = self::withCompetitionPermissions($rolesWithPermissions);
+        $rolesWithPermissions = self::withEventCancellationPermission($rolesWithPermissions);
         $directPermissions = '[
                                 {"name":"Manage:MailManager","guard_name":"web"}
                              ]';
@@ -239,6 +240,23 @@ final class ShieldSeeder extends Seeder
                 $role['permissions'] = array_values(array_unique([
                     ...$role['permissions'],
                     ...$competitionPermissions,
+                ]));
+            }
+        }
+        unset($role);
+
+        return json_encode($roles, JSON_THROW_ON_ERROR);
+    }
+
+    private static function withEventCancellationPermission(string $rolesWithPermissions): string
+    {
+        $roles = json_decode($rolesWithPermissions, true, flags: JSON_THROW_ON_ERROR);
+
+        foreach ($roles as &$role) {
+            if ($role['name'] === 'super_admin') {
+                $role['permissions'] = array_values(array_unique([
+                    ...$role['permissions'],
+                    'Cancel:Event',
                 ]));
             }
         }

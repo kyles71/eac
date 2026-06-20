@@ -45,12 +45,13 @@ final class DashboardScheduleService
 
                 return [
                     'id' => $event->id,
-                    'title' => $event->name,
+                    'title' => $event->isCancelled() ? "Cancelled: {$event->name}" : $event->name,
                     'starts_at' => $event->start_time,
                     'ends_at' => $event->end_time,
                     'calendar' => $displayCalendar?->name,
-                    'color' => $displayCalendar?->background_color,
+                    'color' => $event->isCancelled() ? '#6b7280' : $displayCalendar?->background_color,
                     'is_holiday' => false,
+                    'is_cancelled' => $event->isCancelled(),
                 ];
             });
 
@@ -78,11 +79,12 @@ final class DashboardScheduleService
                 'allDay' => $item['is_holiday'],
                 'backgroundColor' => $item['color'],
                 'borderColor' => $item['color'],
-                'editable' => ! $item['is_holiday'],
-                'startEditable' => ! $item['is_holiday'],
-                'durationEditable' => ! $item['is_holiday'],
+                'editable' => ! $item['is_holiday'] && ! $item['is_cancelled'],
+                'startEditable' => ! $item['is_holiday'] && ! $item['is_cancelled'],
+                'durationEditable' => ! $item['is_holiday'] && ! $item['is_cancelled'],
                 'extendedProps' => [
                     'isHoliday' => $item['is_holiday'],
+                    'isCancelled' => $item['is_cancelled'],
                 ],
             ])
             ->all();
@@ -147,6 +149,7 @@ final class DashboardScheduleService
             'calendar' => null,
             'color' => '#dc2626',
             'is_holiday' => true,
+            'is_cancelled' => false,
         ];
     }
 

@@ -24,6 +24,8 @@ final class Installment extends Model
         'status' => InstallmentStatus::class,
         'paid_at' => 'datetime',
         'retry_count' => 'integer',
+        'last_attempted_at' => 'datetime',
+        'past_due_notification_sent_at' => 'datetime',
     ];
 
     /** @return BelongsTo<PaymentPlan, $this> */
@@ -54,8 +56,18 @@ final class Installment extends Model
      */
     public function scopeRetryable(Builder $query): void
     {
+        $startOfToday = now()
+            ->setTimezone((string) config('app.display_timezone', config('app.timezone')))
+            ->startOfDay()
+            ->setTimezone((string) config('app.timezone'));
+
         $query->where('status', InstallmentStatus::Failed)
-            ->where('retry_count', '<', 3);
+            ->where('retry_count', '<', 3)
+            ->where(function (Builder $query) use ($startOfToday): void {
+                $query
+                    ->whereNull('last_attempted_at')
+                    ->orWhere('last_attempted_at', '<', $startOfToday);
+            });
     }
 
     /**
@@ -66,6 +78,10 @@ final class Installment extends Model
         $data = [
             'status' => InstallmentStatus::Paid,
             'paid_at' => now(),
+            'last_attempted_at' => now(),
+            'last_payment_status' => 'succeeded',
+            'last_failure_reason' => null,
+            'last_failure_code' => null,
         ];
 
         if ($stripePaymentIntentId !== null) {
@@ -83,20 +99,24 @@ final class Installment extends Model
      * Mark this installment as failed, incrementing the retry count.
      * If retry count reaches 3, mark as overdue instead.
      */
-    public function markFailed(): void
-    {
+    public function markFailed(
+        ?string $stripeStatus = 'failed',
+        ?string $stripePaymentIntentId = null,
+        ?string $failureReason = null,
+        ?string $failureCode = null,
+    ): void {
         $newRetryCount = $this->retry_count + 1;
 
-        if ($newRetryCount >= 3) {
-            $this->update([
-                'status' => InstallmentStatus::Overdue,
-                'retry_count' => $newRetryCount,
-            ]);
-        } else {
-            $this->update([
-                'status' => InstallmentStatus::Failed,
-                'retry_count' => $newRetryCount,
-            ]);
-        }
+        $this->update([
+            'status' => $newRetryCount >= 3
+                ? InstallmentStatus::Overdue
+                : InstallmentStatus::Failed,
+            'retry_count' => $newRetryCount,
+            'last_attempted_at' => now(),
+            'last_payment_status' => $stripeStatus,
+            'last_failure_reason' => $failureReason,
+            'last_failure_code' => $failureCode,
+            'stripe_payment_intent_id' => $stripePaymentIntentId,
+        ]);
     }
 }

@@ -18,6 +18,11 @@ return [
 
     'default' => env('MAIL_MAILER', 'log'),
 
+    'payment_plan_past_due_recipient' => env(
+        'MAIL_PAYMENT_PLAN_PAST_DUE_RECIPIENT',
+        'eacdance@outlook.com',
+    ),
+
     /*
     |--------------------------------------------------------------------------
     | Mailer Configurations

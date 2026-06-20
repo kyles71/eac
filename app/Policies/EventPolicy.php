@@ -32,6 +32,11 @@ final class EventPolicy
         return $authUser->can('Update:Event');
     }
 
+    public function cancel(AuthUser $authUser, Event $event): bool
+    {
+        return $event->canBeCancelledAt() && $authUser->can('Cancel:Event');
+    }
+
     public function delete(AuthUser $authUser, Event $event): bool
     {
         return $authUser->can('Delete:Event');

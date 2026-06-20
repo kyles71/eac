@@ -1,0 +1,149 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Actions\Store\SendOrderReceipt;
+use App\Enums\InstallmentStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentPlanFrequency;
+use App\Models\Installment;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\PaymentPlan;
+use App\Models\Product;
+use App\Models\User;
+use App\Services\Mail\OrderReceiptContent;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Enums\LayoutMode;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Kyle\FilamentMailManager\MailManager;
+use Kyle\FilamentMailManager\Repositories\ManagedTemplateRepository;
+
+it('renders escaped purchase details and only applicable product content', function (): void {
+    $order = receiptOrder();
+    $course = Product::factory()->forCourse()->create(['name' => 'Ballet <script>alert(1)</script>']);
+    OrderItem::factory()->fulfilled()->create([
+        'order_id' => $order->id,
+        'product_id' => $course->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    app(ManagedTemplateRepository::class)->saveOverride('order-receipt', [
+        'layout_mode' => LayoutMode::None,
+        'conditional_sections' => [
+            'course' => '<p>COURSE CONTENT for {{ user.first_name }}</p>',
+            'costume' => '<p>COSTUME CONTENT</p>',
+            'gift-card' => '<p>GIFT CARD CONTENT</p>',
+            'standalone' => '<p>OTHER CONTENT</p>',
+        ],
+    ]);
+
+    $payload = app(OrderReceiptContent::class)->for($order);
+    $rendered = app(MailManager::class)->render(
+        emailTypeKey: 'order-receipt',
+        tokens: $payload['tokens'],
+        slots: $payload['slots'],
+        conditions: $payload['conditions'],
+    );
+
+    expect($rendered->subject)->toBe("Receipt for order #{$order->id}")
+        ->and($rendered->html)
+        ->toContain('Ballet &lt;script&gt;alert(1)&lt;/script&gt;')
+        ->toContain('COURSE CONTENT')
+        ->not->toContain('<script>')
+        ->not->toContain('COSTUME CONTENT')
+        ->not->toContain('GIFT CARD CONTENT')
+        ->not->toContain('OTHER CONTENT');
+});
+
+it('queues an initial receipt once through the transactional mailer', function (): void {
+    Mail::fake();
+    $order = receiptOrder();
+    OrderItem::factory()->fulfilled()->create(['order_id' => $order->id]);
+
+    $receipts = app(SendOrderReceipt::class);
+
+    expect($receipts->handle($order))->toBeTrue()
+        ->and($receipts->handle($order))->toBeFalse()
+        ->and($order->refresh()->receipt_queued_at)->not->toBeNull();
+
+    Mail::assertQueued(ManagedMail::class, 1);
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-receipt'
+        && $mail->hasTo($order->user->email)
+        && $mail->usesMailer('transactional'));
+});
+
+it('allows a completed receipt to be resent', function (): void {
+    Mail::fake();
+    $order = receiptOrder(['receipt_queued_at' => now()->subDay()]);
+    OrderItem::factory()->fulfilled()->create(['order_id' => $order->id]);
+
+    expect(app(SendOrderReceipt::class)->handle($order, resend: true))->toBeTrue();
+
+    Mail::assertQueued(ManagedMail::class, 1);
+});
+
+it('does not send a receipt for an incomplete order', function (): void {
+    Mail::fake();
+    $order = receiptOrder(['status' => OrderStatus::Processing]);
+
+    expect(app(SendOrderReceipt::class)->handle($order, resend: true))->toBeFalse();
+    Mail::assertNothingQueued();
+});
+
+it('includes payment plan totals and installment details', function (): void {
+    $order = receiptOrder(['total' => 12000, 'payment_plan_fee' => 500]);
+    OrderItem::factory()->fulfilled()->create([
+        'order_id' => $order->id,
+        'unit_price' => 11500,
+        'total_price' => 11500,
+    ]);
+    $paymentPlan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'total_amount' => 12000,
+        'number_of_installments' => 2,
+        'frequency' => PaymentPlanFrequency::Monthly,
+    ]);
+    Installment::factory()->paid()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 1,
+        'amount' => 6000,
+        'due_date' => now(),
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 2,
+        'amount' => 6000,
+        'status' => InstallmentStatus::Pending,
+        'due_date' => now()->addMonth(),
+    ]);
+
+    $payload = app(OrderReceiptContent::class)->for($order);
+
+    expect($payload['slots']['order-details'])
+        ->toContain('Payment Plan')
+        ->toContain('Payment Plan Fee')
+        ->toContain('Paid: $60.00')
+        ->toContain('Remaining: $60.00')
+        ->toContain('#2');
+});
+
+/**
+ * @param  array<string, mixed>  $attributes
+ */
+function receiptOrder(array $attributes = []): Order
+{
+    $user = User::factory()->create([
+        'first_name' => 'Kyle',
+        'email' => 'receipt@example.com',
+    ]);
+
+    return Order::factory()->completed()->create([
+        'user_id' => $user->id,
+        'subtotal' => 5000,
+        'total' => 5000,
+        ...$attributes,
+    ]);
+}

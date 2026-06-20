@@ -49,7 +49,10 @@ final readonly class UpdateCartQuantity
                 }
             }
 
-            $cartItem->update(['quantity' => $quantity]);
+            $cartItem->update([
+                'quantity' => $quantity,
+                'reminder_sent_at' => null,
+            ]);
 
             return $cartItem->refresh();
         });

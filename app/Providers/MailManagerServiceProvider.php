@@ -4,8 +4,16 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Mail\Types\AbandonedCartReminderEmailType;
+use App\Mail\Types\EventCancellationEmailType;
+use App\Mail\Types\EventReminderEmailType;
 use App\Mail\Types\HandcraftedEmailType;
+use App\Mail\Types\InstallmentPaymentFailedEmailType;
+use App\Mail\Types\InstallmentPaymentSucceededEmailType;
+use App\Mail\Types\OpenEnrollmentReminderEmailType;
+use App\Mail\Types\OrderReceiptEmailType;
 use App\Mail\Types\PasswordResetEmailType;
+use App\Mail\Types\PastDueInstallmentEmailType;
 use App\Mail\Types\VerifyEmailType;
 use App\Mail\Types\WelcomeEmailType;
 use App\Models\User;
@@ -26,7 +34,15 @@ final class MailManagerServiceProvider extends ServiceProvider
     public function boot(): void
     {
         FilamentMailManager::registerEmailTypes([
+            AbandonedCartReminderEmailType::class,
+            EventCancellationEmailType::class,
+            EventReminderEmailType::class,
             HandcraftedEmailType::class,
+            InstallmentPaymentFailedEmailType::class,
+            InstallmentPaymentSucceededEmailType::class,
+            OrderReceiptEmailType::class,
+            OpenEnrollmentReminderEmailType::class,
+            PastDueInstallmentEmailType::class,
             PasswordResetEmailType::class,
             VerifyEmailType::class,
             WelcomeEmailType::class,

@@ -20,6 +20,8 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 use Livewire\Livewire;
 use Stripe\Customer;
 use Stripe\PaymentMethod;
@@ -53,6 +55,24 @@ it('shows only the authenticated users orders', function () {
     livewire(Billing::class)
         ->assertSee("Order #{$order->id}")
         ->assertDontSee("Order #{$otherOrder->id}");
+});
+
+it('resends a completed order receipt from billing', function () {
+    Mail::fake();
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'receipt_queued_at' => now()->subDay(),
+    ]);
+    App\Models\OrderItem::factory()->fulfilled()->create(['order_id' => $order->id]);
+
+    livewire(Billing::class)
+        ->callAction(
+            TestAction::make("resend_receipt_{$order->id}")->schemaComponent(true, 'content'),
+        )
+        ->assertNotified('Receipt email queued');
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo(auth()->user()->email)
+        && $mail->usesMailer('transactional'));
 });
 
 it('shows credit and gift card information', function () {

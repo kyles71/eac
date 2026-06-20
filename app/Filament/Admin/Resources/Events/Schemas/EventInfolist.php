@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
+use App\Models\Event;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -44,6 +45,21 @@ final class EventInfolist
                             ->disk(MediaDisks::public())
                             ->visibility('public')
                             // ->conversion('thumb')
+                            ->columnSpanFull(),
+                    ]),
+                Section::make('Cancellation')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->visible(fn (Event $record): bool => $record->isCancelled())
+                    ->schema([
+                        TextEntry::make('cancelled_at')
+                            ->label('Cancelled At')
+                            ->dateTime(),
+                        TextEntry::make('cancelledBy.fullName')
+                            ->label('Cancelled By')
+                            ->placeholder('Unknown'),
+                        TextEntry::make('cancellation_reason')
+                            ->label('Reason')
                             ->columnSpanFull(),
                     ]),
                 Section::make('Record')

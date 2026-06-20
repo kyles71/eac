@@ -16,8 +16,11 @@ use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 
 beforeEach(function () {
+    Mail::fake();
     $this->product = Product::factory()->create(['price' => 5000]);
 });
 
@@ -77,7 +80,10 @@ it('handles payment_intent.succeeded webhook for order completion', function () 
 
     expect($order->refresh()->status)->toBe(OrderStatus::Completed)
         ->and($order->cart_items_cleared_at)->not->toBeNull()
+        ->and($order->receipt_queued_at)->not->toBeNull()
         ->and(CartItem::query()->where('user_id', $user->id)->count())->toBe(0);
+
+    Mail::assertQueued(ManagedMail::class, 1);
 });
 
 it('returns 400 for invalid webhook signature', function () {
@@ -281,6 +287,11 @@ it('creates a payment plan when order has payment plan template', function () {
 
     // Verify installments were created
     expect($paymentPlan->installments)->toHaveCount(3);
+
+    Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
+        return $mail->emailTypeKey === 'order-receipt'
+            && str_contains($mail->getRenderedEmail()->html, 'Payment Plan');
+    });
 });
 
 it('idempotently creates a missing plan for an already completed order', function () {
@@ -414,6 +425,92 @@ it('handles payment_intent.succeeded webhook for installment', function () {
     expect($response->getStatusCode())->toBe(200);
     expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
     expect($installment->stripe_payment_intent_id)->toBe('pi_test_inst_success');
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'payment-plan-installment-succeeded'
+        && $mail->hasTo($plan->order->user->email)
+        && $mail->usesMailer('transactional'));
+});
+
+it('handles payment_intent.payment_failed webhook for an installment', function () {
+    $plan = PaymentPlan::factory()->create();
+    $installment = Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'payment_intent.payment_failed';
+    $event->data = (object) [
+        'object' => (object) [
+            'id' => 'pi_test_inst_failed',
+            'customer' => 'cus_test_123',
+            'payment_method' => 'pm_test_123',
+            'metadata' => (object) [
+                'installment_id' => (string) $installment->id,
+                'order_id' => (string) $plan->order_id,
+            ],
+            'last_payment_error' => (object) [
+                'message' => 'Your card was declined.',
+                'code' => 'card_declined',
+                'decline_code' => 'insufficient_funds',
+            ],
+        ],
+    ];
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $mockStripeService->shouldReceive('constructWebhookEvent')->once()->andReturn($event);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    $response = app(StripeWebhookController::class)($request);
+
+    expect($response->getData(true))->toBe(['message' => 'Installment payment failure processed'])
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Failed)
+        ->and($installment->retry_count)->toBe(1);
+
+    Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
+        $rendered = $mail->getRenderedEmail();
+
+        return $mail->emailTypeKey === 'payment-plan-installment-failed'
+            && str_contains($rendered->html, 'Your card was declined.')
+            && str_contains($rendered->html, 'insufficient_funds');
+    });
+});
+
+it('prioritizes installment metadata and does not duplicate an already processed success email', function () {
+    $plan = PaymentPlan::factory()->create();
+    $installment = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'stripe_payment_intent_id' => 'pi_already_processed',
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'payment_intent.succeeded';
+    $event->data = (object) [
+        'object' => (object) [
+            'id' => 'pi_already_processed',
+            'metadata' => (object) [
+                'installment_id' => (string) $installment->id,
+                'order_id' => (string) $plan->order_id,
+            ],
+        ],
+    ];
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $mockStripeService->shouldReceive('constructWebhookEvent')->once()->andReturn($event);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    expect(app(StripeWebhookController::class)($request)->getData(true))
+        ->toBe(['message' => 'Installment payment processed']);
+
+    Mail::assertNothingQueued();
 });
 
 it('ignores invoice webhooks for payment plans', function (string $eventType) {

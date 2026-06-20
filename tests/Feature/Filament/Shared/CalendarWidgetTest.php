@@ -26,6 +26,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Saade\FilamentFullCalendar\Actions\CreateAction as CalendarCreateAction;
 use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
@@ -689,7 +690,7 @@ it('opens admin calendar events in the modal with permitted admin actions', func
     Filament::setCurrentPanel('admin');
 
     $user = User::factory()->create();
-    $user->givePermissionTo(['View:Event', 'Update:Event']);
+    $user->givePermissionTo(['View:Event', 'Update:Event', 'Cancel:Event']);
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
     $event = standaloneEvent('Admin Modal Event', $calendar);
     $fullEventUrl = EventResource::getUrl(name: 'view', parameters: ['record' => $event]);
@@ -700,6 +701,7 @@ it('opens admin calendar events in the modal with permitted admin actions', func
         ->call('onEventClick', ['id' => $event->id])
         ->assertActionMounted('view')
         ->assertActionVisible(EditAction::class)
+        ->assertActionVisible('cancelEvent')
         ->assertActionVisible('viewFullEvent')
         ->assertActionHasUrl('viewFullEvent', $fullEventUrl)
         ->assertActionDoesNotExist('addCourseProductToCart')
@@ -720,7 +722,59 @@ it('hides admin calendar edit and full event actions without permission', functi
         ->call('onEventClick', ['id' => $event->id])
         ->assertActionMounted('view')
         ->assertActionHidden(EditAction::class)
+        ->assertActionHidden('cancelEvent')
         ->assertActionHidden('viewFullEvent');
+});
+
+it('hides cancellation for a completed event in the admin calendar modal', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $user = User::factory()->create();
+    $user->givePermissionTo(['View:Event', 'Cancel:Event']);
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $event = Event::factory()->create([
+        'name' => 'Completed Admin Event',
+        'course_id' => null,
+        'calendar_id' => $calendar->id,
+        'start_time' => now()->subHours(2),
+        'end_time' => now()->subHour(),
+    ]);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->assertActionMounted('view')
+        ->assertActionHidden('cancelEvent');
+});
+
+it('cancels an event from the admin calendar modal', function (): void {
+    Filament::setCurrentPanel('admin');
+    Mail::fake();
+
+    $user = User::factory()->create();
+    $user->givePermissionTo(['View:Event', 'Cancel:Event']);
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $event = standaloneEvent('Cancelled From Calendar', $calendar);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->callAction(
+            TestAction::make('cancelEvent')->arguments(['send_email' => false]),
+            ['reason' => 'Cancelled from the calendar.'],
+        )
+        ->assertNotified('Event cancelled without sending email');
+
+    $calendarEvent = fetchCalendarEvents($calendar)->firstWhere('id', $event->id);
+
+    expect($event->refresh()->isCancelled())->toBeTrue()
+        ->and($calendarEvent['title'])->toBe('Cancelled: Cancelled From Calendar')
+        ->and($calendarEvent['backgroundColor'])->toBe('#6b7280')
+        ->and($calendarEvent['editable'])->toBeFalse()
+        ->and($calendarEvent['extendedProps']['isCancelled'])->toBeTrue();
+    Mail::assertNothingQueued();
 });
 
 it('mounts the admin calendar create action with attendee fields', function (): void {

@@ -1,6 +1,8 @@
 <?php
 
 declare(strict_types=1);
+
+use App\Filament\Admin\Resources\Events\EventResource;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -168,6 +170,9 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
+            EventResource::class => [
+                'cancel',
+            ],
             RoleResource::class => [
                 'viewAny',
                 'view',
