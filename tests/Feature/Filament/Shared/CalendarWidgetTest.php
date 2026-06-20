@@ -906,6 +906,16 @@ it('renders regular calendar events with a pointer cursor and holidays with a de
         ->toContain("'default'");
 });
 
+it('stacks the calendar toolbar controls on mobile screens', function (): void {
+    $theme = file_get_contents(resource_path('css/filament/global-theme.css'));
+
+    expect($theme)
+        ->toContain('@media (max-width: 639px)')
+        ->toContain('.filament-fullcalendar .fc-header-toolbar')
+        ->toContain('flex-direction: column')
+        ->toContain('min-height: 2.75rem');
+});
+
 function fetchCalendarEvents(
     ?Calendar $calendar = null,
     string $start = '2027-01-01T00:00:00',

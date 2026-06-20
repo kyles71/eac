@@ -14,3 +14,44 @@
 .dark .fi-sidebar-nav {
     border-right: 1px solid #18181B;
 }
+
+@media (max-width: 639px) {
+    .filament-fullcalendar .fc-header-toolbar {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-toolbar-chunk {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-toolbar-chunk:nth-child(1) {
+        order: 3;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-toolbar-chunk:nth-child(2) {
+        order: 1;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-toolbar-chunk:nth-child(3) {
+        order: 2;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-toolbar-chunk:first-child .fc-button-group {
+        width: 100%;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-button {
+        min-width: 0;
+        min-height: 2.75rem;
+        padding-inline: 0.5rem;
+    }
+
+    .filament-fullcalendar .fc-header-toolbar .fc-toolbar-title {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+}
