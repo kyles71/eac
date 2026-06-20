@@ -29,6 +29,21 @@ it('uses the managed password reset email', function (): void {
         ->toContain('Reset Password');
 });
 
+it('uses the user panel password reset link even when the admin panel is current', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $user = User::factory()->create([
+        'first_name' => 'Melissa',
+        'email' => 'mmcurtiss88+test2@gmail.com',
+    ]);
+
+    $mail = (new ResetPassword('reset-token'))->toMail($user);
+
+    expect($mail->getRenderedEmail()->html)
+        ->toContain('/dancefam/password-reset/reset')
+        ->not->toContain('/admin/password-reset/reset');
+});
+
 it('queues the managed welcome email after registration', function (): void {
     Mail::fake();
 

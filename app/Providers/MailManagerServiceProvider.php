@@ -94,7 +94,7 @@ final class MailManagerServiceProvider extends ServiceProvider
     private function passwordResetUrl(User $user, string $token): string
     {
         try {
-            return Filament::getResetPasswordUrl($token, $user);
+            return Filament::getPanel('user')->getResetPasswordUrl($token, $user);
         } catch (Throwable) {
             return url(route('password.reset', [
                 'token' => $token,
