@@ -10,6 +10,7 @@ use App\Models\Costume;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductQuestionAnswer;
 use App\Models\User;
 use Filament\Facades\Filament;
 
@@ -37,6 +38,25 @@ it('can render the order view page', function () {
         'record' => $order->id,
     ])
         ->assertOk();
+});
+
+it('shows purchaser answers on the admin order view', function (): void {
+    $order = Order::factory()->completed()->create();
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $this->product->id,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'question' => 'Dancer name',
+        'answer' => 'Avery Stone',
+    ]);
+
+    livewire(ViewOrder::class, ['record' => $order->id])
+        ->assertSee('Purchaser Answers')
+        ->assertSee('Dancer name')
+        ->assertSee('Avery Stone');
 });
 
 it('can list orders', function () {

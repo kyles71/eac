@@ -392,11 +392,12 @@ it('initializes payment plan terms agreement when terms do not require scrolling
 
     $template = PaymentPlanTemplate::factory()->create();
 
-    [$grid, $termsEntry, $termsCheckbox] = checkoutTermsSchema($template);
+    [$termsSection, $termsEntry, $termsCheckbox] = checkoutTermsSchema($template);
 
-    expect($grid->getExtraAttributes()['x-data'])->toContain('hasTerms: true')
-        ->and($grid->getExtraAttributes()['x-data'])->toContain('element.clientHeight === 0')
-        ->and($grid->getExtraAttributes()['x-data'])->toContain('element.scrollHeight <= element.clientHeight + 2')
+    expect($termsSection->getHeading())->toBe('Payment Plan Terms & Conditions')
+        ->and($termsSection->getExtraAttributes()['x-data'])->toContain('hasTerms: true')
+        ->and($termsSection->getExtraAttributes()['x-data'])->toContain('element.clientHeight === 0')
+        ->and($termsSection->getExtraAttributes()['x-data'])->toContain('element.scrollHeight <= element.clientHeight + 2')
         ->and((string) $termsEntry->getState())->toContain('new ResizeObserver')
         ->and((string) $termsEntry->getState())->toContain('@scroll="unlockTermsIfReadable($event.target)"')
         ->and($termsCheckbox->getExtraInputAttributes()['x-bind:disabled'])->toBe('!scrolledToBottom');
@@ -414,9 +415,10 @@ it('keeps payment plan terms agreement unavailable when no terms are published',
 
         $template = PaymentPlanTemplate::factory()->create();
 
-        [$grid, $termsEntry, $termsCheckbox] = checkoutTermsSchema($template);
+        [$termsSection, $termsEntry, $termsCheckbox] = checkoutTermsSchema($template);
 
-        expect($grid->getExtraAttributes()['x-data'])->toContain('hasTerms: false')
+        expect($termsSection->getHeading())->toBe('Payment Plan Terms & Conditions')
+            ->and($termsSection->getExtraAttributes()['x-data'])->toContain('hasTerms: false')
             ->and((string) $termsEntry->getState())->toContain('Payment plan terms are not available.')
             ->and($termsCheckbox->getExtraInputAttributes()['x-bind:disabled'])->toBe('!scrolledToBottom');
     } finally {

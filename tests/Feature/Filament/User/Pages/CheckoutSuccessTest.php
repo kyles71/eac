@@ -15,6 +15,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\ProductQuestionAnswer;
 use App\Models\Student;
 use Filament\Facades\Filament;
 use Filament\Schemas\Components\Grid;
@@ -48,6 +49,28 @@ it('shows completed orders as confirmed', function () {
         ->assertOk()
         ->assertSee('Completed')
         ->assertDontSee('Payment Finalizing');
+});
+
+it('shows saved purchaser answers on the order confirmation', function (): void {
+    $product = Product::factory()->create(['name' => 'Competition Shirt']);
+    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'question' => 'Dancer name',
+        'answer' => 'Avery Stone',
+    ]);
+
+    Livewire::withQueryParams(['order_id' => $order->id])
+        ->test(CheckoutSuccess::class)
+        ->assertSee('Answers for Competition Shirt')
+        ->assertSee('Dancer name')
+        ->assertSee('Avery Stone');
 });
 
 it('shows order-specific course assignment fields for course purchases', function () {

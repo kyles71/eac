@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Products\Schemas;
 
 use App\Enums\DashboardAudience;
+use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Support\MediaDisks;
+use Closure;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
@@ -159,6 +161,77 @@ final class ProductForm
                             ->preload()
                             ->visible(fn (Get $get): bool => in_array($get('productable_type'), [Course::class, Costume::class], true)),
                     ]),
+                Section::make('Purchaser Questions & Notifications')
+                    ->columnSpanFull()
+                    ->schema([
+                        Toggle::make('send_purchase_notification')
+                            ->label('Email EAC when this product is purchased')
+                            ->default(false),
+                        Repeater::make('questions')
+                            ->label('Purchaser Questions')
+                            ->relationship()
+                            ->orderColumn('sort_order')
+                            ->schema([
+                                Textarea::make('question')
+                                    ->label('Question')
+                                    ->rows(2)
+                                    ->maxLength(1000)
+                                    ->required()
+                                    ->columnSpanFull(),
+                                Select::make('type')
+                                    ->options(ProductQuestionType::class)
+                                    ->default(ProductQuestionType::Text->value)
+                                    ->required()
+                                    ->live(),
+                                Toggle::make('is_required')
+                                    ->label('Required')
+                                    ->default(false),
+                                TextInput::make('max_length')
+                                    ->label('Maximum Length')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->maxValue(65535)
+                                    ->default(255)
+                                    ->required(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Text)
+                                    ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Text),
+                                Repeater::make('options')
+                                    ->label('Options')
+                                    ->simple(
+                                        TextInput::make('option')
+                                            ->maxLength(255)
+                                            ->distinct()
+                                            ->rule(static function (): Closure {
+                                                return static function (string $attribute, mixed $value, Closure $fail): void {
+                                                    if (mb_strtolower(mb_trim((string) $value)) === 'other') {
+                                                        $fail('Other is reserved. Enable the separate Other option instead.');
+                                                    }
+                                                };
+                                            })
+                                            ->required(),
+                                    )
+                                    ->minItems(1)
+                                    ->required(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select)
+                                    ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select)
+                                    ->columnSpanFull(),
+                                Toggle::make('allows_other')
+                                    ->label('Include an Other option')
+                                    ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add purchaser question')
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): ?string => filled($state['question'] ?? null)
+                                ? (string) $state['question']
+                                : null)
+                            ->mutateRelationshipDataBeforeCreateUsing(
+                                fn (array $data): array => self::normalizeQuestionData($data),
+                            )
+                            ->mutateRelationshipDataBeforeSaveUsing(
+                                fn (array $data): array => self::normalizeQuestionData($data),
+                            )
+                            ->columnSpanFull(),
+                    ]),
                 Section::make('Media')
                     ->columns(2)
                     ->collapsed()
@@ -221,5 +294,41 @@ final class ProductForm
     private static function displayTimezone(): string
     {
         return (string) config('app.display_timezone', config('app.timezone'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function normalizeQuestionData(array $data): array
+    {
+        $type = $data['type'] ?? null;
+        $type = $type instanceof ProductQuestionType
+            ? $type
+            : ProductQuestionType::tryFrom((string) $type);
+
+        if ($type === ProductQuestionType::Text) {
+            $data['options'] = null;
+            $data['allows_other'] = false;
+
+            return $data;
+        }
+
+        $data['max_length'] = null;
+        $data['options'] = collect($data['options'] ?? [])
+            ->map(fn (mixed $option): string => mb_trim((string) (is_array($option) ? ($option['option'] ?? '') : $option)))
+            ->filter()
+            ->unique(fn (string $option): string => mb_strtolower($option))
+            ->values()
+            ->all();
+
+        return $data;
+    }
+
+    private static function questionType(mixed $type): ?ProductQuestionType
+    {
+        return $type instanceof ProductQuestionType
+            ? $type
+            : ProductQuestionType::tryFrom((string) $type);
     }
 }

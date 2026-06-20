@@ -32,6 +32,7 @@ final class OrderItemFactory extends Factory
             'unit_price' => $unitPrice,
             'total_price' => $unitPrice * $quantity,
             'status' => OrderItemStatus::Pending,
+            'purchase_notification_requested' => false,
         ];
     }
 

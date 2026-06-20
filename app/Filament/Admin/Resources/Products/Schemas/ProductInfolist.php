@@ -6,9 +6,11 @@ namespace App\Filament\Admin\Resources\Products\Schemas;
 
 use App\Enums\DashboardAudience;
 use App\Enums\ProductAvailabilityStatus;
+use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -94,6 +96,37 @@ final class ProductInfolist
                         TextEntry::make('order_items_count')
                             ->label('Times Ordered')
                             ->state(fn (Product $record): int => $record->orderItems()->count()),
+                    ]),
+                Section::make('Purchaser Questions & Notifications')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('send_purchase_notification')
+                            ->label('Emails Staff After Purchase')
+                            ->badge()
+                            ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')
+                            ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
+                        TextEntry::make('question_count')
+                            ->label('Questions')
+                            ->state(fn (Product $record): int => $record->questions()->count()),
+                        RepeatableEntry::make('questions')
+                            ->schema([
+                                TextEntry::make('question'),
+                                TextEntry::make('type')
+                                    ->badge(),
+                                TextEntry::make('is_required')
+                                    ->label('Required')
+                                    ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No'),
+                                TextEntry::make('configuration')
+                                    ->state(fn (ProductQuestion $record): string => match ($record->type) {
+                                        ProductQuestionType::Text => "Maximum length: {$record->max_length}",
+                                        ProductQuestionType::Select => collect($record->options)
+                                            ->when($record->allows_other, fn ($options) => $options->push('Other'))
+                                            ->join(', '),
+                                    }),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                     ]),
                 Section::make('Media')
                     ->columnSpanFull()

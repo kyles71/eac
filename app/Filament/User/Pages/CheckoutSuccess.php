@@ -7,6 +7,7 @@ namespace App\Filament\User\Pages;
 use App\Actions\Enrollments\AssignStudentToEnrollmentAction;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
+use App\Filament\Shared\Schemas\ProductQuestionAnswerSchema;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\Students\Schemas\StudentForm;
 use App\Models\Course;
@@ -191,19 +192,26 @@ final class CheckoutSuccess extends Page
                 ->schema($this->getPaymentPlanDetailsSchema())
                 ->visible(fn (): bool => $this->order->paymentPlanTemplate !== null),
             Section::make('Items Purchased')
-                ->schema(
-                    $this->order->orderItems->map(
-                        function (\Illuminate\Database\Eloquent\Model $item): TextEntry {
-                            /** @var OrderItem $item */
-                            /** @var \App\Models\Product $product */
-                            $product = $item->product;
+                ->schema(function (): array {
+                    $components = [];
 
-                            return TextEntry::make("item_{$item->id}")
-                                ->label($product->name)
-                                ->state(fn (): string => "Qty: {$item->quantity} × {$item->formattedUnitPrice()} = {$item->formattedTotalPrice()}");
-                        }
-                    )->all()
-                ),
+                    foreach ($this->order->orderItems as $item) {
+                        /** @var OrderItem $item */
+                        /** @var \App\Models\Product $product */
+                        $product = $item->product;
+
+                        $components[] = TextEntry::make("item_{$item->id}")
+                            ->label($product->name)
+                            ->state(fn (): string => "Qty: {$item->quantity} × {$item->formattedUnitPrice()} = {$item->formattedTotalPrice()}");
+
+                        array_push(
+                            $components,
+                            ...ProductQuestionAnswerSchema::forOrderItem($item, 'confirmation'),
+                        );
+                    }
+
+                    return $components;
+                }),
         ];
 
         return $schema->components($components);
@@ -638,6 +646,7 @@ final class CheckoutSuccess extends Page
             'orderItems.enrollments.course',
             'orderItems.enrollments.student',
             'orderItems.product.productable',
+            'orderItems.questionAnswers',
             'paymentPlan.installments',
             'paymentPlanTemplate',
         ];

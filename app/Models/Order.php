@@ -33,6 +33,7 @@ final class Order extends Model
         'payment_plan_terms_version_id' => 'integer',
         'cart_items_cleared_at' => 'datetime',
         'receipt_queued_at' => 'datetime',
+        'purchase_notification_queued_at' => 'datetime',
     ];
 
     /** @return BelongsTo<User, $this> */

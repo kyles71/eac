@@ -30,6 +30,7 @@ final class Product extends Model implements HasMedia
         'price' => 'integer',
         'is_active' => 'boolean',
         'include_productable_images' => 'boolean',
+        'send_purchase_notification' => 'boolean',
         'requires_course_id' => 'integer',
         'available_from' => 'datetime',
         'available_until' => 'datetime',
@@ -59,6 +60,12 @@ final class Product extends Model implements HasMedia
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /** @return HasMany<ProductQuestion, $this> */
+    public function questions(): HasMany
+    {
+        return $this->hasMany(ProductQuestion::class)->orderBy('sort_order');
     }
 
     /**

@@ -31,6 +31,7 @@ final class ProductFactory extends Factory
             'price' => fake()->randomElement([2500, 5000, 7500, 10000, 12500, 15000]),
             'is_active' => true,
             'include_productable_images' => false,
+            'send_purchase_notification' => false,
             'requires_course_id' => null,
             'available_from' => null,
             'available_until' => null,

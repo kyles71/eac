@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\DashboardAudience;
+use App\Enums\ProductQuestionType;
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Models\Costume;
@@ -55,6 +56,56 @@ it('has an include linked item images field on the product form', function () {
         ->mountAction(CreateAction::class)
         ->assertSchemaComponentExists('include_productable_images')
         ->assertSchemaComponentStateSet('include_productable_images', false);
+});
+
+it('can configure ordered purchaser questions and purchase notifications', function (): void {
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Competition Shirt',
+            'description' => null,
+            'price' => '50.00',
+            'is_active' => true,
+            'send_purchase_notification' => true,
+            'productable_type' => null,
+            'productable_id' => null,
+            'questions' => [
+                [
+                    'question' => 'Dancer name',
+                    'type' => ProductQuestionType::Text->value,
+                    'is_required' => true,
+                    'max_length' => 40,
+                    'options' => null,
+                    'allows_other' => false,
+                ],
+                [
+                    'question' => 'Shirt size',
+                    'type' => ProductQuestionType::Select->value,
+                    'is_required' => true,
+                    'max_length' => 255,
+                    'options' => [
+                        ['option' => 'Small'],
+                        ['option' => 'Medium'],
+                        ['option' => 'Large'],
+                    ],
+                    'allows_other' => true,
+                ],
+            ],
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    $product = Product::query()->where('name', 'Competition Shirt')->firstOrFail();
+    $questions = $product->questions()->get();
+
+    expect($product->send_purchase_notification)->toBeTrue()
+        ->and($questions)->toHaveCount(2)
+        ->and($questions->pluck('question')->all())->toBe(['Dancer name', 'Shirt size'])
+        ->and($questions->first()->type)->toBe(ProductQuestionType::Text)
+        ->and($questions->first()->max_length)->toBe(40)
+        ->and($questions->last()->type)->toBe(ProductQuestionType::Select)
+        ->and($questions->last()->max_length)->toBeNull()
+        ->and($questions->last()->options)->toBe(['Small', 'Medium', 'Large'])
+        ->and($questions->last()->allows_other)->toBeTrue();
 });
 
 it('shows the include linked item images field after selecting a linked item', function () {

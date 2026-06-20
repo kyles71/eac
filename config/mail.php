@@ -23,6 +23,11 @@ return [
         'eacdance@outlook.com',
     ),
 
+    'product_purchase_recipient' => env(
+        'MAIL_PRODUCT_PURCHASE_RECIPIENT',
+        'eacdance@outlook.com',
+    ),
+
     /*
     |--------------------------------------------------------------------------
     | Mailer Configurations

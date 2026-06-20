@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\Product;
+use App\Models\ProductQuestionAnswer;
 use App\Models\User;
 use App\Services\Mail\OrderReceiptContentService;
 use Illuminate\Support\Facades\Mail;
@@ -128,6 +129,31 @@ it('includes payment plan totals and installment details', function (): void {
         ->toContain('Paid: $60.00')
         ->toContain('Remaining: $60.00')
         ->toContain('#2');
+});
+
+it('includes escaped per-unit purchaser answers in the emailed receipt', function (): void {
+    $order = receiptOrder();
+    $product = Product::factory()->create(['name' => 'Competition Shirt']);
+    $orderItem = OrderItem::factory()->fulfilled()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 2,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'unit_number' => 2,
+        'question' => 'Dancer <name>',
+        'answer' => 'Avery & Co.',
+    ]);
+
+    $payload = app(OrderReceiptContentService::class)->for($order);
+
+    expect($payload['slots']['order-details'])
+        ->toContain('Item 2 of 2')
+        ->toContain('Dancer &lt;name&gt;')
+        ->toContain('Avery &amp; Co.')
+        ->not->toContain('Dancer <name>');
 });
 
 /**

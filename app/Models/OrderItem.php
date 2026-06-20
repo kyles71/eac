@@ -23,6 +23,7 @@ final class OrderItem extends Model
         'unit_price' => 'integer',
         'total_price' => 'integer',
         'status' => OrderItemStatus::class,
+        'purchase_notification_requested' => 'boolean',
     ];
 
     public function order(): BelongsTo
@@ -40,6 +41,14 @@ final class OrderItem extends Model
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
+    }
+
+    /** @return HasMany<ProductQuestionAnswer, $this> */
+    public function questionAnswers(): HasMany
+    {
+        return $this->hasMany(ProductQuestionAnswer::class)
+            ->orderBy('unit_number')
+            ->orderBy('question_order');
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreatePaymentPlan;
 use App\Actions\Store\SendInstallmentPaymentEmail;
 use App\Actions\Store\SendOrderReceipt;
+use App\Actions\Store\SendProductPurchaseNotification;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
@@ -24,6 +25,7 @@ final class StripeWebhookController
         private readonly StripeServiceContract $stripeService,
         private readonly CompleteOrder $completeOrder,
         private readonly SendOrderReceipt $sendOrderReceipt,
+        private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
     ) {}
 
@@ -159,6 +161,7 @@ final class StripeWebhookController
         }
 
         $this->sendOrderReceipt->handle($order);
+        $this->sendProductPurchaseNotification->handle($order);
 
         Log::info("Order #{$order->id} completed via payment_intent.succeeded.", [
             'payment_intent_id' => $paymentIntent->id,

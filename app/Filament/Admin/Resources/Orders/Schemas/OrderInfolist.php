@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Orders\Schemas;
 
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
+use App\Models\ProductQuestionAnswer;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -71,6 +72,19 @@ final class OrderInfolist
                                         OrderItemStatus::Fulfilled => 'success',
                                         OrderItemStatus::Pending => 'warning',
                                     }),
+                                RepeatableEntry::make('questionAnswers')
+                                    ->label('Purchaser Answers')
+                                    ->schema([
+                                        TextEntry::make('unit_number')
+                                            ->label('Item'),
+                                        TextEntry::make('question'),
+                                        TextEntry::make('display_answer')
+                                            ->label('Answer')
+                                            ->state(fn (ProductQuestionAnswer $record): string => $record->formattedAnswer()),
+                                    ])
+                                    ->columns(3)
+                                    ->columnSpanFull()
+                                    ->visible(fn ($record): bool => $record->questionAnswers->isNotEmpty()),
                             ]),
                     ]),
             ]);

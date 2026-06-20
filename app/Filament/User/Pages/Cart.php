@@ -10,6 +10,7 @@ use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
+use App\Filament\Shared\Schemas\ProductQuestionCheckoutSchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
 use App\Models\Order;
@@ -28,7 +29,6 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
@@ -152,7 +152,7 @@ final class Cart extends Page implements HasTable
     {
         return CartItem::query()
             ->where('user_id', auth()->id())
-            ->with('product.productable')
+            ->with(['product.productable', 'product.questions'])
             ->get();
     }
 
@@ -477,18 +477,27 @@ final class Cart extends Page implements HasTable
             ->size('lg')
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
             ->slideOver(false)
-            ->modalSubmitActionLabel('Agree & Continue to Payment')
-            ->modalHidden(fn (): bool => $this->selectedTemplate === null)
+            ->modalHeading(fn (): string => $this->selectedTemplate === null
+                ? 'Purchase Details'
+                : 'Purchase Details & Payment Plan Terms')
+            ->modalSubmitActionLabel(fn (): string => $this->selectedTemplate === null
+                ? 'Continue to Payment'
+                : 'Agree & Continue to Payment')
+            ->modalHidden(fn (): bool => $this->selectedTemplate === null && ! $this->hasProductQuestions())
             ->schema(function (): array {
+                $questionSchema = ProductQuestionCheckoutSchema::make($this->cartItems);
+
                 if ($this->selectedTemplate === null) {
-                    return [];
+                    return $questionSchema;
                 }
 
                 $termsVersion = PaymentPlanTerms::currentVersion();
                 $hasTerms = $termsVersion !== null;
 
                 return [
-                    Grid::make()
+                    ...$questionSchema,
+                    Section::make('Payment Plan Terms & Conditions')
+                        ->description('Review and accept the payment plan terms before continuing.')
                         ->columns(1)
                         ->extraAttributes([
                             'x-data' => '{
@@ -530,7 +539,7 @@ final class Cart extends Page implements HasTable
                         ]),
                 ];
             })
-            ->action(function (): void {
+            ->action(function (array $data): void {
                 try {
                     $createOrder = app(CreateOrder::class);
 
@@ -549,6 +558,7 @@ final class Cart extends Page implements HasTable
                         $discountCode,
                         $creditToApply,
                         $paymentPlanTemplate,
+                        $data['question_answers'] ?? [],
                     );
 
                     if ($order->status === OrderStatus::Completed) {
@@ -687,6 +697,13 @@ final class Cart extends Page implements HasTable
                     ->icon(Heroicon::OutlinedShoppingBag)
                     ->url(Store::getUrl()),
             ]);
+    }
+
+    private function hasProductQuestions(): bool
+    {
+        return $this->cartItems->contains(
+            fn (CartItem $cartItem): bool => $cartItem->product->questions->isNotEmpty(),
+        );
     }
 
     private function selectedPaymentPlanTemplateId(): ?int

@@ -33,6 +33,8 @@ final class OrderFactory extends Factory
             'payment_plan_template_id' => null,
             'payment_plan_terms_version_id' => null,
             'cart_items_cleared_at' => null,
+            'receipt_queued_at' => null,
+            'purchase_notification_queued_at' => null,
         ];
     }
 

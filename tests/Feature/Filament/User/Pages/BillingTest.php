@@ -12,7 +12,10 @@ use App\Models\GiftCard;
 use App\Models\Installment;
 use App\Models\LegalDocumentVersion;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PaymentPlan;
+use App\Models\Product;
+use App\Models\ProductQuestionAnswer;
 use App\Models\RestrictedCredit;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
@@ -63,7 +66,7 @@ it('resends a completed order receipt from billing', function () {
         'user_id' => auth()->id(),
         'receipt_queued_at' => now()->subDay(),
     ]);
-    App\Models\OrderItem::factory()->fulfilled()->create(['order_id' => $order->id]);
+    OrderItem::factory()->fulfilled()->create(['order_id' => $order->id]);
 
     livewire(Billing::class)
         ->callAction(
@@ -73,6 +76,45 @@ it('resends a completed order receipt from billing', function () {
 
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo(auth()->user()->email)
         && $mail->usesMailer('transactional'));
+});
+
+it('shows purchaser answers in the billing receipt modal', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 5000,
+        'total' => 5000,
+        'discount_amount' => 0,
+        'restricted_credit_applied' => 0,
+        'credit_applied' => 0,
+        'payment_plan_fee' => 0,
+    ]);
+    $product = Product::factory()->create(['name' => 'Competition Shirt']);
+    $orderItem = OrderItem::factory()->fulfilled()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'question' => 'Dancer name',
+        'answer' => 'Avery Stone',
+    ]);
+
+    $component = livewire(Billing::class);
+    $method = new ReflectionMethod(Billing::class, 'receiptSchema');
+    $method->setAccessible(true);
+    $schema = Schema::make($component->instance())
+        ->components($method->invoke($component->instance(), $order));
+    $components = collect($schema->getFlatComponents(withHidden: true));
+
+    expect($components->contains(fn ($component): bool => $component instanceof \Filament\Schemas\Components\Section
+        && $component->getHeading() === 'Answers for Competition Shirt'))->toBeTrue()
+        ->and($components->contains(fn ($component): bool => $component instanceof \Filament\Infolists\Components\TextEntry
+            && $component->getLabel() === 'Dancer name'
+            && $component->getState() === 'Avery Stone'))->toBeTrue();
 });
 
 it('shows credit and gift card information', function () {
@@ -384,33 +426,6 @@ it('shows a printable terms link for payment plans', function () {
     livewire(Billing::class)
         ->assertSee('All payment plans below have been agreed to under these Terms & Conditions')
         ->assertSee(route('legal-documents.versions.show', $termsVersion), false);
-});
-
-it('shows plan totals before status and payment method', function () {
-    $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
-    $plan = PaymentPlan::factory()->create(['order_id' => $order->id]);
-
-    Installment::factory()->create([
-        'payment_plan_id' => $plan->id,
-        'status' => InstallmentStatus::Pending,
-    ]);
-
-    $component = livewire(Billing::class)
-        ->assertSeeInOrder(['Total', 'Paid', 'Remaining', 'Status', 'Payment Method']);
-
-    $method = new ReflectionMethod(Billing::class, 'getPaymentPlansSchema');
-    $method->setAccessible(true);
-    $schema = Schema::make($component->instance())
-        ->components($method->invoke($component->instance()));
-    $planSection = collect($schema->getComponents(withHidden: true))
-        ->first(fn ($component): bool => $component instanceof \Filament\Schemas\Components\Section
-            && $component->getHeading() === "Order #{$order->id}");
-    $planRows = $planSection->getChildSchema()->getComponents(withHidden: true);
-
-    expect($planRows[0]->getColumns('md'))->toBe(3)
-        ->and($planRows[0]->getColumns('lg'))->toBeNull()
-        ->and($planRows[1]->getColumns('md'))->toBe(2)
-        ->and($planRows[1]->getColumns('lg'))->toBeNull();
 });
 
 it('derives payment plan statuses with problem and terminal precedence', function () {

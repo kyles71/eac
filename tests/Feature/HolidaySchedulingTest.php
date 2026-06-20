@@ -156,7 +156,7 @@ it('renders holidays as non-interactive all-day entries on every accessible cale
             ->end->toBe('2027-12-01')
             ->allDay->toBeTrue()
             ->editable->toBeFalse()
-            ->extendedProps->toBe(['isHoliday' => true]);
+            ->extendedProps->toBe(['isHoliday' => true, 'isCancelled' => false]);
     }
 });
 

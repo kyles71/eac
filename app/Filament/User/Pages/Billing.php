@@ -11,11 +11,11 @@ use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanStatus;
 use App\Filament\Actions\RedeemGiftCardAction;
+use App\Filament\Shared\Schemas\ProductQuestionAnswerSchema;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
 use App\Models\Installment;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\RestrictedCredit;
 use App\Models\User;
@@ -329,7 +329,7 @@ final class Billing extends Page
         $orders = Order::query()
             ->where('user_id', auth()->id())
             ->where('status', '!=', OrderStatus::Cancelled)
-            ->with(['orderItems.product', 'discountCode'])
+            ->with(['orderItems.product', 'orderItems.questionAnswers', 'discountCode'])
             ->latest()
             ->get();
 
@@ -417,13 +417,17 @@ final class Billing extends Page
      */
     private function receiptSchema(Order $order): array
     {
-        $order->loadMissing(['orderItems.product', 'discountCode']);
+        $order->loadMissing(['orderItems.product', 'orderItems.questionAnswers', 'discountCode']);
 
-        $items = $order->orderItems
-            ->map(fn (OrderItem $item): TextEntry => TextEntry::make("receipt_item_{$item->id}")
+        $items = [];
+
+        foreach ($order->orderItems as $item) {
+            $items[] = TextEntry::make("receipt_item_{$item->id}")
                 ->label($item->product->name)
-                ->state("Qty {$item->quantity} × {$item->formattedUnitPrice()} = {$item->formattedTotalPrice()}"))
-            ->all();
+                ->state("Qty {$item->quantity} × {$item->formattedUnitPrice()} = {$item->formattedTotalPrice()}");
+
+            array_push($items, ...ProductQuestionAnswerSchema::forOrderItem($item, 'receipt'));
+        }
 
         return [
             Grid::make()

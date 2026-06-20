@@ -13,7 +13,19 @@
         <tbody>
             @foreach ($order->orderItems as $orderItem)
                 <tr>
-                    <td style="border-bottom: 1px solid #e5e7eb; padding: 8px;">{{ $orderItem->product->name }}</td>
+                    <td style="border-bottom: 1px solid #e5e7eb; padding: 8px;">
+                        {{ $orderItem->product->name }}
+                        @foreach ($orderItem->questionAnswers->groupBy('unit_number') as $unitNumber => $answers)
+                            <div style="margin-top: 8px; font-size: 13px;">
+                                @if ($orderItem->quantity > 1)
+                                    <strong>Item {{ $unitNumber }} of {{ $orderItem->quantity }}</strong><br>
+                                @endif
+                                @foreach ($answers as $answer)
+                                    <strong>{{ $answer->question }}</strong>: {{ $answer->formattedAnswer() }}<br>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </td>
                     <td align="right" style="border-bottom: 1px solid #e5e7eb; padding: 8px;">{{ $orderItem->quantity }}</td>
                     <td align="right" style="border-bottom: 1px solid #e5e7eb; padding: 8px;">{{ $orderItem->formattedUnitPrice() }}</td>
                     <td align="right" style="border-bottom: 1px solid #e5e7eb; padding: 8px;">{{ $orderItem->formattedTotalPrice() }}</td>
