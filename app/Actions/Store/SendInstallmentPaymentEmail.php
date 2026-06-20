@@ -8,13 +8,13 @@ use App\Actions\Mail\QueueManagedEmail;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
 use App\Models\User;
-use App\Services\Mail\InstallmentPaymentContent;
+use App\Services\Mail\InstallmentPaymentContentService;
 
 final readonly class SendInstallmentPaymentEmail
 {
     public function __construct(
         private QueueManagedEmail $managedEmail,
-        private InstallmentPaymentContent $content,
+        private InstallmentPaymentContentService $content,
     ) {}
 
     public function handle(

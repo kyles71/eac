@@ -6,7 +6,7 @@ namespace App\Actions\Mail;
 
 use App\Models\Enrollment;
 use App\Models\User;
-use App\Services\Mail\OpenEnrollmentReminderContent;
+use App\Services\Mail\OpenEnrollmentReminderContentService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,7 +15,7 @@ final readonly class SendOpenEnrollmentReminders
 {
     public function __construct(
         private QueueManagedEmail $managedEmail,
-        private OpenEnrollmentReminderContent $content,
+        private OpenEnrollmentReminderContentService $content,
     ) {}
 
     /** @return array{users_reminded: int, enrollments_marked: int} */

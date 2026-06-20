@@ -6,7 +6,7 @@ namespace App\Services\Mail;
 
 use App\Models\Event;
 
-final readonly class EventCancellationContent
+final readonly class EventCancellationContentService
 {
     /**
      * @return array{tokens: array<string, string>, slots: array<string, string>}

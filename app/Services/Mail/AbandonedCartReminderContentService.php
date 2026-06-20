@@ -8,7 +8,7 @@ use App\Models\CartItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
-final readonly class AbandonedCartReminderContent
+final readonly class AbandonedCartReminderContentService
 {
     /**
      * @param  Collection<int, CartItem>  $cartItems

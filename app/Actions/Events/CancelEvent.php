@@ -7,8 +7,8 @@ namespace App\Actions\Events;
 use App\Actions\Mail\QueueManagedEmail;
 use App\Models\Event;
 use App\Models\User;
-use App\Services\Mail\EventCancellationContent;
-use App\Services\Mail\EventCancellationRecipients;
+use App\Services\Mail\EventCancellationContentService;
+use App\Services\Mail\EventCancellationRecipientsService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -17,8 +17,8 @@ use InvalidArgumentException;
 final readonly class CancelEvent
 {
     public function __construct(
-        private EventCancellationRecipients $recipients,
-        private EventCancellationContent $content,
+        private EventCancellationRecipientsService $recipients,
+        private EventCancellationContentService $content,
         private QueueManagedEmail $managedEmail,
     ) {}
 

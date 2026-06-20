@@ -9,7 +9,7 @@ use App\Models\Order;
 use App\Models\PaymentPlan;
 use LogicException;
 
-final readonly class InstallmentPaymentContent
+final readonly class InstallmentPaymentContentService
 {
     /**
      * @return array{tokens: array<string, string>, slots: array<string, string>}

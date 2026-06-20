@@ -7,14 +7,14 @@ namespace App\Actions\Store;
 use App\Actions\Mail\QueueManagedEmail;
 use App\Enums\OrderStatus;
 use App\Models\Order;
-use App\Services\Mail\OrderReceiptContent;
+use App\Services\Mail\OrderReceiptContentService;
 use Illuminate\Support\Facades\DB;
 
 final readonly class SendOrderReceipt
 {
     public function __construct(
         private QueueManagedEmail $managedEmail,
-        private OrderReceiptContent $content,
+        private OrderReceiptContentService $content,
     ) {}
 
     public function handle(Order $order, bool $resend = false): bool

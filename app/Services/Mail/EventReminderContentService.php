@@ -9,7 +9,7 @@ use App\Models\Event;
 use App\Models\Student;
 use App\Models\User;
 
-final readonly class EventReminderContent
+final readonly class EventReminderContentService
 {
     /**
      * @return array{tokens: array<string, string>, slots: array<string, string>}

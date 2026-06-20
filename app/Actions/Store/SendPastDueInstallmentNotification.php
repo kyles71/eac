@@ -7,13 +7,13 @@ namespace App\Actions\Store;
 use App\Actions\Mail\QueueManagedEmail;
 use App\Enums\InstallmentStatus;
 use App\Models\Installment;
-use App\Services\Mail\InstallmentPaymentContent;
+use App\Services\Mail\InstallmentPaymentContentService;
 
 final readonly class SendPastDueInstallmentNotification
 {
     public function __construct(
         private QueueManagedEmail $managedEmail,
-        private InstallmentPaymentContent $content,
+        private InstallmentPaymentContentService $content,
     ) {}
 
     public function handle(Installment $installment): bool

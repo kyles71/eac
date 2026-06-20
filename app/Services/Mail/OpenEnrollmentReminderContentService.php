@@ -8,7 +8,7 @@ use App\Models\Enrollment;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
-final readonly class OpenEnrollmentReminderContent
+final readonly class OpenEnrollmentReminderContentService
 {
     /**
      * @param  Collection<int, Enrollment>  $enrollments

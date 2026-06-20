@@ -11,7 +11,7 @@ use App\Models\Student;
 use App\Models\User;
 use Carbon\CarbonInterface;
 
-final readonly class EventReminderRecipients
+final readonly class EventReminderRecipientsService
 {
     /**
      * @return list<array{emails: list<string>, user: ?User, student: ?Student}>

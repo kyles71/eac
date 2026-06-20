@@ -7,7 +7,7 @@ namespace App\Services\Mail;
 use App\Enums\ProductType;
 use App\Models\Order;
 
-final readonly class OrderReceiptContent
+final readonly class OrderReceiptContentService
 {
     /**
      * @return array{tokens: array<string, string>, slots: array<string, string>, conditions: array<string, bool>}
@@ -18,6 +18,7 @@ final readonly class OrderReceiptContent
             'user',
             'discountCode',
             'orderItems.product',
+            'orderItems.questionAnswers',
             'paymentPlan.installments',
         ]);
 

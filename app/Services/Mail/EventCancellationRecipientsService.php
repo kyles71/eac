@@ -10,7 +10,7 @@ use App\Models\EventAttendee;
 use App\Models\Student;
 use App\Models\User;
 
-final readonly class EventCancellationRecipients
+final readonly class EventCancellationRecipientsService
 {
     /**
      * @return list<string>

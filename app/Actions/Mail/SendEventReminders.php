@@ -6,8 +6,8 @@ namespace App\Actions\Mail;
 
 use App\Models\Course;
 use App\Models\Event;
-use App\Services\Mail\EventReminderContent;
-use App\Services\Mail\EventReminderRecipients;
+use App\Services\Mail\EventReminderContentService;
+use App\Services\Mail\EventReminderRecipientsService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,8 +16,8 @@ final readonly class SendEventReminders
 {
     public function __construct(
         private QueueManagedEmail $managedEmail,
-        private EventReminderRecipients $recipients,
-        private EventReminderContent $content,
+        private EventReminderRecipientsService $recipients,
+        private EventReminderContentService $content,
     ) {}
 
     /** @return array{events_processed: int, emails_queued: int} */

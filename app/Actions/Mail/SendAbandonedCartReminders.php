@@ -8,7 +8,7 @@ use App\Contracts\HasCapacity;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\User;
-use App\Services\Mail\AbandonedCartReminderContent;
+use App\Services\Mail\AbandonedCartReminderContentService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,7 +17,7 @@ final readonly class SendAbandonedCartReminders
 {
     public function __construct(
         private QueueManagedEmail $managedEmail,
-        private AbandonedCartReminderContent $content,
+        private AbandonedCartReminderContentService $content,
     ) {}
 
     /** @return array{users_reminded: int, cart_items_marked: int} */

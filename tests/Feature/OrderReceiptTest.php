@@ -12,7 +12,7 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\Product;
 use App\Models\User;
-use App\Services\Mail\OrderReceiptContent;
+use App\Services\Mail\OrderReceiptContentService;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Enums\LayoutMode;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
@@ -40,7 +40,7 @@ it('renders escaped purchase details and only applicable product content', funct
         ],
     ]);
 
-    $payload = app(OrderReceiptContent::class)->for($order);
+    $payload = app(OrderReceiptContentService::class)->for($order);
     $rendered = app(MailManager::class)->render(
         emailTypeKey: 'order-receipt',
         tokens: $payload['tokens'],
@@ -120,7 +120,7 @@ it('includes payment plan totals and installment details', function (): void {
         'due_date' => now()->addMonth(),
     ]);
 
-    $payload = app(OrderReceiptContent::class)->for($order);
+    $payload = app(OrderReceiptContentService::class)->for($order);
 
     expect($payload['slots']['order-details'])
         ->toContain('Payment Plan')
