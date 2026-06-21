@@ -8,6 +8,10 @@ namespace App\Models;
 use App\Enums\CreditTransactionType;
 use App\Support\MediaDisks;
 use Database\Factories\UserFactory;
+use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
+use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\HasName;
@@ -22,7 +26,6 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
-use Jeffgreco13\FilamentBreezy\Traits\TwoFactorAuthenticatable;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -30,10 +33,10 @@ use Spatie\Permission\Traits\HasRoles;
 use Spatie\Tags\HasTags;
 use Throwable;
 
-final class User extends Authenticatable implements FilamentUser, HasAvatar, HasMedia, HasName
+final class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, HasTags, InteractsWithMedia, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, HasRoles, HasTags, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, InteractsWithMedia, Notifiable;
 
     public const array STAFF_ROLE_NAMES = ['owner', 'teacher'];
 
@@ -45,8 +48,6 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
     protected $hidden = [
         'password',
         'remember_token',
-        'app_authentication_secret',
-        'app_authentication_recovery_codes',
     ];
 
     public function fullName(): Attribute
@@ -318,8 +319,6 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'credit_balance' => 'integer',
-            'app_authentication_secret' => 'encrypted',
-            'app_authentication_recovery_codes' => 'encrypted:array',
         ];
     }
 

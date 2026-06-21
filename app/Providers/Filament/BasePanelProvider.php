@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Shared\Pages\Auth\Login;
-use App\Filament\Shared\Pages\Profile\PersonalInfo;
+use App\Filament\Shared\Pages\Profile\Profile;
+use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -19,8 +20,6 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Jeffgreco13\FilamentBreezy\BreezyCore;
-use Livewire\Livewire;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 
 abstract class BasePanelProvider extends PanelProvider
@@ -30,9 +29,11 @@ abstract class BasePanelProvider extends PanelProvider
         return $panel
             ->login(Login::class)
             ->passwordReset()
-            ->bootUsing(function (): void {
-                Livewire::component('personal_info', PersonalInfo::class);
-            })
+            ->profile(Profile::class, isSimple: false)
+            ->multiFactorAuthentication([
+                AppAuthentication::make()
+                    ->recoverable(),
+            ])
             ->spa()
             ->unsavedChangesAlerts()
             ->databaseTransactions()
@@ -50,12 +51,6 @@ abstract class BasePanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Shared/Pages'), for: 'App\Filament\Shared\Pages')
             ->discoverWidgets(in: app_path('Filament/Shared/Widgets'), for: 'App\Filament\Shared\Widgets')
             ->plugins([
-                BreezyCore::make()
-                    ->myProfile(userMenuLabel: 'My Profile')
-                    ->myProfileComponents([
-                        'personal_info' => PersonalInfo::class,
-                    ])
-                    ->enableTwoFactorAuthentication(),
                 FilamentFullCalendarPlugin::make()->timezone(config('app.display_timezone')),
             ])
             ->middleware([

@@ -8,6 +8,7 @@ use App\Filament\Shared\Schemas\CompetitionMembershipHistory;
 use App\Models\Calendar;
 use App\Models\User;
 use App\Support\MediaDisks;
+use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\SpatieTagsEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -72,10 +73,10 @@ final class UserInfolist
                             ->label('Email Verified At')
                             ->dateTime()
                             ->placeholder('-'),
-                        TextEntry::make('two_factor_confirmed_at')
-                            ->label('Two Factor Confirmed At')
-                            ->dateTime()
-                            ->placeholder('-'),
+                        IconEntry::make('app_authentication_enabled')
+                            ->label('Authenticator App MFA')
+                            ->state(fn (User $record): bool => filled($record->getAppAuthenticationSecret()))
+                            ->boolean(),
                         TextEntry::make('created_at')
                             ->dateTime(),
                         TextEntry::make('updated_at')
