@@ -8,6 +8,8 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
 use App\Http\Controllers\StripeWebhookController;
 use App\Models\CartItem;
+use App\Models\GiftCard;
+use App\Models\GiftCardType;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -26,27 +28,29 @@ beforeEach(function () {
 
 it('handles payment_intent.succeeded webhook for order completion', function () {
     $user = User::factory()->create();
+    $giftCardType = GiftCardType::factory()->denomination(5000)->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create(['price' => 5000]);
 
     $order = Order::factory()->create([
         'user_id' => $user->id,
         'status' => OrderStatus::Processing,
-        'subtotal' => 5000,
-        'total' => 5000,
+        'subtotal' => 10000,
+        'total' => 10000,
         'stripe_payment_intent_id' => 'pi_test_webhook',
     ]);
 
     OrderItem::factory()->create([
         'order_id' => $order->id,
-        'product_id' => $this->product->id,
-        'quantity' => 1,
+        'product_id' => $giftCardProduct->id,
+        'quantity' => 2,
         'unit_price' => 5000,
-        'total_price' => 5000,
+        'total_price' => 10000,
     ]);
 
     CartItem::factory()->create([
         'user_id' => $user->id,
-        'product_id' => $this->product->id,
-        'quantity' => 1,
+        'product_id' => $giftCardProduct->id,
+        'quantity' => 2,
     ]);
 
     $event = new Stripe\Event;
@@ -83,7 +87,19 @@ it('handles payment_intent.succeeded webhook for order completion', function () 
         ->and($order->receipt_queued_at)->not->toBeNull()
         ->and(CartItem::query()->where('user_id', $user->id)->count())->toBe(0);
 
-    Mail::assertQueued(ManagedMail::class, 1);
+    $giftCards = GiftCard::query()->where('order_id', $order->id)->get();
+
+    expect($giftCards)->toHaveCount(2)
+        ->and($giftCards->every(fn (GiftCard $giftCard): bool => $giftCard->delivery_email_queued_at !== null))->toBeTrue();
+
+    Mail::assertQueued(ManagedMail::class, 3);
+
+    foreach ($giftCards as $giftCard) {
+        Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'gift-card-delivery'
+            && $mail->hasTo($user->email)
+            && $mail->usesMailer('transactional')
+            && str_contains($mail->getRenderedEmail()->html, $giftCard->code));
+    }
 });
 
 it('returns 400 for invalid webhook signature', function () {

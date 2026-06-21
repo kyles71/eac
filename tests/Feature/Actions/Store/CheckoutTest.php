@@ -303,6 +303,7 @@ it('does not apply more credit than the user has', function () {
 });
 
 it('fulfills gift cards when order completes at zero total', function () {
+    Mail::fake();
     $giftCardType = GiftCardType::factory()->denomination(5000)->create();
     $gcProduct = Product::factory()->forGiftCardType($giftCardType)->create(['price' => 5000]);
 
@@ -323,7 +324,13 @@ it('fulfills gift cards when order completes at zero total', function () {
     $giftCard = GiftCard::query()->where('purchased_by_user_id', $this->user->id)->first();
     expect($giftCard->initial_amount)->toBe(5000)
         ->and($giftCard->remaining_amount)->toBe(5000)
-        ->and($giftCard->is_active)->toBeTrue();
+        ->and($giftCard->is_active)->toBeTrue()
+        ->and($giftCard->delivery_email_queued_at)->not->toBeNull();
+
+    Mail::assertQueued(ManagedMail::class, 2);
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'gift-card-delivery'
+        && $mail->hasTo($this->user->email)
+        && $mail->usesMailer('transactional'));
 });
 
 it('leaves costume order items as pending in zero total order', function () {

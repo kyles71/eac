@@ -27,6 +27,7 @@ final class CreateOrder
     public function __construct(
         private readonly CompleteOrder $completeOrder,
         private readonly CancelOrder $cancelOrder,
+        private readonly SendGiftCardDeliveryEmails $sendGiftCardDeliveryEmails,
         private readonly SendOrderReceipt $sendOrderReceipt,
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
     ) {}
@@ -235,6 +236,7 @@ final class CreateOrder
             if ($total === 0) {
                 if ($this->completeOrder->handle($order)) {
                     $this->sendOrderReceipt->handle($order);
+                    $this->sendGiftCardDeliveryEmails->handle($order);
                     $this->sendProductPurchaseNotification->handle($order);
                 }
             }

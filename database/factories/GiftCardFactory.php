@@ -32,6 +32,7 @@ final class GiftCardFactory extends Factory
             'order_id' => null,
             'is_active' => true,
             'redeemed_at' => null,
+            'delivery_email_queued_at' => null,
         ];
     }
 

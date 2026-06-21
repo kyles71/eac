@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreatePaymentPlan;
+use App\Actions\Store\SendGiftCardDeliveryEmails;
 use App\Actions\Store\SendInstallmentPaymentEmail;
 use App\Actions\Store\SendOrderReceipt;
 use App\Actions\Store\SendProductPurchaseNotification;
@@ -24,6 +25,7 @@ final class StripeWebhookController
     public function __construct(
         private readonly StripeServiceContract $stripeService,
         private readonly CompleteOrder $completeOrder,
+        private readonly SendGiftCardDeliveryEmails $sendGiftCardDeliveryEmails,
         private readonly SendOrderReceipt $sendOrderReceipt,
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
@@ -161,6 +163,7 @@ final class StripeWebhookController
         }
 
         $this->sendOrderReceipt->handle($order);
+        $this->sendGiftCardDeliveryEmails->handle($order);
         $this->sendProductPurchaseNotification->handle($order);
 
         Log::info("Order #{$order->id} completed via payment_intent.succeeded.", [

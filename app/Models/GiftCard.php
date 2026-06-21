@@ -24,6 +24,7 @@ final class GiftCard extends Model
         'order_id' => 'integer',
         'is_active' => 'boolean',
         'redeemed_at' => 'datetime',
+        'delivery_email_queued_at' => 'datetime',
     ];
 
     /** @return BelongsTo<GiftCardType, $this> */
