@@ -181,11 +181,10 @@ final class ProductForm
                                 Select::make('type')
                                     ->options(ProductQuestionType::class)
                                     ->default(ProductQuestionType::Text->value)
+                                    ->searchable(false)
+                                    ->selectablePlaceholder(false)
                                     ->required()
                                     ->live(),
-                                Toggle::make('is_required')
-                                    ->label('Required')
-                                    ->default(false),
                                 TextInput::make('max_length')
                                     ->label('Maximum Length')
                                     ->numeric()
@@ -194,8 +193,20 @@ final class ProductForm
                                     ->default(255)
                                     ->required(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Text)
                                     ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Text),
+                                Toggle::make('allows_other')
+                                    ->label('Include an Other option')
+                                    ->inline(false)
+                                    ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select),
+                                Toggle::make('is_required')
+                                    ->label('Required')
+                                    ->inline(false)
+                                    ->default(false),
                                 Repeater::make('options')
                                     ->label('Options')
+                                    ->compact()
+                                    ->table([
+                                        TableColumn::make('Option'),
+                                    ])
                                     ->simple(
                                         TextInput::make('option')
                                             ->maxLength(255)
@@ -213,11 +224,8 @@ final class ProductForm
                                     ->required(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select)
                                     ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select)
                                     ->columnSpanFull(),
-                                Toggle::make('allows_other')
-                                    ->label('Include an Other option')
-                                    ->visible(fn (Get $get): bool => self::questionType($get('type')) === ProductQuestionType::Select),
                             ])
-                            ->columns(2)
+                            ->columns(3)
                             ->defaultItems(0)
                             ->addActionLabel('Add purchaser question')
                             ->collapsible()
