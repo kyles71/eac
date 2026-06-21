@@ -87,6 +87,7 @@ final class Store extends TablePage
             ->columns($this->storeView === StoreView::Cards
                 ? $this->getCardColumns()
                 : $this->getListColumns())
+            ->reorderableColumns(false)
             ->contentGrid($this->storeView === StoreView::Cards
                 ? [
                     'default' => 1,
