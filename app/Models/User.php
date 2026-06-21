@@ -6,6 +6,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\CreditTransactionType;
+use App\Enums\StoreView;
 use App\Support\MediaDisks;
 use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
@@ -41,6 +42,15 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public const array STAFF_ROLE_NAMES = ['owner', 'teacher'];
 
     /**
+     * The model's default values for attributes.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'store_view' => StoreView::List->value,
+    ];
+
+    /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
@@ -69,6 +79,13 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function getFilamentAvatarUrl(): ?string
     {
         return $this->getMediaUrl('avatars');
+    }
+
+    public function getStoreView(): StoreView
+    {
+        $storeView = $this->getAttribute('store_view');
+
+        return $storeView instanceof StoreView ? $storeView : StoreView::List;
     }
 
     public function getStaffPhotoUrl(): ?string
@@ -319,6 +336,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'credit_balance' => 'integer',
+            'store_view' => StoreView::class,
         ];
     }
 

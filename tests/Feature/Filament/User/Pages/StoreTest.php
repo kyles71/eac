@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\StoreView;
 use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
@@ -12,11 +13,14 @@ use App\Models\ProductEarlyAccessWindow;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
     Filament::setCurrentPanel('user');
+    Storage::fake('public');
     $this->course = Course::factory()->create(['capacity' => 5]);
     $this->product = Product::factory()->forCourse($this->course)->create(['price' => 5000]);
 });
@@ -24,6 +28,77 @@ beforeEach(function () {
 it('can render the store page', function () {
     livewire(Store::class)
         ->assertOk();
+});
+
+it('defaults to list view', function () {
+    $component = livewire(Store::class);
+
+    expect($component->instance()->storeView)->toBe(StoreView::List)
+        ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
+        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
+
+    $component
+        ->assertActionDisabled(TestAction::make('listView')->table())
+        ->assertActionEnabled(TestAction::make('cardView')->table());
+});
+
+it('switches to card view and persists the preference', function () {
+    $component = livewire(Store::class)
+        ->callAction(TestAction::make('cardView')->table());
+
+    expect($component->instance()->storeView)->toBe(StoreView::Cards)
+        ->and($component->instance()->getTable()->getContentGrid())->toBe([
+            'default' => 1,
+            'md' => 2,
+            'xl' => 3,
+        ])
+        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::Cards);
+
+    livewire(Store::class)
+        ->assertSet('storeView', StoreView::Cards)
+        ->assertActionEnabled(TestAction::make('listView')->table())
+        ->assertActionDisabled(TestAction::make('cardView')->table());
+});
+
+it('switches back to list view and persists the preference', function () {
+    auth()->user()->update(['store_view' => StoreView::Cards]);
+
+    $component = livewire(Store::class)
+        ->callAction(TestAction::make('listView')->table());
+
+    expect($component->instance()->storeView)->toBe(StoreView::List)
+        ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
+        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
+});
+
+it('shows the first storefront image in card view', function () {
+    $this->product->addMedia(UploadedFile::fake()->image('product-card.jpg'))
+        ->toMediaCollection('images');
+    auth()->user()->update(['store_view' => StoreView::Cards]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertSee('product-card.jpg');
+});
+
+it('shows a linked product image in card view when enabled', function () {
+    $this->course->addMedia(UploadedFile::fake()->image('course-card.jpg'))
+        ->toMediaCollection('images');
+    $this->product->update(['include_productable_images' => true]);
+    auth()->user()->update(['store_view' => StoreView::Cards]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertSee('course-card.jpg');
+});
+
+it('shows an image placeholder in card view when no image is available', function () {
+    auth()->user()->update(['store_view' => StoreView::Cards]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertSee('product-placeholder.svg')
+        ->assertSee("No image available for {$this->product->name}");
 });
 
 it('displays available products', function () {
@@ -142,6 +217,24 @@ it('links table rows to product details', function () {
 
 it('can still quickly add a product to the cart from the table', function () {
     livewire(Store::class)
+        ->callAction(TestAction::make('addToCart')->table($this->product))
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->value('quantity'))->toBe(1);
+});
+
+it('keeps product navigation and quick add available in card view', function () {
+    auth()->user()->update(['store_view' => StoreView::Cards]);
+
+    $component = livewire(Store::class);
+
+    expect($component->instance()->getTable()->getRecordUrl($this->product))
+        ->toBe(ProductDetails::getUrl(['product' => $this->product]));
+
+    $component
         ->callAction(TestAction::make('addToCart')->table($this->product))
         ->assertNotified('Added to cart');
 
