@@ -14,7 +14,8 @@ return new class() extends Migration
             $table->foreignId('order_item_id')
                 ->nullable()
                 ->constrained()
-                ->nullOnDelete();
+                ->nullOnDelete()
+                ->after('student_id');
         });
     }
 

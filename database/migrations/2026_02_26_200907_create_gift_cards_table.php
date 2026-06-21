@@ -21,6 +21,7 @@ return new class() extends Migration
             $table->foreignId('order_id')->nullable()->constrained()->nullOnDelete();
             $table->boolean('is_active')->default(true);
             $table->timestamp('redeemed_at')->nullable();
+            $table->timestamp('delivery_email_queued_at')->nullable();
             $table->timestamps();
         });
     }

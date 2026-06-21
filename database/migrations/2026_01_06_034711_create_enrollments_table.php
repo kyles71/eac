@@ -15,6 +15,7 @@ return new class() extends Migration
             $table->foreignId('course_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained();
             $table->foreignId('student_id')->nullable()->constrained()->nullOnDelete();
+            $table->timestamp('assignment_reminder_sent_at')->nullable();
             $table->timestamps();
         });
     }

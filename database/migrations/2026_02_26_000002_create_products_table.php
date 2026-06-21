@@ -19,6 +19,7 @@ return new class() extends Migration
             $table->dateTime('available_from')->nullable()->index();
             $table->dateTime('available_until')->nullable()->index();
             $table->boolean('include_productable_images')->default(false);
+            $table->boolean('send_purchase_notification')->default(false);
             $table->foreignId('requires_course_id')->nullable()->constrained('courses')->nullOnDelete();
             $table->nullableMorphs('productable');
             $table->timestamps();

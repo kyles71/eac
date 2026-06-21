@@ -21,6 +21,11 @@ return new class() extends Migration
             $table->string('stripe_payment_intent_id')->nullable();
             $table->string('stripe_invoice_id')->nullable();
             $table->unsignedSmallInteger('retry_count')->default(0);
+            $table->timestamp('last_attempted_at')->nullable()->index();
+            $table->string('last_payment_status')->nullable();
+            $table->text('last_failure_reason')->nullable();
+            $table->string('last_failure_code')->nullable();
+            $table->timestamp('past_due_notification_sent_at')->nullable();
             $table->timestamps();
         });
     }

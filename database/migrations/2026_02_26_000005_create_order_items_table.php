@@ -18,6 +18,7 @@ return new class() extends Migration
             $table->unsignedInteger('unit_price');
             $table->unsignedInteger('total_price');
             $table->string('status')->default('Pending');
+            $table->boolean('purchase_notification_requested')->default(false);
             $table->timestamps();
         });
     }

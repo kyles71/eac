@@ -20,6 +20,13 @@ return new class() extends Migration
             $table->dateTime('end_time')->nullable();
             $table->foreignId('calendar_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('course_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->text('cancellation_reason')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->foreignId('cancelled_by_user_id')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+            $table->timestamp('reminder_processed_at')->nullable();
             $table->timestamps();
         });
     }

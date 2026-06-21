@@ -20,6 +20,7 @@ return new class() extends Migration
             $table->dateTime('start_time')->nullable();
             $table->unsignedInteger('duration')->default(60);
             $table->string('guest_teacher')->nullable();
+            $table->timestamp('event_reminder_processed_at')->nullable();
             $table->timestamps();
         });
     }

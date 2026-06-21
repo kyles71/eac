@@ -25,6 +25,8 @@ return new class() extends Migration
             $table->foreignId('payment_plan_template_id')->nullable()->constrained('payment_plan_templates');
             $table->foreignId('payment_plan_terms_version_id')->nullable()->constrained('legal_document_versions')->nullOnDelete();
             $table->timestamp('cart_items_cleared_at')->nullable();
+            $table->timestamp('receipt_queued_at')->nullable();
+            $table->timestamp('purchase_notification_queued_at')->nullable();
             $table->timestamps();
         });
     }
