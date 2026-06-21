@@ -54,7 +54,7 @@ final class OrderInfolist
                     ->schema([
                         RepeatableEntry::make('orderItems')
                             ->hiddenLabel()
-                            ->grid(5)
+                            ->columns(5)
                             ->schema([
                                 TextEntry::make('product.name')
                                     ->label('Product'),
