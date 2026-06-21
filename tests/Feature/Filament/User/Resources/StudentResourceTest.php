@@ -16,6 +16,8 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Infolists\Components\TextEntry;
+use Illuminate\Contracts\Support\Htmlable;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
@@ -221,10 +223,21 @@ it('hides delete for students with enrollments', function () {
 
 it('shows current classes and progressively loads past enrollment history', function () {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $currentTeacher = User::factory()->isTeacher()->create([
+        'first_name' => 'Pearl',
+        'last_name' => 'Primus',
+        'staff_bio' => 'Pearl teaches the current class.',
+    ]);
+    $pastTeacher = User::factory()->isTeacher()->create([
+        'first_name' => 'Alvin',
+        'last_name' => 'Ailey',
+        'staff_bio' => 'Alvin taught this past class.',
+    ]);
     $currentCourse = Course::factory()->create([
         'name' => 'Current Ballet',
         'start_time' => now()->subWeek(),
     ]);
+    $currentCourse->teachers()->sync([$currentTeacher->id]);
     $currentEvent = Event::factory()->create([
         'course_id' => $currentCourse->id,
         'start_time' => now()->addDay(),
@@ -242,6 +255,9 @@ it('shows current classes and progressively loads past enrollment history', func
             'name' => "Past Course {$number}",
             'start_time' => now()->subMonths($number),
         ]);
+        if ($number === 1) {
+            $course->teachers()->sync([$pastTeacher->id]);
+        }
         Event::factory()->create([
             'course_id' => $course->id,
             'start_time' => $number === 1 ? $pastMeetingWithoutEnd : now()->subDays($number),
@@ -257,7 +273,11 @@ it('shows current classes and progressively loads past enrollment history', func
         ->loadTable()
         ->assertCanSeeTableRecords([$currentEvent])
         ->assertSee('Current Ballet')
+        ->assertSee('Pearl Primus')
+        ->assertSee('Pearl teaches the current class.')
         ->assertSee('Past Course 1')
+        ->assertSee('Alvin Ailey')
+        ->assertSee('Alvin taught this past class.')
         ->assertSee('Past Course 5')
         ->assertSee($pastMeetingWithoutEnd
             ->timezone((string) config('app.display_timezone', config('app.timezone')))
@@ -271,9 +291,16 @@ it('shows current classes and progressively loads past enrollment history', func
         ->loadTable()
         ->mountAction(TestAction::make('viewStudentEventDetails')->table($currentEvent))
         ->assertActionMounted(TestAction::make('viewStudentEventDetails')->table($currentEvent))
+        ->assertSchemaComponentExists('teacher', 'mountedActionSchema0', function (TextEntry $entry): bool {
+            $state = $entry->formatState($entry->getState());
+
+            return $state instanceof Htmlable
+                && str_contains($state->toHtml(), 'Pearl Primus')
+                && str_contains($state->toHtml(), 'Pearl teaches the current class.');
+        })
         ->assertActionDataSet(fn (array $data): bool => $data['name'] === $currentEvent->name
             && $data['course_name'] === 'Current Ballet'
-            && $data['teacher'] === $currentCourse->teacherDisplayName);
+            && $data['teacher'] === 'Pearl Primus');
 });
 
 it('shows direct student event invitations on the courses and events table', function () {

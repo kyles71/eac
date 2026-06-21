@@ -15,6 +15,7 @@ use App\Models\Student;
 use App\Models\StudentEmail;
 use App\Models\User;
 use App\Support\EnrollmentStatus;
+use App\Support\Filament\CourseStaffPresenter;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -37,6 +38,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 
 final class ViewStudent extends ViewRecord implements HasTable
@@ -114,7 +116,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                 TextColumn::make('name')
                     ->label('Event'),
                 TextColumn::make('teacher')
-                    ->state(fn (Event $record): ?string => $record->course?->teacherDisplayName)
+                    ->state(fn (Event $record): ?HtmlString => CourseStaffPresenter::render($record->course))
                     ->searchable(false)
                     ->sortable(false)
                     ->placeholder('-'),
@@ -260,7 +262,7 @@ final class ViewStudent extends ViewRecord implements HasTable
         return $this->student()
             ->enrollments()
             ->past()
-            ->with(['course.events', 'course.teachers'])
+            ->with(['course.events', 'course.teachers.media'])
             ->select('enrollments.*')
             ->orderByDesc(DB::raw(
                 'COALESCE(
@@ -283,7 +285,7 @@ final class ViewStudent extends ViewRecord implements HasTable
         return [
             'course' => $course?->name ?? 'Course',
             'semester' => $course?->semester?->getLabel(),
-            'teacher' => $course?->teacherDisplayName,
+            'teacher' => CourseStaffPresenter::render($course),
             'status' => $status,
             'starts_at' => $this->enrollmentMeetingTime($enrollment)
                 ?->timezone((string) config('app.display_timezone', config('app.timezone')))
@@ -332,7 +334,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                         ->where('attendee_type', $studentMorphClass)
                         ->where('attendee_id', $student->id));
             })
-            ->with(['calendar', 'course.teachers']);
+            ->with(['calendar', 'course.teachers.media']);
     }
 
     private function viewStudentEventDetailsAction(): ViewAction
@@ -353,7 +355,9 @@ final class ViewStudent extends ViewRecord implements HasTable
                             ->label('Calendar'),
                         TextInput::make('course_name')
                             ->label('Course'),
-                        TextInput::make('teacher'),
+                        TextEntry::make('teacher')
+                            ->formatStateUsing(fn (Event $record): ?HtmlString => CourseStaffPresenter::render($record->course))
+                            ->placeholder('-'),
                         DateTimePicker::make('start_time')
                             ->label('Starts At')
                             ->timezone((string) config('app.display_timezone', config('app.timezone'))),

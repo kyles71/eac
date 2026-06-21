@@ -6,12 +6,15 @@ namespace App\Filament\Shared\Actions;
 
 use App\Models\Enrollment;
 use App\Support\EnrollmentStatus;
+use App\Support\Filament\CourseStaffPresenter;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\HtmlString;
 
 final class ViewCourseDetailsAction
 {
@@ -59,7 +62,9 @@ final class ViewCourseDetailsAction
                     TextInput::make('name')
                         ->label('Course'),
                     TextInput::make('semester'),
-                    TextInput::make('teacher'),
+                    TextEntry::make('teacher')
+                        ->formatStateUsing(fn (Enrollment $record): ?HtmlString => CourseStaffPresenter::render($record->course))
+                        ->placeholder('-'),
                     TextInput::make('student')
                         ->placeholder('Unassigned'),
                     DateTimePicker::make('starts_at')

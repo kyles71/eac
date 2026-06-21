@@ -127,6 +127,41 @@ it('stores a staff bio for a staff member', function () {
     ]);
 });
 
+it('limits staff bios to 500 characters', function () {
+    $teacherRole = Role::findOrCreate('teacher');
+
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => 'Valid',
+            'last_name' => 'Biography',
+            'email' => 'valid-biography@example.com',
+            'password' => 'password',
+            'roles' => [$teacherRole->id],
+            'staff_bio' => Str::repeat('a', 500),
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    livewire(ListUsers::class)
+        ->callAction(CreateAction::class, data: [
+            'first_name' => 'Invalid',
+            'last_name' => 'Biography',
+            'email' => 'invalid-biography@example.com',
+            'password' => 'password',
+            'roles' => [$teacherRole->id],
+            'staff_bio' => Str::repeat('a', 501),
+        ])
+        ->assertHasActionErrors(['staff_bio' => 'max']);
+
+    assertDatabaseHas(User::class, [
+        'email' => 'valid-biography@example.com',
+        'staff_bio' => Str::repeat('a', 500),
+    ]);
+    assertDatabaseMissing(User::class, [
+        'email' => 'invalid-biography@example.com',
+    ]);
+});
+
 it('only shows the staff profile on staff member view pages', function () {
     $staffMember = User::factory()->isTeacher()->create();
     $nonStaffMember = User::factory()->create();

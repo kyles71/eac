@@ -8,8 +8,11 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Student;
+use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Infolists\Components\TextEntry;
+use Illuminate\Contracts\Support\Htmlable;
 
 use function Pest\Livewire\livewire;
 
@@ -173,6 +176,11 @@ it('does not show assignment actions after a class has concluded', function () {
 
 it('opens course details from a course row without calendar widget actions', function () {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $teacher = User::factory()->isTeacher()->create([
+        'first_name' => 'Katherine',
+        'last_name' => 'Dunham',
+        'staff_bio' => 'Katherine teaches dance history.',
+    ]);
     $course = Course::factory()->create([
         'name' => 'Tap Details',
         'description' => 'Bring tap shoes.',
@@ -180,6 +188,7 @@ it('opens course details from a course row without calendar widget actions', fun
         'start_time' => now()->addWeek(),
         'duration' => 75,
     ]);
+    $course->teachers()->sync([$teacher->id]);
     Event::factory()->create([
         'course_id' => $course->id,
         'start_time' => now()->addWeek(),
@@ -196,12 +205,20 @@ it('opens course details from a course row without calendar widget actions', fun
         ->set('activeTab', 'all')
         ->mountAction(TestAction::make('viewCourseDetails')->table($enrollment))
         ->assertActionMounted(TestAction::make('viewCourseDetails')->table($enrollment))
+        ->assertSchemaComponentExists('teacher', 'mountedActionSchema0', function (TextEntry $entry): bool {
+            $state = $entry->formatState($entry->getState());
+
+            return $state instanceof Htmlable
+                && str_contains($state->toHtml(), 'Katherine Dunham')
+                && str_contains($state->toHtml(), 'Katherine teaches dance history.');
+        })
         ->assertActionDataSet(fn (array $data): bool => $data['name'] === $course->name
             && $data['semester'] === CourseSemester::Fall->getLabel()
             && $data['student'] === $student->fullName
             && $data['duration'] === '75 minutes'
             && $data['meetings'] === 1
             && $data['status'] === 'Future'
+            && $data['teacher'] === 'Katherine Dunham'
             && ! array_key_exists('tags', $data)
             && $data['description'] === 'Bring tap shoes.')
         ->assertActionDoesNotExist('addCourseProductToCart')

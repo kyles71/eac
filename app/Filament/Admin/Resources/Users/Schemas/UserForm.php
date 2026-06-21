@@ -115,6 +115,7 @@ final class UserForm
                             ->columnSpanFull(),
                         Textarea::make('staff_bio')
                             ->label('Staff Bio')
+                            ->maxLength(500)
                             ->rows(6)
                             ->columnSpanFull(),
                     ]),

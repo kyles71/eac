@@ -80,7 +80,7 @@ final class MyEnrollments extends TablePage
             ->query(
                 Enrollment::query()
                     ->where('user_id', auth()->id())
-                    ->with(['course.events', 'course.teachers', 'student'])
+                    ->with(['course.events', 'course.teachers.media', 'student'])
             )
             ->recordTitle(fn (Enrollment $record): string => $record->course?->name ?? 'Enrollment')
             ->columns([

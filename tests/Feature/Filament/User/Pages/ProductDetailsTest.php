@@ -9,6 +9,8 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\User;
+use App\Support\MediaDisks;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
@@ -19,6 +21,7 @@ use function Pest\Livewire\livewire;
 beforeEach(function () {
     Filament::setCurrentPanel('user');
     Storage::fake('public');
+    Storage::fake(MediaDisks::private());
 
     $this->course = Course::factory()->create([
         'capacity' => 5,
@@ -53,6 +56,25 @@ it('shows storefront details for linked products', function () {
         ->assertSee('Misty Copeland')
         ->assertSee('Available Spots')
         ->assertSee('5');
+});
+
+it('shows linked course staff profiles in tooltips', function () {
+    $teacher = User::factory()->isTeacher()->create([
+        'first_name' => 'Martha',
+        'last_name' => 'Graham',
+        'staff_bio' => 'Martha teaches modern dance.',
+    ]);
+    $teacher->addMedia(UploadedFile::fake()->image('martha-staff.jpg'))
+        ->toMediaCollection('staff-photo');
+
+    $this->course->update(['guest_teacher' => null]);
+    $this->course->teachers()->sync([$teacher->id]);
+
+    livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+        ->assertSee('Martha Graham')
+        ->assertSee('Martha teaches modern dance.')
+        ->assertSee('martha-staff.jpg')
+        ->assertSee('x-tooltip', escape: false);
 });
 
 it('renders product and linked item gallery images', function () {

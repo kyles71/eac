@@ -67,24 +67,12 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
 
     public function getFilamentAvatarUrl(): ?string
     {
-        $media = $this->getFirstMedia('avatars');
+        return $this->getMediaUrl('avatars');
+    }
 
-        if ($media === null) {
-            return null;
-        }
-
-        if ($media->disk === MediaDisks::private()) {
-            try {
-                return $media->getTemporaryUrl(
-                    now()->addMinutes((int) config('filament.temporary_file_url_expiry_minutes', 30))->endOfHour()
-                );
-            } catch (Throwable) {
-                return $media->getUrl();
-            }
-        }
-
-        return $media->getUrl();
-        // return $media?->getUrl('thumb') ?? $media?->getUrl();
+    public function getStaffPhotoUrl(): ?string
+    {
+        return $this->getMediaUrl('staff-photo');
     }
 
     public function canAccessPanel(Panel $panel): bool
@@ -333,6 +321,27 @@ final class User extends Authenticatable implements FilamentUser, HasAvatar, Has
             'app_authentication_secret' => 'encrypted',
             'app_authentication_recovery_codes' => 'encrypted:array',
         ];
+    }
+
+    private function getMediaUrl(string $collection): ?string
+    {
+        $media = $this->getFirstMedia($collection);
+
+        if ($media === null) {
+            return null;
+        }
+
+        if ($media->disk === MediaDisks::private()) {
+            try {
+                return $media->getTemporaryUrl(
+                    now()->addMinutes((int) config('filament.temporary_file_url_expiry_minutes', 30))->endOfHour()
+                );
+            } catch (Throwable) {
+                return $media->getUrl();
+            }
+        }
+
+        return $media->getUrl();
     }
 
     // public function registerMediaConversions(?Media $media = null): void

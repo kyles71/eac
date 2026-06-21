@@ -6,7 +6,9 @@ namespace App\Filament\User\Pages;
 
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
+use App\Models\Course;
 use App\Models\Product;
+use App\Support\Filament\CourseStaffPresenter;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Infolists\Components\TextEntry;
@@ -43,6 +45,9 @@ final class ProductDetails extends Page
         $user = auth()->user();
 
         $product->loadMissing(['media', 'productable', 'requiresCourse']);
+        $product->loadMorph('productable', [
+            Course::class => ['teachers.media'],
+        ]);
 
         if ($product->productable instanceof HasMedia) {
             $product->productable->loadMissing('media');
@@ -197,7 +202,11 @@ final class ProductDetails extends Page
         foreach ($this->product?->storefrontDetails() ?? [] as $label => $value) {
             $details[] = TextEntry::make('storefront_detail_'.count($details))
                 ->label($label)
-                ->state($value);
+                ->state(
+                    $label === 'Teacher' && $this->product?->productable instanceof Course
+                        ? CourseStaffPresenter::render($this->product->productable)
+                        : $value
+                );
         }
 
         if ($this->product?->requiresCourse !== null) {
