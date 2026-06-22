@@ -43,34 +43,4 @@ final class CompetitionTeamPolicy
     {
         return $user->can('DeleteAny:CompetitionTeam');
     }
-
-    public function restore(AuthUser $user, CompetitionTeam $competitionTeam): bool
-    {
-        return $user->can('Restore:CompetitionTeam');
-    }
-
-    public function forceDelete(AuthUser $user, CompetitionTeam $competitionTeam): bool
-    {
-        return $user->can('ForceDelete:CompetitionTeam');
-    }
-
-    public function forceDeleteAny(AuthUser $user): bool
-    {
-        return $user->can('ForceDeleteAny:CompetitionTeam');
-    }
-
-    public function restoreAny(AuthUser $user): bool
-    {
-        return $user->can('RestoreAny:CompetitionTeam');
-    }
-
-    public function replicate(AuthUser $user, CompetitionTeam $competitionTeam): bool
-    {
-        return $user->can('Replicate:CompetitionTeam');
-    }
-
-    public function reorder(AuthUser $user): bool
-    {
-        return $user->can('Reorder:CompetitionTeam');
-    }
 }

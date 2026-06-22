@@ -17,11 +17,6 @@ final class CalendarPolicy
         return $authUser->can('ViewAny:Calendar');
     }
 
-    public function view(AuthUser $authUser, Calendar $calendar): bool
-    {
-        return $authUser->can('View:Calendar');
-    }
-
     public function create(AuthUser $authUser): bool
     {
         return $authUser->can('Create:Calendar');
@@ -34,41 +29,12 @@ final class CalendarPolicy
 
     public function delete(AuthUser $authUser, Calendar $calendar): bool
     {
-        return $authUser->can('Delete:Calendar');
+        return ! $calendar->isSystemCalendar()
+            && $authUser->can('Delete:Calendar');
     }
 
     public function deleteAny(AuthUser $authUser): bool
     {
         return $authUser->can('DeleteAny:Calendar');
-    }
-
-    public function restore(AuthUser $authUser, Calendar $calendar): bool
-    {
-        return $authUser->can('Restore:Calendar');
-    }
-
-    public function forceDelete(AuthUser $authUser, Calendar $calendar): bool
-    {
-        return $authUser->can('ForceDelete:Calendar');
-    }
-
-    public function forceDeleteAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('ForceDeleteAny:Calendar');
-    }
-
-    public function restoreAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('RestoreAny:Calendar');
-    }
-
-    public function replicate(AuthUser $authUser, Calendar $calendar): bool
-    {
-        return $authUser->can('Replicate:Calendar');
-    }
-
-    public function reorder(AuthUser $authUser): bool
-    {
-        return $authUser->can('Reorder:Calendar');
     }
 }

@@ -2,11 +2,35 @@
 
 declare(strict_types=1);
 
+use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Resources\Calendars\CalendarResource;
+use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
+use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
+use App\Filament\Admin\Resources\Costumes\CostumeResource;
+use App\Filament\Admin\Resources\Courses\CourseResource;
+use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
+use App\Filament\Admin\Resources\DashboardQuickLinks\DashboardQuickLinkResource;
+use App\Filament\Admin\Resources\DiscountCodes\DiscountCodeResource;
+use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Filament\Admin\Resources\Events\EventResource;
-use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
-use Filament\Pages\Dashboard;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
+use App\Filament\Admin\Resources\Forms\FormResource;
+use App\Filament\Admin\Resources\FormUsers\FormUserResource;
+use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
+use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
+use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
+use App\Filament\Admin\Resources\Orders\OrderResource;
+use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
+use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
+use App\Filament\Admin\Resources\Products\ProductResource;
+use App\Filament\Admin\Resources\Roles\RoleResource;
+use App\Filament\Admin\Resources\Students\StudentResource;
+use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
+use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
+use App\Filament\Shared\Pages\Calendar as CalendarPage;
+use App\Filament\Shared\Widgets\CalendarWidget;
+use App\Filament\Shared\Widgets\MessagesFromEac;
+use App\Filament\Shared\Widgets\QuickLinks;
 
 return [
 
@@ -26,8 +50,8 @@ return [
         'show_model_path' => true,
         'cluster' => null,
         'tabs' => [
-            'pages' => true,
-            'widgets' => true,
+            'pages' => false,
+            'widgets' => false,
             'resources' => true,
             'custom_permissions' => true,
         ],
@@ -125,18 +149,13 @@ return [
 
     'policies' => [
         'path' => app_path('Policies'),
-        'merge' => true,
+        'merge' => false,
         'generate' => true,
-        'methods' => [
-            'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
-        ],
+        'methods' => [],
         'single_parameter_methods' => [
             'viewAny',
             'create',
             'deleteAny',
-            'forceDeleteAny',
-            'restoreAny',
-            'reorder',
         ],
     ],
 
@@ -170,15 +189,74 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
+            CalendarResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CompetitionSeasonResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CompetitionTeamResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CostumeResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CourseResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            DashboardMessageResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            DashboardQuickLinkResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            DiscountCodeResource::class => [
+                'viewAny', 'create',
+            ],
+            EnrollmentResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
             EventResource::class => [
-                'cancel',
+                'viewAny', 'view', 'create', 'update', 'deleteAny', 'cancel',
+            ],
+            FormResource::class => [
+                'viewAny', 'view', 'create', 'update', 'deleteAny',
+            ],
+            FormUserResource::class => [
+                'viewAny', 'view', 'create', 'update', 'deleteAny',
+            ],
+            GiftCardResource::class => [
+                'viewAny', 'create', 'deleteAny',
+            ],
+            GiftCardTypeResource::class => [
+                'viewAny', 'create', 'delete', 'deleteAny',
+            ],
+            HolidayResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            LegalDocumentResource::class => [
+                'viewAny', 'publish',
+            ],
+            OrderResource::class => [
+                'viewAny', 'view',
+            ],
+            PaymentPlanResource::class => [
+                'viewAny', 'view',
+            ],
+            PaymentPlanTemplateResource::class => [
+                'viewAny', 'create', 'update',
+            ],
+            ProductResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             RoleResource::class => [
-                'viewAny',
-                'view',
-                'create',
-                'update',
-                'delete',
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            StudentResource::class => [
+                'viewAny', 'view', 'create', 'update', 'deleteAny',
+            ],
+            UserResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
         ],
         'exclude' => [
@@ -201,7 +279,9 @@ return [
         'subject' => 'class',
         'prefix' => 'view',
         'exclude' => [
+            CalendarPage::class,
             Dashboard::class,
+            ManageDashboardAppearance::class,
         ],
     ],
 
@@ -220,8 +300,9 @@ return [
         'subject' => 'class',
         'prefix' => 'view',
         'exclude' => [
-            AccountWidget::class,
-            FilamentInfoWidget::class,
+            CalendarWidget::class,
+            MessagesFromEac::class,
+            QuickLinks::class,
         ],
     ],
 
@@ -238,7 +319,9 @@ return [
 
     'custom_permissions' => [
         'Manage:DashboardAppearance' => 'Manage Dashboard Appearance',
+        'Manage:MailManager' => 'Manage Mail Manager',
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
+        'Manage:UserAccess' => 'Manage User Access',
     ],
 
     /*

@@ -461,6 +461,8 @@ it('shows comp calendar when staff is on a current competition team', function (
 it('uses current competition accounts in the comp calendar exclusion picker', function (): void {
     Filament::setCurrentPanel('admin');
 
+    $user = User::factory()->create();
+    $user->givePermissionTo('Create:Event');
     $parent = User::factory()->create();
     $student = Student::factory()->for($parent)->create();
     $staff = User::factory()->isTeacher()->create();
@@ -468,6 +470,8 @@ it('uses current competition accounts in the comp calendar exclusion picker', fu
     $team = currentCompetitionTeam();
     $student->competitionTeams()->attach($team);
     $staff->competitionTeams()->attach($team);
+
+    $this->actingAs($user);
 
     livewire(CalendarWidget::class)
         ->mountAction(CalendarCreateAction::class)
@@ -780,11 +784,26 @@ it('cancels an event from the admin calendar modal', function (): void {
 it('mounts the admin calendar create action with attendee fields', function (): void {
     Filament::setCurrentPanel('admin');
 
-    $this->actingAs(User::factory()->create());
+    $user = User::factory()->create();
+    $user->givePermissionTo('Create:Event');
+
+    $this->actingAs($user);
 
     livewire(CalendarWidget::class)
         ->mountAction(CalendarCreateAction::class)
         ->assertOk();
+});
+
+it('hides the admin calendar create action for teachers without event create permission', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $teacher = User::factory()->isTeacher()->create();
+    $teacher->givePermissionTo('Manage:DashboardAppearance');
+
+    $this->actingAs($teacher);
+
+    livewire(CalendarWidget::class)
+        ->assertActionHidden(CalendarCreateAction::class);
 });
 
 it('loads direct invitations with attendee names in a repeater', function (): void {

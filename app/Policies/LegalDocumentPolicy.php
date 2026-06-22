@@ -17,18 +17,8 @@ final class LegalDocumentPolicy
         return $authUser->can('ViewAny:LegalDocument');
     }
 
-    public function view(AuthUser $authUser, LegalDocument $legalDocument): bool
+    public function publish(AuthUser $authUser, LegalDocument $legalDocument): bool
     {
-        return $authUser->can('View:LegalDocument');
-    }
-
-    public function create(AuthUser $authUser): bool
-    {
-        return $authUser->can('Create:LegalDocument');
-    }
-
-    public function update(AuthUser $authUser, LegalDocument $legalDocument): bool
-    {
-        return $authUser->can('Update:LegalDocument');
+        return $authUser->can('Publish:LegalDocument');
     }
 }

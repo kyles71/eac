@@ -6,10 +6,7 @@ namespace App\Filament\Admin\Resources\LegalDocuments\Tables;
 
 use App\Models\LegalDocument;
 use Filament\Actions\Action;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
 use Filament\Forms\Components\RichEditor;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
@@ -37,22 +34,11 @@ final class LegalDocumentsTable
                     ->dateTime()
                     ->placeholder('Not published'),
             ])
-            ->headerActions([
-                CreateAction::make()
-                    ->label('New Legal Document')
-                    ->icon(Heroicon::OutlinedPlus)
-                    ->schema(self::documentSchema(includeKey: true))
-                    ->modalSubmitActionLabel('Create Document')
-                    ->successNotificationTitle('Legal document created'),
-            ])
             ->recordActions([
-                EditAction::make()
-                    ->schema(self::documentSchema(includeKey: false))
-                    ->modalSubmitActionLabel('Save Document')
-                    ->successNotificationTitle('Legal document updated'),
                 Action::make('publishVersion')
                     ->label('Publish Version')
                     ->icon(Heroicon::OutlinedArrowUpTray)
+                    ->authorize('publish')
                     ->schema(fn (LegalDocument $record): array => [
                         TextInput::make('title')
                             ->required()
@@ -72,28 +58,5 @@ final class LegalDocumentsTable
                             ->send();
                     }),
             ]);
-    }
-
-    /**
-     * @return array<\Filament\Schemas\Components\Component>
-     */
-    private static function documentSchema(bool $includeKey): array
-    {
-        return [
-            ...($includeKey ? [
-                TextInput::make('key')
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(ignoreRecord: true)
-                    ->helperText('Stable code-facing key, such as payment_plan_terms.'),
-            ] : []),
-            TextInput::make('name')
-                ->required()
-                ->maxLength(255),
-            Textarea::make('description')
-                ->rows(3)
-                ->maxLength(1000)
-                ->columnSpanFull(),
-        ];
     }
 }

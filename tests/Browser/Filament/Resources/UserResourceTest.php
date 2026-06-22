@@ -50,3 +50,14 @@ it('can edit an existing user', function () {
         'last_name' => $newData->last_name,
     ]);
 });
+
+it('renders the direct permission picker without JavaScript errors', function () {
+    $user = User::factory()->create();
+
+    visit("/admin/users/{$user->id}")
+        ->click('Manage Access')
+        ->assertSee('Direct Permissions')
+        ->assertSee('Cards')
+        ->assertSee('Select all')
+        ->assertNoJavaScriptErrors();
+});

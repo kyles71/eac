@@ -171,6 +171,7 @@ final class CalendarWidget extends FullCalendarWidget
         return [
             ...($this->isAdminPanel() ? [
                 CreateAction::make()
+                    ->authorize('create')
                     ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
                     ->after(function (array $data, CreateAction $action): void {
                         $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($action): void {

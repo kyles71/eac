@@ -43,34 +43,4 @@ final class CompetitionSeasonPolicy
     {
         return $user->can('DeleteAny:CompetitionSeason');
     }
-
-    public function restore(AuthUser $user, CompetitionSeason $competitionSeason): bool
-    {
-        return $user->can('Restore:CompetitionSeason');
-    }
-
-    public function forceDelete(AuthUser $user, CompetitionSeason $competitionSeason): bool
-    {
-        return $user->can('ForceDelete:CompetitionSeason');
-    }
-
-    public function forceDeleteAny(AuthUser $user): bool
-    {
-        return $user->can('ForceDeleteAny:CompetitionSeason');
-    }
-
-    public function restoreAny(AuthUser $user): bool
-    {
-        return $user->can('RestoreAny:CompetitionSeason');
-    }
-
-    public function replicate(AuthUser $user, CompetitionSeason $competitionSeason): bool
-    {
-        return $user->can('Replicate:CompetitionSeason');
-    }
-
-    public function reorder(AuthUser $user): bool
-    {
-        return $user->can('Reorder:CompetitionSeason');
-    }
 }

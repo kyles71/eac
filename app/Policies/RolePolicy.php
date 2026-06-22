@@ -4,71 +4,60 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Models\Role;
+use App\Models\User;
+use App\Services\AccessManagerService;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
-use Spatie\Permission\Models\Role;
+use Illuminate\Auth\Access\Response;
 
 final class RolePolicy
 {
     use HandlesAuthorization;
 
-    public function viewAny(AuthUser $authUser): bool
+    public function viewAny(User $authUser): bool
     {
-        return $authUser->can('ViewAny:Role');
+        return $authUser->can('ViewAny:Role')
+            && app(AccessManagerService::class)->highestRoleWeight($authUser) !== null;
     }
 
-    public function view(AuthUser $authUser, Role $role): bool
+    public function view(User $authUser, Role $role): bool
     {
-        return $authUser->can('View:Role');
+        return $authUser->can('View:Role')
+            && app(AccessManagerService::class)->canManageRole($authUser, $role);
     }
 
-    public function create(AuthUser $authUser): bool
+    public function create(User $authUser): bool
     {
-        return $authUser->can('Create:Role');
+        return $authUser->can('Create:Role')
+            && app(AccessManagerService::class)->highestRoleWeight($authUser) !== null;
     }
 
-    public function update(AuthUser $authUser, Role $role): bool
+    public function update(User $authUser, Role $role): bool
     {
-        return $authUser->can('Update:Role');
+        return $authUser->can('Update:Role')
+            && app(AccessManagerService::class)->canManageRole($authUser, $role);
     }
 
-    public function delete(AuthUser $authUser, Role $role): bool
+    public function delete(User $authUser, Role $role): Response
     {
-        return $authUser->can('Delete:Role');
+        if (! $authUser->can('Delete:Role')) {
+            return Response::deny('You do not have permission to delete roles.');
+        }
+
+        if (! app(AccessManagerService::class)->canManageRole($authUser, $role)) {
+            return Response::deny('You may only delete roles below your own highest role.');
+        }
+
+        if ($role->users()->exists()) {
+            return Response::deny('Reassign or remove every user from this role before deleting it.');
+        }
+
+        return Response::allow();
     }
 
-    public function deleteAny(AuthUser $authUser): bool
+    public function deleteAny(User $authUser): bool
     {
-        return $authUser->can('DeleteAny:Role');
-    }
-
-    public function restore(AuthUser $authUser, Role $role): bool
-    {
-        return $authUser->can('Restore:Role');
-    }
-
-    public function forceDelete(AuthUser $authUser, Role $role): bool
-    {
-        return $authUser->can('ForceDelete:Role');
-    }
-
-    public function forceDeleteAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('ForceDeleteAny:Role');
-    }
-
-    public function restoreAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('RestoreAny:Role');
-    }
-
-    public function replicate(AuthUser $authUser, Role $role): bool
-    {
-        return $authUser->can('Replicate:Role');
-    }
-
-    public function reorder(AuthUser $authUser): bool
-    {
-        return $authUser->can('Reorder:Role');
+        return $authUser->can('DeleteAny:Role')
+            && app(AccessManagerService::class)->highestRoleWeight($authUser) !== null;
     }
 }

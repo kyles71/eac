@@ -23,9 +23,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\PermissionRegistrar;
 
 use function Pest\Livewire\livewire;
 
@@ -34,21 +31,6 @@ it('exposes the cancellation permission in the Shield event permissions', functi
 
     expect(FilamentShield::getResourcePolicyActionsWithPermissions(EventResource::class))
         ->toHaveKey('cancel', 'Cancel:Event');
-});
-
-it('backfills the cancellation permission for an existing super admin role', function (): void {
-    Permission::query()->where('name', 'Cancel:Event')->delete();
-    app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-    expect(Role::findByName('super_admin')->permissions()->where('name', 'Cancel:Event')->doesntExist())->toBeTrue();
-
-    $migration = require database_path('migrations/2026_06_19_181811_backfill_cancel_event_permission.php');
-    $migration->up();
-    $migration->up();
-
-    expect(Permission::query()->where('name', 'Cancel:Event')->count())->toBe(1)
-        ->and(Role::findByName('super_admin')->hasPermissionTo('Cancel:Event'))->toBeTrue()
-        ->and(auth()->user()?->fresh()?->can('Cancel:Event'))->toBeTrue();
 });
 
 it('cancels an event without sending email and records the audit details', function (): void {

@@ -32,43 +32,8 @@ final class FormUserPolicy
         return $authUser->can('Update:FormUser');
     }
 
-    public function delete(AuthUser $authUser, FormUser $formUser): bool
-    {
-        return $authUser->can('Delete:FormUser');
-    }
-
     public function deleteAny(AuthUser $authUser): bool
     {
         return $authUser->can('DeleteAny:FormUser');
-    }
-
-    public function restore(AuthUser $authUser, FormUser $formUser): bool
-    {
-        return $authUser->can('Restore:FormUser');
-    }
-
-    public function forceDelete(AuthUser $authUser, FormUser $formUser): bool
-    {
-        return $authUser->can('ForceDelete:FormUser');
-    }
-
-    public function forceDeleteAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('ForceDeleteAny:FormUser');
-    }
-
-    public function restoreAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('RestoreAny:FormUser');
-    }
-
-    public function replicate(AuthUser $authUser, FormUser $formUser): bool
-    {
-        return $authUser->can('Replicate:FormUser');
-    }
-
-    public function reorder(AuthUser $authUser): bool
-    {
-        return $authUser->can('Reorder:FormUser');
     }
 }

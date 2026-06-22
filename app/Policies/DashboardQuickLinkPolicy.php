@@ -17,11 +17,6 @@ final class DashboardQuickLinkPolicy
         return $user->can('ViewAny:DashboardQuickLink');
     }
 
-    public function view(AuthUser $user, DashboardQuickLink $link): bool
-    {
-        return $user->can('View:DashboardQuickLink');
-    }
-
     public function create(AuthUser $user): bool
     {
         return $user->can('Create:DashboardQuickLink');
@@ -44,6 +39,6 @@ final class DashboardQuickLinkPolicy
 
     public function reorder(AuthUser $user): bool
     {
-        return $user->can('Reorder:DashboardQuickLink');
+        return $user->can('Update:DashboardQuickLink');
     }
 }

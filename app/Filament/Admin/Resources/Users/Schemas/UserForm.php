@@ -12,11 +12,9 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
-use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 final class UserForm
@@ -53,11 +51,6 @@ final class UserForm
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('roles')
-                            ->relationship('roles', 'name')
-                            ->multiple()
-                            ->live()
-                            ->preload(),
                         Select::make('calendar_audience_tag_ids')
                             ->label('Calendar Audience Tags')
                             ->multiple()
@@ -69,7 +62,7 @@ final class UserForm
                                 ->get()
                                 ->mapWithKeys(fn (Tag $tag): array => [$tag->id => $tag->name])
                                 ->all())
-                            ->visible(fn (Get $get, ?User $record): bool => self::hasSelectedRoles($get('roles'), $record))
+                            ->visible(fn (?User $record): bool => $record?->roles()->exists() ?? false)
                             ->loadStateFromRelationshipsUsing(function (Select $component, ?User $record): void {
                                 $component->state($record?->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
                                     ->pluck('id')
@@ -104,7 +97,7 @@ final class UserForm
                 Section::make('Staff Profile')
                     ->collapsed()
                     ->columnSpanFull()
-                    ->visible(fn (Get $get, ?User $record): bool => self::hasSelectedStaffRole($get('roles'), $record))
+                    ->visible(fn (?User $record): bool => $record?->isStaffMember() ?? false)
                     ->schema([
                         SpatieMediaLibraryFileUpload::make('staff_photo')
                             ->label('Staff Photo')
@@ -120,26 +113,5 @@ final class UserForm
                             ->columnSpanFull(),
                     ]),
             ]);
-    }
-
-    private static function hasSelectedRoles(mixed $roles, ?User $record): bool
-    {
-        if (is_array($roles)) {
-            return $roles !== [];
-        }
-
-        return $record instanceof User && $record->roles()->exists();
-    }
-
-    private static function hasSelectedStaffRole(mixed $roles, ?User $record): bool
-    {
-        if (is_array($roles)) {
-            return Role::query()
-                ->whereKey($roles)
-                ->whereIn('name', User::STAFF_ROLE_NAMES)
-                ->exists();
-        }
-
-        return $record?->isStaffMember() ?? false;
     }
 }

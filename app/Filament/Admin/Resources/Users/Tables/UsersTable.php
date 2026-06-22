@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Tables;
 
+use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\Calendar;
 use App\Support\MediaDisks;
@@ -60,13 +61,15 @@ final class UsersTable
                 //
             ])
             ->recordActions([
+                ManageUserAccessAction::make(),
                 SendEmailAction::make()
                     ->to(fn ($record) => [$record->email]),
 
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->authorizeIndividualRecords('delete'),
                 ]),
             ]);
     }

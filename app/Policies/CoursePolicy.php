@@ -42,34 +42,4 @@ final class CoursePolicy
     {
         return $authUser->can('DeleteAny:Course');
     }
-
-    public function restore(AuthUser $authUser, Course $course): bool
-    {
-        return $authUser->can('Restore:Course');
-    }
-
-    public function forceDelete(AuthUser $authUser, Course $course): bool
-    {
-        return $authUser->can('ForceDelete:Course');
-    }
-
-    public function forceDeleteAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('ForceDeleteAny:Course');
-    }
-
-    public function restoreAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('RestoreAny:Course');
-    }
-
-    public function replicate(AuthUser $authUser, Course $course): bool
-    {
-        return $authUser->can('Replicate:Course');
-    }
-
-    public function reorder(AuthUser $authUser): bool
-    {
-        return $authUser->can('Reorder:Course');
-    }
 }

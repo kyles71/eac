@@ -37,43 +37,8 @@ final class EventPolicy
         return $event->canBeCancelledAt() && $authUser->can('Cancel:Event');
     }
 
-    public function delete(AuthUser $authUser, Event $event): bool
-    {
-        return $authUser->can('Delete:Event');
-    }
-
     public function deleteAny(AuthUser $authUser): bool
     {
         return $authUser->can('DeleteAny:Event');
-    }
-
-    public function restore(AuthUser $authUser, Event $event): bool
-    {
-        return $authUser->can('Restore:Event');
-    }
-
-    public function forceDelete(AuthUser $authUser, Event $event): bool
-    {
-        return $authUser->can('ForceDelete:Event');
-    }
-
-    public function forceDeleteAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('ForceDeleteAny:Event');
-    }
-
-    public function restoreAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('RestoreAny:Event');
-    }
-
-    public function replicate(AuthUser $authUser, Event $event): bool
-    {
-        return $authUser->can('Replicate:Event');
-    }
-
-    public function reorder(AuthUser $authUser): bool
-    {
-        return $authUser->can('Reorder:Event');
     }
 }

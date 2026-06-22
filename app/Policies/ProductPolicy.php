@@ -42,34 +42,4 @@ final class ProductPolicy
     {
         return $authUser->can('DeleteAny:Product');
     }
-
-    public function restore(AuthUser $authUser, Product $product): bool
-    {
-        return $authUser->can('Restore:Product');
-    }
-
-    public function forceDelete(AuthUser $authUser, Product $product): bool
-    {
-        return $authUser->can('ForceDelete:Product');
-    }
-
-    public function forceDeleteAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('ForceDeleteAny:Product');
-    }
-
-    public function restoreAny(AuthUser $authUser): bool
-    {
-        return $authUser->can('RestoreAny:Product');
-    }
-
-    public function replicate(AuthUser $authUser, Product $product): bool
-    {
-        return $authUser->can('Replicate:Product');
-    }
-
-    public function reorder(AuthUser $authUser): bool
-    {
-        return $authUser->can('Reorder:Product');
-    }
 }

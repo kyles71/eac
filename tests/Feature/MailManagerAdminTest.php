@@ -99,14 +99,14 @@ it('saves email type edits from array backed table records', function (): void {
         ->layout_mode->toBe(LayoutMode::None);
 });
 
-it('denies a super admin mail manager access without the explicit mail manager permission', function (): void {
+it('grants a super admin mail manager access through the synchronized catalog', function (): void {
     $user = User::factory()->create();
     $user->assignRole('super_admin');
     $this->actingAs($user);
 
-    expect($user->hasPermissionTo('Manage:MailManager'))->toBeFalse();
+    expect($user->hasPermissionTo('Manage:MailManager'))->toBeTrue();
 
-    $this->get(ManageEmailTypes::getUrl())->assertForbidden();
-    $this->get(ManageLayoutSettings::getUrl())->assertForbidden();
-    $this->get(ListMailLayouts::getUrl())->assertForbidden();
+    $this->get(ManageEmailTypes::getUrl())->assertOk();
+    $this->get(ManageLayoutSettings::getUrl())->assertOk();
+    $this->get(ListMailLayouts::getUrl())->assertOk();
 });

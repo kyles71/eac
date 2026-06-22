@@ -17,11 +17,6 @@ final class DashboardMessagePolicy
         return $user->can('ViewAny:DashboardMessage');
     }
 
-    public function view(AuthUser $user, DashboardMessage $message): bool
-    {
-        return $user->can('View:DashboardMessage');
-    }
-
     public function create(AuthUser $user): bool
     {
         return $user->can('Create:DashboardMessage');

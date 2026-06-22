@@ -5,8 +5,6 @@ declare(strict_types=1);
 use App\Filament\Admin\Resources\LegalDocuments\Pages\ListLegalDocuments;
 use App\Models\LegalDocument;
 use App\Models\LegalDocumentVersion;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 
@@ -30,41 +28,12 @@ it('can list legal documents', function () {
         ->assertCanSeeTableRecords($documents);
 });
 
-it('can create a legal document', function () {
-    livewire(ListLegalDocuments::class)
-        ->callAction(TestAction::make(CreateAction::class)->table(), data: [
-            'key' => 'checkout_disclosures',
-            'name' => 'Checkout Disclosures',
-            'description' => 'Reusable checkout disclosure text.',
-        ])
-        ->assertNotified('Legal document created');
-
-    assertDatabaseHas(LegalDocument::class, [
-        'key' => 'checkout_disclosures',
-        'name' => 'Checkout Disclosures',
-        'description' => 'Reusable checkout disclosure text.',
-    ]);
-});
-
-it('can update legal document name and description without changing the key', function () {
-    $document = LegalDocument::factory()->create([
-        'key' => 'student_waiver_terms',
-        'name' => 'Payment Plan Terms',
-        'description' => 'Old description.',
-    ]);
+it('does not expose create or edit actions', function () {
+    $document = LegalDocument::factory()->create();
 
     livewire(ListLegalDocuments::class)
-        ->callAction(TestAction::make(EditAction::class)->table($document), data: [
-            'name' => 'Payment Plan Terms & Conditions',
-            'description' => 'Updated description.',
-        ])
-        ->assertNotified('Legal document updated');
-
-    $document->refresh();
-
-    expect($document->key)->toBe('student_waiver_terms')
-        ->and($document->name)->toBe('Payment Plan Terms & Conditions')
-        ->and($document->description)->toBe('Updated description.');
+        ->assertActionDoesNotExist(TestAction::make('create')->table())
+        ->assertActionDoesNotExist(TestAction::make('edit')->table($document));
 });
 
 it('can publish a new legal document version', function () {
@@ -91,6 +60,17 @@ it('can publish a new legal document version', function () {
         'title' => 'Updated Terms',
         'content' => '<p>Updated payment plan terms.</p>',
     ]);
+});
+
+it('requires publish permission to publish a version', function () {
+    $document = LegalDocument::factory()->create();
+    $user = App\Models\User::factory()->create();
+    $user->givePermissionTo('ViewAny:LegalDocument');
+
+    $this->actingAs($user);
+
+    livewire(ListLegalDocuments::class)
+        ->assertActionHidden(TestAction::make('publishVersion')->table($document));
 });
 
 it('allows nested rich editor payload updates in the publish version action', function () {
