@@ -26,18 +26,16 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Collection;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Traits\HasRoles;
-use Spatie\Tags\HasTags;
 use Throwable;
 
 final class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, HasTags, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, InteractsWithMedia, Notifiable;
+    use HasFactory, HasRoles, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, InteractsWithMedia, Notifiable;
 
     public const array STAFF_ROLE_NAMES = ['owner', 'teacher'];
 
@@ -119,29 +117,6 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->belongsToMany(CompetitionTeam::class, 'competition_team_user')
             ->using(CompetitionTeamStaff::class)
             ->withTimestamps();
-    }
-
-    public function studentCalendarAudienceTagIds(): Collection
-    {
-        $this->loadMissing('students.tags');
-
-        return $this->students
-            ->flatMap(
-                fn (Student $student): Collection => $student->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
-            )
-            ->pluck('id')
-            ->unique()
-            ->values();
-    }
-
-    public function calendarAudienceTagIds(): Collection
-    {
-        $this->loadMissing('tags');
-
-        return $this->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
-            ->pluck('id')
-            ->unique()
-            ->values();
     }
 
     public function enrollments(): HasMany

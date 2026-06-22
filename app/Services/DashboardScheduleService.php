@@ -21,7 +21,6 @@ final class DashboardScheduleService
     public function accessibleCalendars(User $user): EloquentCollection
     {
         return Calendar::query()
-            ->with('tags')
             ->visibleTo($user)
             ->orderBy('id')
             ->get();

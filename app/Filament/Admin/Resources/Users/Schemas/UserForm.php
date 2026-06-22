@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
-use App\Models\Calendar;
 use App\Models\User;
 use App\Support\MediaDisks;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -15,7 +13,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
-use Spatie\Tags\Tag;
 
 final class UserForm
 {
@@ -46,40 +43,6 @@ final class UserForm
                             ->unique(ignoreRecord: true)
                             ->email()
                             ->required(),
-                    ]),
-                Section::make('Access')
-                    ->columns(2)
-                    ->columnSpanFull()
-                    ->schema([
-                        Select::make('calendar_audience_tag_ids')
-                            ->label('Calendar Audience Tags')
-                            ->multiple()
-                            ->preload()
-                            ->options(fn (): array => Tag::query()
-                                ->where('type', Calendar::AUDIENCE_TAG_TYPE)
-                                ->orderBy('order_column')
-                                ->orderBy('id')
-                                ->get()
-                                ->mapWithKeys(fn (Tag $tag): array => [$tag->id => $tag->name])
-                                ->all())
-                            ->visible(fn (?User $record): bool => $record?->roles()->exists() ?? false)
-                            ->loadStateFromRelationshipsUsing(function (Select $component, ?User $record): void {
-                                $component->state($record?->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)
-                                    ->pluck('id')
-                                    ->map(fn (int $id): string => (string) $id)
-                                    ->all() ?? []);
-                            })
-                            ->saveRelationshipsUsing(function (?User $record, array $state): void {
-                                $tagIds = Tag::query()
-                                    ->where('type', Calendar::AUDIENCE_TAG_TYPE)
-                                    ->whereIn('id', $state)
-                                    ->pluck('id')
-                                    ->all();
-
-                                $record?->syncTagIds($tagIds, Calendar::AUDIENCE_TAG_TYPE);
-                            })
-                            ->dehydrated(false)
-                            ->columnSpanFull(),
                     ]),
                 Section::make('Security')
                     ->columns(2)

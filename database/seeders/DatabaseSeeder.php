@@ -77,7 +77,6 @@ final class DatabaseSeeder extends Seeder
             $this->seedDevData($adminUser);
         }
 
-        $this->grantDefaultCalendarAudienceTags();
     }
 
     private function seedSystemCalendars(): void
@@ -89,53 +88,8 @@ final class DatabaseSeeder extends Seeder
             );
         }
 
-        foreach ($this->systemCalendarAudienceTags() as $slug => $tagName) {
-            Calendar::query()
-                ->where('slug', $slug)
-                ->first()
-                ?->attachTag($tagName, Calendar::AUDIENCE_TAG_TYPE);
-        }
-
         Tag::findOrCreate(Calendar::SLUG_EAC, Course::CALENDAR_TAG_TYPE);
         Tag::findOrCreate(Calendar::SLUG_COMP, Course::CALENDAR_TAG_TYPE);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function systemCalendarAudienceTags(): array
-    {
-        return [
-            Calendar::SLUG_MY => Calendar::AUDIENCE_TAG_PUBLIC,
-            Calendar::SLUG_EAC => Calendar::AUDIENCE_TAG_PUBLIC,
-            Calendar::SLUG_OWNERS => Calendar::AUDIENCE_TAG_OWNERS,
-            Calendar::SLUG_STAFF => Calendar::AUDIENCE_TAG_STAFF,
-        ];
-    }
-
-    private function grantDefaultCalendarAudienceTags(): void
-    {
-        $this->grantCalendarAudienceTagsToRole('super_admin', [
-            Calendar::AUDIENCE_TAG_OWNERS,
-            Calendar::AUDIENCE_TAG_STAFF,
-        ]);
-        $this->grantCalendarAudienceTagsToRole('owner', [
-            Calendar::AUDIENCE_TAG_OWNERS,
-            Calendar::AUDIENCE_TAG_STAFF,
-        ]);
-        $this->grantCalendarAudienceTagsToRole('teacher', [
-            Calendar::AUDIENCE_TAG_STAFF,
-        ]);
-    }
-
-    /**
-     * @param  array<int, string>  $tagNames
-     */
-    private function grantCalendarAudienceTagsToRole(string $roleName, array $tagNames): void
-    {
-        User::role($roleName)
-            ->get()
-            ->each(fn (User $user): User => $user->attachTags($tagNames, Calendar::AUDIENCE_TAG_TYPE));
     }
 
     private function seedDevData(User $adminUser): void

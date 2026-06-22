@@ -102,4 +102,4 @@ it('keeps the publish version rich editor body scrollable inside the modal', fun
 it('has required table columns', function (string $column) {
     livewire(ListLegalDocuments::class)
         ->assertTableColumnExists($column);
-})->with(['name', 'key', 'latestPublishedVersion.version', 'latestPublishedVersion.published_at']);
+})->with(['name', 'latestPublishedVersion.version', 'latestPublishedVersion.published_at']);

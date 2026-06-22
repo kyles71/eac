@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
 use App\Filament\Shared\Schemas\CompetitionMembershipHistory;
-use App\Models\Calendar;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
-use Filament\Infolists\Components\SpatieTagsEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -43,9 +41,6 @@ final class UserInfolist
                             ->label('Roles')
                             ->badge()
                             ->listWithLineBreaks(),
-                        SpatieTagsEntry::make('calendar_audience_tags')
-                            ->label('Calendar Audience Tags')
-                            ->type(Calendar::AUDIENCE_TAG_TYPE),
                     ]),
                 Section::make('Staff Profile')
                     ->collapsed()

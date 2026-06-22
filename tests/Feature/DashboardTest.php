@@ -32,7 +32,6 @@ use App\Settings\DashboardAppearanceSettings;
 use App\Support\MediaDisks;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Storage;
-use Spatie\Tags\Tag;
 
 use function Pest\Livewire\livewire;
 
@@ -228,11 +227,10 @@ it('renders dashboard communication and action widgets without exposing audience
 });
 
 it('shows only my upcoming events and closures without calendar tabs', function (): void {
-    $publicTag = Tag::findOrCreate(Calendar::AUDIENCE_TAG_PUBLIC, Calendar::AUDIENCE_TAG_TYPE);
     $myCalendar = Calendar::query()->where('slug', Calendar::SLUG_MY)->firstOrFail();
     $eacCalendar = Calendar::query()->where('slug', Calendar::SLUG_EAC)->firstOrFail();
-    $myCalendar->attachTag($publicTag);
-    $eacCalendar->attachTag($publicTag);
+    $myCalendar->update(['access' => null]);
+    $eacCalendar->update(['access' => null]);
 
     Event::factory()->create([
         'name' => 'Public Open House',

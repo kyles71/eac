@@ -22,10 +22,6 @@ final class LegalDocumentsTable
                 TextColumn::make('name')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('key')
-                    ->label('Key')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('latestPublishedVersion.version')
                     ->label('Current Version')
                     ->formatStateUsing(fn (?int $state): string => $state !== null ? "Version {$state}" : 'None'),

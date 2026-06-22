@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Enums\CalendarAccess;
 use App\Filament\Admin\Resources\Calendars\Pages\ListCalendars;
 use App\Filament\Admin\Resources\Events\EventResource;
+use App\Filament\Admin\Resources\Events\Pages\ListEvents;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
+use App\Filament\Shared\Schemas\PeopleAndGroupsPicker;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Models\Calendar;
+use App\Models\CalendarAudience;
 use App\Models\CartItem;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
@@ -28,7 +32,6 @@ use Filament\Forms\Components\Select;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Saade\FilamentFullCalendar\Actions\CreateAction as CalendarCreateAction;
-use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 use function Pest\Livewire\livewire;
@@ -38,7 +41,6 @@ beforeEach(function (): void {
         Calendar::query()->updateOrCreate(['slug' => $slug], $calendar);
     }
 
-    seedSystemCalendarAudienceTags();
     Tag::findOrCreate(Calendar::SLUG_EAC, Course::CALENDAR_TAG_TYPE);
     Tag::findOrCreate(Calendar::SLUG_COMP, Course::CALENDAR_TAG_TYPE);
 
@@ -247,10 +249,12 @@ it('hides untagged custom calendars from the widget feed', function (): void {
     expect($events->pluck('id')->all())->not->toContain($event->id);
 });
 
-it('shows public tagged custom calendars to every authenticated user', function (): void {
+it('shows public custom calendars to every authenticated user', function (): void {
     $user = User::factory()->create();
-    $calendar = Calendar::factory()->create(['name' => 'Community Calendar']);
-    $calendar->attachTag(Calendar::AUDIENCE_TAG_PUBLIC, Calendar::AUDIENCE_TAG_TYPE);
+    $calendar = Calendar::factory()->create([
+        'name' => 'Community Calendar',
+        'access' => CalendarAccess::Public,
+    ]);
     $event = standaloneEvent('Community Open House', $calendar);
 
     $this->actingAs($user);
@@ -309,7 +313,7 @@ it('shows system public calendars to every authenticated user', function (): voi
         ->and(fetchCalendarEvents($eacCalendar)->pluck('id')->all())->toContain($event->id);
 });
 
-it('shows owner calendars through default user audience tags', function (string $slug): void {
+it('shows owner calendars through fixed role access', function (string $slug): void {
     $owner = User::factory()->isOwner()->create();
     $calendar = calendarBySlug($slug);
     $event = standaloneEvent($calendar->name.' Event', $calendar);
@@ -327,7 +331,6 @@ it('shows owner calendars through default user audience tags', function (string 
 it('grants admin panel access through admin permissions rather than calendar visibility alone', function (): void {
     $owner = User::factory()->isOwner()->create();
     $customCalendarUser = User::factory()->create();
-    $customCalendarUser->attachTag('Company', Calendar::AUDIENCE_TAG_TYPE);
 
     expect($owner->canAccessPanel(Filament::getPanel('admin')))->toBeTrue()
         ->and($owner->canAccessPanel(Filament::getPanel('user')))->toBeTrue()
@@ -359,51 +362,100 @@ it('limits event calendar assignment to visible calendars without calendar polic
         ->not->toContain('My Calendar', 'Owners', 'Comp Calendar');
 });
 
-it('allows users with calendar policy access to assign events to all shared calendars', function (): void {
+it('does not let calendar policy access override event calendar assignment access', function (): void {
     $scheduler = User::factory()->create();
     $scheduler->givePermissionTo('ViewAny:Calendar');
 
     $calendarNames = assignableEventCalendarNames($scheduler);
 
-    expect($calendarNames)->toContain('EAC Calendar', 'Owners', 'Staff', 'Comp Calendar')
-        ->not->toContain('My Calendar');
+    expect($calendarNames)->toBe(['EAC Calendar']);
 });
 
-it('supports future roles through user audience tags', function (): void {
-    $advisorRole = Role::findOrCreate('advisor');
+it('rejects an inaccessible calendar id when creating an event', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    $scheduler = User::factory()->create();
+    $scheduler->givePermissionTo(['ViewAny:Event', 'Create:Event']);
+    $restrictedCalendar = Calendar::factory()->create(['name' => 'Private Calendar']);
+
+    $this->actingAs($scheduler);
+
+    livewire(ListEvents::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Unauthorized Event',
+            'start_time' => '2027-01-15 18:00:00',
+            'end_time' => '2027-01-15 19:00:00',
+            'calendar_id' => $restrictedCalendar->id,
+        ])
+        ->assertHasActionErrors(['calendar_id']);
+
+    expect(Event::query()->where('name', 'Unauthorized Event')->exists())->toBeFalse();
+});
+
+it('does not expand fixed system calendar access through custom audiences', function (): void {
     $advisor = User::factory()->create();
-    $advisor->assignRole($advisorRole);
-    $advisor->attachTag(Calendar::AUDIENCE_TAG_STAFF, Calendar::AUDIENCE_TAG_TYPE);
     $calendar = calendarBySlug(Calendar::SLUG_STAFF);
+    $calendar->audiences()->create([
+        'audience_type' => $advisor->getMorphClass(),
+        'audience_id' => $advisor->id,
+    ]);
     $event = standaloneEvent('Advisor Staff Event', $calendar);
 
     $this->actingAs($advisor);
 
     $events = fetchCalendarEvents($calendar);
 
-    expect($events->pluck('id')->all())->toContain($event->id);
+    expect($events->pluck('id')->all())->not->toContain($event->id);
 });
 
-it('supports custom calendar audience tags and user grants', function (): void {
+it('supports restricted custom calendars with direct user grants', function (): void {
     Filament::setCurrentPanel('admin');
+    $user = User::factory()->create();
 
     livewire(ListCalendars::class)
         ->callAction(CreateAction::class, data: [
             'name' => 'Company Calendar',
             'background_color' => '#123456',
-            'audience_tag_ids' => [Tag::findOrCreate('Company', Calendar::AUDIENCE_TAG_TYPE)->id],
+            'access' => CalendarAccess::Restricted->value,
+            'audiences_list' => [[
+                'audience_type' => $user->getMorphClass(),
+                'audience_id' => $user->id,
+                'label' => $user->fullName,
+            ]],
         ])
         ->assertNotified();
 
     $calendar = Calendar::query()->where('name', 'Company Calendar')->firstOrFail();
-    $user = User::factory()->create();
-    $user->attachTag('Company', Calendar::AUDIENCE_TAG_TYPE);
     $event = standaloneEvent('Company Planning', $calendar);
 
     $this->actingAs($user);
 
-    expect($calendar->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe(['Company'])
+    expect($calendar->access)->toBe(CalendarAccess::Restricted)
+        ->and($calendar->audiences()->count())->toBe(1)
+        ->and($calendar->audiences()->whereMorphedTo('audience', $user)->exists())->toBeTrue()
         ->and(fetchCalendarEvents($calendar)->pluck('id')->all())->toContain($event->id);
+});
+
+it('requires an audience for restricted custom calendars but not public calendars', function (): void {
+    Filament::setCurrentPanel('admin');
+
+    livewire(ListCalendars::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Empty Restricted Calendar',
+            'access' => CalendarAccess::Restricted->value,
+        ])
+        ->assertHasActionErrors(['audiences_list']);
+
+    livewire(ListCalendars::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Public Community Calendar',
+            'access' => CalendarAccess::Public->value,
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    expect(Calendar::query()->where('name', 'Empty Restricted Calendar')->exists())->toBeFalse()
+        ->and(Calendar::query()->where('name', 'Public Community Calendar')->value('access'))->toBe(CalendarAccess::Public);
 });
 
 it('routes course events to calendars through course calendar tags', function (): void {
@@ -487,11 +539,14 @@ it('uses current competition accounts in the comp calendar exclusion picker', fu
         );
 });
 
-it('does not show internal calendars when only an owned student has the matching audience tag', function (string $slug, string $tag): void {
+it('does not show fixed internal calendars through a direct student audience', function (string $slug): void {
     $user = User::factory()->create();
     $student = Student::factory()->create(['user_id' => $user->id]);
     $calendar = calendarBySlug($slug);
-    $student->attachTag($tag, Calendar::AUDIENCE_TAG_TYPE);
+    $calendar->audiences()->create([
+        'audience_type' => $student->getMorphClass(),
+        'audience_id' => $student->id,
+    ]);
     $event = standaloneEvent('Internal Event', $calendar);
 
     $this->actingAs($user);
@@ -500,16 +555,18 @@ it('does not show internal calendars when only an owned student has the matching
 
     expect($events->pluck('id')->all())->not->toContain($event->id);
 })->with([
-    [Calendar::SLUG_OWNERS, Calendar::AUDIENCE_TAG_OWNERS],
-    [Calendar::SLUG_STAFF, Calendar::AUDIENCE_TAG_STAFF],
+    Calendar::SLUG_OWNERS,
+    Calendar::SLUG_STAFF,
 ]);
 
-it('shows audience tagged custom calendars when an owned student has a matching tag', function (): void {
+it('shows restricted custom calendars when an owned student is granted access', function (): void {
     $user = User::factory()->create();
     $calendar = Calendar::factory()->create(['name' => 'Team Calendar']);
-    $calendar->attachTag('team', Calendar::AUDIENCE_TAG_TYPE);
     $student = Student::factory()->create(['user_id' => $user->id]);
-    $student->attachTag('team', Calendar::AUDIENCE_TAG_TYPE);
+    $calendar->audiences()->create([
+        'audience_type' => $student->getMorphClass(),
+        'audience_id' => $student->id,
+    ]);
     $event = standaloneEvent('Team Event', $calendar);
 
     $this->actingAs($user);
@@ -519,11 +576,13 @@ it('shows audience tagged custom calendars when an owned student has a matching 
     expect($events->pluck('id')->all())->toContain($event->id);
 });
 
-it('shows audience tagged custom calendars when the user has a matching tag', function (): void {
+it('shows restricted custom calendars when the user is granted access', function (): void {
     $user = User::factory()->create();
     $calendar = Calendar::factory()->create(['name' => 'Staff Team Calendar']);
-    $calendar->attachTag('staff-team', Calendar::AUDIENCE_TAG_TYPE);
-    $user->attachTag('staff-team', Calendar::AUDIENCE_TAG_TYPE);
+    $calendar->audiences()->create([
+        'audience_type' => $user->getMorphClass(),
+        'audience_id' => $user->id,
+    ]);
     $event = standaloneEvent('Staff Team Event', $calendar);
 
     $this->actingAs($user);
@@ -533,12 +592,52 @@ it('shows audience tagged custom calendars when the user has a matching tag', fu
     expect($events->pluck('id')->all())->toContain($event->id);
 });
 
-it('hides audience tagged calendars from the widget feed without a matching audience tag', function (string $panel): void {
+it('keeps course roster calendar access live for enrolled families and teachers', function (): void {
+    $parent = User::factory()->create();
+    $student = Student::factory()->for($parent)->create();
+    $teacher = User::factory()->isTeacher()->create();
+    $otherUser = User::factory()->create();
+    $course = Course::factory()->create(['name' => 'Live Roster']);
+    $course->teachers()->sync([$teacher->id]);
+    $calendar = Calendar::factory()->create(['name' => 'Live Roster Calendar']);
+    $calendar->audiences()->create([
+        'audience_type' => $course->getMorphClass(),
+        'audience_id' => $course->id,
+    ]);
+    $event = standaloneEvent('Roster Event', $calendar);
+
+    $this->actingAs($parent);
+    expect(fetchCalendarEvents($calendar)->pluck('id')->all())->not->toContain($event->id);
+
+    Enrollment::factory()->withStudent($student)->create([
+        'user_id' => $parent->id,
+        'course_id' => $course->id,
+    ]);
+
+    expect($calendar->usersWithAccess()->pluck('users.id')->all())
+        ->toContain($parent->id, $teacher->id)
+        ->not->toContain($otherUser->id);
+
+    $this->actingAs($parent);
+    expect(fetchCalendarEvents($calendar)->pluck('id')->all())->toContain($event->id);
+
+    $this->actingAs($teacher);
+    expect(fetchCalendarEvents($calendar)->pluck('id')->all())->toContain($event->id);
+
+    $this->actingAs($otherUser);
+    expect(fetchCalendarEvents($calendar)->pluck('id')->all())->not->toContain($event->id);
+});
+
+it('hides restricted custom calendars without a matching audience', function (string $panel): void {
     Filament::setCurrentPanel($panel);
 
     $user = User::factory()->create();
     $calendar = Calendar::factory()->create(['name' => 'Restricted Calendar']);
-    $calendar->attachTag('company', Calendar::AUDIENCE_TAG_TYPE);
+    $otherUser = User::factory()->create();
+    $calendar->audiences()->create([
+        'audience_type' => $otherUser->getMorphClass(),
+        'audience_id' => $otherUser->id,
+    ]);
     $event = standaloneEvent('Restricted Rehearsal', $calendar);
 
     $this->actingAs($user);
@@ -548,41 +647,42 @@ it('hides audience tagged calendars from the widget feed without a matching audi
     expect($events->pluck('id')->all())->not->toContain($event->id);
 })->with(['admin', 'user']);
 
-it('keeps my calendar and eac calendar visible in the widget even when audience tagged', function (): void {
+it('keeps public system calendars visible regardless of audience records', function (): void {
     $user = User::factory()->create();
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
-    $tag = Tag::findOrCreate('restricted', Calendar::AUDIENCE_TAG_TYPE);
-    $calendar->tags()->attach($tag);
+    $otherUser = User::factory()->create();
+    $calendar->audiences()->create([
+        'audience_type' => $otherUser->getMorphClass(),
+        'audience_id' => $otherUser->id,
+    ]);
     $event = standaloneEvent('Public Community Event', $calendar);
 
     $this->actingAs($user);
 
     $events = fetchCalendarEvents($calendar);
 
-    expect($calendar->refresh()->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())
-        ->toContain(Calendar::AUDIENCE_TAG_PUBLIC, 'restricted')
-        ->and($events->pluck('id')->all())->toContain($event->id);
+    expect($events->pluck('id')->all())->toContain($event->id);
 });
 
-it('keeps the public audience tag on public system calendars when audience tags are synced', function (string $slug): void {
+it('removes audience records when a system calendar is saved', function (string $slug): void {
     $calendar = calendarBySlug($slug);
+    CalendarAudience::factory()->for($calendar)->create();
 
-    $calendar->syncTagsWithType(['restricted'], Calendar::AUDIENCE_TAG_TYPE);
+    $calendar->touch();
 
-    expect($calendar->refresh()->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())
-        ->toContain(Calendar::AUDIENCE_TAG_PUBLIC, 'restricted');
+    expect($calendar->audiences()->exists())->toBeFalse();
 })->with([
     Calendar::SLUG_MY,
     Calendar::SLUG_EAC,
 ]);
 
-it('uses seeded audience tags for restricted system calendar visibility', function (string $slug, string $tagName): void {
+it('uses fixed roles for restricted system calendar visibility', function (string $slug, string $allowedRole): void {
     $calendar = calendarBySlug($slug);
     $allowedUser = User::factory()->create();
     $otherUser = User::factory()->create();
     $event = standaloneEvent('Restricted System Event', $calendar);
 
-    $allowedUser->attachTag($tagName, Calendar::AUDIENCE_TAG_TYPE);
+    $allowedUser->assignRole($allowedRole);
 
     $this->actingAs($allowedUser);
 
@@ -592,8 +692,8 @@ it('uses seeded audience tags for restricted system calendar visibility', functi
 
     expect(fetchCalendarEvents($calendar)->pluck('id')->all())->not->toContain($event->id);
 })->with([
-    [Calendar::SLUG_OWNERS, Calendar::AUDIENCE_TAG_OWNERS],
-    [Calendar::SLUG_STAFF, Calendar::AUDIENCE_TAG_STAFF],
+    [Calendar::SLUG_OWNERS, 'owner'],
+    [Calendar::SLUG_STAFF, 'teacher'],
 ]);
 
 it('prevents required system calendars from being deleted', function (): void {
@@ -603,11 +703,10 @@ it('prevents required system calendars from being deleted', function (): void {
         ->and(Calendar::query()->whereKey($calendar->id)->exists())->toBeTrue();
 });
 
-it('does not restrict the admin calendar resource table by widget audience tags', function (): void {
+it('does not restrict the admin calendar resource table by custom calendar audiences', function (): void {
     Filament::setCurrentPanel('admin');
 
     $calendar = Calendar::factory()->create(['name' => 'Resource Managed Calendar']);
-    $calendar->attachTag('restricted', Calendar::AUDIENCE_TAG_TYPE);
 
     livewire(ListCalendars::class)
         ->loadTable()
@@ -621,28 +720,33 @@ it('does not show the internal slug on the admin calendar table', function (): v
         ->assertTableColumnDoesNotExist('slug');
 });
 
-it('does not allow audience tags to be changed on system calendars', function (string $slug, array $expectedAudienceTags): void {
+it('does not allow availability or audiences to be changed on system calendars', function (string $slug): void {
     Filament::setCurrentPanel('admin');
 
     $calendar = calendarBySlug($slug);
-    $tag = Tag::findOrCreate('Updated Audience', Calendar::AUDIENCE_TAG_TYPE);
+    $user = User::factory()->create();
 
     livewire(ListCalendars::class)
         ->callAction(TestAction::make(EditAction::class)->table($calendar), data: [
             'name' => $calendar->name,
             'background_color' => '#123456',
-            'audience_tag_ids' => [$tag->id],
+            'access' => CalendarAccess::Restricted->value,
+            'audiences_list' => [[
+                'audience_type' => $user->getMorphClass(),
+                'audience_id' => $user->id,
+                'label' => $user->fullName,
+            ]],
         ])
         ->assertNotified();
 
-    expect($calendar->refresh()->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())
-        ->toBe($expectedAudienceTags);
+    expect($calendar->refresh()->access)->toBeNull()
+        ->and($calendar->audiences()->exists())->toBeFalse();
 })->with([
-    [Calendar::SLUG_MY, [Calendar::AUDIENCE_TAG_PUBLIC]],
-    [Calendar::SLUG_EAC, [Calendar::AUDIENCE_TAG_PUBLIC]],
-    [Calendar::SLUG_OWNERS, [Calendar::AUDIENCE_TAG_OWNERS]],
-    [Calendar::SLUG_STAFF, [Calendar::AUDIENCE_TAG_STAFF]],
-    [Calendar::SLUG_COMP, []],
+    Calendar::SLUG_MY,
+    Calendar::SLUG_EAC,
+    Calendar::SLUG_OWNERS,
+    Calendar::SLUG_STAFF,
+    Calendar::SLUG_COMP,
 ]);
 
 it('hides excluded events from otherwise eligible users', function (): void {
@@ -828,6 +932,27 @@ it('loads direct invitations with attendee names in a repeater', function (): vo
         ->and($attendeeRepeater)->toBeInstanceOf(Repeater::class);
 });
 
+it('saves direct invitations through the shared people picker', function (): void {
+    $event = standaloneEvent('Private Rehearsal');
+    $user = User::factory()->create();
+    $student = Student::factory()->create();
+
+    PeopleAndGroupsPicker::saveEventInvitations($event, [[
+        'attendee_type' => $user->getMorphClass(),
+        'attendee_id' => $user->id,
+    ]]);
+
+    expect($event->attendees()->whereMorphedTo('attendee', $user)->exists())->toBeTrue();
+
+    PeopleAndGroupsPicker::saveEventInvitations($event, [[
+        'attendee_type' => $student->getMorphClass(),
+        'attendee_id' => $student->id,
+    ]]);
+
+    expect($event->attendees()->whereMorphedTo('attendee', $user)->exists())->toBeFalse()
+        ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue();
+});
+
 it('opens user calendar event details as a modal instead of a slideover', function (): void {
     Filament::setCurrentPanel('user');
 
@@ -968,10 +1093,7 @@ function calendarWidgetViewAction(CalendarWidget $widget): Action
 
 function eventFormAttendeeState(Event $event): array
 {
-    $method = new ReflectionMethod(EventForm::class, 'attendeeState');
-    $method->setAccessible(true);
-
-    return $method->invoke(null, $event);
+    return PeopleAndGroupsPicker::eventInvitationState($event);
 }
 
 function eventFormComponent(string $name): mixed
@@ -1049,14 +1171,6 @@ function assignableEventCalendarNames(User $user): array
         ->orderBy('id')
         ->pluck('name')
         ->all();
-}
-
-function seedSystemCalendarAudienceTags(): void
-{
-    calendarBySlug(Calendar::SLUG_MY)->attachTag(Calendar::AUDIENCE_TAG_PUBLIC, Calendar::AUDIENCE_TAG_TYPE);
-    calendarBySlug(Calendar::SLUG_EAC)->attachTag(Calendar::AUDIENCE_TAG_PUBLIC, Calendar::AUDIENCE_TAG_TYPE);
-    calendarBySlug(Calendar::SLUG_OWNERS)->attachTag(Calendar::AUDIENCE_TAG_OWNERS, Calendar::AUDIENCE_TAG_TYPE);
-    calendarBySlug(Calendar::SLUG_STAFF)->attachTag(Calendar::AUDIENCE_TAG_STAFF, Calendar::AUDIENCE_TAG_TYPE);
 }
 
 function currentCompetitionTeam(): CompetitionTeam

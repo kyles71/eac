@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Students\Schemas;
 
 use App\Filament\Shared\Schemas\CompetitionMembershipHistory;
-use App\Models\Calendar;
 use App\Models\Student;
 use Filament\Infolists\Components\SpatieTagsEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -40,9 +39,6 @@ final class StudentInfolist
                         SpatieTagsEntry::make('tags')
                             ->label('Student Tags')
                             ->type(Student::GENERAL_TAG_TYPE),
-                        SpatieTagsEntry::make('calendar_audience_tags')
-                            ->label('Calendar Audience Tags')
-                            ->type(Calendar::AUDIENCE_TAG_TYPE),
                     ]),
                 CompetitionMembershipHistory::make(),
                 Section::make('Record')

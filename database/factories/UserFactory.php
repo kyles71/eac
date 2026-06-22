@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Calendar;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -56,10 +55,6 @@ final class UserFactory extends Factory
             $user->assignRole('super_admin');
         })->afterCreating(function (User $user) {
             $user->assignRole('super_admin');
-            $user->attachTags([
-                Calendar::AUDIENCE_TAG_OWNERS,
-                Calendar::AUDIENCE_TAG_STAFF,
-            ], Calendar::AUDIENCE_TAG_TYPE);
         });
     }
 
@@ -72,10 +67,6 @@ final class UserFactory extends Factory
             $user->assignRole('owner');
         })->afterCreating(function (User $user) {
             $user->assignRole('owner');
-            $user->attachTags([
-                Calendar::AUDIENCE_TAG_OWNERS,
-                Calendar::AUDIENCE_TAG_STAFF,
-            ], Calendar::AUDIENCE_TAG_TYPE);
         });
     }
 
@@ -88,7 +79,6 @@ final class UserFactory extends Factory
             $user->assignRole('teacher');
         })->afterCreating(function (User $user) {
             $user->assignRole('teacher');
-            $user->attachTag(Calendar::AUDIENCE_TAG_STAFF, Calendar::AUDIENCE_TAG_TYPE);
         });
     }
 }

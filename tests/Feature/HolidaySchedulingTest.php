@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\CalendarAccess;
 use App\Enums\HolidayEventScope;
 use App\Enums\ScheduleFrequency;
 use App\Filament\Admin\Resources\Events\Pages\ListEvents;
@@ -129,11 +130,7 @@ it('renders holidays as non-interactive all-day entries on every accessible cale
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $calendars = Calendar::factory(2)->create();
-    $calendars->each(fn (Calendar $calendar) => $calendar->attachTag(
-        Calendar::AUDIENCE_TAG_PUBLIC,
-        Calendar::AUDIENCE_TAG_TYPE,
-    ));
+    $calendars = Calendar::factory(2)->create(['access' => CalendarAccess::Public]);
     $holiday = Holiday::factory()->create([
         'name' => 'Thanksgiving',
         'starts_on' => '2027-11-27',

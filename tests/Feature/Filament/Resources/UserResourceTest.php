@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Filament\Admin\Resources\Users\Pages\ViewUser;
-use App\Models\Calendar;
 use App\Models\Role;
 use App\Models\User;
 use Filament\Actions\CreateAction;
@@ -12,7 +11,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Str;
-use Spatie\Tags\Tag;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
@@ -172,43 +170,6 @@ it('only shows the staff profile on staff member view pages', function () {
 
     livewire(ViewUser::class, ['record' => $nonStaffMember->id])
         ->assertSchemaComponentHidden('staff_bio', 'infolist');
-});
-
-it('stores calendar audience tags on role-bearing users', function () {
-    $user = User::factory()->create();
-    $user->assignRole('teacher');
-    $audienceTag = Tag::findOrCreate('Staff', Calendar::AUDIENCE_TAG_TYPE);
-
-    livewire(ViewUser::class, ['record' => $user->id])
-        ->callAction(EditAction::class, data: [
-            'first_name' => $user->first_name,
-            'last_name' => $user->last_name,
-            'email' => $user->email,
-            'calendar_audience_tag_ids' => [$audienceTag->id],
-        ])
-        ->assertNotified();
-
-    expect($user->tagsWithType(Calendar::AUDIENCE_TAG_TYPE)->pluck('name')->all())->toBe(['Staff']);
-});
-
-it('does not create calendar audience tags from the user form', function () {
-    $user = User::factory()->create();
-    $user->assignRole('teacher');
-
-    Tag::query()
-        ->where('type', Calendar::AUDIENCE_TAG_TYPE)
-        ->delete();
-
-    livewire(ViewUser::class, ['record' => $user->id])
-        ->callAction(EditAction::class, data: [
-            'first_name' => $user->first_name,
-            'last_name' => $user->last_name,
-            'email' => $user->email,
-            'calendar_audience_tag_ids' => [999],
-        ])
-        ->assertHasActionErrors(['calendar_audience_tag_ids.0']);
-
-    expect(Tag::query()->where('type', Calendar::AUDIENCE_TAG_TYPE)->count())->toBe(0);
 });
 
 it('can update a user', function () {

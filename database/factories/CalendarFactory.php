@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\CalendarAccess;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -25,6 +26,7 @@ final class CalendarFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name),
             'background_color' => fake()->optional()->hexColor(),
+            'access' => CalendarAccess::Restricted,
         ];
     }
 }

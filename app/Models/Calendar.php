@@ -4,28 +4,18 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\CalendarAccess;
 use App\Services\CompetitionRosterService;
-use ArrayAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
-use Spatie\Tags\HasTags;
-use Spatie\Tags\Tag;
 
 final class Calendar extends Model
 {
     /** @use HasFactory<\Database\Factories\CalendarFactory> */
     use HasFactory;
-
-    use HasTags {
-        attachTag as protected attachTagFromTrait;
-        attachTags as protected attachTagsFromTrait;
-        syncTagIds as protected syncTagIdsFromTrait;
-        syncTags as protected syncTagsFromTrait;
-        syncTagsWithType as protected syncTagsWithTypeFromTrait;
-    }
 
     public const string SLUG_MY = 'my';
 
@@ -37,22 +27,9 @@ final class Calendar extends Model
 
     public const string SLUG_COMP = 'comp';
 
-    public const string AUDIENCE_TAG_TYPE = 'calendar-audience';
-
-    public const string AUDIENCE_TAG_PUBLIC = 'Public';
-
-    public const string AUDIENCE_TAG_OWNERS = 'Owners';
-
-    public const string AUDIENCE_TAG_STAFF = 'Staff';
-
     public const array PUBLIC_SYSTEM_SLUGS = [
         self::SLUG_MY,
         self::SLUG_EAC,
-    ];
-
-    public const array INTERNAL_SYSTEM_SLUGS = [
-        self::SLUG_OWNERS,
-        self::SLUG_STAFF,
     ];
 
     public const array SYSTEM_SLUGS = [
@@ -63,10 +40,9 @@ final class Calendar extends Model
         self::SLUG_COMP,
     ];
 
-    public const array STUDENT_HIDDEN_AUDIENCE_TAGS = [
-        self::AUDIENCE_TAG_PUBLIC,
-        self::AUDIENCE_TAG_OWNERS,
-        self::AUDIENCE_TAG_STAFF,
+    protected $casts = [
+        'id' => 'integer',
+        'access' => CalendarAccess::class,
     ];
 
     /**
@@ -98,12 +74,13 @@ final class Calendar extends Model
         ];
     }
 
-    public static function isStudentAssignableAudienceTag(Tag $tag): bool
+    /** @return HasMany<CalendarAudience, $this> */
+    public function audiences(): HasMany
     {
-        return $tag->type === self::AUDIENCE_TAG_TYPE
-            && ! in_array($tag->name, self::STUDENT_HIDDEN_AUDIENCE_TAGS, true);
+        return $this->hasMany(CalendarAudience::class);
     }
 
+    /** @return HasMany<Event, $this> */
     public function events(): HasMany
     {
         return $this->hasMany(Event::class);
@@ -124,109 +101,158 @@ final class Calendar extends Model
         return in_array($this->slug, self::SYSTEM_SLUGS, true);
     }
 
-    public function isInternalSystemCalendar(): bool
-    {
-        return in_array($this->slug, self::INTERNAL_SYSTEM_SLUGS, true);
-    }
-
     public function isCompetitionCalendar(): bool
     {
         return $this->slug === self::SLUG_COMP;
     }
 
-    public function attachTag(string|Tag $tag, ?string $type = null): static
-    {
-        return $this->attachTagFromTrait($tag, $type);
-    }
-
-    public function attachTags(array|ArrayAccess|Tag $tags, ?string $type = null): static
-    {
-        return $this->attachTagsFromTrait($tags, $type);
-    }
-
-    public function syncTags(string|array|ArrayAccess $tags): static
-    {
-        return $this->syncTagsFromTrait($tags);
-    }
-
-    public function syncTagIds($ids, ?string $type = null, $detaching = true): void
-    {
-        if ($this->isPublicSystemCalendar() && $type === self::AUDIENCE_TAG_TYPE) {
-            $ids = collect($ids)
-                ->push(Tag::findOrCreate(self::AUDIENCE_TAG_PUBLIC, self::AUDIENCE_TAG_TYPE)->id)
-                ->unique()
-                ->values()
-                ->all();
-        }
-
-        $this->syncTagIdsFromTrait($ids, $type, $detaching);
-    }
-
-    public function syncTagsWithType(array|ArrayAccess $tags, ?string $type = null): static
-    {
-        return $this->syncTagsWithTypeFromTrait($tags, $type);
-    }
-
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        $userAudienceTagIds = $user->calendarAudienceTagIds();
-        $audienceTagIds = $user->studentCalendarAudienceTagIds();
-        $allAudienceTagIds = $userAudienceTagIds
-            ->merge($audienceTagIds)
-            ->unique()
-            ->values();
-        $publicAudienceTagId = Tag::findFromString(self::AUDIENCE_TAG_PUBLIC, self::AUDIENCE_TAG_TYPE)?->id;
+        $studentIds = $user->students()->pluck('students.id');
+        $courseIds = Course::query()
+            ->where(function (Builder $query) use ($studentIds, $user): void {
+                $query->whereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id));
+
+                if ($studentIds->isNotEmpty()) {
+                    $query->orWhereHas('students', fn (Builder $query): Builder => $query->whereIn('students.id', $studentIds));
+                }
+            })
+            ->pluck('courses.id');
+        $isOwner = $user->hasAnyRole(['owner', 'super_admin']);
+        $isStaff = $isOwner || $user->hasRole('teacher');
         $isCompetitionMember = app(CompetitionRosterService::class)->isCurrentMember($user);
+        $userMorphClass = $user->getMorphClass();
+        $studentMorphClass = (new Student())->getMorphClass();
+        $courseMorphClass = (new Course())->getMorphClass();
 
-        return $query->where(function (Builder $query) use ($allAudienceTagIds, $isCompetitionMember, $publicAudienceTagId, $userAudienceTagIds): void {
-            $query->whereRaw('0 = 1');
+        return $query->where(function (Builder $query) use ($courseIds, $courseMorphClass, $isCompetitionMember, $isOwner, $isStaff, $studentIds, $studentMorphClass, $user, $userMorphClass): void {
+            $query->whereIn('slug', self::PUBLIC_SYSTEM_SLUGS);
 
-            if ($publicAudienceTagId !== null) {
-                $query->orWhereHas('tags', fn (Builder $query): Builder => $query
-                    ->where('type', self::AUDIENCE_TAG_TYPE)
-                    ->whereKey($publicAudienceTagId));
+            if ($isOwner) {
+                $query->orWhere('slug', self::SLUG_OWNERS);
+            }
+
+            if ($isStaff) {
+                $query->orWhere('slug', self::SLUG_STAFF);
             }
 
             if ($isCompetitionMember) {
                 $query->orWhere('slug', self::SLUG_COMP);
             }
 
-            $query
-                ->orWhere(function (Builder $query) use ($userAudienceTagIds): void {
-                    $query
-                        ->whereIn('slug', self::INTERNAL_SYSTEM_SLUGS)
-                        ->whereHas('tags', fn (Builder $query): Builder => $query
-                            ->where('type', self::AUDIENCE_TAG_TYPE)
-                            ->whereIn('tags.id', $userAudienceTagIds));
-                })
-                ->orWhere(function (Builder $query) use ($allAudienceTagIds): void {
-                    $query
-                        ->whereNotIn('slug', self::SYSTEM_SLUGS)
-                        ->whereHas('tags', fn (Builder $query): Builder => $query
-                            ->where('type', self::AUDIENCE_TAG_TYPE)
-                            ->whereIn('tags.id', $allAudienceTagIds));
-                });
+            $query->orWhere(function (Builder $query) use ($courseIds, $courseMorphClass, $studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                $query
+                    ->whereNotIn('slug', self::SYSTEM_SLUGS)
+                    ->where(function (Builder $query) use ($courseIds, $courseMorphClass, $studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                        $query
+                            ->where('access', CalendarAccess::Public->value)
+                            ->orWhere(function (Builder $query) use ($courseIds, $courseMorphClass, $studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                                $query
+                                    ->where('access', CalendarAccess::Restricted->value)
+                                    ->whereHas('audiences', function (Builder $query) use ($courseIds, $courseMorphClass, $studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                                        $query->where(function (Builder $query) use ($courseIds, $courseMorphClass, $studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                                            $query->where(function (Builder $query) use ($user, $userMorphClass): void {
+                                                $query
+                                                    ->where('audience_type', $userMorphClass)
+                                                    ->where('audience_id', $user->id);
+                                            });
+
+                                            if ($studentIds->isNotEmpty()) {
+                                                $query->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass): void {
+                                                    $query
+                                                        ->where('audience_type', $studentMorphClass)
+                                                        ->whereIn('audience_id', $studentIds);
+                                                });
+                                            }
+
+                                            if ($courseIds->isNotEmpty()) {
+                                                $query->orWhere(function (Builder $query) use ($courseIds, $courseMorphClass): void {
+                                                    $query
+                                                        ->where('audience_type', $courseMorphClass)
+                                                        ->whereIn('audience_id', $courseIds);
+                                                });
+                                            }
+                                        });
+                                    });
+                            });
+                    });
+            });
         });
     }
 
     public function scopeAssignableBy(Builder $query, User $user): Builder
     {
-        if ($user->can('ViewAny:Calendar') || $user->can('Update:Calendar')) {
+        return $this->scopeVisibleTo($query, $user);
+    }
+
+    /** @return Builder<User> */
+    public function usersWithAccess(): Builder
+    {
+        $query = User::query();
+
+        if ($this->isPublicSystemCalendar() || (! $this->isSystemCalendar() && $this->access === CalendarAccess::Public)) {
             return $query;
         }
 
-        return $this->scopeVisibleTo($query, $user);
+        if ($this->slug === self::SLUG_OWNERS) {
+            return $query->whereHas('roles', fn (Builder $query): Builder => $query->whereIn('name', ['owner', 'super_admin']));
+        }
+
+        if ($this->slug === self::SLUG_STAFF) {
+            return $query->whereHas('roles', fn (Builder $query): Builder => $query->whereIn('name', ['teacher', 'owner', 'super_admin']));
+        }
+
+        if ($this->isCompetitionCalendar()) {
+            return app(CompetitionRosterService::class)->applyCurrentAccountScope($query);
+        }
+
+        if ($this->isSystemCalendar() || $this->access !== CalendarAccess::Restricted) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        $userMorphClass = (new User())->getMorphClass();
+        $studentMorphClass = (new Student())->getMorphClass();
+        $courseMorphClass = (new Course())->getMorphClass();
+        $directUserIds = $this->audiences()->where('audience_type', $userMorphClass)->pluck('audience_id');
+        $studentIds = $this->audiences()->where('audience_type', $studentMorphClass)->pluck('audience_id');
+        $courseIds = $this->audiences()->where('audience_type', $courseMorphClass)->pluck('audience_id');
+
+        return $query->where(function (Builder $query) use ($courseIds, $directUserIds, $studentIds): void {
+            $query->whereIn('users.id', $directUserIds);
+
+            if ($studentIds->isNotEmpty()) {
+                $query->orWhereHas('students', fn (Builder $query): Builder => $query->whereIn('students.id', $studentIds));
+            }
+
+            if ($courseIds->isNotEmpty()) {
+                $query
+                    ->orWhereHas('teachingCourses', fn (Builder $query): Builder => $query->whereIn('courses.id', $courseIds))
+                    ->orWhereHas('students.courses', fn (Builder $query): Builder => $query->whereIn('courses.id', $courseIds));
+            }
+        });
     }
 
     protected static function booted(): void
     {
-        static::saving(function (Calendar $calendar): void {
+        self::saving(function (Calendar $calendar): void {
             if (blank($calendar->slug)) {
                 $calendar->slug = self::uniqueSlugForName($calendar->name, $calendar->id);
             }
+
+            if ($calendar->isSystemCalendar()) {
+                $calendar->access = null;
+            } elseif ($calendar->access === null) {
+                $calendar->access = CalendarAccess::Restricted;
+            }
         });
 
-        static::deleting(fn (Calendar $calendar): bool => ! $calendar->isSystemCalendar());
+        self::deleting(fn (Calendar $calendar): bool => ! $calendar->isSystemCalendar());
+
+        self::saved(function (Calendar $calendar): void {
+            if ($calendar->isSystemCalendar() || $calendar->access === CalendarAccess::Public) {
+                $calendar->audiences()->delete();
+            }
+        });
     }
 
     private static function uniqueSlugForName(string $name, ?int $ignoreId = null): string

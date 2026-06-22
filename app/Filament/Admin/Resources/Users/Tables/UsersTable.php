@@ -6,12 +6,10 @@ namespace App\Filament\Admin\Resources\Users\Tables;
 
 use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Actions\SendEmailAction;
-use App\Models\Calendar;
 use App\Support\MediaDisks;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
-use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -35,10 +33,6 @@ final class UsersTable
                     ->searchable(),
                 TextColumn::make('email')
                     ->searchable(),
-                SpatieTagsColumn::make('calendar_audience_tags')
-                    ->label('Calendar Audience Tags')
-                    ->type(Calendar::AUDIENCE_TAG_TYPE)
-                    ->toggleable(),
                 TextColumn::make('credit_balance')
                     ->label('Store Credit')
                     ->moneyCents()

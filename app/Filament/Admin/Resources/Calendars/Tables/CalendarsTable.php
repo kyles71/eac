@@ -11,7 +11,6 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ColorColumn;
-use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -24,9 +23,11 @@ final class CalendarsTable
                 TextColumn::make('name')
                     ->searchable(),
                 ColorColumn::make('background_color'),
-                SpatieTagsColumn::make('tags')
-                    ->label('Audience Tags')
-                    ->type(Calendar::AUDIENCE_TAG_TYPE)
+                TextColumn::make('availability')
+                    ->state(fn (Calendar $record): string => $record->isSystemCalendar()
+                        ? 'System managed'
+                        : ($record->access?->getLabel() ?? 'Restricted'))
+                    ->badge()
                     ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()

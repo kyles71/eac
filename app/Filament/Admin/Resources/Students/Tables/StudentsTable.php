@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Students\Tables;
 
 use App\Filament\Actions\SendEmailAction;
-use App\Models\Calendar;
 use App\Models\Student;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -36,10 +35,6 @@ final class StudentsTable
                 SpatieTagsColumn::make('tags')
                     ->label('Student Tags')
                     ->type(Student::GENERAL_TAG_TYPE)
-                    ->toggleable(),
-                SpatieTagsColumn::make('calendar_audience_tags')
-                    ->label('Calendar Audience Tags')
-                    ->type(Calendar::AUDIENCE_TAG_TYPE)
                     ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
