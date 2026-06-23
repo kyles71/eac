@@ -27,6 +27,8 @@ final class FormUserResource extends Resource
 
     protected static ?string $model = FormUser::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static ?string $modelLabel = 'My Form';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;

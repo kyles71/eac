@@ -21,6 +21,8 @@ final class DashboardMessageResource extends Resource
 {
     protected static ?string $model = DashboardMessage::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
 
     protected static ?string $cluster = SettingsCluster::class;

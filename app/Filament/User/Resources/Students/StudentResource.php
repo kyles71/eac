@@ -25,6 +25,8 @@ final class StudentResource extends Resource
 
     protected static ?string $slug = 'students';
 
+    protected static bool $isGloballySearchable = false;
+
     protected static ?string $modelLabel = 'Student';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;

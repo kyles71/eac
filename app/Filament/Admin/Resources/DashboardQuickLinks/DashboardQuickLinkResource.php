@@ -21,6 +21,8 @@ final class DashboardQuickLinkResource extends Resource
 {
     protected static ?string $model = DashboardQuickLink::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLink;
 
     protected static ?string $cluster = SettingsCluster::class;

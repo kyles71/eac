@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\Students\Pages\ListStudents;
 use App\Filament\User\Resources\Students\Pages\ViewStudent;
 use App\Filament\User\Resources\Students\StudentResource;
@@ -30,6 +31,11 @@ beforeEach(function () {
 it('can render the students index page', function () {
     livewire(ListStudents::class)
         ->assertOk();
+});
+
+it('keeps user panel resources out of global search', function (): void {
+    expect(StudentResource::canGloballySearch())->toBeFalse()
+        ->and(FormUserResource::canGloballySearch())->toBeFalse();
 });
 
 it('only lists students on the authenticated account', function () {
