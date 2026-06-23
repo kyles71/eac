@@ -28,10 +28,10 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
-use App\Models\RestrictedCredit;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use App\Services\CreditLedgerService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Spatie\Tags\Tag;
@@ -299,13 +299,19 @@ final class DatabaseSeeder extends Seeder
                 ->create(['event_id' => $event->id]));
         });
 
-        // Restricted credits
+        // Limited use credits
         $allUsers->random(3)->each(function (User $user) use ($giftCardTypes, $activeGiftCards): void {
-            RestrictedCredit::factory()->create([
-                'user_id' => $user->id,
-                'gift_card_type_id' => $giftCardTypes->random()->id,
-                'gift_card_id' => $activeGiftCards->random()->id,
-            ]);
+            $giftCardType = $giftCardTypes->random();
+            $giftCard = $activeGiftCards->random();
+
+            app(CreditLedgerService::class)->issue(
+                recipient: $user,
+                amount: fake()->randomElement([2500, 5000, 10000]),
+                description: 'Seeded limited use credit',
+                restrictedToProductType: $giftCardType->restricted_to_product_type,
+                source: $giftCard,
+                transactionType: CreditTransactionType::GiftCardRedemption,
+            );
         });
 
         $studentWaivers = FormUser::query()
@@ -344,21 +350,24 @@ final class DatabaseSeeder extends Seeder
             EmergencyContact::factory(2)->create(['student_waiver_id' => $waiver->id]);
         });
 
-        // Credit transactions via User::adjustCredit()
+        // Store credit grants
         $allUsers->random(5)->each(function (User $user) use ($allGiftCards): void {
-            $user->adjustCredit(
-                fake()->randomElement([2500, 5000, 10000]),
-                CreditTransactionType::GiftCardRedemption,
-                $allGiftCards->random(),
-                'Gift card redeemed',
+            app(CreditLedgerService::class)->issue(
+                recipient: $user,
+                amount: fake()->randomElement([2500, 5000, 10000]),
+                description: 'Gift card redeemed',
+                source: $allGiftCards->random(),
+                transactionType: CreditTransactionType::GiftCardRedemption,
             );
         });
 
-        $allUsers->random(3)->each(function (User $user): void {
-            $user->adjustCredit(
-                fake()->randomElement([1000, 2000, 5000]),
-                CreditTransactionType::AdminAdjustment,
+        $issuer = $allUsers->first();
+        $allUsers->random(3)->each(function (User $user) use ($issuer): void {
+            app(CreditLedgerService::class)->issue(
+                recipient: $user,
+                amount: fake()->randomElement([1000, 2000, 5000]),
                 description: 'Admin credit adjustment',
+                issuer: $issuer,
             );
         });
 

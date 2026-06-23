@@ -12,12 +12,10 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanStatus;
 use App\Filament\Actions\RedeemGiftCardAction;
 use App\Filament\Shared\Schemas\ProductQuestionAnswerSchema;
-use App\Models\CreditTransaction;
 use App\Models\GiftCard;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\PaymentPlan;
-use App\Models\RestrictedCredit;
 use App\Models\User;
 use App\Services\DashboardAccountSummaryService;
 use BackedEnum;
@@ -27,6 +25,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -653,120 +652,29 @@ final class Billing extends Page
      */
     private function getCreditsAndGiftCardsSchema(): array
     {
-        $creditBalance = (int) User::query()
-            ->whereKey(auth()->id())
-            ->value('credit_balance');
-
-        $restrictedCredits = RestrictedCredit::query()
-            ->where('user_id', auth()->id())
-            ->where('balance', '>', 0)
-            ->with(['giftCardType', 'giftCard'])
-            ->get();
-
-        $restrictedCreditBalance = (int) $restrictedCredits->sum('balance');
+        /** @var User $user */
+        $user = auth()->user();
 
         return [
             Actions::make([
                 RedeemGiftCardAction::make(),
             ]),
-            Grid::make([
-                'default' => 1,
-                'md' => 2,
-            ])
-                ->schema([
-                    Section::make('Store Credit')
-                        ->schema([
-                            TextEntry::make('credits_store_credit')
-                                ->hiddenLabel()
-                                ->state(format_money($creditBalance)),
-                        ])
-                        ->columnSpan(['md' => $restrictedCreditBalance > 0 ? 1 : 2]),
-                    Section::make('Limited Use Credit')
-                        ->schema([
-                            TextEntry::make('credits_restricted_credit')
-                                ->hiddenLabel()
-                                ->state(format_money($restrictedCreditBalance)),
-                        ])
-                        ->visible($restrictedCreditBalance > 0)
-                        ->columnSpan(['md' => 6]),
-                ]),
-            Section::make('Limited Use Credit Details')
-                ->schema($this->restrictedCreditSchema($restrictedCredits))
-                ->extraAttributes([
-                    'id' => 'limited-use-credit-details',
-                    'tabindex' => '-1',
-                ])
-                ->visible($restrictedCreditBalance > 0),
-            Section::make('Credit Activity')
-                ->schema($this->creditTransactionSchema()),
             Section::make('Unredeemed Gift Cards')
                 ->schema($this->giftCardSchema(redeemed: false)),
-            Section::make('Redeemed Gift Cards')
-                ->schema($this->giftCardSchema(redeemed: true)),
+            EmbeddedTable::make(BillingCreditGrantsTable::class, [
+                    'type' => BillingCreditGrantsTable::TYPE_STORE,
+                ])
+                ->columnSpanFull(),
+            EmbeddedTable::make(BillingCreditGrantsTable::class, [
+                    'type' => BillingCreditGrantsTable::TYPE_LIMITED_USE,
+                ])
+                ->extraAttributes([
+                    'id' => 'limited-use-credits',
+                    'tabindex' => '-1',
+                ])
+                ->visible($user->availableRestrictedCreditBalance() > 0)
+                ->columnSpanFull(),
         ];
-    }
-
-    /**
-     * @param  EloquentCollection<int, RestrictedCredit>  $restrictedCredits
-     * @return array<\Filament\Schemas\Components\Component>
-     */
-    private function restrictedCreditSchema(EloquentCollection $restrictedCredits): array
-    {
-        if ($restrictedCredits->isEmpty()) {
-            return [
-                TextEntry::make('restricted_credit_empty')
-                    ->hiddenLabel()
-                    ->state('No limited use credit balances.'),
-            ];
-        }
-
-        return $restrictedCredits
-            ->map(fn (RestrictedCredit $credit): TextEntry => TextEntry::make("restricted_credit_{$credit->id}")
-                ->label($credit->giftCardType?->restrictionSummary() ?? 'Limited Use Credit')
-                ->state($credit->formattedBalance()))
-            ->all();
-    }
-
-    /**
-     * @return array<\Filament\Schemas\Components\Component>
-     */
-    private function creditTransactionSchema(): array
-    {
-        $transactions = CreditTransaction::query()
-            ->where('user_id', auth()->id())
-            ->where(function ($query): void {
-                $query
-                    ->whereNull('reference_type')
-                    ->orWhere('reference_type', '!=', (new Order)->getMorphClass())
-                    ->orWhereHasMorph('reference', [Order::class], fn ($query) => $query->where('status', '!=', OrderStatus::Cancelled));
-            })
-            ->latest()
-            ->limit(25)
-            ->get();
-
-        if ($transactions->isEmpty()) {
-            return [
-                TextEntry::make('credit_transactions_empty')
-                    ->hiddenLabel()
-                    ->state('No credit activity yet.'),
-            ];
-        }
-
-        return $transactions
-            ->map(fn (CreditTransaction $transaction): TextEntry => TextEntry::make("credit_transaction_{$transaction->id}")
-                ->label($transaction->created_at->format('M j, Y'))
-                ->state(function () use ($transaction): string {
-                    $description = $transaction->description === null
-                        ? ''
-                        : ' · '.str_replace(
-                            ['Restricted Credit', 'restricted credit'],
-                            ['Limited Use Credit', 'limited use credit'],
-                            $transaction->description,
-                        );
-
-                    return $transaction->formattedAmount().' · '.$transaction->type->getLabel().$description;
-                }))
-            ->all();
     }
 
     /**
@@ -1010,7 +918,7 @@ final class Billing extends Page
         return Action::make('viewLimitedUseCreditDetails')
             ->label('View Details')
             ->icon(Heroicon::OutlinedArrowRight)
-            ->url(fn (): string => self::getUrl(['tab' => 'credits']).'#limited-use-credit-details');
+            ->url(fn (): string => self::getUrl(['tab' => 'credits']).'#limited-use-credits');
     }
 
     private function completeRedirectedPaymentMethodSetup(): bool

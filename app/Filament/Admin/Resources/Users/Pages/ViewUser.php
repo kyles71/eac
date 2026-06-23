@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Users\Pages;
 
+use App\Filament\Actions\IssueCreditGrantAction;
 use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Admin\Resources\Users\UserResource;
 use Filament\Actions\EditAction;
@@ -16,6 +17,7 @@ final class ViewUser extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            IssueCreditGrantAction::make(),
             ManageUserAccessAction::make(),
             EditAction::make(),
         ];

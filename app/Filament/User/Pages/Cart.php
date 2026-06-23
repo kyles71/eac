@@ -13,10 +13,8 @@ use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Filament\Shared\Schemas\ProductQuestionCheckoutSchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
-use App\Models\Order;
 use App\Models\PaymentPlanTemplate;
-use App\Models\Product;
-use App\Models\RestrictedCredit;
+use App\Services\CreditLedgerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlanFee;
 use BackedEnum;
@@ -157,29 +155,6 @@ final class Cart extends Page implements HasTable
     }
 
     /**
-     * Get pending orders whose reserved credits would be released before creating a new checkout order.
-     *
-     * @return Collection<int, Order>
-     */
-    public function getPendingOrdersProperty(): Collection
-    {
-        return Order::query()
-            ->where('user_id', auth()->id())
-            ->where('status', OrderStatus::Pending)
-            ->get();
-    }
-
-    public function getPendingStoreCreditAmountProperty(): int
-    {
-        return $this->pendingOrders->sum('credit_applied');
-    }
-
-    public function getPendingRestrictedCreditAmountProperty(): int
-    {
-        return $this->pendingOrders->sum('restricted_credit_applied');
-    }
-
-    /**
      * Get the subtotal in cents (before discounts/credits).
      */
     public function getSubtotalProperty(): int
@@ -210,26 +185,18 @@ final class Cart extends Page implements HasTable
      */
     public function getRestrictedCreditAmountProperty(): int
     {
-        $totalRestricted = 0;
-        $remaining = $this->subtotal - $this->discountAmount;
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        $items = $this->cartItems->map(fn (CartItem $cartItem): array => [
+            'product' => $cartItem->product,
+            'amount' => $cartItem->product->price * $cartItem->quantity,
+        ]);
 
-        /** @var CartItem $cartItem */
-        foreach ($this->cartItems as $cartItem) {
-            if ($remaining <= 0) {
-                break;
-            }
-
-            $itemTotal = $cartItem->product->price * $cartItem->quantity;
-            $available = $this->getPreviewRestrictedCreditForProduct($cartItem->product);
-
-            if ($available > 0) {
-                $applicable = min($available, $itemTotal, $remaining);
-                $totalRestricted += $applicable;
-                $remaining -= $applicable;
-            }
-        }
-
-        return $totalRestricted;
+        return app(CreditLedgerService::class)->previewRestrictedAmount(
+            $user,
+            $items,
+            max(0, $this->subtotal - $this->discountAmount),
+        );
     }
 
     /**
@@ -738,9 +705,6 @@ final class Cart extends Page implements HasTable
             'totalBeforePaymentPlanFee',
             'paymentPlanFeeAmount',
             'grandTotal',
-            'pendingOrders',
-            'pendingStoreCreditAmount',
-            'pendingRestrictedCreditAmount',
             'paymentPlanTemplates',
             'selectedTemplate',
             'amountDueToday',
@@ -770,47 +734,9 @@ final class Cart extends Page implements HasTable
 
     private function getPreviewStoreCreditBalance(): int
     {
-        $user = auth()->user();
-
-        $creditBalance = $user !== null && array_key_exists('credit_balance', $user->getAttributes())
-            ? (int) $user->getAttribute('credit_balance')
-            : (int) ($user?->newQuery()->whereKey(auth()->id())->value('credit_balance') ?? 0);
-
-        return $creditBalance + $this->pendingStoreCreditAmount;
-    }
-
-    private function getPreviewRestrictedCreditForProduct(Product $product): int
-    {
         /** @var \App\Models\User $user */
         $user = auth()->user();
-        $pendingRestrictedCreditAmount = $this->pendingRestrictedCreditAmount;
 
-        if ($pendingRestrictedCreditAmount <= 0) {
-            return $user->getRestrictedCreditForProduct($product);
-        }
-
-        $restrictedCredits = $user->restrictedCredits()
-            ->where('balance', '>=', 0)
-            ->with('giftCardType.products')
-            ->orderByDesc('created_at')
-            ->get();
-
-        $available = 0;
-
-        /** @var RestrictedCredit $restrictedCredit */
-        foreach ($restrictedCredits as $restrictedCredit) {
-            $effectiveBalance = $restrictedCredit->balance;
-
-            if ($pendingRestrictedCreditAmount > 0) {
-                $effectiveBalance += $pendingRestrictedCreditAmount;
-                $pendingRestrictedCreditAmount = 0;
-            }
-
-            if ($restrictedCredit->giftCardType->appliesToProduct($product)) {
-                $available += $effectiveBalance;
-            }
-        }
-
-        return $available;
+        return app(CreditLedgerService::class)->previewUnrestrictedBalance($user);
     }
 }

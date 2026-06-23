@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
 use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
+use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
 use App\Filament\Admin\Resources\DashboardQuickLinks\DashboardQuickLinkResource;
 use App\Filament\Admin\Resources\DiscountCodes\DiscountCodeResource;
@@ -204,6 +205,9 @@ return [
             CourseResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
+            CreditGrantResource::class => [
+                'viewAny', 'view', 'create', 'revoke',
+            ],
             DashboardMessageResource::class => [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
@@ -322,6 +326,7 @@ return [
         'Manage:MailManager' => 'Manage Mail Manager',
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
+        'Revoke:CreditGrant' => 'Revoke Store Credit',
     ],
 
     /*

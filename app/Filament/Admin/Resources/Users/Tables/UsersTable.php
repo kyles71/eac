@@ -12,12 +12,18 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 final class UsersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum([
+                'creditGrants as available_store_credit' => fn (Builder $query): Builder => $query
+                    ->available()
+                    ->unrestricted(),
+            ], 'remaining_amount'))
             ->columns([
                 SpatieMediaLibraryImageColumn::make('avatar')
                     ->collection('avatars')
@@ -33,7 +39,7 @@ final class UsersTable
                     ->searchable(),
                 TextColumn::make('email')
                     ->searchable(),
-                TextColumn::make('credit_balance')
+                TextColumn::make('available_store_credit')
                     ->label('Store Credit')
                     ->moneyCents()
                     ->sortable()

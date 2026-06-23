@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Enums\CreditTransactionType;
 use App\Enums\StoreView;
 use App\Support\MediaDisks;
 use Database\Factories\UserFactory;
@@ -19,7 +18,6 @@ use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
@@ -181,112 +179,38 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(CreditTransaction::class);
     }
 
-    /** @return HasMany<RestrictedCredit, $this> */
-    public function restrictedCredits(): HasMany
+    /** @return HasMany<CreditGrant, $this> */
+    public function creditGrants(): HasMany
     {
-        return $this->hasMany(RestrictedCredit::class);
+        return $this->hasMany(CreditGrant::class);
     }
 
-    /**
-     * Get the total restricted credit balance applicable to a given product.
-     */
+    public function creditBalance(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): int => $this->availableStoreCreditBalance(),
+        );
+    }
+
+    public function availableStoreCreditBalance(): int
+    {
+        return (int) $this->creditGrants()->available()->unrestricted()->sum('remaining_amount');
+    }
+
+    public function availableRestrictedCreditBalance(): int
+    {
+        return (int) $this->creditGrants()->available()->restricted()->sum('remaining_amount');
+    }
+
     public function getRestrictedCreditForProduct(Product $product): int
     {
-        return $this->restrictedCredits()
-            ->where('balance', '>', 0)
-            ->with('giftCardType.products')
+        return (int) $this->creditGrants()
+            ->available()
+            ->restricted()
+            ->with('products')
             ->get()
-            ->filter(fn (RestrictedCredit $rc): bool => $rc->giftCardType->appliesToProduct($product))
-            ->sum('balance');
-    }
-
-    /**
-     * Debit restricted credits applicable to a product (FIFO by oldest).
-     * Returns the actual amount debited.
-     */
-    public function applyRestrictedCredit(Product $product, int $amount): int
-    {
-        if ($amount <= 0) {
-            return 0;
-        }
-
-        $applicableCredits = $this->restrictedCredits()
-            ->where('balance', '>', 0)
-            ->with('giftCardType.products')
-            ->orderBy('created_at')
-            ->get()
-            ->filter(fn (RestrictedCredit $rc): bool => $rc->giftCardType->appliesToProduct($product));
-
-        $totalDebited = 0;
-
-        /** @var RestrictedCredit $restrictedCredit */
-        foreach ($applicableCredits as $restrictedCredit) {
-            if ($totalDebited >= $amount) {
-                break;
-            }
-
-            $debit = min($restrictedCredit->balance, $amount - $totalDebited);
-            $restrictedCredit->update(['balance' => $restrictedCredit->balance - $debit]);
-            $totalDebited += $debit;
-        }
-
-        return $totalDebited;
-    }
-
-    /**
-     * Reverse restricted credits that were debited for an order.
-     * Re-credits the amount back to the most recent applicable restricted credit records (reverse FIFO).
-     */
-    public function reverseRestrictedCredit(int $amount): int
-    {
-        if ($amount <= 0) {
-            return 0;
-        }
-
-        $applicableCredits = $this->restrictedCredits()
-            ->where('balance', '>=', 0)
-            ->orderByDesc('created_at')
-            ->get();
-
-        $totalCredited = 0;
-
-        /** @var RestrictedCredit $restrictedCredit */
-        foreach ($applicableCredits as $restrictedCredit) {
-            if ($totalCredited >= $amount) {
-                break;
-            }
-
-            $credit = min($amount - $totalCredited, PHP_INT_MAX);
-            $restrictedCredit->update(['balance' => $restrictedCredit->balance + $credit]);
-            $totalCredited += $credit;
-        }
-
-        return $totalCredited;
-    }
-
-    /**
-     * Adjust the user's credit balance and record a transaction.
-     *
-     * @param  int  $amount  Positive to add credit, negative to debit
-     */
-    public function adjustCredit(int $amount, CreditTransactionType $type, ?Model $reference = null, ?string $description = null): CreditTransaction
-    {
-        if ($amount !== 0) {
-            self::query()
-                ->whereKey($this->getKey())
-                ->increment('credit_balance', $amount);
-
-            $this->refresh();
-        }
-
-        /** @var CreditTransaction */
-        return $this->creditTransactions()->create([
-            'amount' => $amount,
-            'type' => $type,
-            'reference_type' => $reference !== null ? $reference->getMorphClass() : null,
-            'reference_id' => $reference?->getKey(),
-            'description' => $description,
-        ]);
+            ->filter(fn (CreditGrant $grant): bool => $grant->appliesToProduct($product))
+            ->sum('remaining_amount');
     }
 
     public function registerMediaCollections(): void
@@ -310,7 +234,6 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'credit_balance' => 'integer',
             'store_view' => StoreView::class,
         ];
     }

@@ -59,11 +59,6 @@ final class GiftCardType extends Model implements Productable, ProvidesStorefron
         return $this->hasMany(GiftCard::class);
     }
 
-    public function restrictedCredits(): HasMany
-    {
-        return $this->hasMany(RestrictedCredit::class);
-    }
-
     /**
      * Whether this gift card type has any product or product-type restrictions.
      */

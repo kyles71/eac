@@ -7,7 +7,6 @@ namespace App\Services;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Installment;
-use App\Models\RestrictedCredit;
 use App\Models\User;
 
 final class DashboardAccountSummaryService
@@ -23,13 +22,8 @@ final class DashboardAccountSummaryService
             'open_enrollments' => $user->enrollments()
                 ->whereNull('student_id')
                 ->count(),
-            'store_credit' => (int) User::query()
-                ->whereKey($user->id)
-                ->value('credit_balance'),
-            'limited_use_credit' => (int) RestrictedCredit::query()
-                ->where('user_id', $user->id)
-                ->where('balance', '>', 0)
-                ->sum('balance'),
+            'store_credit' => $user->availableStoreCreditBalance(),
+            'limited_use_credit' => $user->availableRestrictedCreditBalance(),
             'next_installment' => $nextInstallment,
         ];
     }

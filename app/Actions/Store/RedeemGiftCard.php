@@ -6,70 +6,60 @@ namespace App\Actions\Store;
 
 use App\Enums\CreditTransactionType;
 use App\Models\GiftCard;
-use App\Models\RestrictedCredit;
 use App\Models\User;
+use App\Services\CreditLedgerService;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 final readonly class RedeemGiftCard
 {
-    /**
-     * Redeem a gift card code and add the balance to the user's store credit
-     * (or restricted credit if the gift card type has restrictions).
-     */
     public function handle(string $code, User $user): GiftCard
     {
-        $giftCard = GiftCard::query()->where('code', $code)->first();
+        return DB::transaction(function () use ($code, $user): GiftCard {
+            $giftCard = GiftCard::query()
+                ->where('code', $code)
+                ->lockForUpdate()
+                ->first();
 
-        if ($giftCard === null) {
-            throw new InvalidArgumentException('Gift card not found.');
-        }
+            if ($giftCard === null) {
+                throw new InvalidArgumentException('Gift card not found.');
+            }
 
-        if (! $giftCard->is_active) {
-            throw new InvalidArgumentException('This gift card has been deactivated.');
-        }
+            if (! $giftCard->is_active) {
+                throw new InvalidArgumentException('This gift card has been deactivated.');
+            }
 
-        if ($giftCard->isRedeemed()) {
-            throw new InvalidArgumentException('This gift card has already been redeemed.');
-        }
+            if ($giftCard->isRedeemed()) {
+                throw new InvalidArgumentException('This gift card has already been redeemed.');
+            }
 
-        if ($giftCard->remaining_amount <= 0) {
-            throw new InvalidArgumentException('This gift card has no remaining balance.');
-        }
+            if ($giftCard->remaining_amount <= 0) {
+                throw new InvalidArgumentException('This gift card has no remaining balance.');
+            }
 
-        $amount = $giftCard->remaining_amount;
+            $amount = $giftCard->remaining_amount;
+            $giftCardType = $giftCard->giftCardType;
+            $description = $giftCardType !== null && $giftCardType->hasRestrictions()
+                ? "Redeemed gift card {$giftCard->code} ({$giftCardType->restrictionSummary()})"
+                : "Redeemed gift card {$giftCard->code}";
 
-        $giftCard->update([
-            'redeemed_by_user_id' => $user->id,
-            'redeemed_at' => now(),
-            'remaining_amount' => 0,
-        ]);
+            app(CreditLedgerService::class)->issue(
+                recipient: $user,
+                amount: $amount,
+                description: $description,
+                restrictedToProductType: $giftCardType?->restricted_to_product_type,
+                productIds: $giftCardType?->products()->pluck('products.id')->all() ?? [],
+                source: $giftCard,
+                transactionType: CreditTransactionType::GiftCardRedemption,
+            );
 
-        $giftCardType = $giftCard->giftCardType;
-
-        if ($giftCardType !== null && $giftCardType->hasRestrictions()) {
-            // Create a restricted credit entry instead of adding to general balance
-            RestrictedCredit::query()->create([
-                'user_id' => $user->id,
-                'gift_card_type_id' => $giftCardType->id,
-                'gift_card_id' => $giftCard->id,
-                'balance' => $amount,
+            $giftCard->update([
+                'redeemed_by_user_id' => $user->id,
+                'redeemed_at' => now(),
+                'remaining_amount' => 0,
             ]);
 
-            $user->adjustCredit(
-                0,
-                CreditTransactionType::GiftCardRedemption,
-                $giftCard,
-                "Redeemed restricted gift card {$giftCard->code} ({$giftCardType->restrictionSummary()})",
-            );
-        } else {
-            $user->adjustCredit(
-                $amount,
-                CreditTransactionType::GiftCardRedemption,
-                $giftCard,
-                "Redeemed gift card {$giftCard->code}",
-            );
-        }
-
-        return $giftCard->refresh();
+            return $giftCard->refresh();
+        });
     }
 }

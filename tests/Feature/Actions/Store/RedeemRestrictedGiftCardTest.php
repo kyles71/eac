@@ -5,9 +5,9 @@ declare(strict_types=1);
 use App\Actions\Store\RedeemGiftCard;
 use App\Enums\CreditTransactionType;
 use App\Enums\ProductType;
+use App\Models\CreditGrant;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
-use App\Models\RestrictedCredit;
 use App\Models\User;
 
 beforeEach(function () {
@@ -25,18 +25,16 @@ it('creates restricted credit when gift card type has restrictions', function ()
     $action = new RedeemGiftCard;
     $action->handle($giftCard->code, $this->user);
 
-    // Should NOT increase general credit balance
     expect($this->user->refresh()->credit_balance)->toBe(0);
 
-    // Should create a restricted credit entry
-    $restrictedCredit = RestrictedCredit::query()
+    $grant = CreditGrant::query()
         ->where('user_id', $this->user->id)
         ->first();
 
-    expect($restrictedCredit)->not->toBeNull()
-        ->and($restrictedCredit->gift_card_type_id)->toBe($giftCardType->id)
-        ->and($restrictedCredit->gift_card_id)->toBe($giftCard->id)
-        ->and($restrictedCredit->balance)->toBe(5000);
+    expect($grant)->not->toBeNull()
+        ->and($grant->source->is($giftCard))->toBeTrue()
+        ->and($grant->restricted_to_product_type)->toBe(ProductType::Course)
+        ->and($grant->remaining_amount)->toBe(5000);
 });
 
 it('adds to general credit when gift card type has no restrictions', function () {
@@ -48,11 +46,7 @@ it('adds to general credit when gift card type has no restrictions', function ()
 
     expect($this->user->refresh()->credit_balance)->toBe(5000);
 
-    $restrictedCreditCount = RestrictedCredit::query()
-        ->where('user_id', $this->user->id)
-        ->count();
-
-    expect($restrictedCreditCount)->toBe(0);
+    expect($this->user->creditGrants()->restricted()->count())->toBe(0);
 });
 
 it('adds to general credit when gift card has no type', function () {
@@ -78,9 +72,9 @@ it('records a credit transaction for restricted redemption', function () {
     $transaction = $this->user->creditTransactions()->first();
 
     expect($transaction)->not->toBeNull()
-        ->and($transaction->amount)->toBe(0)
+        ->and($transaction->amount)->toBe(5000)
         ->and($transaction->type)->toBe(CreditTransactionType::GiftCardRedemption)
-        ->and($transaction->description)->toContain('restricted');
+        ->and($transaction->creditGrant->restricted_to_product_type)->toBe(ProductType::Course);
 });
 
 it('marks gift card as redeemed for restricted redemption', function () {

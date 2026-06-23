@@ -6,7 +6,10 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanStatus;
+use App\Enums\ProductType;
 use App\Filament\User\Pages\Billing;
+use App\Filament\User\Pages\BillingCreditGrantsTable;
+use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
 use App\Models\Installment;
@@ -16,7 +19,6 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\Product;
 use App\Models\ProductQuestionAnswer;
-use App\Models\RestrictedCredit;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use Filament\Actions\Testing\TestAction;
@@ -118,37 +120,152 @@ it('shows purchaser answers in the billing receipt modal', function (): void {
 });
 
 it('shows credit and gift card information', function () {
-    auth()->user()->update(['credit_balance' => 2500]);
+    $redeemedGiftCard = GiftCard::factory()
+        ->amount(2500)
+        ->redeemed(auth()->user())
+        ->create();
+
+    CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(2500)
+        ->create([
+            'source_type' => $redeemedGiftCard->getMorphClass(),
+            'source_id' => $redeemedGiftCard->id,
+            'description' => "Redeemed gift card {$redeemedGiftCard->code}",
+        ]);
+
+    $expiresOn = now('America/New_York')->addMonth();
+
+    CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(1500)
+        ->restrictedTo(ProductType::Course)
+        ->create([
+            'description' => 'Course scholarship',
+            'expires_on' => $expiresOn->toDateString(),
+        ]);
 
     $giftCard = GiftCard::factory()->amount(5000)->create([
         'purchased_by_user_id' => auth()->id(),
     ]);
 
+    $hiddenRedeemedGiftCard = GiftCard::factory()
+        ->amount(7500)
+        ->redeemed(auth()->user())
+        ->create();
+
+    CreditTransaction::factory()->create([
+        'user_id' => auth()->id(),
+        'description' => 'Hidden billing activity row',
+    ]);
+
     livewire(Billing::class)
+        ->assertSee('Remaining')
+        ->assertSee('Source')
+        ->assertSee('Expiration')
         ->assertSee('$25.00')
+        ->assertSee("Redeemed gift card {$redeemedGiftCard->code}")
+        ->assertSee('No expiration')
+        ->assertSee('$15.00')
+        ->assertSee('Description')
+        ->assertSee('Course scholarship')
+        ->assertSee('Course products only')
+        ->assertSee($expiresOn->format('M j, Y'))
         ->assertSee($giftCard->code)
-        ->assertSee('$50.00');
+        ->assertSee('$50.00')
+        ->assertDontSee($hiddenRedeemedGiftCard->code)
+        ->assertDontSee('Credit Details')
+        ->assertDontSee('Credit Activity')
+        ->assertDontSee('Redeemed Gift Cards')
+        ->assertDontSee('Hidden billing activity row');
+});
+
+it('renders store and limited use credit as native filament tables', function () {
+    $redeemedGiftCard = GiftCard::factory()
+        ->amount(2500)
+        ->redeemed(auth()->user())
+        ->create();
+
+    $storeCredit = CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(2500)
+        ->create([
+            'source_type' => $redeemedGiftCard->getMorphClass(),
+            'source_id' => $redeemedGiftCard->id,
+            'description' => "Redeemed gift card {$redeemedGiftCard->code}",
+        ]);
+
+    $expiresOn = now('America/New_York')->addMonth();
+    $limitedUseCredit = CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(1500)
+        ->restrictedTo(ProductType::Course)
+        ->create([
+            'description' => 'Course scholarship',
+            'expires_on' => $expiresOn->toDateString(),
+        ]);
+
+    livewire(BillingCreditGrantsTable::class, ['type' => BillingCreditGrantsTable::TYPE_STORE])
+        ->assertTableColumnExists('remaining_amount')
+        ->assertTableColumnExists('source_label')
+        ->assertTableColumnExists('expires_on')
+        ->assertTableColumnDoesNotExist('description')
+        ->assertCanSeeTableRecords([$storeCredit])
+        ->assertCanNotSeeTableRecords([$limitedUseCredit])
+        ->assertSee('$25.00')
+        ->assertSee("Redeemed gift card {$redeemedGiftCard->code}")
+        ->assertSee('No expiration');
+
+    livewire(BillingCreditGrantsTable::class, ['type' => BillingCreditGrantsTable::TYPE_LIMITED_USE])
+        ->assertTableColumnExists('remaining_amount')
+        ->assertTableColumnExists('description')
+        ->assertTableColumnExists('restriction')
+        ->assertTableColumnExists('expires_on')
+        ->assertCanSeeTableRecords([$limitedUseCredit])
+        ->assertCanNotSeeTableRecords([$storeCredit])
+        ->assertSee('$15.00')
+        ->assertSee('Course scholarship')
+        ->assertSee('Course products only')
+        ->assertSee($expiresOn->format('M j, Y'));
 });
 
 it('hides limited use credit sections until the user has a balance', function () {
     livewire(Billing::class)
         ->assertDontSee('Limited Use Credit')
-        ->assertDontSee('Limited Use Credit Details')
+        ->assertDontSee('Credit Details')
+        ->assertDontSee('Credit Activity')
+        ->assertDontSee('Redeemed Gift Cards')
         ->assertDontSee('View Details');
 });
 
 it('shows limited use credit details with an overview shortcut when the user has a balance', function () {
-    RestrictedCredit::factory()->balance(2500)->create([
-        'user_id' => auth()->id(),
-    ]);
+    CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(2500)
+        ->restrictedTo(ProductType::Course)
+        ->create();
 
     livewire(Billing::class)
         ->assertSee('Limited Use Credit')
-        ->assertSee('Limited Use Credit Details')
+        ->assertDontSee('Credit Details')
         ->assertSee('View Details')
         ->assertSee('tab=credits', false)
-        ->assertSee('limited-use-credit-details', false)
+        ->assertSee('limited-use-credits', false)
         ->assertDontSee('Restricted Credit');
+});
+
+it('shows credit tables as full-width billing sections', function () {
+    CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(2500)
+        ->restrictedTo(ProductType::Course)
+        ->create();
+
+    $sections = billingCreditsSections();
+
+    expect($sections['Store Credit']->getColumnSpan('default'))->toBe('full')
+        ->and($sections['Limited Use Credit']->getColumnSpan('default'))->toBe('full')
+        ->and($sections['Limited Use Credit']->isVisible())->toBeTrue();
 });
 
 it('keeps billing overview cards on one row with conditional spans', function () {
@@ -165,9 +282,11 @@ it('keeps billing overview cards on one row with conditional spans', function ()
         ->and($cards[2]->getColumnSpan('md'))->toBe(4)
         ->and($cards[3]->isVisible())->toBeFalse();
 
-    RestrictedCredit::factory()->balance(2500)->create([
-        'user_id' => auth()->id(),
-    ]);
+    CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(2500)
+        ->restrictedTo(ProductType::Course)
+        ->create();
 
     $cards = billingOverviewCards();
 
@@ -225,6 +344,22 @@ function billingOverviewCards(): array
     $grid = $schema->getComponents(withHidden: true)[0];
 
     return array_slice($grid->getChildSchema()->getComponents(withHidden: true), 0, 4);
+}
+
+function billingCreditsSections(): array
+{
+    $component = livewire(Billing::class);
+    $method = new ReflectionMethod(Billing::class, 'getCreditsAndGiftCardsSchema');
+    $method->setAccessible(true);
+
+    $creditsSchema = $method->invoke($component->instance());
+    $schema = Schema::make($component->instance())
+        ->components($creditsSchema);
+
+    return collect($schema->getFlatComponents(withHidden: true))
+        ->filter(fn ($component): bool => $component instanceof \Filament\Schemas\Components\Section)
+        ->keyBy(fn (\Filament\Schemas\Components\Section $section): ?string => $section->getHeading())
+        ->all();
 }
 
 function paymentPlanTermsVersionForBillingTest(): LegalDocumentVersion

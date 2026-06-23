@@ -19,6 +19,8 @@ final class CreditTransaction extends Model
     protected $casts = [
         'id' => 'integer',
         'user_id' => 'integer',
+        'credit_grant_id' => 'integer',
+        'performed_by_user_id' => 'integer',
         'amount' => 'integer',
         'type' => CreditTransactionType::class,
     ];
@@ -26,6 +28,16 @@ final class CreditTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function creditGrant(): BelongsTo
+    {
+        return $this->belongsTo(CreditGrant::class);
+    }
+
+    public function performedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'performed_by_user_id');
     }
 
     public function reference(): MorphTo

@@ -10,6 +10,7 @@ use App\Enums\OrderStatus;
 use App\Models\CartItem;
 use App\Models\Costume;
 use App\Models\Course;
+use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\DiscountCode;
 use App\Models\Enrollment;
@@ -207,7 +208,7 @@ it('completes order immediately when discount covers full amount', function () {
 });
 
 it('applies store credit to reduce the order total', function () {
-    $this->user->update(['credit_balance' => 3000]);
+    CreditGrant::factory()->for($this->user)->amount(3000)->create();
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
@@ -233,7 +234,7 @@ it('applies store credit to reduce the order total', function () {
 
 it('completes order immediately when credit covers full amount', function () {
     Mail::fake();
-    $this->user->update(['credit_balance' => 15000]);
+    CreditGrant::factory()->for($this->user)->amount(15000)->create();
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
@@ -260,7 +261,7 @@ it('completes order immediately when credit covers full amount', function () {
 });
 
 it('combines discount code and credit to cover the full amount', function () {
-    $this->user->update(['credit_balance' => 5000]);
+    CreditGrant::factory()->for($this->user)->amount(5000)->create();
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
@@ -284,7 +285,7 @@ it('combines discount code and credit to cover the full amount', function () {
 });
 
 it('does not apply more credit than the user has', function () {
-    $this->user->update(['credit_balance' => 2000]);
+    CreditGrant::factory()->for($this->user)->amount(2000)->create();
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
@@ -539,7 +540,7 @@ it('does not cancel processing orders when creating a new one', function () {
 });
 
 it('reverses store credit from previous pending order when creating a new one', function () {
-    $this->user->update(['credit_balance' => 3000]);
+    CreditGrant::factory()->for($this->user)->amount(3000)->create();
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,

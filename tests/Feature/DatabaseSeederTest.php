@@ -8,6 +8,7 @@ use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
+use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\DiscountCode;
 use App\Models\EmergencyContact;
@@ -24,7 +25,6 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
-use App\Models\RestrictedCredit;
 use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
@@ -66,12 +66,12 @@ it('seeds the development database with all models', function (): void {
         ->and(PaymentPlan::count())->toBe(3)
         ->and(Installment::count())->toBeGreaterThanOrEqual(9)
         ->and(EventAttendee::count())->toBeGreaterThanOrEqual(20)
-        ->and(RestrictedCredit::count())->toBe(3)
+        ->and(CreditGrant::count())->toBe(11)
         ->and(StudentWaiver::count())->toBeGreaterThanOrEqual(1)
         ->and(ShowcaseParticipation::count())->toBeGreaterThanOrEqual(1)
         ->and(EmergencyContact::count())->toBeGreaterThanOrEqual(2)
         ->and(FormUser::count())->toBeGreaterThanOrEqual(2)
-        ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(5)
+        ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(11)
         ->and(Role::findByName('super_admin')->hasPermissionTo('ViewAny:Holiday'))->toBeTrue()
         ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue()
         ->and(Role::findByName('super_admin')->hasPermissionTo('Cancel:Event'))->toBeTrue()

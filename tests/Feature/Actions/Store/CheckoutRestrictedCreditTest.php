@@ -8,10 +8,8 @@ use App\Enums\OrderStatus;
 use App\Enums\ProductType;
 use App\Models\CartItem;
 use App\Models\Course;
-use App\Models\GiftCard;
-use App\Models\GiftCardType;
+use App\Models\CreditGrant;
 use App\Models\Product;
-use App\Models\RestrictedCredit;
 use App\Models\User;
 
 beforeEach(function () {
@@ -24,96 +22,52 @@ beforeEach(function () {
 });
 
 it('applies restricted credit to eligible items during checkout', function () {
-    $giftCardType = GiftCardType::factory()
-        ->restrictedToProductType(ProductType::Course)
-        ->denomination(5000)
+    $grant = CreditGrant::factory()
+        ->for($this->user)
+        ->amount(5000)
+        ->restrictedTo(ProductType::Course)
         ->create();
-
-    $giftCard = GiftCard::factory()->forType($giftCardType)->amount(5000)->create();
-
-    RestrictedCredit::factory()->create([
-        'user_id' => $this->user->id,
-        'gift_card_type_id' => $giftCardType->id,
-        'gift_card_id' => $giftCard->id,
-        'balance' => 5000,
-    ]);
-
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->courseProduct->id,
         'quantity' => 1,
     ]);
 
-    $action = app(CreateOrder::class);
-    $order = $action->handle($this->user);
+    $order = app(CreateOrder::class)->handle($this->user);
 
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->subtotal)->toBe(5000)
         ->and($order->restricted_credit_applied)->toBe(5000)
-        ->and($order->total)->toBe(0);
-
-    // Verify restricted credit was debited
-    $restrictedCredit = RestrictedCredit::query()
-        ->where('user_id', $this->user->id)
-        ->first();
-
-    expect($restrictedCredit->balance)->toBe(0);
+        ->and($order->total)->toBe(0)
+        ->and($grant->refresh()->remaining_amount)->toBe(0);
 });
 
 it('does not apply restricted credit to ineligible items', function () {
-    $giftCardType = GiftCardType::factory()
-        ->restrictedToProductType(ProductType::Course)
-        ->denomination(5000)
+    $grant = CreditGrant::factory()
+        ->for($this->user)
+        ->amount(5000)
+        ->restrictedTo(ProductType::Course)
         ->create();
-
-    $giftCard = GiftCard::factory()->forType($giftCardType)->amount(5000)->create();
-
-    RestrictedCredit::factory()->create([
-        'user_id' => $this->user->id,
-        'gift_card_type_id' => $giftCardType->id,
-        'gift_card_id' => $giftCard->id,
-        'balance' => 5000,
-    ]);
-
-    // Cart has only a standalone product (not a Course)
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->standaloneProduct->id,
         'quantity' => 1,
     ]);
 
-    $action = app(CreateOrder::class);
-    $order = $action->handle($this->user);
+    $order = app(CreateOrder::class)->handle($this->user);
 
     expect($order->restricted_credit_applied)->toBe(0)
-        ->and($order->total)->toBe(3000);
-
-    // Restricted credit should remain untouched
-    $restrictedCredit = RestrictedCredit::query()
-        ->where('user_id', $this->user->id)
-        ->first();
-
-    expect($restrictedCredit->balance)->toBe(5000);
+        ->and($order->total)->toBe(3000)
+        ->and($grant->refresh()->remaining_amount)->toBe(5000);
 });
 
-it('combines restricted credit and unrestricted credit', function () {
-    $giftCardType = GiftCardType::factory()
-        ->restrictedToProductType(ProductType::Course)
-        ->denomination(3000)
+it('combines restricted credit and optional unrestricted credit', function () {
+    $restrictedGrant = CreditGrant::factory()
+        ->for($this->user)
+        ->amount(3000)
+        ->restrictedTo(ProductType::Course)
         ->create();
-
-    $giftCard = GiftCard::factory()->forType($giftCardType)->amount(3000)->create();
-
-    RestrictedCredit::factory()->create([
-        'user_id' => $this->user->id,
-        'gift_card_type_id' => $giftCardType->id,
-        'gift_card_id' => $giftCard->id,
-        'balance' => 3000,
-    ]);
-
-    $this->user->update(['credit_balance' => 3000]);
-
-    // Cart: course product (5000) + standalone (3000) = 8000
+    $unrestrictedGrant = CreditGrant::factory()->for($this->user)->amount(3000)->create();
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->courseProduct->id,
@@ -125,55 +79,50 @@ it('combines restricted credit and unrestricted credit', function () {
         'quantity' => 1,
     ]);
 
-    $action = app(CreateOrder::class);
-    $order = $action->handle($this->user, creditToApply: 3000);
+    $order = app(CreateOrder::class)->handle($this->user, creditToApply: 3000);
 
-    // Restricted credit (3000) applied to the course product
     expect($order->restricted_credit_applied)->toBe(3000)
-        // Unrestricted credit (3000) applied to remaining
         ->and($order->credit_applied)->toBe(3000)
-        // Total: 8000 - 3000 restricted - 3000 unrestricted = 2000
-        ->and($order->total)->toBe(2000);
-
-    // Verify restricted credit was fully consumed
-    expect(RestrictedCredit::query()->where('user_id', $this->user->id)->first()->balance)->toBe(0);
-
-    // Verify unrestricted credit was consumed
-    expect($this->user->refresh()->credit_balance)->toBe(0);
+        ->and($order->total)->toBe(2000)
+        ->and($restrictedGrant->refresh()->remaining_amount)->toBe(0)
+        ->and($unrestrictedGrant->refresh()->remaining_amount)->toBe(0);
 });
 
-it('partially applies restricted credit when item is cheaper than credit', function () {
-    $giftCardType = GiftCardType::factory()
-        ->restrictedToProductType(ProductType::Course)
-        ->denomination(10000)
+it('partially applies restricted credit when the eligible item is cheaper', function () {
+    $grant = CreditGrant::factory()
+        ->for($this->user)
+        ->amount(10000)
+        ->restrictedTo(ProductType::Course)
         ->create();
-
-    $giftCard = GiftCard::factory()->forType($giftCardType)->amount(10000)->create();
-
-    RestrictedCredit::factory()->create([
-        'user_id' => $this->user->id,
-        'gift_card_type_id' => $giftCardType->id,
-        'gift_card_id' => $giftCard->id,
-        'balance' => 10000,
-    ]);
-
     CartItem::factory()->create([
         'user_id' => $this->user->id,
         'product_id' => $this->courseProduct->id,
         'quantity' => 1,
     ]);
 
-    $action = app(CreateOrder::class);
-    $order = $action->handle($this->user);
+    $order = app(CreateOrder::class)->handle($this->user);
 
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->restricted_credit_applied)->toBe(5000)
-        ->and($order->total)->toBe(0);
+        ->and($order->total)->toBe(0)
+        ->and($grant->refresh()->remaining_amount)->toBe(5000);
+});
 
-    // Remaining restricted credit should be 5000
-    $restrictedCredit = RestrictedCredit::query()
-        ->where('user_id', $this->user->id)
-        ->first();
+it('ignores expired restricted credit', function () {
+    CreditGrant::factory()
+        ->for($this->user)
+        ->amount(5000)
+        ->restrictedTo(ProductType::Course)
+        ->expired()
+        ->create();
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->courseProduct->id,
+        'quantity' => 1,
+    ]);
 
-    expect($restrictedCredit->balance)->toBe(5000);
+    $order = app(CreateOrder::class)->handle($this->user);
+
+    expect($order->restricted_credit_applied)->toBe(0)
+        ->and($order->total)->toBe(5000);
 });

@@ -2,72 +2,53 @@
 
 declare(strict_types=1);
 
-use App\Enums\CreditTransactionType;
-use App\Models\CreditTransaction;
+use App\Enums\ProductType;
+use App\Models\CreditGrant;
 use App\Models\GiftCard;
+use App\Models\Product;
 use App\Models\User;
 
-it('starts with zero credit balance', function () {
+it('starts with zero available credit', function () {
     $user = User::factory()->create();
 
-    expect($user->refresh()->credit_balance)->toBe(0);
+    expect($user->credit_balance)->toBe(0)
+        ->and($user->availableRestrictedCreditBalance())->toBe(0);
 });
 
-it('adjusts credit balance upward', function () {
+it('derives unrestricted and restricted balances from active grants', function () {
     $user = User::factory()->create();
+    CreditGrant::factory()->for($user)->amount(5000)->create();
+    CreditGrant::factory()->for($user)->amount(3000)->restrictedTo(ProductType::Course)->create();
+    CreditGrant::factory()->for($user)->amount(2000)->expired()->create();
 
-    $user->adjustCredit(5000, CreditTransactionType::GiftCardRedemption);
-
-    expect($user->refresh()->credit_balance)->toBe(5000);
+    expect($user->credit_balance)->toBe(5000)
+        ->and($user->availableRestrictedCreditBalance())->toBe(3000)
+        ->and($user->creditGrants)->toHaveCount(3);
 });
 
-it('adjusts credit balance downward', function () {
-    $user = User::factory()->create(['credit_balance' => 10000]);
-
-    $user->adjustCredit(-3000, CreditTransactionType::CheckoutDebit);
-
-    expect($user->refresh()->credit_balance)->toBe(7000);
-});
-
-it('creates a credit transaction when adjusting', function () {
+it('finds restricted credit applicable to a product', function () {
     $user = User::factory()->create();
-    $giftCard = GiftCard::factory()->create();
+    $product = Product::factory()->create();
+    $grant = CreditGrant::factory()->for($user)->amount(2500)->create([
+        'has_product_restrictions' => true,
+    ]);
+    $grant->products()->attach($product);
 
-    $transaction = $user->adjustCredit(
-        5000,
-        CreditTransactionType::GiftCardRedemption,
-        $giftCard,
-        'Redeemed gift card',
-    );
-
-    expect($transaction)->toBeInstanceOf(CreditTransaction::class)
-        ->and($transaction->amount)->toBe(5000)
-        ->and($transaction->type)->toBe(CreditTransactionType::GiftCardRedemption)
-        ->and($transaction->reference_type)->toBe(GiftCard::class)
-        ->and($transaction->reference_id)->toBe($giftCard->id)
-        ->and($transaction->description)->toBe('Redeemed gift card');
+    expect($user->getRestrictedCreditForProduct($product))->toBe(2500);
 });
 
-it('has gift cards purchased relationship', function () {
+it('has gift card and transaction relationships', function () {
     $user = User::factory()->create();
-    $giftCard = GiftCard::factory()->create(['purchased_by_user_id' => $user->id]);
+    GiftCard::factory()->create(['purchased_by_user_id' => $user->id]);
+    GiftCard::factory()->redeemed($user)->create();
+    $grant = CreditGrant::factory()->for($user)->create();
+    $grant->transactions()->create([
+        'user_id' => $user->id,
+        'amount' => $grant->initial_amount,
+        'type' => App\Enums\CreditTransactionType::AdminGrant,
+    ]);
 
     expect($user->giftCardsPurchased)->toHaveCount(1)
-        ->and($user->giftCardsPurchased->first()->id)->toBe($giftCard->id);
-});
-
-it('has gift cards redeemed relationship', function () {
-    $user = User::factory()->create();
-    $giftCard = GiftCard::factory()->redeemed($user)->create();
-
-    expect($user->giftCardsRedeemed)->toHaveCount(1)
-        ->and($user->giftCardsRedeemed->first()->id)->toBe($giftCard->id);
-});
-
-it('has credit transactions relationship', function () {
-    $user = User::factory()->create();
-    $user->adjustCredit(5000, CreditTransactionType::GiftCardRedemption);
-    $user->adjustCredit(3000, CreditTransactionType::AdminAdjustment);
-
-    expect($user->creditTransactions)->toHaveCount(2);
+        ->and($user->giftCardsRedeemed)->toHaveCount(1)
+        ->and($user->creditTransactions)->toHaveCount(1);
 });

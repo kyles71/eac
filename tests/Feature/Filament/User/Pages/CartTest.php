@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 use App\Enums\CourseSemester;
+use App\Enums\CreditTransactionType;
 use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
 use App\Models\Costume;
 use App\Models\Course;
+use App\Models\CreditGrant;
 use App\Models\DiscountCode;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
@@ -16,7 +18,6 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
-use App\Models\RestrictedCredit;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use Filament\Actions\Testing\TestAction;
@@ -452,15 +453,11 @@ it('shows limited use credit in the order summary', function () {
         'quantity' => 1,
     ]);
 
-    $giftCardType = GiftCardType::factory()
-        ->restrictedToProductType(ProductType::Course)
+    CreditGrant::factory()
+        ->for(auth()->user())
+        ->amount(3000)
+        ->restrictedTo(ProductType::Course)
         ->create();
-
-    RestrictedCredit::factory()->create([
-        'user_id' => auth()->id(),
-        'gift_card_type_id' => $giftCardType->id,
-        'balance' => 3000,
-    ]);
 
     livewire(Cart::class)
         ->assertSet('restrictedCreditAmount', 3000)
@@ -504,19 +501,25 @@ it('shows limited use credit reserved on a pending order in the order summary', 
         'quantity' => 2,
     ]);
 
-    $giftCardType = GiftCardType::factory()->create();
-
-    RestrictedCredit::factory()->create([
-        'user_id' => auth()->id(),
-        'gift_card_type_id' => $giftCardType->id,
-        'balance' => 0,
-    ]);
-
     $order = Order::factory()->create([
         'user_id' => auth()->id(),
         'subtotal' => 10000,
         'restricted_credit_applied' => 5000,
         'total' => 5000,
+    ]);
+    $grant = CreditGrant::factory()
+        ->for(auth()->user())
+        ->restrictedTo(ProductType::Course)
+        ->create([
+            'initial_amount' => 5000,
+            'remaining_amount' => 0,
+        ]);
+    $grant->transactions()->create([
+        'user_id' => auth()->id(),
+        'amount' => -5000,
+        'type' => CreditTransactionType::CheckoutDebit,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
     ]);
 
     OrderItem::factory()->create([
@@ -536,7 +539,7 @@ it('shows limited use credit reserved on a pending order in the order summary', 
 });
 
 it('shows applied store credit in the order summary', function () {
-    auth()->user()->update(['credit_balance' => 3000]);
+    CreditGrant::factory()->for(auth()->user())->amount(3000)->create();
 
     CartItem::factory()->create([
         'user_id' => auth()->id(),
@@ -566,6 +569,17 @@ it('shows store credit reserved on a pending order in the order summary after it
         'subtotal' => 5000,
         'credit_applied' => 3000,
         'total' => 2000,
+    ]);
+    $grant = CreditGrant::factory()->for(auth()->user())->create([
+        'initial_amount' => 3000,
+        'remaining_amount' => 0,
+    ]);
+    $grant->transactions()->create([
+        'user_id' => auth()->id(),
+        'amount' => -3000,
+        'type' => CreditTransactionType::CheckoutDebit,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
     ]);
 
     OrderItem::factory()->create([

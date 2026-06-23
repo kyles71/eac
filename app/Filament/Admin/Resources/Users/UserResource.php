@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Users;
 
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
 use App\Filament\Admin\Resources\Users\Pages\ViewUser;
+use App\Filament\Admin\Resources\Users\RelationManagers\CreditGrantsRelationManager;
 use App\Filament\Admin\Resources\Users\Schemas\UserForm;
 use App\Filament\Admin\Resources\Users\Schemas\UserInfolist;
 use App\Filament\Admin\Resources\Users\Tables\UsersTable;
@@ -54,7 +55,7 @@ final class UserResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            CreditGrantsRelationManager::class,
         ];
     }
 

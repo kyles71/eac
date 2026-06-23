@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
-use App\Enums\CreditTransactionType;
 use App\Enums\OrderStatus;
 use App\Models\Order;
+use App\Services\CreditLedgerService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +16,7 @@ final readonly class CancelOrder
 {
     public function __construct(
         private StripeServiceContract $stripeService,
+        private CreditLedgerService $creditLedger,
     ) {}
 
     public function handle(Order $order): bool
@@ -27,29 +28,8 @@ final readonly class CancelOrder
                 return false;
             }
 
-            /** @var \App\Models\User $user */
-            $user = $order->user;
-
-            // Reverse store credit
-            if ($order->credit_applied > 0) {
-                $user->adjustCredit(
-                    $order->credit_applied,
-                    CreditTransactionType::Refund,
-                    $order,
-                    "Reversed credit for cancelled order #{$order->id}",
-                );
-            }
-
-            // Reverse restricted credit
-            if ($order->restricted_credit_applied > 0) {
-                $user->reverseRestrictedCredit($order->restricted_credit_applied);
-
-                $user->adjustCredit(
-                    0,
-                    CreditTransactionType::Refund,
-                    $order,
-                    "Reversed limited use credit for cancelled order #{$order->id}",
-                );
+            if ($order->credit_applied > 0 || $order->restricted_credit_applied > 0) {
+                $this->creditLedger->restoreOrder($order);
             }
 
             // Decrement discount code usage

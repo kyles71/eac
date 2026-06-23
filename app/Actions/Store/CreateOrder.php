@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\HasCapacity;
-use App\Enums\CreditTransactionType;
 use App\Enums\OrderStatus;
 use App\Enums\ProductAvailabilityStatus;
 use App\Enums\ProductQuestionType;
@@ -16,6 +15,7 @@ use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\User;
+use App\Services\CreditLedgerService;
 use App\Services\ProductAvailabilityService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlanFee;
@@ -30,6 +30,7 @@ final class CreateOrder
         private readonly SendGiftCardDeliveryEmails $sendGiftCardDeliveryEmails,
         private readonly SendOrderReceipt $sendOrderReceipt,
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
+        private readonly CreditLedgerService $creditLedger,
     ) {}
 
     public function handle(
@@ -149,51 +150,20 @@ final class CreateOrder
                 $discountCode->increment('times_used');
             }
 
-            // Apply restricted credits to eligible items
-            $restrictedCreditTotal = 0;
-            $order->loadMissing('orderItems.product.productable');
-
-            /** @var \App\Models\OrderItem $orderItem */
-            foreach ($order->orderItems as $orderItem) {
-                if ($total <= 0) {
-                    break;
-                }
-
-                /** @var Product $product */
-                $product = $orderItem->product;
-                $itemTotal = $orderItem->total_price;
-
-                $availableRestricted = $user->getRestrictedCreditForProduct($product);
-
-                if ($availableRestricted > 0) {
-                    $applicableAmount = min($availableRestricted, $itemTotal, $total);
-                    $actualDebited = $user->applyRestrictedCredit($product, $applicableAmount);
-
-                    if ($actualDebited > 0) {
-                        $restrictedCreditTotal += $actualDebited;
-                        $total = max(0, $total - $actualDebited);
-                    }
-                }
-            }
+            $restrictedCreditTotal = $this->creditLedger->applyRestrictedToOrder($order);
 
             if ($restrictedCreditTotal > 0) {
+                $total = max(0, $total - $restrictedCreditTotal);
+
                 $order->update([
                     'restricted_credit_applied' => $restrictedCreditTotal,
                     'total' => $total,
                 ]);
-
-                $user->adjustCredit(
-                    0,
-                    CreditTransactionType::CheckoutDebit,
-                    $order,
-                    "Limited use credit applied to order #{$order->id}",
-                );
             }
 
             // Apply store credit if requested
             if ($creditToApply > 0 && $total > 0) {
-                $user->refresh();
-                $actualCredit = min($creditToApply, $total, $user->credit_balance);
+                $actualCredit = $this->creditLedger->applyUnrestrictedToOrder($order, $creditToApply);
 
                 if ($actualCredit > 0) {
                     $total = max(0, $total - $actualCredit);
@@ -202,13 +172,6 @@ final class CreateOrder
                         'credit_applied' => $actualCredit,
                         'total' => $total,
                     ]);
-
-                    $user->adjustCredit(
-                        -$actualCredit,
-                        CreditTransactionType::CheckoutDebit,
-                        $order,
-                        'Applied to order #'.$order->id,
-                    );
                 }
             }
 
