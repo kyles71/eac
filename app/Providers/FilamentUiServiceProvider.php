@@ -193,6 +193,12 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->slideOver();
         });
 
+        Action::configureUsing(function (Action $action) {
+            $action
+                ->stickyModalHeader()
+                ->stickyModalFooter();
+        });
+
         // various table presets
         Table::configureUsing(function (Table $table) {
             return $table
