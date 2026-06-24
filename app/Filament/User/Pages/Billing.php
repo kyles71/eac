@@ -629,7 +629,7 @@ final class Billing extends Page
                                         ->label('Due Date')
                                         ->state($installment->due_date)
                                         ->date('M j, Y')
-                                        ->timezone(config('app.display_timezone', config('app.timezone'))),
+                                        ->timezone($this->displayTimezone()),
                                     TextEntry::make("installment_{$installment->id}_status")
                                         ->label('Status')
                                         ->state($installment->status)
@@ -638,6 +638,7 @@ final class Billing extends Page
                                         ->label('Paid At')
                                         ->state($installment->paid_at)
                                         ->dateTime('M j, Y')
+                                        ->timezone($this->displayTimezone())
                                         ->placeholder('—'),
                                 ]),
                         ])
@@ -646,6 +647,11 @@ final class Billing extends Page
             )
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close');
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     /**

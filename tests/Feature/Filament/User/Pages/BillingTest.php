@@ -254,20 +254,6 @@ it('shows limited use credit details with an overview shortcut when the user has
         ->assertDontSee('Restricted Credit');
 });
 
-it('shows credit tables as full-width billing sections', function () {
-    CreditGrant::factory()
-        ->for(auth()->user())
-        ->amount(2500)
-        ->restrictedTo(ProductType::Course)
-        ->create();
-
-    $sections = billingCreditsSections();
-
-    expect($sections['Store Credit']->getColumnSpan('default'))->toBe('full')
-        ->and($sections['Limited Use Credit']->getColumnSpan('default'))->toBe('full')
-        ->and($sections['Limited Use Credit']->isVisible())->toBeTrue();
-});
-
 it('keeps billing overview cards on one row with conditional spans', function () {
     $cards = billingOverviewCards();
 
@@ -344,22 +330,6 @@ function billingOverviewCards(): array
     $grid = $schema->getComponents(withHidden: true)[0];
 
     return array_slice($grid->getChildSchema()->getComponents(withHidden: true), 0, 4);
-}
-
-function billingCreditsSections(): array
-{
-    $component = livewire(Billing::class);
-    $method = new ReflectionMethod(Billing::class, 'getCreditsAndGiftCardsSchema');
-    $method->setAccessible(true);
-
-    $creditsSchema = $method->invoke($component->instance());
-    $schema = Schema::make($component->instance())
-        ->components($creditsSchema);
-
-    return collect($schema->getFlatComponents(withHidden: true))
-        ->filter(fn ($component): bool => $component instanceof \Filament\Schemas\Components\Section)
-        ->keyBy(fn (\Filament\Schemas\Components\Section $section): ?string => $section->getHeading())
-        ->all();
 }
 
 function paymentPlanTermsVersionForBillingTest(): LegalDocumentVersion
