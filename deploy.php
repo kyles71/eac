@@ -15,7 +15,6 @@ add('shared_dirs', ['storage']);
 
 set('http_user', 'www-data');
 set('writable_mode', 'acl');
-set('writable_use_sudo', true);
 set('writable_recursive', true);
 
 // Hosts
