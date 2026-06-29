@@ -21,28 +21,15 @@ final class ListEnrollments extends ListRecords
 
         return [
             'open' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('student_id')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->open()),
             'active' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->join('courses', 'courses.id', '=', 'enrollments.course_id')
-                    ->join('events', 'events.course_id', '=', 'courses.id')
-                    ->whereNotNull('enrollments.student_id')
-                    ->where('courses.start_time', '<', $now)
-                    ->where('events.start_time', '>', $now)
-                    ->groupBy('courses.id')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->active($now)),
             'future' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('student_id')
-                    ->whereRelation('course', 'start_time', '>', $now)),
+                ->modifyQueryUsing(fn (Builder $query) => $query->future($now)),
             'past' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->select('enrollments.*')
-                    ->join('courses', 'courses.id', '=', 'enrollments.course_id')
-                    ->leftJoin('events', function ($join) use ($now): void {
-                        $join->on('events.course_id', '=', 'enrollments.id')
-                            ->where('events.start_time', '>', $now);
-                    })
-                    ->whereNotNull('enrollments.student_id')
-                    ->where('courses.start_time', '<', $now)
-                    ->whereNull('events.id')
-                    ->groupBy('enrollments.id')),
+                ->modifyQueryUsing(fn (Builder $query) => $query
+                    ->whereNotNull('student_id')
+                    ->past($now)),
             'all' => Tab::make(),
             // ->modifyQueryUsing(fn (Builder $query) => $query->where('active', false)),
         ];

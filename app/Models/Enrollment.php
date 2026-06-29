@@ -63,20 +63,13 @@ final class Enrollment extends Model
             $date = Carbon::now();
         }
 
-        $query->join('courses', 'courses.id', '=', 'enrollments.course_id')
-            ->join('events', 'events.course_id', '=', 'courses.id')
-            ->whereNotNull('enrollments.student_id')
-            ->where('courses.start_time', '<', $date)
-            ->where(function (Builder $query) use ($date): void {
-                $query
-                    ->where('events.end_time', '>=', $date)
-                    ->orWhere(function (Builder $query) use ($date): void {
-                        $query
-                            ->whereNull('events.end_time')
-                            ->where('events.start_time', '>=', $date);
-                    });
-            })
-            ->groupBy('enrollments.id');
+        $query->whereNotNull('student_id')
+            ->whereHas(
+                'course',
+                fn (Builder $query): Builder => $query
+                    ->where('start_time', '<', $date)
+                    ->notConcluded($date)
+            );
     }
 
     #[Scope]
