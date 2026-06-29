@@ -170,6 +170,47 @@ it('marks installment as failed when auto-charge fails', function () {
     });
 });
 
+it('continues processing installments when a charge throws a runtime throwable', function () {
+    $plans = PaymentPlan::factory()->count(2)->create([
+        'stripe_customer_id' => 'cus_runtime_throwable',
+        'stripe_payment_method_id' => 'pm_runtime_throwable',
+    ]);
+
+    $firstInstallment = Installment::factory()->dueToday()->create([
+        'payment_plan_id' => $plans[0]->id,
+    ]);
+
+    $secondInstallment = Installment::factory()->dueToday()->create([
+        'payment_plan_id' => $plans[1]->id,
+    ]);
+
+    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_runtime_recovered', 'status' => 'succeeded']);
+    $attempts = 0;
+
+    $this->mockStripe
+        ->shouldReceive('chargePaymentMethod')
+        ->twice()
+        ->andReturnUsing(function () use (&$attempts, $paymentIntent): PaymentIntent {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new TypeError('Stripe SDK returned an unexpected shape.');
+            }
+
+            return $paymentIntent;
+        });
+
+    $result = app(ProcessInstallments::class)->handle();
+
+    expect($result['processed'])->toBe(2)
+        ->and($result['succeeded'])->toBe(1)
+        ->and($result['failed'])->toBe(1)
+        ->and($firstInstallment->refresh()->status)->toBe(InstallmentStatus::Failed)
+        ->and($firstInstallment->retry_count)->toBe(1)
+        ->and($secondInstallment->refresh()->status)->toBe(InstallmentStatus::Paid)
+        ->and($secondInstallment->stripe_payment_intent_id)->toBe('pi_runtime_recovered');
+});
+
 it('retries failed installments', function () {
     $plan = PaymentPlan::factory()->create([
         'stripe_customer_id' => 'cus_test_123',

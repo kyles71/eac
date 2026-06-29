@@ -8,7 +8,6 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
-use Exception;
 use Illuminate\Support\Facades\Log;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\CardException;
@@ -83,7 +82,7 @@ final class ProcessInstallments
 
         try {
             return $this->processAutoCharge($installment, $paymentPlan);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error("Failed to process installment #{$installment->id}: {$e->getMessage()}");
             $failureReason = $this->customerFailureReason($e);
             $failureCode = $this->failureCode($e);
@@ -152,7 +151,7 @@ final class ProcessInstallments
                     'order_id' => (string) $paymentPlan->order_id,
                 ],
             );
-        } catch (Exception $exception) {
+        } catch (Throwable $exception) {
             Log::error("Failed to charge installment #{$installment->id}: {$exception->getMessage()}");
             $this->markFailedAndNotify(
                 installment: $installment,
@@ -254,7 +253,7 @@ final class ProcessInstallments
         }
     }
 
-    private function customerFailureReason(Exception $exception): string
+    private function customerFailureReason(Throwable $exception): string
     {
         if ($exception instanceof CardException) {
             $message = $exception->getError()?->message;
@@ -284,7 +283,7 @@ final class ProcessInstallments
         }
     }
 
-    private function failureCode(Exception $exception): ?string
+    private function failureCode(Throwable $exception): ?string
     {
         if ($exception instanceof CardException && is_string($exception->getDeclineCode())) {
             return $exception->getDeclineCode();

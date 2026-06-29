@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Deployer;
 
 require 'recipe/laravel.php';
@@ -9,6 +12,11 @@ set('repository', 'https://github.com/kyles71/eac.git');
 
 add('shared_files', ['.env']);
 add('shared_dirs', ['storage']);
+
+set('http_user', 'www-data');
+set('writable_mode', 'acl');
+set('writable_use_sudo', true);
+set('writable_recursive', true);
 
 // Hosts
 host(getenv('DEPLOY_HOST'))
