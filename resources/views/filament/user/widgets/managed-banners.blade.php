@@ -3,8 +3,11 @@
 @endphp
 
 <div
+    @class([
+        'hidden' => $banners->isEmpty(),
+        'mt-2' => $banners->isNotEmpty(),
+    ])
     @if ($banners->isEmpty())
-        class="hidden"
         aria-hidden="true"
     @endif
     data-managed-banners-empty="{{ $banners->isEmpty() ? 'true' : 'false' }}"

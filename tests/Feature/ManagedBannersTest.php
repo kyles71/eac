@@ -298,7 +298,7 @@ it('renders scoped managed banners and persists dismissals per user', function (
         ->assertSee('Global notice');
 });
 
-it('collapses empty managed banner hook roots', function (): void {
+it('collapses empty managed banner hook roots and spaces populated roots', function (): void {
     $owner = User::factory()->isOwner()->create();
     $this->actingAs($owner);
 
@@ -322,6 +322,7 @@ it('collapses empty managed banner hook roots', function (): void {
         'scopes' => [Dashboard::class],
     ])
         ->assertSee('Visible hook root')
+        ->assertSeeHtml('class="mt-2"')
         ->assertSeeHtml('data-managed-banners-empty="false"')
         ->assertDontSeeHtml('data-managed-banners-empty="true"');
 });

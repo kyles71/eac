@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers\Filament;
 
 use App\Filament\User\Pages\Auth\Register;
@@ -7,7 +9,7 @@ use App\Filament\User\Pages\Dashboard;
 use App\Http\Middleware\UserBanners;
 use Filament\Panel;
 
-class UserPanelProvider extends BasePanelProvider
+final class UserPanelProvider extends BasePanelProvider
 {
     public function panel(Panel $panel): Panel
     {
@@ -23,7 +25,7 @@ class UserPanelProvider extends BasePanelProvider
             ->registration(Register::class)
             ->middleware([
                 UserBanners::class,
-            ])
+            ], isPersistent: true)
             ->pages([
                 Dashboard::class,
             ])
