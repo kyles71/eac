@@ -36,6 +36,7 @@ abstract class BasePanelProvider extends PanelProvider
                     ->recoverable(),
             ])
             ->spa()
+            ->darkMode(false)
             ->unsavedChangesAlerts()
             ->databaseTransactions()
             ->sidebarCollapsibleOnDesktop()
