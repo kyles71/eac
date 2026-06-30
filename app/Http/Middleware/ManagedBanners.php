@@ -10,10 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-final class UserBanners
+final class ManagedBanners
 {
-    private const string CHECKOUT_SUCCESS_ROUTE = 'filament.user.pages.checkout.success';
-
     /**
      * Handle an incoming request.
      *
@@ -21,12 +19,8 @@ final class UserBanners
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! Auth::check()) {
-            return $next($request);
-        }
-
-        if (! $request->routeIs(self::CHECKOUT_SUCCESS_ROUTE)) {
-            app(UserBannerRenderHookRegistrarService::class)->registerSystemAttentionBanners();
+        if (Auth::check()) {
+            app(UserBannerRenderHookRegistrarService::class)->registerManagedBanners();
         }
 
         return $next($request);

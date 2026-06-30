@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Form;
 use App\Models\FormUser;
+use App\Models\ManagedBanner;
 use App\Models\Order;
 use App\Models\Student;
 use Filament\Facades\Filament;
@@ -54,12 +55,20 @@ it('does not render global banners on the checkout success page', function (): v
         'form_id' => $waiverForm->id,
         'user_id' => auth()->id(),
     ]);
+    ManagedBanner::factory()
+        ->forScope(CheckoutSuccess::class)
+        ->create([
+            'title' => 'Checkout success notice',
+            'message' => 'This managed banner is scoped to the order confirmation page.',
+        ]);
 
     $this->get(CheckoutSuccess::getUrl().'?order_id='.$order->id)
         ->assertOk()
         ->assertDontSeeText('Complete Enrollments')
         ->assertDontSeeText('Waivers Needed')
-        ->assertDontSeeText('Forms Needed');
+        ->assertDontSeeText('Forms Needed')
+        ->assertSeeText('Checkout success notice')
+        ->assertSeeText('This managed banner is scoped to the order confirmation page.');
 });
 
 it('refreshes enrollment and form banners without a page navigation', function (): void {

@@ -19,6 +19,7 @@ use App\Filament\Admin\Resources\FormUsers\FormUserResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
+use App\Filament\Admin\Resources\ManagedBanners\ManagedBannerResource;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
@@ -240,6 +241,9 @@ return [
             ],
             LegalDocumentResource::class => [
                 'viewAny', 'publish',
+            ],
+            ManagedBannerResource::class => [
+                'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
             OrderResource::class => [
                 'viewAny', 'view',

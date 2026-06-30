@@ -18,6 +18,7 @@ use App\Filament\Admin\Resources\FormUsers\FormUserResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
+use App\Filament\Admin\Resources\ManagedBanners\ManagedBannerResource;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
@@ -60,6 +61,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         GiftCardTypeResource::class => ['viewAny', 'create', 'delete', 'deleteAny'],
         HolidayResource::class => $fiveAbilities,
         LegalDocumentResource::class => ['viewAny', 'publish'],
+        ManagedBannerResource::class => $fiveAbilities,
         OrderResource::class => ['viewAny', 'view'],
         PaymentPlanResource::class => ['viewAny', 'view'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],

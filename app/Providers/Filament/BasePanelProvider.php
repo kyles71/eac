@@ -6,6 +6,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Shared\Pages\Auth\Login;
 use App\Filament\Shared\Pages\Profile\Profile;
+use App\Http\Middleware\ManagedBanners;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -61,6 +62,7 @@ abstract class BasePanelProvider extends PanelProvider
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,
+                ManagedBanners::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])

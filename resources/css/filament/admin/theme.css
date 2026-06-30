@@ -6,4 +6,15 @@
 @source '../../../../resources/views/filament/admin/**/*';
 @source '../../../../vendor/charlieetienne/filament-font-picker/resources/**/*.blade.php';
 @source '../../../../vendor/awcodes/mason/resources/**/*.blade.php';
+@source '../../../../vendor/guava/filament-icon-picker/resources/**/*';
 @source '../../../../vendor/kyle/filament-mail-manager/resources/**/*.blade.php';
+
+@media (min-width: 1280px) {
+    .managed-banner-preview-pane {
+        position: sticky;
+        top: 1rem;
+        align-self: start;
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+    }
+}
