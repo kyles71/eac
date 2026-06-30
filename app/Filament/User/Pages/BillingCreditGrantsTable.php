@@ -18,6 +18,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 final class BillingCreditGrantsTable extends Component implements HasActions, HasSchemas, HasTable
@@ -30,6 +31,8 @@ final class BillingCreditGrantsTable extends Component implements HasActions, Ha
     public const string TYPE_STORE = 'store';
 
     public const string TYPE_LIMITED_USE = 'limited-use';
+
+    public const string REFRESH_EVENT = 'billing-credit-grants-updated';
 
     public string $type = self::TYPE_STORE;
 
@@ -61,6 +64,9 @@ final class BillingCreditGrantsTable extends Component implements HasActions, Ha
     {
         return view('filament.user.pages.billing-credit-grants-table');
     }
+
+    #[On(self::REFRESH_EVENT)]
+    public function refreshCreditGrants(): void {}
 
     /**
      * @return Builder<CreditGrant>

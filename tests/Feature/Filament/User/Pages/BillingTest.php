@@ -12,6 +12,7 @@ use App\Filament\User\Pages\BillingCreditGrantsTable;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
+use App\Models\GiftCardType;
 use App\Models\Installment;
 use App\Models\LegalDocumentVersion;
 use App\Models\Order;
@@ -252,6 +253,70 @@ it('shows limited use credit details with an overview shortcut when the user has
         ->assertSee('tab=credits', false)
         ->assertSee('limited-use-credits', false)
         ->assertDontSee('Restricted Credit');
+});
+
+it('refreshes the credits tab after redeeming a store gift card', function () {
+    $giftCard = GiftCard::factory()->amount(5000)->create([
+        'code' => 'STORE-CARD-50',
+        'purchased_by_user_id' => auth()->id(),
+    ]);
+
+    $storeCreditsTable = livewire(BillingCreditGrantsTable::class, ['type' => BillingCreditGrantsTable::TYPE_STORE])
+        ->assertSee('No store credit');
+
+    livewire(Billing::class)
+        ->assertSee('STORE-CARD-50')
+        ->callAction(
+            TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+            ['code' => $giftCard->code],
+        )
+        ->assertNotified('Gift card redeemed!')
+        ->assertDispatched(BillingCreditGrantsTable::REFRESH_EVENT)
+        ->assertSee('No unredeemed purchased gift cards.')
+        ->assertSee('$50.00');
+
+    $storeCreditsTable
+        ->dispatch(BillingCreditGrantsTable::REFRESH_EVENT)
+        ->assertDontSee('No store credit')
+        ->assertSee('$50.00')
+        ->assertSee('Redeemed gift card STORE-CARD-50');
+});
+
+it('refreshes the credits tab after redeeming a limited use gift card', function () {
+    $giftCardType = GiftCardType::factory()
+        ->restrictedToProductType(ProductType::Course)
+        ->denomination(5000)
+        ->create();
+    $giftCard = GiftCard::factory()
+        ->forType($giftCardType)
+        ->amount(5000)
+        ->create([
+            'code' => 'COURSE-CARD-50',
+            'purchased_by_user_id' => auth()->id(),
+        ]);
+
+    $limitedUseCreditsTable = livewire(BillingCreditGrantsTable::class, ['type' => BillingCreditGrantsTable::TYPE_LIMITED_USE])
+        ->assertSee('No limited use credit');
+
+    livewire(Billing::class)
+        ->assertSee('COURSE-CARD-50')
+        ->assertDontSee('Limited Use Credit')
+        ->callAction(
+            TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+            ['code' => $giftCard->code],
+        )
+        ->assertNotified('Gift card redeemed!')
+        ->assertDispatched(BillingCreditGrantsTable::REFRESH_EVENT)
+        ->assertSee('No unredeemed purchased gift cards.')
+        ->assertSee('Limited Use Credit')
+        ->assertSee('$50.00');
+
+    $limitedUseCreditsTable
+        ->dispatch(BillingCreditGrantsTable::REFRESH_EVENT)
+        ->assertDontSee('No limited use credit')
+        ->assertSee('$50.00')
+        ->assertSee('Redeemed gift card COURSE-CARD-50 (Course products only)')
+        ->assertSee('Course products only');
 });
 
 it('keeps billing overview cards on one row with conditional spans', function () {

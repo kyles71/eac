@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Actions;
 
 use App\Actions\Store\RedeemGiftCard;
+use App\Models\GiftCard;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -13,6 +15,8 @@ use InvalidArgumentException;
 
 final class RedeemGiftCardAction extends Action
 {
+    protected ?Closure $afterSuccessfulRedemption = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -30,6 +34,12 @@ final class RedeemGiftCardAction extends Action
                 try {
                     $action = new RedeemGiftCard;
                     $giftCard = $action->handle($data['code'], auth()->user());
+
+                    $this->evaluate(
+                        $this->afterSuccessfulRedemption,
+                        namedInjections: ['giftCard' => $giftCard],
+                        typedInjections: [GiftCard::class => $giftCard],
+                    );
 
                     Notification::make()
                         ->title('Gift card redeemed!')
@@ -49,5 +59,12 @@ final class RedeemGiftCardAction extends Action
     public static function getDefaultName(): ?string
     {
         return 'redeemGiftCard';
+    }
+
+    public function afterSuccessfulRedemption(?Closure $callback): static
+    {
+        $this->afterSuccessfulRedemption = $callback;
+
+        return $this;
     }
 }

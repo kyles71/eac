@@ -664,17 +664,20 @@ final class Billing extends Page
 
         return [
             Actions::make([
-                RedeemGiftCardAction::make(),
+                RedeemGiftCardAction::make()
+                    ->afterSuccessfulRedemption(function (): void {
+                        $this->refreshBillingContent(refreshPaymentMethods: false);
+                    }),
             ]),
             Section::make('Unredeemed Gift Cards')
                 ->schema($this->giftCardSchema(redeemed: false)),
             EmbeddedTable::make(BillingCreditGrantsTable::class, [
-                    'type' => BillingCreditGrantsTable::TYPE_STORE,
-                ])
+                'type' => BillingCreditGrantsTable::TYPE_STORE,
+            ])
                 ->columnSpanFull(),
             EmbeddedTable::make(BillingCreditGrantsTable::class, [
-                    'type' => BillingCreditGrantsTable::TYPE_LIMITED_USE,
-                ])
+                'type' => BillingCreditGrantsTable::TYPE_LIMITED_USE,
+            ])
                 ->extraAttributes([
                     'id' => 'limited-use-credits',
                     'tabindex' => '-1',
@@ -837,10 +840,14 @@ final class Billing extends Page
         }
     }
 
-    private function refreshBillingContent(): void
+    private function refreshBillingContent(bool $refreshPaymentMethods = true): void
     {
-        $this->refreshPaymentMethods(notifyOnError: true);
+        if ($refreshPaymentMethods) {
+            $this->refreshPaymentMethods(notifyOnError: true);
+        }
+
         $this->cacheSchema('content', null);
+        $this->dispatch(BillingCreditGrantsTable::REFRESH_EVENT)->to(BillingCreditGrantsTable::class);
     }
 
     private function paymentMethodBelongsToUser(string $paymentMethodId): bool
