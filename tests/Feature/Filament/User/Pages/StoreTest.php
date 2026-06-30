@@ -2,14 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Enums\ManagedBannerRenderLocation;
 use App\Enums\StoreView;
 use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\ManagedBanner;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Services\UserBannerRenderHookRegistrarService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
@@ -28,6 +31,22 @@ beforeEach(function () {
 it('can render the store page', function () {
     livewire(Store::class)
         ->assertOk();
+});
+
+it('keeps scoped managed banners visible after the store table loads', function (): void {
+    app(UserBannerRenderHookRegistrarService::class)->registerManagedBanners();
+
+    ManagedBanner::factory()
+        ->forScope(Store::class)
+        ->create([
+            'render_location' => ManagedBannerRenderLocation::PageStart,
+            'title' => 'Store table notice',
+        ]);
+
+    livewire(Store::class)
+        ->assertSee('Store table notice')
+        ->loadTable()
+        ->assertSee('Store table notice');
 });
 
 it('defaults to list view', function () {

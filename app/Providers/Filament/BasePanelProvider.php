@@ -66,6 +66,9 @@ abstract class BasePanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->persistentMiddleware([
+                ManagedBanners::class,
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ]);

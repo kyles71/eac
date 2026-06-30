@@ -13,6 +13,8 @@ use App\Filament\User\Pages\Cart;
 use App\Filament\User\Pages\CheckoutSuccess;
 use App\Filament\User\Pages\Dashboard;
 use App\Filament\User\Widgets\ManagedBanners;
+use App\Http\Middleware\ManagedBanners as ManagedBannersMiddleware;
+use App\Http\Middleware\UserBanners as UserBannersMiddleware;
 use App\Models\ManagedBanner;
 use App\Models\User;
 use App\Services\ManagedBannerDestinationService;
@@ -20,6 +22,7 @@ use App\Services\ManagedBannerScopeService;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Guava\IconPicker\Forms\Components\IconPicker;
+use Livewire\Livewire;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
@@ -73,6 +76,14 @@ it('filters visible managed banners by schedule audience scope location and dism
         ->all();
 
     expect($titles)->toBe([]);
+});
+
+it('keeps banner hook middleware persistent for Livewire updates', function (): void {
+    $persistentMiddleware = Livewire::getPersistentMiddleware();
+
+    expect($persistentMiddleware)
+        ->toContain(ManagedBannersMiddleware::class)
+        ->toContain(UserBannersMiddleware::class);
 });
 
 it('manages banners from the admin panel', function (): void {
