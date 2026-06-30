@@ -20,6 +20,7 @@ use App\Models\FormUser;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Installment;
+use App\Models\LegalDocument;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlan;
@@ -29,6 +30,10 @@ use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use App\Support\LegalDocuments\HealthSafetyPolicy;
+use App\Support\LegalDocuments\PaymentPlanTerms;
+use App\Support\LegalDocuments\PortalTerms;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
@@ -51,6 +56,12 @@ it('seeds the development database with all models', function (): void {
         ->and(Calendar::query()->whereIn('slug', Calendar::SYSTEM_SLUGS)->whereNotNull('access')->count())->toBe(0)
         ->and(Calendar::query()->whereIn('slug', Calendar::SYSTEM_SLUGS)->whereHas('audiences')->count())->toBe(0)
         ->and(Form::count())->toBe(2)
+        ->and(LegalDocument::query()->whereIn('key', [
+            HealthSafetyPolicy::KEY,
+            PaymentPlanTerms::KEY,
+            PortalTerms::KEY,
+            TextMessageUpdatesPolicy::KEY,
+        ])->count())->toBe(4)
         ->and(Course::count())->toBeGreaterThanOrEqual(10)
         ->and(Product::count())->toBeGreaterThanOrEqual(20)
         ->and(Costume::count())->toBe(5)

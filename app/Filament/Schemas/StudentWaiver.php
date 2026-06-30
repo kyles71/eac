@@ -6,8 +6,11 @@ namespace App\Filament\Schemas;
 
 use App\Filament\User\Resources\Students\Schemas\StudentForm;
 use App\Models\FormUser;
+use App\Models\LegalDocumentVersion;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\LegalDocuments\HealthSafetyPolicy;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
@@ -22,12 +25,20 @@ use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 final class StudentWaiver
 {
+    private const string LINK_CLASSES = 'fi-link fi-size-sm fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-400';
+
     public static function configure(Schema $schema, bool $withRelationships = true): Schema
     {
+        $textMessageUpdatesPolicyVersion = TextMessageUpdatesPolicy::currentVersion();
+        $healthSafetyPolicyVersion = HealthSafetyPolicy::currentVersion();
+
         $studentSelection = Grid::make(2)
             ->columnSpanFull()
             ->schema([
@@ -107,7 +118,7 @@ final class StudentWaiver
                     ->required(),
                 Radio::make('wants_text_updates')
                     ->label('Enroll this phone number in EAC Text Message Updates?')
-                    ->helperText('Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.')
+                    ->helperText(self::textMessageUpdatesPolicyHelperText($textMessageUpdatesPolicyVersion))
                     ->boolean('Yes', 'No')
                     ->columnSpanFull()
                     ->required(),
@@ -162,7 +173,7 @@ final class StudentWaiver
                             ->required(),
                         Textarea::make('student_home_address')
                             ->label('Student Home Address')
-                            ->helperText('Please enter home address of the student.')
+                            ->aboveContent('Please enter home address of the student.')
                             ->rows(2)
                             ->columnSpanFull()
                             ->required(),
@@ -177,29 +188,36 @@ final class StudentWaiver
                             ->columnSpanFull(),
                         Textarea::make('allergies')
                             ->label('Please enter any allergies that your student has.')
-                            ->helperText('If none, please type "N/A".')
+                            ->aboveContent('If none, please type "N/A".')
                             ->rows(3)
                             ->columnSpanFull()
                             ->required(),
                         Textarea::make('medical_conditions')
                             ->label('Please enter any medical conditions your student is currently being treated for.')
-                            ->helperText('Examples: asthma, breathing problems, heart conditions, bone/joint/muscle conditions, conditions affecting eyesight/depth perception or hearing. If none, please type "N/A".')
+                            ->aboveContent('Examples: asthma, breathing problems, heart conditions, bone/joint/muscle conditions, conditions affecting eyesight/depth perception or hearing. If none, please type "N/A".')
                             ->rows(3)
                             ->columnSpanFull()
                             ->required(),
                         Textarea::make('past_injuries')
                             ->label('Please list any past injuries treated by a medical professional.')
-                            ->helperText('Examples: broken bones, concussions, fractures, dislocations. Please include date/year of injury. If none, please type "N/A".')
+                            ->aboveContent('Examples: broken bones, concussions, fractures, dislocations. Please include date/year of injury. If none, please type "N/A".')
                             ->rows(3)
                             ->columnSpanFull()
                             ->required(),
                         Textarea::make('medications')
                             ->label('Please list any medication the student may take/need during class.')
-                            ->helperText('Include over the counter and prescriptions. If none, please type "N/A".')
+                            ->aboveContent('Include over the counter and prescriptions. If none, please type "N/A".')
                             ->rows(3)
                             ->columnSpanFull()
                             ->required(),
-                        Text::make('As guardian of the aforementioned minor, I authorize the designated adult to administer general first aid treatment for minor injuries or illnesses and to seek professional emergency personnel for severe injury or illness. Elite Arts Company, Natalie Schweikert, Melissa Schwab, and the EAC Staff are not liable for medical treatment costs or injuries.')
+                        Text::make('Consent to Medical Treatment')
+                            ->weight(FontWeight::Bold)
+                            ->columnSpanFull(),
+                        Text::make('As the parent/legal guardian of the minor dancer listed above, I authorize Elite Arts Company, LLC, its owners, staff, and instructors to provide general first aid for minor injuries or illnesses that may occur during EAC classes, events, rehearsals, performances, or other studio-related activities.')
+                            ->columnSpanFull(),
+                        Text::make('In the event of a more serious injury, illness, or medical emergency, I authorize EAC to contact emergency medical personnel and assist in obtaining medical care, transportation, and treatment as deemed necessary by emergency responders or licensed medical professionals.')
+                            ->columnSpanFull(),
+                        Text::make('I understand that Elite Arts Company, LLC, its owners, staff, instructors, and designated adults are not responsible for medical costs, emergency transportation, treatment expenses, injuries, illnesses, or medical conditions that may occur during or as a result of participation in EAC activities.')
                             ->columnSpanFull(),
                         Checkbox::make('medical_release_consent')
                             ->label('I consent')
@@ -207,7 +225,8 @@ final class StudentWaiver
                             ->required(),
                         Textarea::make('behavioral_notes')
                             ->label('Does your dancer have any attitude, behavioral, or social/emotional challenges that we should be aware of?')
-                            ->helperText('Examples: ADHD, OCD, anxiety, etc.')
+                            ->aboveContent('Examples: ADHD, OCD, anxiety, etc.')
+                            ->helperText('Please note: While we aim to adjust our instructional methods when possible to better support each dancer, we are unable to cater to every individual need. Our goal is to provide a positive learning environment for all, but certain challenges may require strategies beyond what we can accommodate within the class structure.')
                             ->rows(3)
                             ->columnSpanFull(),
                         self::signatureDateField(
@@ -220,10 +239,9 @@ final class StudentWaiver
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Text::make('Elite Arts Company follows State regulations and CDC recommendations in regards to health safety and precautionary measures. By answering below, you are providing your electronic signature.')
-                            ->columnSpanFull(),
                         Checkbox::make('health_safety_policy_consent')
                             ->label('I have read, understood, and agree to comply with the EAC Health & Safety Policy.')
+                            ->helperText(self::legalDocumentLink($healthSafetyPolicyVersion, 'View and print the EAC Health & Safety Policy'))
                             ->accepted()
                             ->columnSpanFull()
                             ->required(),
@@ -237,7 +255,19 @@ final class StudentWaiver
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Text::make('As guardian of the aforementioned minor, I grant my authorization and consent for Elite Arts Company, Melissa Schwab, and Natalie Schweikert to use photos or videos of my child during class times for promotional purposes. By answering below, you are providing your electronic signature.')
+                        Text::make('As the parent/guardian of the participating minor, I grant permission for Elite Arts Company, LLC, including its owners, staff, instructors, and authorized representatives, to photograph, video record, and/or otherwise capture media of my child during classes, rehearsals, performances, events, activities, and other studio-related programming.')
+                            ->columnSpanFull(),
+                        Text::make('I understand and agree that these photographs, videos, and other media may be used for promotional, advertising, educational, informational, or marketing purposes, including but not limited to: Elite Arts Company’s website, social media pages, printed materials, digital advertisements, newspaper features, videos, commercials, and other studio communications.')
+                            ->columnSpanFull(),
+                        Text::make('Elite Arts Company will make reasonable efforts to use media in a respectful and appropriate manner and will not knowingly use any photo, video, or footage that is inappropriate, unsafe, or harmful to my child’s reputation or image.')
+                            ->columnSpanFull(),
+                        Text::make('If my child is requested to participate in an interview or provide a personal statement for promotional use, I understand that I will be notified at least five days in advance and will have the opportunity to be present.')
+                            ->columnSpanFull(),
+                        Text::make('I understand that if I do not consent to this media release, my child may be excluded from certain optional media-related activities outside of regular class participation, such as Calendar Photo Day, Team Media Day, promotional photo shoots, or similar events.')
+                            ->columnSpanFull(),
+                        Text::make('I understand that neither I nor my child will receive monetary compensation for the use of any photographs, videos, or other media.')
+                            ->columnSpanFull(),
+                        Text::make('By signing, I acknowledge that I have read and understand this Media Release and grant permission for Elite Arts Company, LLC to use photos, videos, and other media of my child for studio-related promotional, advertising, and communication purposes.')
                             ->columnSpanFull(),
                         Radio::make('media_release_consent')
                             ->label('Media Release Consent')
@@ -251,16 +281,41 @@ final class StudentWaiver
             ]);
     }
 
+    private static function textMessageUpdatesPolicyHelperText(?LegalDocumentVersion $version): string|Htmlable
+    {
+        $helperText = 'Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.';
+
+        if ($version === null) {
+            return $helperText;
+        }
+
+        return new HtmlString(e($helperText).' '.self::legalDocumentLinkHtml($version, 'Click here to view our full Text Message Updates Policy'));
+    }
+
+    private static function legalDocumentLink(?LegalDocumentVersion $version, string $label): ?HtmlString
+    {
+        if ($version === null) {
+            return null;
+        }
+
+        return new HtmlString(self::legalDocumentLinkHtml($version, $label));
+    }
+
+    private static function legalDocumentLinkHtml(LegalDocumentVersion $version, string $label): string
+    {
+        return '<a class="'.self::LINK_CLASSES.'" href="'.e(route('legal-documents.versions.show', $version)).'" target="_blank" rel="noopener noreferrer">'.e($label).'</a>';
+    }
+
     private static function today(): string
     {
         return now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
     }
 
-    private static function signatureDateField(string $name, string $helperText): DatePicker
+    private static function signatureDateField(string $name, string $aboveContent): DatePicker
     {
         return DatePicker::make($name)
             ->label("Today's Date")
-            ->helperText($helperText)
+            ->aboveContent($aboveContent)
             ->required()
             ->default(fn (): string => self::today())
             ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)

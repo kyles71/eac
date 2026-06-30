@@ -6,16 +6,24 @@ namespace App\Http\Controllers;
 
 use App\Models\LegalDocumentAcceptance;
 use App\Models\LegalDocumentVersion;
+use App\Support\LegalDocuments\HealthSafetyPolicy;
 use App\Support\LegalDocuments\PortalTerms;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Contracts\View\View;
 
 final class LegalDocumentVersionController
 {
+    private const array PUBLIC_DOCUMENT_KEYS = [
+        HealthSafetyPolicy::KEY,
+        PortalTerms::KEY,
+        TextMessageUpdatesPolicy::KEY,
+    ];
+
     public function __invoke(LegalDocumentVersion $legalDocumentVersion): View
     {
         $legalDocumentVersion->loadMissing('document');
 
-        if ($legalDocumentVersion->published_at !== null && $legalDocumentVersion->document?->key === PortalTerms::KEY) {
+        if ($legalDocumentVersion->published_at !== null && in_array($legalDocumentVersion->document?->key, self::PUBLIC_DOCUMENT_KEYS, true)) {
             return view('legal-documents.version', [
                 'version' => $legalDocumentVersion,
             ]);

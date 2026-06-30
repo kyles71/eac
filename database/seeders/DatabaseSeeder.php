@@ -32,6 +32,8 @@ use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
 use App\Services\CreditLedgerService;
+use App\Support\LegalDocuments\HealthSafetyPolicy;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Spatie\Tags\Tag;
@@ -62,6 +64,22 @@ final class DatabaseSeeder extends Seeder
             'name' => 'Portal Terms & Conditions',
             'description' => 'Terms accepted before creating an account.',
         ]);
+
+        LegalDocument::query()->firstOrCreate(
+            ['key' => TextMessageUpdatesPolicy::KEY],
+            [
+                'name' => 'Text Message Updates Policy',
+                'description' => 'Policy for text message updates selected on student waivers.',
+            ],
+        );
+
+        LegalDocument::query()->firstOrCreate(
+            ['key' => HealthSafetyPolicy::KEY],
+            [
+                'name' => 'EAC Health & Safety Policy',
+                'description' => 'Health and safety policy accepted on student waivers.',
+            ],
+        );
 
         $adminUser = User::firstOrCreate(
             ['email' => config('app.default_user.email')],

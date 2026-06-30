@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Models\LegalDocument;
 use App\Models\LegalDocumentVersion;
+use App\Support\LegalDocuments\HealthSafetyPolicy;
 use App\Support\LegalDocuments\PortalTerms;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 
 it('publishes new versions without mutating the current published terms', function () {
     $document = LegalDocument::factory()->create();
@@ -51,6 +53,27 @@ it('allows anyone to view and print published portal terms', function () {
         ->assertSee('Print')
         ->assertSee('Portal Terms & Conditions');
 });
+
+it('allows anyone to view and print published waiver policy documents', function (string $key, string $title) {
+    auth()->logout();
+
+    $document = LegalDocument::factory()->create([
+        'key' => $key,
+    ]);
+
+    $version = LegalDocumentVersion::factory()->create([
+        'legal_document_id' => $document->id,
+        'title' => $title,
+    ]);
+
+    $this->get(route('legal-documents.versions.show', $version))
+        ->assertOk()
+        ->assertSee('Print')
+        ->assertSee($title);
+})->with([
+    'health safety policy' => [HealthSafetyPolicy::KEY, 'EAC Health & Safety Policy'],
+    'text message updates policy' => [TextMessageUpdatesPolicy::KEY, 'Text Message Updates Policy'],
+]);
 
 it('does not publicly expose other legal documents', function () {
     auth()->logout();

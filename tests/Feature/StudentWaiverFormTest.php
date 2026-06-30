@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\FormTypes;
 use App\Enums\MedicalWaiverStatus;
+use App\Filament\Schemas\StudentWaiver as StudentWaiverSchema;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
 use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
@@ -13,12 +14,22 @@ use App\Filament\User\Resources\Students\Pages\ViewStudent;
 use App\Models\EmergencyContact;
 use App\Models\Form;
 use App\Models\FormUser;
+use App\Models\LegalDocument;
+use App\Models\LegalDocumentVersion;
 use App\Models\ShowcaseParticipation;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use App\Support\LegalDocuments\HealthSafetyPolicy;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Repeater;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Schema;
 
 use function Pest\Laravel\assertDatabaseCount;
 use function Pest\Laravel\assertDatabaseHas;
@@ -156,6 +167,65 @@ it('defaults waiver signature dates to today', function (): void {
             'responseable.media_release_signed_on' => $today,
             'date_signed' => $today,
         ]);
+});
+
+it('links student waiver policy copy to published legal documents', function (): void {
+    $textMessageUpdatesPolicy = LegalDocument::factory()->create([
+        'key' => TextMessageUpdatesPolicy::KEY,
+    ]);
+    $textMessageUpdatesPolicyVersion = LegalDocumentVersion::factory()->create([
+        'legal_document_id' => $textMessageUpdatesPolicy->id,
+        'title' => 'Text Message Updates Policy',
+    ]);
+    $healthSafetyPolicy = LegalDocument::factory()->create([
+        'key' => HealthSafetyPolicy::KEY,
+    ]);
+    $healthSafetyPolicyVersion = LegalDocumentVersion::factory()->create([
+        'legal_document_id' => $healthSafetyPolicy->id,
+        'title' => 'EAC Health & Safety Policy',
+    ]);
+    $form = Form::factory()->create([
+        'form_type' => FormTypes::StudentWaiver,
+        'valid_until' => now()->addMonth(),
+    ]);
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $waiver = StudentWaiver::query()->create();
+    $formUser = FormUser::factory()
+        ->forStudent($student)
+        ->unsigned()
+        ->create([
+            'form_id' => $form->id,
+            'user_id' => auth()->id(),
+            'responseable_type' => $waiver->getMorphClass(),
+            'responseable_id' => $waiver->id,
+        ]);
+
+    $component = livewire(EditFormUser::class, ['record' => $formUser->id]);
+    $schema = StudentWaiverSchema::configure(Schema::make($component->instance()), withRelationships: false);
+    $emergencyContactsRepeater = $schema->getComponent(
+        fn (Component $component): bool => $component instanceof Repeater && $component->getName() === 'emergency_contacts',
+        withHidden: true,
+    );
+    $textMessageUpdatesField = $emergencyContactsRepeater?->getChildSchema()?->getComponent(
+        fn (Component $component): bool => $component instanceof Radio && $component->getName() === 'wants_text_updates',
+        withHidden: true,
+    );
+    $healthSafetyPolicyField = $schema->getComponent(
+        fn (Component $component): bool => $component instanceof Checkbox && $component->getName() === 'health_safety_policy_consent',
+        withHidden: true,
+    );
+
+    $textMessageUpdatesHelperHtml = (string) $textMessageUpdatesField?->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString();
+    $healthSafetyPolicyHelperHtml = (string) $healthSafetyPolicyField?->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString();
+
+    expect($textMessageUpdatesHelperHtml)
+        ->toContain('View and print the Text Message Updates Policy')
+        ->toContain(route('legal-documents.versions.show', $textMessageUpdatesPolicyVersion))
+        ->toContain('target="_blank"')
+        ->and($healthSafetyPolicyHelperHtml)
+        ->toContain('View and print the EAC Health &amp; Safety Policy')
+        ->toContain(route('legal-documents.versions.show', $healthSafetyPolicyVersion))
+        ->toContain('target="_blank"');
 });
 
 it('allows unassigned waivers to select only students from the authenticated account', function (): void {
