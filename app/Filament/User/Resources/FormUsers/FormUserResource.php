@@ -31,7 +31,7 @@ final class FormUserResource extends Resource
 
     protected static ?string $modelLabel = 'My Form';
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFolder;
 
     // protected static ?string $recordTitleAttribute = 'form.name';
 
