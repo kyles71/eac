@@ -25,7 +25,7 @@ final class NextPayment extends StatsOverviewWidget
         $user = auth()->user();
 
         return $user instanceof User
-            && app(DashboardAccountSummaryService::class)->nextInstallmentFor($user) instanceof Installment;
+            && app(DashboardAccountSummaryService::class)->nextInstallmentsFor($user)->isNotEmpty();
     }
 
     protected function getStats(): array
@@ -36,14 +36,15 @@ final class NextPayment extends StatsOverviewWidget
             return [];
         }
 
-        $nextInstallment = app(DashboardAccountSummaryService::class)->nextInstallmentFor($user);
+        $nextInstallments = app(DashboardAccountSummaryService::class)->nextInstallmentsFor($user);
+        $nextInstallment = $nextInstallments->first();
 
         if (! $nextInstallment instanceof Installment) {
             return [];
         }
 
         return [
-            Stat::make('Next Payment', format_money($nextInstallment->amount))
+            Stat::make('Next Payment', format_money((int) $nextInstallments->sum('amount')))
                 ->description('Due '.$nextInstallment->due_date->format('M j, Y'))
                 ->descriptionIcon(Heroicon::OutlinedCreditCard)
                 ->url(Billing::getUrl(['tab' => 'payment-plans'])),

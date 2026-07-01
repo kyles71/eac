@@ -238,6 +238,7 @@ final class Billing extends Page
         $restrictedCreditBalance = $accountSummary['limited_use_credit'];
         $openEnrollments = $accountSummary['open_enrollments'];
         $nextInstallment = $accountSummary['next_installment'];
+        $nextPaymentTotal = $accountSummary['next_payment_total'];
 
         $summaryColumnSpan = ['default' => 1, 'md' => $restrictedCreditBalance > 0 ? 3 : 4];
 
@@ -259,7 +260,7 @@ final class Billing extends Page
                             TextEntry::make('next_payment')
                                 ->hiddenLabel()
                                 ->state($nextInstallment !== null
-                                    ? format_money($nextInstallment->amount).' due '.$nextInstallment->due_date->format('M j, Y')
+                                    ? format_money($nextPaymentTotal).' due '.$nextInstallment->due_date->format('M j, Y')
                                     : 'No upcoming payments'),
                         ])
                         ->columnSpan($summaryColumnSpan),

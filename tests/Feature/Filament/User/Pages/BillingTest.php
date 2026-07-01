@@ -348,6 +348,44 @@ it('keeps billing overview cards on one row with conditional spans', function ()
         ->and($cards[3]->isVisible())->toBeTrue();
 });
 
+it('shows the total next payment due across payment plans on the same day', function (): void {
+    $nextDueDate = now()->addWeek();
+    $laterDueDate = now()->addWeeks(2);
+
+    $firstOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $secondOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $laterOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+
+    $firstPaymentPlan = PaymentPlan::factory()->create(['order_id' => $firstOrder->id]);
+    $secondPaymentPlan = PaymentPlan::factory()->create(['order_id' => $secondOrder->id]);
+    $laterPaymentPlan = PaymentPlan::factory()->create(['order_id' => $laterOrder->id]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $firstPaymentPlan->id,
+        'amount' => 4500,
+        'due_date' => $nextDueDate,
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $secondPaymentPlan->id,
+        'amount' => 3200,
+        'due_date' => $nextDueDate,
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $laterPaymentPlan->id,
+        'amount' => 9900,
+        'due_date' => $laterDueDate,
+    ]);
+
+    $nextPaymentEntry = billingOverviewCards()[1]
+        ->getChildSchema()
+        ->getComponents()[0];
+
+    expect($nextPaymentEntry->getState())
+        ->toBe('$77.00 due '.$nextDueDate->format('M j, Y'));
+});
+
 it('hides cancelled order details from billing tabs', function () {
     $completedOrder = Order::factory()->completed()->create([
         'user_id' => auth()->id(),

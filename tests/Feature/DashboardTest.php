@@ -282,3 +282,41 @@ it('shows next payment only for active payment plans requiring another payment',
     expect(NextPayment::canView())->toBeFalse()
         ->and((new ComingUp)->getColumnSpan())->toBe('full');
 });
+
+it('combines next payments due on the same day', function (): void {
+    $nextDueDate = now()->addWeek();
+    $laterDueDate = now()->addWeeks(2);
+
+    $firstOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $secondOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+    $laterOrder = Order::factory()->completed()->create(['user_id' => auth()->id()]);
+
+    $firstPaymentPlan = PaymentPlan::factory()->create(['order_id' => $firstOrder->id]);
+    $secondPaymentPlan = PaymentPlan::factory()->create(['order_id' => $secondOrder->id]);
+    $laterPaymentPlan = PaymentPlan::factory()->create(['order_id' => $laterOrder->id]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $firstPaymentPlan->id,
+        'amount' => 4500,
+        'due_date' => $nextDueDate,
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $secondPaymentPlan->id,
+        'amount' => 3200,
+        'due_date' => $nextDueDate,
+    ]);
+
+    Installment::factory()->create([
+        'payment_plan_id' => $laterPaymentPlan->id,
+        'amount' => 9900,
+        'due_date' => $laterDueDate,
+    ]);
+
+    livewire(NextPayment::class)
+        ->assertSee('Next Payment')
+        ->assertSee('$77.00')
+        ->assertSee('Due '.$nextDueDate->format('M j, Y'))
+        ->assertDontSee('2 payments due')
+        ->assertDontSee('$99.00');
+});
