@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\Storage;
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
+    config(['app.display_timezone' => 'America/Los_Angeles']);
+
     Filament::setCurrentPanel('user');
     Storage::fake('public');
     Storage::fake(MediaDisks::private());
@@ -27,7 +29,7 @@ beforeEach(function () {
         'capacity' => 5,
         'duration' => 60,
         'guest_teacher' => 'Misty Copeland',
-        'start_time' => CarbonImmutable::parse('2026-06-01 18:30:00'),
+        'start_time' => CarbonImmutable::parse('2026-06-01 18:30:00', 'UTC'),
     ]);
 
     $this->product = Product::factory()
@@ -49,7 +51,7 @@ it('can render an available product details page', function () {
 it('shows storefront details for linked products', function () {
     livewire(ProductDetails::class, ['product' => $this->product])
         ->assertSee('Start Time')
-        ->assertSee('Jun 1, 2026 6:30 PM')
+        ->assertSee('Jun 1, 2026 11:30 AM')
         ->assertSee('Duration')
         ->assertSee('60 minutes')
         ->assertSee('Teacher')

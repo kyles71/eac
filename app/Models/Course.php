@@ -162,7 +162,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
         return array_filter([
             'Semester' => $this->semester?->getLabel(),
-            'Start Time' => $this->start_time?->format('M j, Y g:i A'),
+            'Start Time' => $this->formattedStorefrontStartTime(),
             'Duration' => "{$this->duration} minutes",
             'Teacher' => $this->teacherDisplayName,
             'Available Spots' => $availableCapacity > 0 ? (string) $availableCapacity : 'Sold Out',
@@ -299,6 +299,14 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         }
 
         return $event->start_time?->gte($date) ?? false;
+    }
+
+    private function formattedStorefrontStartTime(): ?string
+    {
+        return $this->start_time
+            ?->copy()
+            ->timezone((string) config('app.display_timezone', config('app.timezone')))
+            ->format('M j, Y g:i A');
     }
 
     private function formattedTeacherNames(): ?string

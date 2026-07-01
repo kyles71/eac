@@ -74,6 +74,8 @@ it('can include linked item images in the gallery', function () {
 });
 
 it('delegates course storefront details to the linked course', function () {
+    config(['app.display_timezone' => 'America/Los_Angeles']);
+
     $teacher = User::factory()->create([
         'first_name' => 'Misty',
         'last_name' => 'Copeland',
@@ -81,14 +83,14 @@ it('delegates course storefront details to the linked course', function () {
     $course = Course::factory()->create([
         'capacity' => 8,
         'duration' => 90,
-        'start_time' => Carbon::parse('2027-01-15 18:30:00'),
+        'start_time' => Carbon::parse('2027-01-15 18:30:00', 'UTC'),
         'guest_teacher' => null,
     ]);
     $course->teachers()->sync([$teacher->id]);
     $product = Product::factory()->forCourse($course)->create();
 
     expect($product->storefrontDetails())->toMatchArray([
-        'Start Time' => 'Jan 15, 2027 6:30 PM',
+        'Start Time' => 'Jan 15, 2027 10:30 AM',
         'Duration' => '90 minutes',
         'Teacher' => 'Misty Copeland',
         'Available Spots' => '8',
