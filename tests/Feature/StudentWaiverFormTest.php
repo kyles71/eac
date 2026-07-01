@@ -219,7 +219,7 @@ it('links student waiver policy copy to published legal documents', function ():
     $healthSafetyPolicyHelperHtml = (string) $healthSafetyPolicyField?->getChildSchema(Field::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString();
 
     expect($textMessageUpdatesHelperHtml)
-        ->toContain('View and print the Text Message Updates Policy')
+        ->toContain('Click here to view our full Text Message Updates Policy')
         ->toContain(route('legal-documents.versions.show', $textMessageUpdatesPolicyVersion))
         ->toContain('target="_blank"')
         ->and($healthSafetyPolicyHelperHtml)

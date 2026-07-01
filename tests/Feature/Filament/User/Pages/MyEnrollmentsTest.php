@@ -45,6 +45,16 @@ it('groups row actions at the start of the table', function () {
 
 it('scopes the sticky action column styling to the my classes page', function () {
     $themeCss = file_get_contents(resource_path('css/filament/user/theme.css'));
+    $cssRuleContainingSelector = function (string $selector) use ($themeCss): string {
+        $matched = preg_match('/[^{}]*'.preg_quote($selector, '/').'[^{}]*\{[^}]*\}/', $themeCss, $matches);
+
+        expect($matched)->toBe(1);
+
+        return $matches[0];
+    };
+
+    $bodyActionCellSelector = '.fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child';
+    $headerActionCellSelector = '.fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child';
 
     expect((new MyEnrollments)->getPageClasses())
         ->toContain('fi-user-my-enrollments-page')
@@ -57,9 +67,23 @@ it('scopes the sticky action column styling to the my classes page', function ()
         ->toContain('z-index: 50');
 
     expect($themeCss)
-        ->toContain('.fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child')
-        ->toContain('.fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child')
+        ->toContain($bodyActionCellSelector)
+        ->toContain($headerActionCellSelector);
+
+    expect($cssRuleContainingSelector($headerActionCellSelector))
         ->toContain('z-index: 20')
+        ->not->toContain('z-index: 30');
+
+    expect($cssRuleContainingSelector($bodyActionCellSelector))
+        ->toContain('z-index: 10')
+        ->not->toContain('z-index: 30');
+
+    expect($cssRuleContainingSelector($bodyActionCellSelector.':focus-within'))
+        ->toContain('z-index: 40')
+        ->not->toContain('z-index: 30');
+
+    expect($cssRuleContainingSelector('body:has(.fi-user-my-enrollments-page) .fi-dropdown-panel'))
+        ->toContain('z-index: 50')
         ->not->toContain('z-index: 30');
 });
 
