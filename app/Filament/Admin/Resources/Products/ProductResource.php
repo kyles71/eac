@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Filament\Admin\Resources\Products\Schemas\ProductForm;
 use App\Filament\Admin\Resources\Products\Schemas\ProductInfolist;
 use App\Filament\Admin\Resources\Products\Tables\ProductsTable;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -52,6 +53,35 @@ final class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function normalizePricingData(array $data): array
+    {
+        if (($data['productable_type'] ?? null) !== GiftCardType::class || blank($data['productable_id'] ?? null)) {
+            return $data;
+        }
+
+        $giftCardType = GiftCardType::query()->find($data['productable_id']);
+
+        if (! $giftCardType instanceof GiftCardType) {
+            return $data;
+        }
+
+        if ($giftCardType->allows_custom_amount) {
+            $data['price'] = null;
+
+            return $data;
+        }
+
+        if (blank($data['price'] ?? null)) {
+            $data['price'] = $giftCardType->denomination;
+        }
+
+        return $data;
     }
 
     public static function getPages(): array

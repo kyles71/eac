@@ -8,6 +8,7 @@ use App\Actions\Store\UpdateCartQuantity;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
@@ -48,6 +49,63 @@ it('increments quantity when adding the same product again', function () {
 
     expect($cartItem->quantity)->toBe(2);
 });
+
+it('stores custom gift card amounts on separate cart lines', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    $action = new AddToCart;
+    $action->handle($this->user, $giftCardProduct, customGiftCardAmount: 7500);
+    $action->handle($this->user, $giftCardProduct, customGiftCardAmount: 7500);
+    $action->handle($this->user, $giftCardProduct, customGiftCardAmount: 2500);
+
+    $cartItems = CartItem::query()
+        ->where('user_id', $this->user->id)
+        ->where('product_id', $giftCardProduct->id)
+        ->orderBy('custom_gift_card_amount')
+        ->get();
+
+    expect($cartItems)->toHaveCount(2)
+        ->and($cartItems[0]->custom_gift_card_amount)->toBe(2500)
+        ->and($cartItems[0]->quantity)->toBe(1)
+        ->and($cartItems[1]->custom_gift_card_amount)->toBe(7500)
+        ->and($cartItems[1]->quantity)->toBe(2);
+});
+
+it('rejects custom gift card amounts below the configured minimum', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    $action = new AddToCart;
+    $action->handle($this->user, $giftCardProduct, customGiftCardAmount: 400);
+})->throws(InvalidArgumentException::class, 'Gift card amount must be at least $5.00.');
+
+it('rejects custom gift card amounts with cents', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount()
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    $action = new AddToCart;
+    $action->handle($this->user, $giftCardProduct, customGiftCardAmount: 5050);
+})->throws(InvalidArgumentException::class, 'Gift card amounts must be whole dollars.');
+
+it('rejects custom amounts for fixed gift cards', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    $action = new AddToCart;
+    $action->handle($this->user, $giftCardProduct, customGiftCardAmount: 7500);
+})->throws(InvalidArgumentException::class, 'Custom gift card amounts are only available for enabled gift cards.');
 
 it('rejects adding to cart when course is at capacity', function () {
     // Fill all spots

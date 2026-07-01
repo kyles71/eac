@@ -68,7 +68,7 @@ final class ProductFactory extends Factory
                 'name' => $giftCardType->name,
                 'productable_type' => GiftCardType::class,
                 'productable_id' => $giftCardType->id,
-                'price' => $giftCardType->denomination,
+                'price' => $giftCardType->allows_custom_amount ? null : $giftCardType->denomination,
             ];
         });
     }

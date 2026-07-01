@@ -9,6 +9,7 @@ use App\Contracts\HasCapacity;
 use App\Models\Course;
 use App\Models\Product;
 use App\Support\Filament\CourseStaffPresenter;
+use App\Support\Filament\CustomGiftCardAmountField;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Infolists\Components\TextEntry;
@@ -105,8 +106,18 @@ final class ProductDetails extends Page
             ->label('Add to Cart')
             ->icon(Heroicon::OutlinedShoppingCart)
             ->color('primary')
+            ->modalHeading(fn (): string => $this->product?->allowsCustomGiftCardAmount() === true
+                ? 'Choose Gift Card Amount'
+                : 'Add to Cart')
+            ->modalSubmitActionLabel('Add to Cart')
+            ->fillForm(fn (): array => [
+                'custom_gift_card_amount' => $this->product?->suggestedCustomGiftCardAmount(),
+            ])
+            ->schema(fn (): array => $this->product === null
+                ? []
+                : CustomGiftCardAmountField::schema($this->product))
             ->disabled(fn (): bool => $this->product === null || $this->isSoldOut())
-            ->action(function (): void {
+            ->action(function (array $data): void {
                 if ($this->product === null) {
                     return;
                 }
@@ -116,7 +127,11 @@ final class ProductDetails extends Page
                     $user = auth()->user();
 
                     $addToCart = new AddToCart;
-                    $addToCart->handle($user, $this->product);
+                    $addToCart->handle(
+                        $user,
+                        $this->product,
+                        customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($this->product, $data),
+                    );
 
                     $this->dispatch('refresh-sidebar');
 
@@ -191,7 +206,7 @@ final class ProductDetails extends Page
         $details = [
             TextEntry::make('price')
                 ->label('Price')
-                ->state(fn (): string => $this->product?->formattedPrice() ?? ''),
+                ->state(fn (): string => $this->product?->storefrontPriceLabel() ?? ''),
             TextEntry::make('description')
                 ->label('Description')
                 ->state(fn (): ?string => $this->product?->description)

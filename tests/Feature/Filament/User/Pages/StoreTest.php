@@ -9,6 +9,7 @@ use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\GiftCardType;
 use App\Models\ManagedBanner;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
@@ -243,6 +244,28 @@ it('can still quickly add a product to the cart from the table', function () {
         ->where('user_id', auth()->id())
         ->where('product_id', $this->product->id)
         ->value('quantity'))->toBe(1);
+});
+
+it('can add a custom amount gift card from the table', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertSee('Name your price from $5.00')
+        ->callAction(TestAction::make('addToCart')->table($giftCardProduct), data: [
+            'custom_gift_card_amount' => 75,
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $giftCardProduct->id)
+        ->value('custom_gift_card_amount'))->toBe(7500);
 });
 
 it('keeps product navigation and quick add available in card view', function () {

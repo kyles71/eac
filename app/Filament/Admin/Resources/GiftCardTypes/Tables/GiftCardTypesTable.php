@@ -24,6 +24,15 @@ final class GiftCardTypesTable
                     ->label('Denomination')
                     ->moneyCents()
                     ->sortable(),
+                TextColumn::make('amount_type')
+                    ->label('Amount Type')
+                    ->state(fn (GiftCardType $record): string => $record->allows_custom_amount
+                        ? 'Custom from '.$record->formattedMinimumCustomAmount()
+                        : 'Fixed')
+                    ->badge()
+                    ->color(fn (GiftCardType $record): string => $record->allows_custom_amount ? 'info' : 'gray')
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('restriction')
                     ->label('Restriction')
                     ->state(fn (GiftCardType $record): string => $record->restrictionSummary())

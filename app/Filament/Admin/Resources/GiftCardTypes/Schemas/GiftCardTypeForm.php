@@ -7,7 +7,9 @@ namespace App\Filament\Admin\Resources\GiftCardTypes\Schemas;
 use App\Enums\ProductType;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -27,9 +29,21 @@ final class GiftCardTypeForm
                             ->maxLength(255),
                         TextInput::make('denomination')
                             ->label('Denomination')
-                            ->helperText('The face value of the gift card. The product price can differ for promotions.')
+                            ->helperText('For fixed gift cards, this is the face value. For custom gift cards, this is the suggested amount.')
                             ->moneyCents(0.01)
                             ->required(),
+                        Toggle::make('allows_custom_amount')
+                            ->label('Allow custom amount')
+                            ->live()
+                            ->default(false),
+                        TextInput::make('minimum_custom_amount')
+                            ->label('Minimum Custom Amount')
+                            ->helperText('Whole dollars only. There is no maximum.')
+                            ->moneyCents(1)
+                            ->multipleOf(1)
+                            ->default(100)
+                            ->required(fn (Get $get): bool => (bool) $get('allows_custom_amount'))
+                            ->visible(fn (Get $get): bool => (bool) $get('allows_custom_amount')),
                     ]),
                 Section::make('Restrictions')
                     ->columns(2)

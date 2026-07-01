@@ -15,7 +15,8 @@ final class ListProducts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->mutateDataUsing(fn (array $data): array => ProductResource::normalizePricingData($data)),
         ];
     }
 }

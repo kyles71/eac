@@ -8,6 +8,7 @@ use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
@@ -106,6 +107,27 @@ it('can add one item to the cart', function () {
         ->where('user_id', auth()->id())
         ->where('product_id', $this->product->id)
         ->value('quantity'))->toBe(1);
+});
+
+it('can add a custom amount gift card', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    livewire(ProductDetails::class, ['product' => $giftCardProduct])
+        ->assertSee('Name your price from $5.00')
+        ->callAction('addToCart', data: [
+            'custom_gift_card_amount' => 75,
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $giftCardProduct->id)
+        ->value('custom_gift_card_amount'))->toBe(7500);
 });
 
 it('disables adding to cart when capacity is sold out', function () {

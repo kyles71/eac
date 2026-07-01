@@ -159,7 +159,7 @@ final class Cart extends Page implements HasTable
      */
     public function getSubtotalProperty(): int
     {
-        return $this->cartItems->sum(fn (CartItem $item): int => $item->product->price * $item->quantity);
+        return $this->cartItems->sum(fn (CartItem $item): int => $item->lineTotal());
     }
 
     /**
@@ -189,7 +189,7 @@ final class Cart extends Page implements HasTable
         $user = auth()->user();
         $items = $this->cartItems->map(fn (CartItem $cartItem): array => [
             'product' => $cartItem->product,
-            'amount' => $cartItem->product->price * $cartItem->quantity,
+            'amount' => $cartItem->lineTotal(),
         ]);
 
         return app(CreditLedgerService::class)->previewRestrictedAmount(
@@ -597,7 +597,7 @@ final class Cart extends Page implements HasTable
             ->query(
                 CartItem::query()
                     ->where('user_id', auth()->id())
-                    ->with('product')
+                    ->with('product.productable')
             )
             ->columns([
                 TextColumn::make('product.name')
@@ -605,9 +605,9 @@ final class Cart extends Page implements HasTable
                     ->toggleable(false)
                     ->searchable(false)
                     ->sortable(false),
-                TextColumn::make('product.price')
+                TextColumn::make('unit_price')
                     ->label('Price')
-                    ->formatStateUsing(fn (int $state): string => '$'.number_format($state / 100, 2))
+                    ->state(fn (CartItem $record): string => $record->formattedEffectiveUnitPrice())
                     ->toggleable(false)
                     ->searchable(false)
                     ->sortable(false),
@@ -619,7 +619,7 @@ final class Cart extends Page implements HasTable
                     ->sortable(false),
                 TextColumn::make('line_total')
                     ->label('Total')
-                    ->state(fn (CartItem $record): string => '$'.number_format(($record->product->price * $record->quantity) / 100, 2))
+                    ->state(fn (CartItem $record): string => $record->formattedLineTotal())
                     ->toggleable(false)
                     ->searchable(false)
                     ->sortable(false),

@@ -23,14 +23,23 @@ it('scopes available products', function () {
     $active = Product::factory()->create(['is_active' => true, 'price' => 5000]);
     $inactive = Product::factory()->inactive()->create();
     $zeroPriced = Product::factory()->create(['is_active' => true, 'price' => 0]);
+    $nullPriced = Product::factory()->create(['is_active' => true, 'price' => null]);
     $scheduled = Product::factory()->availableFrom(now()->addDay())->create(['price' => 5000]);
     $expired = Product::factory()->availableUntil(now()->subMinute())->create(['price' => 5000]);
+    $customGiftCardType = GiftCardType::factory()
+        ->customAmount(500)
+        ->create();
+    $customGiftCard = Product::factory()
+        ->forGiftCardType($customGiftCardType)
+        ->create(['is_active' => true, 'price' => null]);
 
     $results = Product::query()->available()->get();
 
     expect($results->pluck('id')->toArray())->toContain($active->id)
+        ->and($results->pluck('id')->toArray())->toContain($customGiftCard->id)
         ->and($results->pluck('id')->toArray())->not->toContain($inactive->id)
         ->and($results->pluck('id')->toArray())->not->toContain($zeroPriced->id)
+        ->and($results->pluck('id')->toArray())->not->toContain($nullPriced->id)
         ->and($results->pluck('id')->toArray())->not->toContain($scheduled->id)
         ->and($results->pluck('id')->toArray())->not->toContain($expired->id);
 });
@@ -39,6 +48,34 @@ it('formats price correctly', function () {
     $product = Product::factory()->create(['price' => 15099]);
 
     expect($product->formattedPrice())->toBe('$150.99');
+});
+
+it('derives valid pricing for name your price gift card products', function () {
+    $user = User::factory()->create();
+    $customGiftCardType = GiftCardType::factory()
+        ->customAmount(500)
+        ->create();
+    $customGiftCard = Product::factory()
+        ->forGiftCardType($customGiftCardType)
+        ->create(['price' => null]);
+    $missingFixedPrice = Product::factory()->create(['price' => null]);
+    $invalidCustomGiftCardType = GiftCardType::factory()
+        ->customAmount(50)
+        ->create();
+    $invalidCustomGiftCard = Product::factory()
+        ->forGiftCardType($invalidCustomGiftCardType)
+        ->create(['price' => null]);
+
+    expect($customGiftCard->requiresFixedPrice())->toBeFalse()
+        ->and($customGiftCard->hasValidPricing())->toBeTrue()
+        ->and($customGiftCard->availabilityFor($user))->toBe(ProductAvailabilityStatus::Available)
+        ->and($customGiftCard->canBePurchasedBy($user))->toBeTrue()
+        ->and(Product::query()->visibleTo($user)->pluck('id')->all())->toContain($customGiftCard->id)
+        ->and($missingFixedPrice->requiresFixedPrice())->toBeTrue()
+        ->and($missingFixedPrice->hasValidPricing())->toBeFalse()
+        ->and($missingFixedPrice->availabilityFor($user))->toBe(ProductAvailabilityStatus::InvalidPrice)
+        ->and($invalidCustomGiftCard->hasValidPricing())->toBeFalse()
+        ->and($invalidCustomGiftCard->availabilityFor($user))->toBe(ProductAvailabilityStatus::InvalidPrice);
 });
 
 it('uses only product images by default', function () {

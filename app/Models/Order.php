@@ -135,6 +135,7 @@ final class Order extends Model
                 $cartItem = CartItem::query()
                     ->where('user_id', $order->user_id)
                     ->where('product_id', $orderItem->product_id)
+                    ->where('custom_gift_card_amount', $orderItem->custom_gift_card_amount)
                     ->lockForUpdate()
                     ->first();
 

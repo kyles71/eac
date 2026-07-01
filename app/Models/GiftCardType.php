@@ -22,6 +22,8 @@ final class GiftCardType extends Model implements Productable, ProvidesStorefron
     protected $casts = [
         'id' => 'integer',
         'denomination' => 'integer',
+        'allows_custom_amount' => 'boolean',
+        'minimum_custom_amount' => 'integer',
         'restricted_to_product_type' => ProductType::class,
     ];
 
@@ -43,10 +45,19 @@ final class GiftCardType extends Model implements Productable, ProvidesStorefron
      */
     public function storefrontDetails(): array
     {
-        return [
-            'Denomination' => $this->formattedDenomination(),
+        $details = [
+            ($this->allows_custom_amount ? 'Suggested Amount' : 'Denomination') => $this->formattedDenomination(),
             'Restrictions' => $this->restrictionSummary(),
         ];
+
+        if ($this->allows_custom_amount) {
+            $details = [
+                'Amount' => 'Name your price from '.$this->formattedMinimumCustomAmount(),
+                ...$details,
+            ];
+        }
+
+        return $details;
     }
 
     public function products(): BelongsToMany
@@ -100,6 +111,26 @@ final class GiftCardType extends Model implements Productable, ProvidesStorefron
     public function formattedDenomination(): string
     {
         return format_money($this->denomination);
+    }
+
+    public function minimumCustomAmount(): int
+    {
+        return max(100, $this->minimum_custom_amount);
+    }
+
+    public function hasValidCustomAmountConfiguration(): bool
+    {
+        return $this->allows_custom_amount && $this->minimum_custom_amount >= 100;
+    }
+
+    public function suggestedCustomAmount(): int
+    {
+        return max($this->minimumCustomAmount(), $this->denomination);
+    }
+
+    public function formattedMinimumCustomAmount(): string
+    {
+        return format_money($this->minimumCustomAmount());
     }
 
     /**

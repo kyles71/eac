@@ -61,6 +61,40 @@ it('creates an order and returns the order model', function () {
         ->and($orderItems->first()->total_price)->toBe(10000);
 });
 
+it('creates separate order items for custom gift card amounts', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $giftCardProduct->id,
+        'quantity' => 2,
+        'custom_gift_card_amount' => 7500,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $giftCardProduct->id,
+        'quantity' => 1,
+        'custom_gift_card_amount' => 2500,
+    ]);
+
+    $order = app(CreateOrder::class)->handle($this->user);
+    $orderItems = $order->orderItems()->orderBy('unit_price')->get();
+
+    expect($order->subtotal)->toBe(17500)
+        ->and($orderItems)->toHaveCount(2)
+        ->and($orderItems[0]->unit_price)->toBe(2500)
+        ->and($orderItems[0]->total_price)->toBe(2500)
+        ->and($orderItems[0]->custom_gift_card_amount)->toBe(2500)
+        ->and($orderItems[1]->unit_price)->toBe(7500)
+        ->and($orderItems[1]->total_price)->toBe(15000)
+        ->and($orderItems[1]->custom_gift_card_amount)->toBe(7500);
+});
+
 it('fails when cart is empty', function () {
     $action = app(CreateOrder::class);
     $action->handle($this->user);
@@ -329,6 +363,35 @@ it('fulfills gift cards when order completes at zero total', function () {
         ->and($giftCard->delivery_email_queued_at)->not->toBeNull();
 
     Mail::assertQueued(ManagedMail::class, 2);
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'gift-card-delivery'
+        && $mail->hasTo($this->user->email)
+        && $mail->usesMailer('transactional'));
+});
+
+it('fulfills custom amount gift cards when order completes at zero total', function () {
+    Mail::fake();
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $giftCardProduct->id,
+        'quantity' => 1,
+        'custom_gift_card_amount' => 7500,
+    ]);
+
+    $discountCode = DiscountCode::factory()->fixedAmount(10000)->create();
+
+    $order = app(CreateOrder::class)->handle($this->user, $discountCode);
+    $giftCard = GiftCard::query()->where('order_id', $order->id)->firstOrFail();
+
+    expect($giftCard->initial_amount)->toBe(7500)
+        ->and($giftCard->remaining_amount)->toBe(7500)
+        ->and($giftCard->delivery_email_queued_at)->not->toBeNull();
+
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'gift-card-delivery'
         && $mail->hasTo($this->user->email)
         && $mail->usesMailer('transactional'));

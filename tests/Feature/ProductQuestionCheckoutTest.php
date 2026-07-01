@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Store\CreateOrder;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\User;
@@ -74,6 +75,55 @@ it('captures required and optional purchaser answers once per purchased unit', f
         ->toBe(['Jordan', 'Youth XL', 'Not answered'])
         ->and($orderItem->questionAnswers->firstWhere('product_question_id', $noteQuestion->id)?->answer)
         ->toBeNull();
+});
+
+it('keeps purchaser answers attached to separate custom gift card amount lines', function (): void {
+    $user = User::factory()->create();
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $product = Product::factory()->forGiftCardType($giftCardType)->create([
+        'name' => 'Gift Card',
+    ]);
+    $question = ProductQuestion::factory()->for($product)->required()->create([
+        'question' => 'Recipient name',
+    ]);
+    $smallGiftCard = CartItem::factory()->create([
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'custom_gift_card_amount' => 2500,
+    ]);
+    $largeGiftCard = CartItem::factory()->create([
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'custom_gift_card_amount' => 7500,
+    ]);
+
+    $order = app(CreateOrder::class)->handle(
+        $user,
+        questionAnswers: [
+            $smallGiftCard->id => [
+                1 => ["question_{$question->id}" => 'Avery'],
+            ],
+            $largeGiftCard->id => [
+                1 => ["question_{$question->id}" => 'Jordan'],
+            ],
+        ],
+    );
+
+    $orderItems = $order->orderItems()
+        ->with('questionAnswers')
+        ->orderBy('unit_price')
+        ->get();
+
+    expect($orderItems)->toHaveCount(2)
+        ->and($orderItems[0]->unit_price)->toBe(2500)
+        ->and($orderItems[0]->questionAnswers->first()?->answer)->toBe('Avery')
+        ->and($orderItems[1]->unit_price)->toBe(7500)
+        ->and($orderItems[1]->questionAnswers->first()?->answer)->toBe('Jordan');
 });
 
 it('shows per-unit questions in the final checkout action modal', function (): void {

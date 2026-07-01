@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\DashboardAudience;
 use App\Enums\ProductAvailabilityStatus;
+use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
@@ -23,7 +24,7 @@ final readonly class ProductAvailabilityService
             return ProductAvailabilityStatus::Draft;
         }
 
-        if ($product->price <= 0) {
+        if (! $product->hasValidPricing()) {
             return ProductAvailabilityStatus::InvalidPrice;
         }
 
@@ -58,7 +59,7 @@ final readonly class ProductAvailabilityService
             return ProductAvailabilityStatus::Draft;
         }
 
-        if ($product->price <= 0) {
+        if (! $product->hasValidPricing()) {
             return ProductAvailabilityStatus::InvalidPrice;
         }
 
@@ -85,7 +86,9 @@ final readonly class ProductAvailabilityService
 
         return $query
             ->where('is_active', true)
-            ->where('price', '>', 0)
+            ->where(function (Builder $query): void {
+                $this->validPricingQuery($query);
+            })
             ->where(fn (Builder $query): Builder => $query
                 ->whereNull('available_from')
                 ->orWhere('available_from', '<=', $at))
@@ -105,7 +108,9 @@ final readonly class ProductAvailabilityService
 
         return $query
             ->where('is_active', true)
-            ->where('price', '>', 0)
+            ->where(function (Builder $query): void {
+                $this->validPricingQuery($query);
+            })
             ->where(function (Builder $query) use ($at, $audienceValues, $user): void {
                 $query
                     ->where(function (Builder $query) use ($at): void {
@@ -135,15 +140,21 @@ final readonly class ProductAvailabilityService
             ProductAvailabilityStatus::Draft => $query->where('is_active', false),
             ProductAvailabilityStatus::InvalidPrice => $query
                 ->where('is_active', true)
-                ->where('price', '<=', 0),
+                ->whereNot(function (Builder $query): void {
+                    $this->validPricingQuery($query);
+                }),
             ProductAvailabilityStatus::Expired => $query
                 ->where('is_active', true)
-                ->where('price', '>', 0)
+                ->where(function (Builder $query): void {
+                    $this->validPricingQuery($query);
+                })
                 ->whereNotNull('available_until')
                 ->where('available_until', '<=', $at),
             ProductAvailabilityStatus::Scheduled => $query
                 ->where('is_active', true)
-                ->where('price', '>', 0)
+                ->where(function (Builder $query): void {
+                    $this->validPricingQuery($query);
+                })
                 ->whereNotNull('available_from')
                 ->where('available_from', '>', $at)
                 ->where(fn (Builder $query): Builder => $query
@@ -153,7 +164,9 @@ final readonly class ProductAvailabilityService
                     ->whereDoesntHave('earlyAccessWindows', fn (Builder $query): Builder => $this->activeWindowQuery($query, $at))),
             ProductAvailabilityStatus::EarlyAccess => $query
                 ->where('is_active', true)
-                ->where('price', '>', 0)
+                ->where(function (Builder $query): void {
+                    $this->validPricingQuery($query);
+                })
                 ->whereNotNull('available_from')
                 ->where('available_from', '>', $at)
                 ->where(fn (Builder $query): Builder => $query
@@ -162,6 +175,47 @@ final readonly class ProductAvailabilityService
                 ->whereHas('earlyAccessWindows', fn (Builder $query): Builder => $this->activeWindowQuery($query, $at)),
             ProductAvailabilityStatus::EnrollmentRequired => $query,
         };
+    }
+
+    private function validPricingQuery(Builder $query): void
+    {
+        $query
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNotNull('price')
+                    ->where('price', '>', 0)
+                    ->where(function (Builder $query): void {
+                        $this->notCustomerEnteredGiftCardPricingQuery($query);
+                    });
+            })
+            ->orWhere(function (Builder $query): void {
+                $this->customerEnteredGiftCardPricingQuery($query);
+            });
+    }
+
+    private function customerEnteredGiftCardPricingQuery(Builder $query): void
+    {
+        $query
+            ->where('productable_type', GiftCardType::class)
+            ->whereHasMorph(
+                'productable',
+                [GiftCardType::class],
+                fn (Builder $query): Builder => $query
+                    ->where('allows_custom_amount', true)
+                    ->where('minimum_custom_amount', '>=', 100),
+            );
+    }
+
+    private function notCustomerEnteredGiftCardPricingQuery(Builder $query): void
+    {
+        $query
+            ->whereNull('productable_type')
+            ->orWhere('productable_type', '!=', GiftCardType::class)
+            ->orWhereDoesntHaveMorph(
+                'productable',
+                [GiftCardType::class],
+                fn (Builder $query): Builder => $query->where('allows_custom_amount', true),
+            );
     }
 
     private function applyOpenScheduleToQuery(Builder $query, CarbonInterface $at): Builder

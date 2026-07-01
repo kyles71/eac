@@ -22,6 +22,8 @@ final class GiftCardTypeFactory extends Factory
         return [
             'name' => '$'.fake()->randomElement([25, 50, 100]).' Gift Card',
             'denomination' => fake()->randomElement([2500, 5000, 10000]),
+            'allows_custom_amount' => false,
+            'minimum_custom_amount' => 100,
             'restricted_to_product_type' => null,
         ];
     }
@@ -44,6 +46,14 @@ final class GiftCardTypeFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'restricted_to_product_type' => $productType,
+        ]);
+    }
+
+    public function customAmount(int $minimumCents = 100): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'allows_custom_amount' => true,
+            'minimum_custom_amount' => $minimumCents,
         ]);
     }
 }

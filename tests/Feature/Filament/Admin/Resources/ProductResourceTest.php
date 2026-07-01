@@ -58,9 +58,90 @@ it('has an include linked item images field on the product form', function () {
         ->assertSchemaComponentStateSet('include_productable_images', false);
 });
 
-it('can configure ordered purchaser questions and purchase notifications', function (): void {
+it('shows linked item controls before store details on the product form', function () {
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->assertSeeInOrder(['Linked Item', 'Store Details']);
+});
+
+it('does not require or save a fixed product price for custom gift card products', function () {
+    $giftCardType = GiftCardType::factory()
+        ->customAmount(500)
+        ->denomination(5000)
+        ->create(['name' => 'Open Amount Gift Card']);
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'name' => 'Open Amount Gift Card',
+            'description' => null,
+            'price' => '999.00',
+            'is_active' => true,
+            'productable_type' => GiftCardType::class,
+        ])
+        ->fillForm([
+            'productable_id' => $giftCardType->id,
+        ])
+        ->assertSchemaComponentHidden('price')
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    assertDatabaseHas(Product::class, [
+        'name' => 'Open Amount Gift Card',
+        'price' => null,
+        'productable_type' => GiftCardType::class,
+        'productable_id' => $giftCardType->id,
+    ]);
+});
+
+it('keeps fixed gift card products on fixed product pricing', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(2500)
+        ->create(['name' => '$25 Gift Card']);
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'name' => '$25 Gift Card',
+            'description' => null,
+            'is_active' => true,
+            'productable_type' => GiftCardType::class,
+        ])
+        ->fillForm([
+            'productable_id' => $giftCardType->id,
+        ])
+        ->assertSchemaComponentVisible('price')
+        ->assertSchemaComponentStateSet('price', '25.00')
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    assertDatabaseHas(Product::class, [
+        'name' => '$25 Gift Card',
+        'price' => 2500,
+        'productable_type' => GiftCardType::class,
+        'productable_id' => $giftCardType->id,
+    ]);
+});
+
+it('still requires a fixed price for standalone products', function () {
     livewire(ListProducts::class)
         ->callAction(CreateAction::class, data: [
+            'name' => 'Competition Shirt',
+            'description' => null,
+            'price' => null,
+            'is_active' => true,
+            'productable_type' => null,
+            'productable_id' => null,
+        ])
+        ->assertHasActionErrors(['price' => 'required']);
+});
+
+it('can configure ordered purchaser questions and purchase notifications', function (): void {
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
             'name' => 'Competition Shirt',
             'description' => null,
             'price' => '50.00',
@@ -91,6 +172,7 @@ it('can configure ordered purchaser questions and purchase notifications', funct
                 ],
             ],
         ])
+        ->callMountedAction()
         ->assertHasNoActionErrors()
         ->assertNotified();
 
@@ -187,7 +269,8 @@ it('can create a linked product that includes linked item images', function () {
     $costume = Costume::factory()->create();
 
     livewire(ListProducts::class)
-        ->callAction(CreateAction::class, data: [
+        ->mountAction(CreateAction::class)
+        ->fillForm([
             'name' => 'Costume Product',
             'description' => null,
             'price' => '42.50',
@@ -196,6 +279,8 @@ it('can create a linked product that includes linked item images', function () {
             'productable_id' => $costume->id,
             'include_productable_images' => true,
         ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
         ->assertNotified();
 
     assertDatabaseHas(Product::class, [
@@ -220,7 +305,8 @@ it('can create a product with scheduled availability and early access controls',
     $windowEnd = now()->addDay();
 
     livewire(ListProducts::class)
-        ->callAction(CreateAction::class, data: [
+        ->mountAction(CreateAction::class)
+        ->fillForm([
             'name' => 'Competition Signup',
             'description' => null,
             'price' => '75.00',
@@ -238,6 +324,8 @@ it('can create a product with scheduled availability and early access controls',
             'productable_type' => null,
             'productable_id' => null,
         ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
         ->assertNotified();
 
     $product = Product::query()->where('name', 'Competition Signup')->firstOrFail();
@@ -276,7 +364,7 @@ it('can edit product early access windows', function () {
     expect($windowStateKey)->toBe("record-{$window->id}");
 
     $component
-        ->setActionData([
+        ->fillForm([
             'name' => $product->name,
             'description' => $product->description,
             'price' => '50.00',

@@ -22,6 +22,7 @@ final class OrderItem extends Model
         'quantity' => 'integer',
         'unit_price' => 'integer',
         'total_price' => 'integer',
+        'custom_gift_card_amount' => 'integer',
         'status' => OrderItemStatus::class,
         'purchase_notification_requested' => 'boolean',
     ];
@@ -65,6 +66,11 @@ final class OrderItem extends Model
     public function formattedTotalPrice(): string
     {
         return format_money($this->total_price);
+    }
+
+    public function customGiftCardAmount(): ?int
+    {
+        return $this->custom_gift_card_amount > 0 ? $this->custom_gift_card_amount : null;
     }
 
     /**

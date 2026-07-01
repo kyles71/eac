@@ -25,8 +25,8 @@ final readonly class FulfillGiftCard
         /** @var GiftCardType $giftCardType */
         $giftCardType = $product->productable;
 
-        // Denomination is the face value of the gift card (product price may differ for promotions)
-        $amount = $giftCardType->denomination;
+        // Fixed gift cards use denomination so promotions can discount purchase price without lowering value.
+        $amount = $orderItem->customGiftCardAmount() ?? $giftCardType->denomination;
 
         $giftCards = [];
 

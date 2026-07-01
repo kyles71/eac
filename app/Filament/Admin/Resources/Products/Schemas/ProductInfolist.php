@@ -30,7 +30,8 @@ final class ProductInfolist
                     ->schema([
                         TextEntry::make('name'),
                         TextEntry::make('price')
-                            ->moneyCents(),
+                            ->formatStateUsing(fn (mixed $state, Product $record): ?string => self::formatPriceState($state, $record))
+                            ->placeholder('Missing price'),
                         TextEntry::make('is_active')
                             ->label('Status')
                             ->badge()
@@ -148,6 +149,15 @@ final class ProductInfolist
                             ->dateTime(),
                     ]),
             ]);
+    }
+
+    private static function formatPriceState(mixed $state, Product $record): ?string
+    {
+        if ($record->usesCustomerEnteredPricing()) {
+            return 'Customer-entered';
+        }
+
+        return is_numeric($state) ? format_money((int) $state) : null;
     }
 
     /**

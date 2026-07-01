@@ -286,6 +286,43 @@ it('filters payment plan templates by product type and line total', function () 
         ->assertSee('5 Monthly Payments');
 });
 
+it('uses custom gift card amounts for cart totals and payment plan eligibility', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $giftCardProduct->id,
+        'quantity' => 2,
+        'custom_gift_card_amount' => 7500,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::GiftCardType,
+        'min_price' => 1000,
+        'max_price' => 10000,
+        'number_of_installments' => 3,
+    ]);
+
+    PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::GiftCardType,
+        'min_price' => 1000,
+        'max_price' => 20000,
+        'number_of_installments' => 4,
+    ]);
+
+    livewire(Cart::class)
+        ->loadTable()
+        ->assertSet('subtotal', 15000)
+        ->assertSee('$75.00')
+        ->assertSee('$150.00')
+        ->assertDontSee('3 Monthly Payments')
+        ->assertSee('4 Monthly Payments');
+});
+
 it('only shows templates eligible for every item in a mixed cart', function () {
     $costume = Costume::factory()->create();
     $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 4000]);

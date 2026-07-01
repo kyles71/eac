@@ -17,3 +17,14 @@ it('formats denomination in dollars', function () {
 
     expect($giftCardType->formattedDenomination())->toBe('$50.00');
 });
+
+it('formats custom amount minimums', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+
+    expect($giftCardType->minimumCustomAmount())->toBe(500)
+        ->and($giftCardType->suggestedCustomAmount())->toBe(5000)
+        ->and($giftCardType->formattedMinimumCustomAmount())->toBe('$5.00');
+});

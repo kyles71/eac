@@ -89,27 +89,28 @@ final class CreateOrder
             // Calculate totals and create order
             $subtotal = 0;
             $orderItems = [];
-            $answerRowsByProductId = [];
 
             /** @var CartItem $cartItem */
             foreach ($cartItems as $cartItem) {
                 /** @var Product $product */
                 $product = $cartItem->product;
-                $unitPrice = $product->price;
-                $totalPrice = $unitPrice * $cartItem->quantity;
+                $unitPrice = $cartItem->effectiveUnitPrice();
+                $totalPrice = $cartItem->lineTotal();
                 $subtotal += $totalPrice;
 
-                $answerRowsByProductId[$product->id] = $this->normalizeQuestionAnswers(
-                    $cartItem,
-                    $questionAnswers[$cartItem->id] ?? [],
-                );
-
                 $orderItems[] = [
-                    'product_id' => $product->id,
-                    'quantity' => $cartItem->quantity,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $totalPrice,
-                    'purchase_notification_requested' => $product->send_purchase_notification,
+                    'attributes' => [
+                        'product_id' => $product->id,
+                        'quantity' => $cartItem->quantity,
+                        'unit_price' => $unitPrice,
+                        'total_price' => $totalPrice,
+                        'custom_gift_card_amount' => $cartItem->custom_gift_card_amount,
+                        'purchase_notification_requested' => $product->send_purchase_notification,
+                    ],
+                    'question_answers' => $this->normalizeQuestionAnswers(
+                        $cartItem,
+                        $questionAnswers[$cartItem->id] ?? [],
+                    ),
                 ];
             }
 
@@ -128,10 +129,8 @@ final class CreateOrder
             ]);
 
             foreach ($orderItems as $item) {
-                $orderItem = $order->orderItems()->create($item);
-                $orderItem->questionAnswers()->createMany(
-                    $answerRowsByProductId[$orderItem->product_id] ?? [],
-                );
+                $orderItem = $order->orderItems()->create($item['attributes']);
+                $orderItem->questionAnswers()->createMany($item['question_answers']);
             }
 
             $total = $subtotal;

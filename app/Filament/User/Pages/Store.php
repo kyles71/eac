@@ -11,6 +11,7 @@ use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Filament\CustomGiftCardAmountField;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -146,7 +147,7 @@ final class Store extends TablePage
                 ->toggleable(),
             TextColumn::make('price')
                 ->label('Price')
-                ->formatStateUsing(fn (int $state): string => format_money($state))
+                ->state(fn (Product $record): string => $record->storefrontPriceLabel())
                 ->sortable(),
             $this->getAvailableSpotsColumn(),
         ];
@@ -184,7 +185,7 @@ final class Store extends TablePage
                         ->placeholder('No description available.'),
                     Split::make([
                         TextColumn::make('price')
-                            ->formatStateUsing(fn (int $state): string => format_money($state))
+                            ->state(fn (Product $record): string => $record->storefrontPriceLabel())
                             ->weight(FontWeight::Medium)
                             ->sortable(),
                         $this->getAvailableSpotsColumn()
@@ -228,14 +229,26 @@ final class Store extends TablePage
             ->label('Add to Cart')
             ->icon(Heroicon::OutlinedShoppingCart)
             ->color('primary')
+            ->modalHeading(fn (Product $record): string => $record->allowsCustomGiftCardAmount()
+                ? 'Choose Gift Card Amount'
+                : 'Add to Cart')
+            ->modalSubmitActionLabel('Add to Cart')
+            ->fillForm(fn (Product $record): array => [
+                'custom_gift_card_amount' => $record->suggestedCustomGiftCardAmount(),
+            ])
+            ->schema(fn (Product $record): array => CustomGiftCardAmountField::schema($record))
             ->disabled(function (Product $record): bool {
                 return $record->productable instanceof HasCapacity
                     && $record->productable->getAvailableCapacity() <= 0;
             })
-            ->action(function (Product $record): void {
+            ->action(function (Product $record, array $data): void {
                 try {
                     $addToCart = new AddToCart;
-                    $addToCart->handle($this->getUser(), $record);
+                    $addToCart->handle(
+                        $this->getUser(),
+                        $record,
+                        customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($record, $data),
+                    );
 
                     $this->dispatch('refresh-sidebar');
 

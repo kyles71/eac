@@ -35,7 +35,8 @@ final class ProductsTable
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('price')
-                    ->moneyCents()
+                    ->formatStateUsing(fn (mixed $state, Product $record): ?string => self::formatPriceState($state, $record))
+                    ->placeholder('Missing price')
                     ->sortable(),
                 IconColumn::make('is_active')
                     ->label('Active')
@@ -95,5 +96,14 @@ final class ProductsTable
                         ->authorizeIndividualRecords('delete'),
                 ]),
             ]);
+    }
+
+    private static function formatPriceState(mixed $state, Product $record): ?string
+    {
+        if ($record->usesCustomerEnteredPricing()) {
+            return 'Customer-entered';
+        }
+
+        return is_numeric($state) ? format_money((int) $state) : null;
     }
 }

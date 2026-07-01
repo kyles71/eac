@@ -91,7 +91,71 @@ final class Product extends Model implements HasMedia
      */
     public function formattedPrice(): string
     {
-        return format_money($this->price);
+        return format_money($this->price ?? 0);
+    }
+
+    public function allowsCustomGiftCardAmount(): bool
+    {
+        return $this->usesCustomerEnteredPricing();
+    }
+
+    public function usesCustomerEnteredPricing(): bool
+    {
+        $this->loadMissing('productable');
+
+        return $this->productable instanceof GiftCardType
+            && $this->productable->allows_custom_amount;
+    }
+
+    public function requiresFixedPrice(): bool
+    {
+        return ! $this->usesCustomerEnteredPricing();
+    }
+
+    public function hasValidPricing(): bool
+    {
+        if ($this->usesCustomerEnteredPricing()) {
+            /** @var GiftCardType $giftCardType */
+            $giftCardType = $this->productable;
+
+            return $giftCardType->hasValidCustomAmountConfiguration();
+        }
+
+        return ($this->price ?? 0) > 0;
+    }
+
+    public function minimumCustomGiftCardAmount(): ?int
+    {
+        $this->loadMissing('productable');
+
+        if (! $this->productable instanceof GiftCardType) {
+            return null;
+        }
+
+        return $this->productable->minimumCustomAmount();
+    }
+
+    public function suggestedCustomGiftCardAmount(): ?int
+    {
+        $this->loadMissing('productable');
+
+        if (! $this->productable instanceof GiftCardType) {
+            return null;
+        }
+
+        return $this->productable->suggestedCustomAmount();
+    }
+
+    public function storefrontPriceLabel(): string
+    {
+        if (! $this->allowsCustomGiftCardAmount()) {
+            return $this->formattedPrice();
+        }
+
+        /** @var GiftCardType $giftCardType */
+        $giftCardType = $this->productable;
+
+        return 'Name your price from '.$giftCardType->formattedMinimumCustomAmount();
     }
 
     /**

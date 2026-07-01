@@ -11,7 +11,7 @@
             <tr>
                 <td style="padding: 6px 8px;">{{ $cartItem->product->name }}</td>
                 <td style="padding: 6px 8px; text-align: right;">{{ $cartItem->quantity }}</td>
-                <td style="padding: 6px 8px; text-align: right;">{{ format_money($cartItem->product->price * $cartItem->quantity) }}</td>
+                <td style="padding: 6px 8px; text-align: right;">{{ $cartItem->formattedLineTotal() }}</td>
             </tr>
         @endforeach
         <tr>

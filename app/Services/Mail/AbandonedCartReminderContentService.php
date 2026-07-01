@@ -16,7 +16,7 @@ final readonly class AbandonedCartReminderContentService
      */
     public function for(User $user, Collection $cartItems): array
     {
-        $total = $cartItems->sum(fn (CartItem $cartItem): int => $cartItem->product->price * $cartItem->quantity);
+        $total = $cartItems->sum(fn (CartItem $cartItem): int => $cartItem->lineTotal());
 
         return [
             'tokens' => [

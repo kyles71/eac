@@ -15,7 +15,8 @@ final class ViewProduct extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
+            EditAction::make()
+                ->mutateDataUsing(fn (array $data): array => ProductResource::normalizePricingData($data)),
         ];
     }
 }

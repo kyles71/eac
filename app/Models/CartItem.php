@@ -18,6 +18,7 @@ final class CartItem extends Model
         'user_id' => 'integer',
         'product_id' => 'integer',
         'quantity' => 'integer',
+        'custom_gift_card_amount' => 'integer',
         'reminder_sent_at' => 'datetime',
     ];
 
@@ -31,5 +32,30 @@ final class CartItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function customGiftCardAmount(): ?int
+    {
+        return $this->custom_gift_card_amount > 0 ? $this->custom_gift_card_amount : null;
+    }
+
+    public function effectiveUnitPrice(): int
+    {
+        return $this->customGiftCardAmount() ?? $this->product->price ?? 0;
+    }
+
+    public function lineTotal(): int
+    {
+        return $this->effectiveUnitPrice() * $this->quantity;
+    }
+
+    public function formattedEffectiveUnitPrice(): string
+    {
+        return format_money($this->effectiveUnitPrice());
+    }
+
+    public function formattedLineTotal(): string
+    {
+        return format_money($this->lineTotal());
     }
 }

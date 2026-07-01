@@ -22,6 +22,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -33,6 +34,65 @@ final class ProductForm
     {
         return $schema
             ->components([
+                Section::make('Linked Item')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('productable_type')
+                            ->label('Product Type')
+                            ->options([
+                                Course::class => 'Course',
+                                GiftCardType::class => 'Gift Card',
+                                Costume::class => 'Costume',
+                            ])
+                            ->placeholder(ProductType::Standalone->getLabel())
+                            ->live()
+                            ->afterStateUpdated(function (Set $set): void {
+                                $set('productable_id', null);
+                                $set('include_productable_images', false);
+                            }),
+                        Select::make('productable_id')
+                            ->label(fn (Get $get): string => match ($get('productable_type')) {
+                                Course::class => 'Linked Course',
+                                GiftCardType::class => 'Linked Gift Card Type',
+                                Costume::class => 'Linked Costume',
+                                default => 'Linked Item',
+                            })
+                            ->options(fn (Get $get, ?Product $record) => match ($get('productable_type')) {
+                                Course::class => self::availableProductableOptions(Course::class, $record),
+                                GiftCardType::class => self::availableProductableOptions(GiftCardType::class, $record),
+                                Costume::class => self::availableProductableOptions(Costume::class, $record),
+                                default => [],
+                            })
+                            ->required(fn (Get $get): bool => $get('productable_type') !== null)
+                            ->preload()
+                            ->live()
+                            ->visible(fn (Get $get): bool => $get('productable_type') !== null)
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
+                                if ($get('productable_type') !== GiftCardType::class || $state === null) {
+                                    return;
+                                }
+
+                                $set('price', null);
+
+                                $giftCardType = GiftCardType::query()->find($state);
+
+                                if ($giftCardType instanceof GiftCardType && ! $giftCardType->allows_custom_amount) {
+                                    $set('price', number_format($giftCardType->denomination / 100, 2, '.', ''));
+                                }
+                            }),
+                        Select::make('requires_course_id')
+                            ->label('Requires Enrollment In')
+                            ->helperText('Only available to users already enrolled in this course.')
+                            ->relationship(
+                                name: 'requiresCourse',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
+                            )
+                            ->nullable()
+                            ->preload()
+                            ->visible(fn (Get $get): bool => in_array($get('productable_type'), [Course::class, Costume::class], true)),
+                    ]),
                 Section::make('Store Details')
                     ->columns(2)
                     ->columnSpanFull()
@@ -41,14 +101,17 @@ final class ProductForm
                             ->label('Store Name')
                             ->required()
                             ->maxLength(255),
-                        TextInput::make('price')
-                            ->label('Price')
-                            ->moneyCents()
-                            ->required(),
                         Toggle::make('is_active')
                             ->label('Active')
                             ->helperText('Draft products never appear in the store, even when scheduled or granted early access.')
                             ->default(true),
+                        TextInput::make('price')
+                            ->label('Price')
+                            ->moneyCents()
+                            ->required(fn (Get $get): bool => self::requiresFixedPrice($get))
+                            ->visible(fn (Get $get): bool => self::requiresFixedPrice($get)),
+                        Text::make(fn (Get $get): string => self::customerEnteredPricingSummary($get))
+                            ->visible(fn (Get $get): bool => self::usesCustomerEnteredPricing($get)),
                         Textarea::make('description')
                             ->label('Store Description')
                             ->columnSpanFull(),
@@ -103,63 +166,6 @@ final class ProductForm
                             ->reorderable(false)
                             ->collapsible()
                             ->columnSpanFull(),
-                    ]),
-                Section::make('Linked Item')
-                    ->columns(2)
-                    ->columnSpanFull()
-                    ->schema([
-                        Select::make('productable_type')
-                            ->label('Product Type')
-                            ->options([
-                                Course::class => 'Course',
-                                GiftCardType::class => 'Gift Card',
-                                Costume::class => 'Costume',
-                            ])
-                            ->placeholder(ProductType::Standalone->getLabel())
-                            ->live()
-                            ->afterStateUpdated(function (Set $set): void {
-                                $set('productable_id', null);
-                                $set('include_productable_images', false);
-                            }),
-                        Select::make('productable_id')
-                            ->label(fn (Get $get): string => match ($get('productable_type')) {
-                                Course::class => 'Linked Course',
-                                GiftCardType::class => 'Linked Gift Card Type',
-                                Costume::class => 'Linked Costume',
-                                default => 'Linked Item',
-                            })
-                            ->options(fn (Get $get, ?Product $record) => match ($get('productable_type')) {
-                                Course::class => self::availableProductableOptions(Course::class, $record),
-                                GiftCardType::class => self::availableProductableOptions(GiftCardType::class, $record),
-                                Costume::class => self::availableProductableOptions(Costume::class, $record),
-                                default => [],
-                            })
-                            ->required(fn (Get $get): bool => $get('productable_type') !== null)
-                            ->preload()
-                            ->live()
-                            ->visible(fn (Get $get): bool => $get('productable_type') !== null)
-                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state): void {
-                                if ($get('productable_type') !== GiftCardType::class || $state === null) {
-                                    return;
-                                }
-
-                                $denomination = GiftCardType::query()->find($state)?->denomination;
-
-                                if ($denomination !== null) {
-                                    $set('price', number_format($denomination / 100, 2, '.', ''));
-                                }
-                            }),
-                        Select::make('requires_course_id')
-                            ->label('Requires Enrollment In')
-                            ->helperText('Only available to users already enrolled in this course.')
-                            ->relationship(
-                                name: 'requiresCourse',
-                                titleAttribute: 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
-                            )
-                            ->nullable()
-                            ->preload()
-                            ->visible(fn (Get $get): bool => in_array($get('productable_type'), [Course::class, Costume::class], true)),
                     ]),
                 Section::make('Purchaser Questions & Notifications')
                     ->columnSpanFull()
@@ -302,6 +308,36 @@ final class ProductForm
     private static function displayTimezone(): string
     {
         return (string) config('app.display_timezone', config('app.timezone'));
+    }
+
+    private static function requiresFixedPrice(Get $get): bool
+    {
+        return ! self::usesCustomerEnteredPricing($get);
+    }
+
+    private static function usesCustomerEnteredPricing(Get $get): bool
+    {
+        return self::selectedGiftCardType($get)?->allows_custom_amount ?? false;
+    }
+
+    private static function selectedGiftCardType(Get $get): ?GiftCardType
+    {
+        if ($get('productable_type') !== GiftCardType::class || blank($get('productable_id'))) {
+            return null;
+        }
+
+        return GiftCardType::query()->find($get('productable_id'));
+    }
+
+    private static function customerEnteredPricingSummary(Get $get): string
+    {
+        $giftCardType = self::selectedGiftCardType($get);
+
+        if (! $giftCardType instanceof GiftCardType) {
+            return '';
+        }
+
+        return 'Customer enters amount. Minimum '.$giftCardType->formattedMinimumCustomAmount().'; suggested amount '.$giftCardType->formattedDenomination().'.';
     }
 
     /**

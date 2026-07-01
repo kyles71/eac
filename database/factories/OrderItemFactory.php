@@ -31,6 +31,7 @@ final class OrderItemFactory extends Factory
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total_price' => $unitPrice * $quantity,
+            'custom_gift_card_amount' => 0,
             'status' => OrderItemStatus::Pending,
             'purchase_notification_requested' => false,
         ];

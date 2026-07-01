@@ -63,7 +63,7 @@ final class PaymentPlanTemplate extends Model
 
     public function matchesCartItem(CartItem $cartItem): bool
     {
-        return $this->matchesProduct($cartItem->product, $cartItem->product->price * $cartItem->quantity);
+        return $this->matchesProduct($cartItem->product, $cartItem->lineTotal());
     }
 
     public function matchesProduct(Product $product, int $price): bool
