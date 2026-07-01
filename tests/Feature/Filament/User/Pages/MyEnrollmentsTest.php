@@ -44,15 +44,23 @@ it('groups row actions at the start of the table', function () {
 });
 
 it('scopes the sticky action column styling to the my classes page', function () {
+    $themeCss = file_get_contents(resource_path('css/filament/user/theme.css'));
+
     expect((new MyEnrollments)->getPageClasses())
         ->toContain('fi-user-my-enrollments-page')
-        ->and(file_get_contents(resource_path('css/filament/user/theme.css')))
+        ->and($themeCss)
         ->toContain('.fi-user-my-enrollments-page')
         ->toContain('position: sticky')
         ->toContain('inset-inline-start: 0')
         ->toContain(':focus-within')
         ->toContain('body:has(.fi-user-my-enrollments-page) .fi-dropdown-panel')
         ->toContain('z-index: 50');
+
+    expect($themeCss)
+        ->toContain('.fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child')
+        ->toContain('.fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child')
+        ->toContain('z-index: 20')
+        ->not->toContain('z-index: 30');
 });
 
 it('can assign an open purchased enrollment to a student', function () {

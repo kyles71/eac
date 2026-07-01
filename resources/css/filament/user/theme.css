@@ -3,21 +3,20 @@
 @source '../../../../app/Filament/User/**/*';
 @source '../../../../resources/views/filament/user/**/*';
 
-.fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child,
-.fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+.fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
     position: sticky;
+    z-index: 20;
     inset-inline-start: 0;
+    background-color: rgb(249 250 251);
     box-shadow: 1px 0 0 rgb(229 231 235);
 }
 
-.fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
-    z-index: 30;
-    background-color: rgb(249 250 251);
-}
-
 .fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    position: sticky;
     z-index: 10;
+    inset-inline-start: 0;
     background-color: rgb(255 255 255);
+    box-shadow: 1px 0 0 rgb(229 231 235);
 }
 
 .fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:hover,
@@ -40,19 +39,19 @@ body:has(.fi-user-my-enrollments-page) .fi-dropdown-panel {
     }
 }
 
-.dark .fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child,
 .dark .fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(17 24 39);
     box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
 }
 
-.dark .fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child,
 .dark .fi-user-my-enrollments-page .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
 .dark .fi-user-my-enrollments-page .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
     background-color: rgb(255 255 255 / 0.05);
 }
 
-.dark .fi-user-my-enrollments-page .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
-    background-color: rgb(17 24 39);
+.dark .fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
+    background-color: rgb(255 255 255 / 0.05);
+    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
 }
 
 @media (hover: hover) {
