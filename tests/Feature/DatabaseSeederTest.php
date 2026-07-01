@@ -10,6 +10,8 @@ use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
+use App\Models\DashboardMessage;
+use App\Models\DashboardQuickLink;
 use App\Models\DiscountCode;
 use App\Models\EmergencyContact;
 use App\Models\Enrollment;
@@ -19,15 +21,24 @@ use App\Models\Form;
 use App\Models\FormUser;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
+use App\Models\Holiday;
 use App\Models\Installment;
 use App\Models\LegalDocument;
+use App\Models\LegalDocumentAcceptance;
+use App\Models\LegalDocumentVersion;
+use App\Models\ManagedBanner;
+use App\Models\ManagedBannerDismissal;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
+use App\Models\ProductQuestionAnswer;
 use App\Models\ShowcaseParticipation;
 use App\Models\Student;
+use App\Models\StudentEmail;
 use App\Models\StudentWaiver;
 use App\Models\User;
 use App\Support\LegalDocuments\HealthSafetyPolicy;
@@ -62,24 +73,40 @@ it('seeds the development database with all models', function (): void {
             PortalTerms::KEY,
             TextMessageUpdatesPolicy::KEY,
         ])->count())->toBe(4)
+        ->and(LegalDocumentVersion::count())->toBeGreaterThanOrEqual(4)
+        ->and(LegalDocumentAcceptance::count())->toBe(2)
         ->and(Course::count())->toBeGreaterThanOrEqual(10)
         ->and(Product::count())->toBeGreaterThanOrEqual(20)
+        ->and(Product::query()->whereNull('price')->exists())->toBeTrue()
         ->and(Costume::count())->toBe(5)
-        ->and(GiftCardType::count())->toBe(3)
+        ->and(GiftCardType::count())->toBe(4)
+        ->and(GiftCardType::query()->where('allows_custom_amount', true)->exists())->toBeTrue()
         ->and(PaymentPlanTemplate::count())->toBe(3)
         ->and(DiscountCode::count())->toBe(4)
+        ->and(DashboardMessage::count())->toBe(3)
+        ->and(DashboardQuickLink::count())->toBe(3)
+        ->and(Holiday::count())->toBe(2)
+        ->and(ManagedBanner::count())->toBe(3)
+        ->and(ManagedBannerDismissal::count())->toBe(1)
         ->and(Event::count())->toBeGreaterThanOrEqual(20)
+        ->and(ProductEarlyAccessWindow::count())->toBe(2)
         ->and(Enrollment::count())->toBeGreaterThanOrEqual(30)
-        ->and(Order::count())->toBe(15)
+        ->and(Enrollment::query()->whereNotNull('order_item_id')->exists())->toBeTrue()
+        ->and(Order::count())->toBeGreaterThanOrEqual(16)
         ->and(OrderItem::count())->toBeGreaterThanOrEqual(15)
-        ->and(CartItem::count())->toBe(5)
-        ->and(GiftCard::count())->toBe(6)
+        ->and(OrderItem::query()->where('custom_gift_card_amount', '>', 0)->exists())->toBeTrue()
+        ->and(CartItem::count())->toBe(6)
+        ->and(CartItem::query()->where('custom_gift_card_amount', '>', 0)->exists())->toBeTrue()
+        ->and(GiftCard::count())->toBe(7)
         ->and(PaymentPlan::count())->toBe(3)
         ->and(Installment::count())->toBeGreaterThanOrEqual(9)
         ->and(EventAttendee::count())->toBeGreaterThanOrEqual(20)
         ->and(CreditGrant::count())->toBe(11)
+        ->and(ProductQuestion::count())->toBe(2)
+        ->and(ProductQuestionAnswer::count())->toBe(2)
         ->and(StudentWaiver::count())->toBeGreaterThanOrEqual(1)
         ->and(ShowcaseParticipation::count())->toBeGreaterThanOrEqual(1)
+        ->and(StudentEmail::count())->toBe(10)
         ->and(EmergencyContact::count())->toBeGreaterThanOrEqual(2)
         ->and(FormUser::count())->toBeGreaterThanOrEqual(2)
         ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(11)

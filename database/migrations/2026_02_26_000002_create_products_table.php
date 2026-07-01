@@ -14,7 +14,7 @@ return new class() extends Migration
             $table->id();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->unsignedInteger('price')->default(0);
+            $table->unsignedInteger('price')->nullable();
             $table->boolean('is_active')->default(true);
             $table->dateTime('available_from')->nullable()->index();
             $table->dateTime('available_until')->nullable()->index();

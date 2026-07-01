@@ -17,8 +17,6 @@ return new class() extends Migration
             $table->text('description')->nullable();
             $table->string('semester')->default(CourseSemester::Fall->value);
             $table->unsignedInteger('capacity')->default(10);
-            $table->dateTime('start_time')->nullable();
-            $table->unsignedInteger('duration')->default(60);
             $table->string('guest_teacher')->nullable();
             $table->timestamp('event_reminder_processed_at')->nullable();
             $table->timestamps();

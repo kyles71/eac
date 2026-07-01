@@ -14,6 +14,8 @@ return new class() extends Migration
             $table->id();
             $table->string('name');
             $table->unsignedInteger('denomination');
+            $table->boolean('allows_custom_amount')->default(false);
+            $table->unsignedInteger('minimum_custom_amount')->default(100);
             $table->string('restricted_to_product_type')->nullable();
             $table->timestamps();
         });

@@ -6,12 +6,15 @@ namespace Database\Seeders;
 
 use App\Enums\CreditTransactionType;
 use App\Enums\FormTypes;
+use App\Enums\ProductType;
 use App\Models\Calendar;
 use App\Models\CartItem;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
+use App\Models\DashboardMessage;
+use App\Models\DashboardQuickLink;
 use App\Models\DiscountCode;
 use App\Models\EmergencyContact;
 use App\Models\Enrollment;
@@ -21,14 +24,23 @@ use App\Models\Form;
 use App\Models\FormUser;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
+use App\Models\Holiday;
 use App\Models\Installment;
 use App\Models\LegalDocument;
+use App\Models\LegalDocumentAcceptance;
+use App\Models\LegalDocumentVersion;
+use App\Models\ManagedBanner;
+use App\Models\ManagedBannerDismissal;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
+use App\Models\ProductQuestionAnswer;
 use App\Models\Student;
+use App\Models\StudentEmail;
 use App\Models\StudentWaiver;
 use App\Models\User;
 use App\Services\CreditLedgerService;
@@ -142,10 +154,32 @@ final class DatabaseSeeder extends Seeder
             'form_type' => FormTypes::ShowcaseParticipation->value,
         ]);
 
+        $legalDocumentVersions = LegalDocument::query()
+            ->orderBy('id')
+            ->get()
+            ->values()
+            ->map(function (LegalDocument $legalDocument): LegalDocumentVersion {
+                $existingVersion = $legalDocument->latestPublishedVersion()->first();
+
+                if ($existingVersion instanceof LegalDocumentVersion) {
+                    return $existingVersion;
+                }
+
+                return $legalDocument->publishVersion(
+                    title: "{$legalDocument->name} v1",
+                    content: '<p>Seeded legal document content.</p>',
+                );
+            });
+
         $giftCardTypes = collect([
             GiftCardType::factory()->denomination(2500)->create(),
             GiftCardType::factory()->denomination(5000)->create(),
             GiftCardType::factory()->denomination(10000)->create(),
+            GiftCardType::factory()
+                ->denomination(7500)
+                ->customAmount(2500)
+                ->restrictedToProductType(ProductType::Course)
+                ->create(['name' => 'Flexible Class Gift Card']),
         ]);
 
         $costumes = Costume::factory(5)->create();
@@ -163,11 +197,27 @@ final class DatabaseSeeder extends Seeder
             DiscountCode::factory()->exhausted()->create(['code' => 'USED5']),
         ]);
 
+        DashboardMessage::factory()->count(3)->create();
+        DashboardQuickLink::factory()->count(3)->create();
+        Holiday::factory()->count(2)->create();
+
+        $managedBanners = collect([
+            ManagedBanner::factory()->dismissible()->create(),
+            ManagedBanner::factory()->create(),
+            ManagedBanner::factory()->create([
+                'published_at' => now()->addDay(),
+            ]),
+        ]);
+
         // ── Tier 1: Depend on Tier 0 ──
 
         $students = Student::factory(15)->sequence(
             ...collect(range(0, 14))->map(fn (int $i) => ['user_id' => $allUsers->random()->id])->all()
         )->create();
+
+        $students->take(5)->each(fn (Student $student) => StudentEmail::factory(2)->create([
+            'student_id' => $student->id,
+        ]));
 
         $this->seedCompetitionData($students, $competitionStaff);
 
@@ -185,6 +235,33 @@ final class DatabaseSeeder extends Seeder
         $standaloneProducts = Product::factory(2)->standalone()->create();
 
         $allProducts = $courseProducts->merge($giftCardProducts)->merge($costumeProducts)->merge($standaloneProducts);
+
+        $courseProducts
+            ->take(2)
+            ->values()
+            ->each(function (Product $product, int $index) use ($allUsers): void {
+                $window = ProductEarlyAccessWindow::factory()->create([
+                    'product_id' => $product->id,
+                    'available_from' => now()->subDays($index + 1),
+                    'available_until' => now()->addDays(14 + $index),
+                ]);
+
+                $window->users()->attach($allUsers->take($index + 2)->pluck('id')->all());
+            });
+
+        $questionedProduct = $standaloneProducts->first();
+        $productQuestions = collect([
+            ProductQuestion::factory()->required()->create([
+                'product_id' => $questionedProduct->id,
+                'question' => 'Performer name for the program',
+                'sort_order' => 1,
+            ]),
+            ProductQuestion::factory()->required()->select(['Small', 'Medium', 'Large'], true)->create([
+                'product_id' => $questionedProduct->id,
+                'question' => 'Preferred showcase shirt size',
+                'sort_order' => 2,
+            ]),
+        ]);
 
         // ── Tier 2: Depend on Tier 1 ──
 
@@ -244,6 +321,17 @@ final class DatabaseSeeder extends Seeder
             ]);
         });
 
+        $customGiftCardProduct = $giftCardProducts->first(
+            fn (Product $product): bool => $product->allowsCustomGiftCardAmount()
+        );
+        $customGiftCardOwner = $allUsers->first();
+
+        CartItem::factory()->create([
+            'user_id' => $customGiftCardOwner->id,
+            'product_id' => $customGiftCardProduct->id,
+            'custom_gift_card_amount' => 7500,
+        ]);
+
         // Gift cards
         $activeGiftCards = collect();
         $giftCardTypes->each(function (GiftCardType $type) use ($allUsers, $activeGiftCards): void {
@@ -272,11 +360,18 @@ final class DatabaseSeeder extends Seeder
 
             $products->each(function (Product $product) use ($order): void {
                 $state = $order->status === \App\Enums\OrderStatus::Completed ? 'fulfilled' : null;
+                $customGiftCardAmount = $product->price === null
+                    ? ($product->suggestedCustomGiftCardAmount() ?? 0)
+                    : 0;
+                $unitPrice = $customGiftCardAmount > 0
+                    ? $customGiftCardAmount
+                    : ($product->price ?? 0);
                 $factory = OrderItem::factory()->state([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
-                    'unit_price' => $product->price,
-                    'total_price' => $product->price,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $unitPrice,
+                    'custom_gift_card_amount' => $customGiftCardAmount,
                     'quantity' => 1,
                 ]);
 
@@ -287,6 +382,74 @@ final class DatabaseSeeder extends Seeder
                 $factory->create();
             });
         });
+
+        $seededStudent = $students->first();
+        $seededCourse = $courses->first();
+        $seededCourseProduct = $courseProducts->first(
+            fn (Product $product): bool => $product->productable_id === $seededCourse->id
+        );
+        $scenarioOrderSubtotal = ($seededCourseProduct->price ?? 0)
+            + ($questionedProduct->price ?? 0)
+            + 7500;
+
+        $scenarioOrder = Order::factory()->completed()->create([
+            'user_id' => $seededStudent->user_id,
+            'subtotal' => $scenarioOrderSubtotal,
+            'total' => $scenarioOrderSubtotal,
+        ]);
+
+        $courseOrderItem = OrderItem::factory()->fulfilled()->create([
+            'order_id' => $scenarioOrder->id,
+            'product_id' => $seededCourseProduct->id,
+            'unit_price' => $seededCourseProduct->price ?? 0,
+            'total_price' => $seededCourseProduct->price ?? 0,
+            'quantity' => 1,
+        ]);
+
+        Enrollment::factory()->withStudent($seededStudent)->create([
+            'course_id' => $seededCourse->id,
+            'user_id' => $seededStudent->user_id,
+            'student_id' => $seededStudent->id,
+            'order_item_id' => $courseOrderItem->id,
+        ]);
+
+        $questionOrderItem = OrderItem::factory()->fulfilled()->create([
+            'order_id' => $scenarioOrder->id,
+            'product_id' => $questionedProduct->id,
+            'unit_price' => $questionedProduct->price ?? 0,
+            'total_price' => $questionedProduct->price ?? 0,
+            'quantity' => 1,
+        ]);
+
+        ProductQuestionAnswer::factory()->create([
+            'order_item_id' => $questionOrderItem->id,
+            'product_question_id' => $productQuestions[0]->id,
+            'question' => $productQuestions[0]->question,
+            'question_type' => $productQuestions[0]->type,
+            'was_required' => $productQuestions[0]->is_required,
+            'question_order' => $productQuestions[0]->sort_order,
+            'answer' => 'Harper Quinn',
+        ]);
+
+        ProductQuestionAnswer::factory()->create([
+            'order_item_id' => $questionOrderItem->id,
+            'product_question_id' => $productQuestions[1]->id,
+            'question' => $productQuestions[1]->question,
+            'question_type' => $productQuestions[1]->type,
+            'was_required' => $productQuestions[1]->is_required,
+            'question_order' => $productQuestions[1]->sort_order,
+            'selected_option' => 'Medium',
+            'answer' => 'Medium',
+        ]);
+
+        OrderItem::factory()->fulfilled()->create([
+            'order_id' => $scenarioOrder->id,
+            'product_id' => $customGiftCardProduct->id,
+            'unit_price' => 7500,
+            'total_price' => 7500,
+            'custom_gift_card_amount' => 7500,
+            'quantity' => 1,
+        ]);
 
         // Payment plans on some completed orders
         $ordersWithPlans = $completedOrders->random(3);
@@ -338,6 +501,24 @@ final class DatabaseSeeder extends Seeder
             ->get()
             ->map(fn (FormUser $formUser) => $formUser->responseable)
             ->filter(fn ($responseable): bool => $responseable instanceof StudentWaiver);
+
+        $versionByKey = $legalDocumentVersions->keyBy(
+            fn (LegalDocumentVersion $version): string => $version->document->key
+        );
+
+        LegalDocumentAcceptance::factory()->create([
+            'legal_document_version_id' => $versionByKey['portal_terms']->id,
+            'user_id' => $customGiftCardOwner->id,
+            'acceptable_type' => $customGiftCardOwner->getMorphClass(),
+            'acceptable_id' => $customGiftCardOwner->id,
+        ]);
+
+        LegalDocumentAcceptance::factory()->create([
+            'legal_document_version_id' => $versionByKey['payment_plan_terms']->id,
+            'user_id' => $scenarioOrder->user_id,
+            'acceptable_type' => $scenarioOrder->getMorphClass(),
+            'acceptable_id' => $scenarioOrder->id,
+        ]);
 
         // ── Tier 4: Depend on Tier 3 ──
 
@@ -399,6 +580,11 @@ final class DatabaseSeeder extends Seeder
             ->each(function (GiftCardType $type) use ($allProducts): void {
                 $type->products()->attach($allProducts->random(2)->pluck('id'));
             });
+
+        ManagedBannerDismissal::factory()->create([
+            'managed_banner_id' => $managedBanners->first()->id,
+            'user_id' => $customGiftCardOwner->id,
+        ]);
     }
 
     /**

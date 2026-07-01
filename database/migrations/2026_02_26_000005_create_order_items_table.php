@@ -17,6 +17,7 @@ return new class() extends Migration
             $table->unsignedSmallInteger('quantity');
             $table->unsignedInteger('unit_price');
             $table->unsignedInteger('total_price');
+            $table->unsignedInteger('custom_gift_card_amount')->default(0);
             $table->string('status')->default('Pending');
             $table->boolean('purchase_notification_requested')->default(false);
             $table->timestamps();

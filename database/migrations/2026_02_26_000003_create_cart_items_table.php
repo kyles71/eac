@@ -15,10 +15,12 @@ return new class() extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
             $table->unsignedSmallInteger('quantity')->default(1);
+            $table->unsignedInteger('custom_gift_card_amount')->default(0);
             $table->timestamp('reminder_sent_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['user_id', 'product_id']);
+            $table->index(['user_id', 'product_id']);
+            $table->unique(['user_id', 'product_id', 'custom_gift_card_amount']);
         });
     }
 
