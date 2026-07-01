@@ -9,3 +9,16 @@ it('includes shared Filament classes in both panel themes', function (): void {
         ->toContain("@source '../../../app/Filament/Shared/**/*';")
         ->toContain("@source '../../../resources/views/filament/shared/**/*';");
 });
+
+it('pins the user panel topbar on mobile viewports', function (): void {
+    $userTheme = file_get_contents(resource_path('css/filament/user/theme.css'));
+
+    expect($userTheme)
+        ->toContain('@media (max-width: 1023px)')
+        ->toContain('--eac-user-mobile-topbar-offset')
+        ->toContain('.fi-panel-user.fi-body-has-topbar .fi-topbar-ctn')
+        ->toContain('position: fixed')
+        ->toContain('inset-block-start: env(safe-area-inset-top, 0px)')
+        ->toContain('.fi-panel-user.fi-body-has-topbar .fi-layout')
+        ->toContain('padding-block-start: var(--eac-user-mobile-topbar-offset)');
+});

@@ -3,6 +3,25 @@
 @source '../../../../app/Filament/User/**/*';
 @source '../../../../resources/views/filament/user/**/*';
 
+@media (max-width: 1023px) {
+    .fi-panel-user.fi-body-has-topbar {
+        --eac-user-mobile-topbar-offset: calc(4rem + env(safe-area-inset-top, 0px));
+        scroll-padding-block-start: var(--eac-user-mobile-topbar-offset);
+    }
+
+    .fi-panel-user.fi-body-has-topbar .fi-topbar-ctn {
+        position: fixed;
+        inset-block-start: env(safe-area-inset-top, 0px);
+        inset-inline: 0;
+        width: 100%;
+        z-index: 30;
+    }
+
+    .fi-panel-user.fi-body-has-topbar .fi-layout {
+        padding-block-start: var(--eac-user-mobile-topbar-offset);
+    }
+}
+
 .fi-user-my-enrollments-page .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
     position: sticky;
     z-index: 20;
