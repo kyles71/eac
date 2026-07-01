@@ -65,7 +65,16 @@ it('scopes the sticky action column styling to the my classes page', function ()
 
 it('can assign an open purchased enrollment to a student', function () {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
-    $enrollment = Enrollment::factory()->create(['user_id' => auth()->id()]);
+    $course = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addWeek(),
+        'end_time' => now()->addWeek()->addHour(),
+    ]);
+    $enrollment = Enrollment::factory()->create([
+        'course_id' => $course->id,
+        'user_id' => auth()->id(),
+    ]);
 
     livewire(MyEnrollments::class)
         ->set('activeTab', 'all')
@@ -83,7 +92,11 @@ it('can remove a student from an enrollment beyond the configured cutoff', funct
     $student = Student::factory()->create(['user_id' => auth()->id()]);
     $course = Course::factory()->create([
         'semester' => CourseSemester::Fall,
+    ]);
+    Event::factory()->create([
+        'course_id' => $course->id,
         'start_time' => now()->addDays(8),
+        'end_time' => now()->addDays(8)->addHour(),
     ]);
     $enrollment = Enrollment::factory()
         ->withStudent($student)
@@ -107,7 +120,11 @@ it('does not allow removing a student inside the configured cutoff', function ()
     $student = Student::factory()->create(['user_id' => auth()->id()]);
     $course = Course::factory()->create([
         'semester' => CourseSemester::Fall,
+    ]);
+    Event::factory()->create([
+        'course_id' => $course->id,
         'start_time' => now()->addDays(6),
+        'end_time' => now()->addDays(6)->addHour(),
     ]);
     $enrollment = Enrollment::factory()
         ->withStudent($student)
@@ -127,7 +144,11 @@ it('groups current classes by semester and moves concluded classes to past', fun
 
     $winterCourse = Course::factory()->create([
         'semester' => CourseSemester::WinterSpring,
+    ]);
+    Event::factory()->create([
+        'course_id' => $winterCourse->id,
         'start_time' => now()->subWeek(),
+        'end_time' => now()->subWeek()->addHour(),
     ]);
     Event::factory()->create([
         'course_id' => $winterCourse->id,
@@ -143,7 +164,11 @@ it('groups current classes by semester and moves concluded classes to past', fun
 
     $summerCourse = Course::factory()->create([
         'semester' => CourseSemester::Summer,
+    ]);
+    Event::factory()->create([
+        'course_id' => $summerCourse->id,
         'start_time' => now()->addMonth(),
+        'end_time' => now()->addMonth()->addHour(),
     ]);
     $summerEnrollment = Enrollment::factory()
         ->withStudent($student)
@@ -154,7 +179,6 @@ it('groups current classes by semester and moves concluded classes to past', fun
 
     $concludedCourse = Course::factory()->create([
         'semester' => CourseSemester::WinterSpring,
-        'start_time' => now()->subMonth(),
     ]);
     Event::factory()->create([
         'course_id' => $concludedCourse->id,
@@ -194,7 +218,6 @@ it('groups current classes by semester and moves concluded classes to past', fun
 it('does not show assignment actions after a class has concluded', function () {
     $course = Course::factory()->create([
         'semester' => CourseSemester::Fall,
-        'start_time' => now()->subMonth(),
     ]);
     Event::factory()->create([
         'course_id' => $course->id,
@@ -223,14 +246,12 @@ it('opens course details from a course row without calendar widget actions', fun
         'name' => 'Tap Details',
         'description' => 'Bring tap shoes.',
         'semester' => CourseSemester::Fall,
-        'start_time' => now()->addWeek(),
-        'duration' => 75,
     ]);
     $course->teachers()->sync([$teacher->id]);
     Event::factory()->create([
         'course_id' => $course->id,
         'start_time' => now()->addWeek(),
-        'end_time' => now()->addWeek()->addHour(),
+        'end_time' => now()->addWeek()->addMinutes(75),
     ]);
     $enrollment = Enrollment::factory()
         ->withStudent($student)

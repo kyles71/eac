@@ -10,6 +10,7 @@ use App\Contracts\ProvidesStorefrontDetails;
 use App\Enums\CourseSemester;
 use App\Support\MediaDisks;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,9 +36,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     protected $casts = [
         'id' => 'integer',
         'semester' => CourseSemester::class,
-        'start_time' => 'datetime',
         'capacity' => 'integer',
-        'duration' => 'integer',
         'event_reminder_processed_at' => 'datetime',
     ];
 
@@ -89,6 +88,84 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
                 ? $this->guest_teacher
                 : $this->formattedTeacherNames()
         );
+    }
+
+    public function firstScheduledEvent(): ?Event
+    {
+        if ($this->relationLoaded('events')) {
+            return $this->events
+                ->filter(fn (Event $event): bool => $event->start_time instanceof CarbonInterface)
+                ->sortBy('start_time')
+                ->first();
+        }
+
+        return $this->events()
+            ->whereNotNull('start_time')
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->first();
+    }
+
+    public function nextScheduledEvent(?CarbonInterface $date = null): ?Event
+    {
+        $date ??= Carbon::now();
+
+        if ($this->relationLoaded('events')) {
+            return $this->events
+                ->filter(fn (Event $event): bool => $event->start_time?->gte($date) ?? false)
+                ->sortBy('start_time')
+                ->first();
+        }
+
+        return $this->events()
+            ->where('start_time', '>=', $date)
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->first();
+    }
+
+    public function lastScheduledEvent(): ?Event
+    {
+        if ($this->relationLoaded('events')) {
+            return $this->events
+                ->filter(fn (Event $event): bool => $event->start_time instanceof CarbonInterface)
+                ->sortByDesc(fn (Event $event): mixed => $event->end_time ?? $event->start_time)
+                ->first();
+        }
+
+        return $this->events()
+            ->whereNotNull('start_time')
+            ->orderByRaw('COALESCE(end_time, start_time) desc')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    public function firstMeetingStartsAt(): ?CarbonInterface
+    {
+        return $this->firstScheduledEvent()?->start_time;
+    }
+
+    public function nextMeetingStartsAt(?CarbonInterface $date = null): ?CarbonInterface
+    {
+        return $this->nextScheduledEvent($date)?->start_time;
+    }
+
+    public function lastMeetingEndsAt(): ?CarbonInterface
+    {
+        $event = $this->lastScheduledEvent();
+
+        return $event?->end_time ?? $event?->start_time;
+    }
+
+    public function scheduledDurationMinutes(?Event $event = null): ?int
+    {
+        $event ??= $this->firstScheduledEvent();
+
+        if ($event?->start_time instanceof CarbonInterface && $event->end_time instanceof CarbonInterface) {
+            return (int) round($event->start_time->diffInMinutes($event->end_time, true));
+        }
+
+        return null;
     }
 
     public function teachers(): BelongsToMany
@@ -159,11 +236,12 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function storefrontDetails(): array
     {
         $availableCapacity = $this->getAvailableCapacity();
+        $duration = $this->scheduledDurationMinutes();
 
         return array_filter([
             'Semester' => $this->semester?->getLabel(),
             'Start Time' => $this->formattedStorefrontStartTime(),
-            'Duration' => "{$this->duration} minutes",
+            'Duration' => $duration !== null ? "{$duration} minutes" : null,
             'Teacher' => $this->teacherDisplayName,
             'Available Spots' => $availableCapacity > 0 ? (string) $availableCapacity : 'Sold Out',
         ], fn (?string $value): bool => filled($value));
@@ -188,18 +266,14 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
         $query->where(function (Builder $query) use ($date): void {
             $query
-                ->where(function (Builder $query) use ($date): void {
+                ->whereDoesntHave('events')
+                ->orWhere(function (Builder $query) use ($date): void {
                     $query
                         ->whereHas('events')
                         ->whereDoesntHave(
                             'events',
                             fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
                         );
-                })
-                ->orWhere(function (Builder $query) use ($date): void {
-                    $query
-                        ->whereDoesntHave('events')
-                        ->where('start_time', '<', $date);
                 });
         });
     }
@@ -208,22 +282,10 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     {
         $date ??= Carbon::now();
 
-        $query->where(function (Builder $query) use ($date): void {
-            $query
-                ->whereHas(
-                    'events',
-                    fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
-                )
-                ->orWhere(function (Builder $query) use ($date): void {
-                    $query
-                        ->whereDoesntHave('events')
-                        ->where(function (Builder $query) use ($date): void {
-                            $query
-                                ->whereNull('start_time')
-                                ->orWhere('start_time', '>=', $date);
-                        });
-                });
-        });
+        $query->whereHas(
+            'events',
+            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+        );
     }
 
     public function hasConcluded(?Carbon $date = null): bool
@@ -237,7 +299,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
                 );
             }
 
-            return $this->start_time?->lt($date) ?? false;
+            return true;
         }
 
         return ! self::query()
@@ -303,7 +365,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
     private function formattedStorefrontStartTime(): ?string
     {
-        return $this->start_time
+        return $this->firstMeetingStartsAt()
             ?->copy()
             ->timezone((string) config('app.display_timezone', config('app.timezone')))
             ->format('M j, Y g:i A');

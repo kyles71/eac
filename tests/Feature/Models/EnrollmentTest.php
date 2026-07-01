@@ -19,8 +19,11 @@ it('returns enrollments without a student using the open scope', function () {
 });
 
 it('returns active enrollments with a past course start and future events', function () {
-    $course = Course::factory()->create([
+    $course = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $course->id,
         'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
     ]);
     Event::factory()->create([
         'course_id' => $course->id,
@@ -40,9 +43,7 @@ it('returns active enrollments with a past course start and future events', func
 });
 
 it('excludes enrollments from courses that have no future events from active scope', function () {
-    $pastCourse = Course::factory()->create([
-        'start_time' => Carbon::now()->subMonth(),
-    ]);
+    $pastCourse = Course::factory()->create();
     Event::factory()->create([
         'course_id' => $pastCourse->id,
         'start_time' => Carbon::now()->subWeek(),
@@ -57,15 +58,21 @@ it('excludes enrollments from courses that have no future events from active sco
 });
 
 it('returns future enrollments where the course has not started yet', function () {
-    $futureCourse = Course::factory()->create([
+    $futureCourse = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $futureCourse->id,
         'start_time' => Carbon::now()->addMonth(),
+        'end_time' => Carbon::now()->addMonth()->addHour(),
     ]);
 
     $future = Enrollment::factory()->withStudent()->create(['course_id' => $futureCourse->id]);
 
     // Enrollment for a course already started should not appear
-    $startedCourse = Course::factory()->create([
+    $startedCourse = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $startedCourse->id,
         'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
     ]);
     $started = Enrollment::factory()->withStudent()->create(['course_id' => $startedCourse->id]);
 
@@ -76,9 +83,7 @@ it('returns future enrollments where the course has not started yet', function (
 });
 
 it('returns past enrollments where the course started and has no future events', function () {
-    $pastCourse = Course::factory()->create([
-        'start_time' => Carbon::now()->subMonth(),
-    ]);
+    $pastCourse = Course::factory()->create();
     // Only past events
     Event::factory()->create([
         'course_id' => $pastCourse->id,
@@ -89,8 +94,11 @@ it('returns past enrollments where the course started and has no future events',
     $past = Enrollment::factory()->withStudent()->create(['course_id' => $pastCourse->id]);
 
     // Active course (has future events) should NOT appear in past
-    $activeCourse = Course::factory()->create([
+    $activeCourse = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $activeCourse->id,
         'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
     ]);
     Event::factory()->create([
         'course_id' => $activeCourse->id,
@@ -108,7 +116,11 @@ it('returns past enrollments where the course started and has no future events',
 it('returns semester enrollments until the course has concluded', function () {
     $currentCourse = Course::factory()->create([
         'semester' => CourseSemester::Summer,
+    ]);
+    Event::factory()->create([
+        'course_id' => $currentCourse->id,
         'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
     ]);
     Event::factory()->create([
         'course_id' => $currentCourse->id,
@@ -119,7 +131,6 @@ it('returns semester enrollments until the course has concluded', function () {
 
     $concludedCourse = Course::factory()->create([
         'semester' => CourseSemester::Summer,
-        'start_time' => Carbon::now()->subMonth(),
     ]);
     Event::factory()->create([
         'course_id' => $concludedCourse->id,
@@ -131,7 +142,6 @@ it('returns semester enrollments until the course has concluded', function () {
     $fallEnrollment = Enrollment::factory()->create([
         'course_id' => Course::factory()->create([
             'semester' => CourseSemester::Fall,
-            'start_time' => Carbon::now()->addMonth(),
         ])->id,
     ]);
 

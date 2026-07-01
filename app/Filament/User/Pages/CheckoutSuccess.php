@@ -400,7 +400,7 @@ final class CheckoutSuccess extends Page
     {
         return Select::make("assignmentStudentIds.{$enrollment->id}")
             ->label($this->assignmentLabel($enrollment))
-            ->helperText($enrollment->course?->start_time?->format('M j, Y g:i A'))
+            ->helperText($enrollment->course?->firstMeetingStartsAt()?->format('M j, Y g:i A'))
             ->options(fn (): array => $this->studentOptions())
             ->required()
             ->searchable()

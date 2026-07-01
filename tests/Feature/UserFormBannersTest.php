@@ -7,6 +7,7 @@ use App\Filament\User\Pages\CheckoutSuccess;
 use App\Filament\User\Widgets\UserBanners;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Form;
 use App\Models\FormUser;
 use App\Models\ManagedBanner;
@@ -73,7 +74,12 @@ it('does not render global banners on the checkout success page', function (): v
 
 it('refreshes enrollment and form banners without a page navigation', function (): void {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
-    $course = Course::factory()->create(['start_time' => now()->addMonth()]);
+    $course = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addMonth(),
+        'end_time' => now()->addMonth()->addHour(),
+    ]);
     $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
     $course->forms()->attach($form);
     $enrollment = Enrollment::factory()->create([

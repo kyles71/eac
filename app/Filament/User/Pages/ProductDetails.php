@@ -46,7 +46,7 @@ final class ProductDetails extends Page
 
         $product->loadMissing(['media', 'productable', 'requiresCourse']);
         $product->loadMorph('productable', [
-            Course::class => ['teachers.media'],
+            Course::class => ['events', 'teachers.media'],
         ]);
 
         if ($product->productable instanceof HasMedia) {

@@ -7,6 +7,7 @@ use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
@@ -27,9 +28,12 @@ beforeEach(function () {
 
     $this->course = Course::factory()->create([
         'capacity' => 5,
-        'duration' => 60,
         'guest_teacher' => 'Misty Copeland',
+    ]);
+    Event::factory()->create([
+        'course_id' => $this->course->id,
         'start_time' => CarbonImmutable::parse('2026-06-01 18:30:00', 'UTC'),
+        'end_time' => CarbonImmutable::parse('2026-06-01 19:30:00', 'UTC'),
     ]);
 
     $this->product = Product::factory()

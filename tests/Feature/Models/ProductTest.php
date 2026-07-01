@@ -8,6 +8,7 @@ use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
@@ -82,9 +83,12 @@ it('delegates course storefront details to the linked course', function () {
     ]);
     $course = Course::factory()->create([
         'capacity' => 8,
-        'duration' => 90,
-        'start_time' => Carbon::parse('2027-01-15 18:30:00', 'UTC'),
         'guest_teacher' => null,
+    ]);
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::parse('2027-01-15 18:30:00', 'UTC'),
+        'end_time' => Carbon::parse('2027-01-15 20:00:00', 'UTC'),
     ]);
     $course->teachers()->sync([$teacher->id]);
     $product = Product::factory()->forCourse($course)->create();

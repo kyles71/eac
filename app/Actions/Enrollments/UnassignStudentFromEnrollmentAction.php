@@ -39,6 +39,6 @@ final readonly class UnassignStudentFromEnrollmentAction
 
         $cutoffDays = (int) config('app.enrollment_unassign_cutoff_days', 7);
 
-        return $enrollment->course->start_time?->gte(now()->addDays($cutoffDays)) ?? false;
+        return $enrollment->course->firstMeetingStartsAt()?->gte(now()->addDays($cutoffDays)) ?? false;
     }
 }

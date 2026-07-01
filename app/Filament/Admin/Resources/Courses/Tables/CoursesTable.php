@@ -40,12 +40,16 @@ final class CoursesTable
                     ->sortable(false)
                     ->badge()
                     ->color(fn (Course $record): string => $record->getAvailableCapacity() > 0 ? 'success' : 'danger'),
-                TextColumn::make('start_time')
+                TextColumn::make('first_meeting_starts_at')
+                    ->label('Starts At')
+                    ->state(fn (Course $record): mixed => $record->firstMeetingStartsAt())
                     ->dateTime()
-                    ->sortable(),
-                TextColumn::make('duration')
+                    ->sortable(false),
+                TextColumn::make('scheduled_duration')
+                    ->label('Duration')
+                    ->state(fn (Course $record): ?int => $record->scheduledDurationMinutes())
                     ->numeric()
-                    ->sortable(),
+                    ->sortable(false),
                 TextColumn::make('guest_teacher')
                     ->searchable(),
                 TextColumn::make('teacher_display_name')

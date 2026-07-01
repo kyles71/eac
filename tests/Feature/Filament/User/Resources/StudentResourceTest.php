@@ -241,9 +241,13 @@ it('shows current classes and progressively loads past enrollment history', func
     ]);
     $currentCourse = Course::factory()->create([
         'name' => 'Current Ballet',
-        'start_time' => now()->subWeek(),
     ]);
     $currentCourse->teachers()->sync([$currentTeacher->id]);
+    Event::factory()->create([
+        'course_id' => $currentCourse->id,
+        'start_time' => now()->subWeek(),
+        'end_time' => now()->subWeek()->addHour(),
+    ]);
     $currentEvent = Event::factory()->create([
         'course_id' => $currentCourse->id,
         'start_time' => now()->addDay(),
@@ -259,7 +263,6 @@ it('shows current classes and progressively loads past enrollment history', func
     foreach (range(1, 6) as $number) {
         $course = Course::factory()->create([
             'name' => "Past Course {$number}",
-            'start_time' => now()->subMonths($number),
         ]);
         if ($number === 1) {
             $course->teachers()->sync([$pastTeacher->id]);

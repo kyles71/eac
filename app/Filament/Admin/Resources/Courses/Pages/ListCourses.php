@@ -10,6 +10,7 @@ use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
 use App\Services\HolidayConflictService;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
@@ -20,13 +21,31 @@ final class ListCourses extends ListRecords
 
     protected static string $resource = CourseResource::class;
 
+    private ?CarbonInterface $courseStartsAt = null;
+
+    private ?int $courseDurationMinutes = null;
+
     protected function getHeaderActions(): array
     {
         return [
             CreateAction::make()
-                ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
+                ->mutateDataUsing(fn (array $data): array => $this->prepareCourseCreateData($data))
                 ->after(fn (CreateAction $action): array => $this->createCourseEvents($action)),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function prepareCourseCreateData(array $data): array
+    {
+        $this->courseStartsAt = $this->normalizeCourseStartsAt($data['start_time'] ?? null);
+        $this->courseDurationMinutes = $this->normalizeCourseDuration($data['duration'] ?? null);
+
+        unset($data['start_time'], $data['duration']);
+
+        return $this->prepRecurringData($data);
     }
 
     /**
@@ -70,18 +89,42 @@ final class ListCourses extends ListRecords
      */
     private function courseEventData(Course $course): array
     {
-        if (! $course->start_time instanceof CarbonInterface) {
+        if (! $this->courseStartsAt instanceof CarbonInterface || $this->courseDurationMinutes === null) {
             return [];
         }
 
         return [
             'name' => $course->name,
             'description' => $course->description,
-            'start_time' => $course->start_time->toDateTimeString(),
-            'end_time' => $course->start_time->copy()->addMinutes($course->duration)->toDateTimeString(),
+            'start_time' => $this->courseStartsAt->toDateTimeString(),
+            'end_time' => $this->courseStartsAt->copy()->addMinutes($this->courseDurationMinutes)->toDateTimeString(),
             'calendar_id' => $this->courseCalendarId($course),
             'course_id' => $course->id,
         ];
+    }
+
+    private function normalizeCourseStartsAt(mixed $startsAt): ?CarbonInterface
+    {
+        if ($startsAt instanceof CarbonInterface) {
+            return $startsAt;
+        }
+
+        if (blank($startsAt)) {
+            return null;
+        }
+
+        return CarbonImmutable::parse((string) $startsAt);
+    }
+
+    private function normalizeCourseDuration(mixed $duration): ?int
+    {
+        if (! is_numeric($duration)) {
+            return null;
+        }
+
+        $minutes = (int) $duration;
+
+        return $minutes > 0 ? $minutes : null;
     }
 
     private function courseCalendarId(Course $course): ?int

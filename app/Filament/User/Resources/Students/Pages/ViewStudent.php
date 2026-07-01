@@ -265,10 +265,7 @@ final class ViewStudent extends ViewRecord implements HasTable
             ->with(['course.events', 'course.teachers.media'])
             ->select('enrollments.*')
             ->orderByDesc(DB::raw(
-                'COALESCE(
-                    (SELECT MAX(COALESCE(events.end_time, events.start_time)) FROM events WHERE events.course_id = enrollments.course_id),
-                    (SELECT courses.start_time FROM courses WHERE courses.id = enrollments.course_id)
-                )'
+                '(SELECT MAX(COALESCE(events.end_time, events.start_time)) FROM events WHERE events.course_id = enrollments.course_id)'
             ))
             ->limit($this->historyLimit + 1)
             ->get();
@@ -302,17 +299,10 @@ final class ViewStudent extends ViewRecord implements HasTable
         }
 
         if (EnrollmentStatus::for($enrollment) === 'Past') {
-            $lastMeeting = $course->events
-                ->sortByDesc(fn ($event): mixed => $event->end_time ?? $event->start_time)
-                ->first();
-
-            return $lastMeeting?->end_time ?? $lastMeeting?->start_time ?? $course->start_time;
+            return $course->lastMeetingEndsAt();
         }
 
-        return $course->events
-            ->filter(fn ($event): bool => $event->start_time?->gte(now()) ?? false)
-            ->sortBy('start_time')
-            ->first()?->start_time ?? $course->start_time;
+        return $course->nextMeetingStartsAt();
     }
 
     private function studentEventsQuery(): Builder

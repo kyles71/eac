@@ -106,10 +106,11 @@ final class MyEnrollments extends TablePage
                     ->label('Student')
                     ->placeholder('Unassigned')
                     ->searchable(['first_name', 'last_name']),
-                TextColumn::make('course.start_time')
+                TextColumn::make('course_starts_at')
                     ->label('Starts')
+                    ->state(fn (Enrollment $record): mixed => $record->course?->firstMeetingStartsAt())
                     ->dateTime('M j, Y g:i A')
-                    ->sortable(),
+                    ->sortable(false),
                 TextColumn::make('status')
                     ->state(fn (Enrollment $record): string => EnrollmentStatus::for($record))
                     ->badge()

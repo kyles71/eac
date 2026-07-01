@@ -45,32 +45,33 @@ final class CourseForm
                             ->required()
                             ->numeric()
                             ->default(10),
-                        TextInput::make('duration')
-                            ->label('Duration (minutes)')
-                            ->required()
-                            ->numeric()
-                            ->default(60),
                         Textarea::make('description')
                             ->columnSpanFull(),
                     ]),
                 Section::make('Schedule')
                     ->columns(2)
                     ->columnSpanFull()
+                    ->visible(fn (string $operation): bool => $operation === 'create')
                     ->schema([
                         DateTimePicker::make('start_time')
                             ->label('Starts At')
-                            ->required(),
+                            ->required()
+                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                        TextInput::make('duration')
+                            ->label('Duration (minutes)')
+                            ->required()
+                            ->numeric()
+                            ->default(60),
                         Select::make('repeat_frequency')
                             ->label('Repeat')
                             ->placeholder('Does not repeat')
                             ->live()
-                            ->visible(fn (string $operation): bool => $operation === 'create')
                             ->enum(ScheduleFrequency::class)
                             ->options(ScheduleFrequency::class),
                         DatePicker::make('repeat_through')
                             ->label('Repeat Through')
                             ->required(fn (Get $get): bool => filled($get('repeat_frequency')))
-                            ->visible(fn (Get $get, string $operation): bool => $operation === 'create' && filled($get('repeat_frequency'))),
+                            ->visible(fn (Get $get): bool => filled($get('repeat_frequency'))),
                     ]),
                 Section::make('Enrollment & Visibility')
                     ->columns(2)
@@ -100,21 +101,7 @@ final class CourseForm
 
                                 $record?->syncTagsWithType($calendarSlugs, Course::CALENDAR_TAG_TYPE);
                             })
-                            ->dehydrated(false)
-                            ->columnSpanFull(),
-                        Select::make('teachers')
-                            ->label('Teachers')
-                            ->multiple()
-                            ->preload()
-                            ->searchableRelationship(
-                                name: 'teachers',
-                                searchColumns: ['first_name', 'last_name'],
-                                labelFromRecord: fn (User $user): string => $user->fullName,
-                                modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),
-                                orderBy: ['first_name', 'last_name'],
-                            ),
-                        TextInput::make('guest_teacher')
-                            ->label('Guest Teacher'),
+                            ->dehydrated(false),
                         Select::make('courseForms')
                             ->label('Required Forms')
                             ->multiple()
@@ -129,6 +116,19 @@ final class CourseForm
                                 ->where('form_type', FormTypes::StudentWaiver)
                                 ->orderBy('valid_until', 'desc')
                                 ->first()) === null ? [] : [$form->id]),
+                        Select::make('teachers')
+                            ->label('Teachers')
+                            ->multiple()
+                            ->preload()
+                            ->searchableRelationship(
+                                name: 'teachers',
+                                searchColumns: ['first_name', 'last_name'],
+                                labelFromRecord: fn (User $user): string => $user->fullName,
+                                modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),
+                                orderBy: ['first_name', 'last_name'],
+                            ),
+                        TextInput::make('guest_teacher')
+                            ->label('Guest Teacher'),
                         SpatieTagsInput::make('tags')
                             ->label('Course Tags')
                             ->type(Course::GENERAL_TAG_TYPE)

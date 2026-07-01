@@ -35,11 +35,13 @@ final class CourseInfolist
                             ->state(fn (Course $record): int => $record->getAvailableCapacity())
                             ->badge()
                             ->color(fn (Course $record): string => $record->getAvailableCapacity() > 0 ? 'success' : 'danger'),
-                        TextEntry::make('start_time')
+                        TextEntry::make('first_meeting_starts_at')
                             ->label('Starts At')
+                            ->state(fn (Course $record): mixed => $record->firstMeetingStartsAt())
                             ->dateTime(),
-                        TextEntry::make('duration')
+                        TextEntry::make('scheduled_duration')
                             ->label('Duration (minutes)')
+                            ->state(fn (Course $record): ?int => $record->scheduledDurationMinutes())
                             ->numeric(),
                         TextEntry::make('teacher_display_name')
                             ->label('Teachers'),

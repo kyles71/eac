@@ -21,10 +21,13 @@ afterEach(function (): void {
 });
 
 it('lists every assigned enrollment for the same active course', function (): void {
-    $activeCourse = Course::factory()->create([
-        'start_time' => Carbon::now()->subWeek(),
-    ]);
+    $activeCourse = Course::factory()->create();
 
+    Event::factory()->create([
+        'course_id' => $activeCourse->id,
+        'start_time' => Carbon::now()->subWeek(),
+        'end_time' => Carbon::now()->subWeek()->addHour(),
+    ]);
     Event::factory()->create([
         'course_id' => $activeCourse->id,
         'start_time' => Carbon::now()->addDay(),
@@ -42,15 +45,17 @@ it('lists every assigned enrollment for the same active course', function (): vo
         'student_id' => null,
     ]);
 
+    $futureCourse = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $futureCourse->id,
+        'start_time' => Carbon::now()->addWeek(),
+        'end_time' => Carbon::now()->addWeek()->addHour(),
+    ]);
     $futureEnrollment = Enrollment::factory()->withStudent()->create([
-        'course_id' => Course::factory()->create([
-            'start_time' => Carbon::now()->addWeek(),
-        ])->id,
+        'course_id' => $futureCourse->id,
     ]);
 
-    $concludedCourse = Course::factory()->create([
-        'start_time' => Carbon::now()->subMonth(),
-    ]);
+    $concludedCourse = Course::factory()->create();
     Event::factory()->create([
         'course_id' => $concludedCourse->id,
         'start_time' => Carbon::now()->subWeek(),

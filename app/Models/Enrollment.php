@@ -67,7 +67,10 @@ final class Enrollment extends Model
             ->whereHas(
                 'course',
                 fn (Builder $query): Builder => $query
-                    ->where('start_time', '<', $date)
+                    ->whereHas(
+                        'events',
+                        fn (Builder $query): Builder => $query->where('start_time', '<', $date)
+                    )
                     ->notConcluded($date)
             );
     }
@@ -80,7 +83,17 @@ final class Enrollment extends Model
         }
 
         $query->whereNotNull('student_id')
-            ->whereRelation('course', 'start_time', '>', $date);
+            ->whereHas('course', function (Builder $query) use ($date): void {
+                $query
+                    ->whereHas(
+                        'events',
+                        fn (Builder $query): Builder => $query->where('start_time', '>', $date)
+                    )
+                    ->whereDoesntHave(
+                        'events',
+                        fn (Builder $query): Builder => $query->where('start_time', '<=', $date)
+                    );
+            });
     }
 
     #[Scope]

@@ -53,9 +53,16 @@ it('only shows needs attention when there are tasks', function (): void {
         ->assertOk()
         ->assertDontSeeLivewire(NeedsAttention::class);
 
+    $course = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+
     Enrollment::factory()->create([
         'user_id' => auth()->id(),
-        'course_id' => Course::factory()->create(['start_time' => now()->addDay()]),
+        'course_id' => $course->id,
         'student_id' => null,
     ]);
 
@@ -71,7 +78,12 @@ it('resolves inherited dashboard audiences for families teachers and owners', fu
     $compFamily = User::factory()->create();
     $teacher = User::factory()->isTeacher()->create();
     $owner = User::factory()->isOwner()->create();
-    $course = Course::factory()->create(['start_time' => now()->addDay()]);
+    $course = Course::factory()->create();
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
     $compStudent = Student::factory()->create(['user_id' => $compFamily->id]);
     $compTeam = CompetitionTeam::factory()
         ->for(CompetitionSeason::factory()->current(), 'season')

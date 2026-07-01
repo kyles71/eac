@@ -27,7 +27,7 @@ final class EnrollmentStatus
             return 'Open';
         }
 
-        if ($course->start_time?->gt($now)) {
+        if ($course->firstMeetingStartsAt()?->gt($now)) {
             return 'Future';
         }
 
