@@ -142,16 +142,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.386.2",
+            "version": "3.387.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "accda84af79689415782908dfa2b4a0fe434e0a1"
+                "reference": "2e1a16e9c87f2a069aa8a0a14a314dd148de21e1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/accda84af79689415782908dfa2b4a0fe434e0a1",
-                "reference": "accda84af79689415782908dfa2b4a0fe434e0a1",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/2e1a16e9c87f2a069aa8a0a14a314dd148de21e1",
+                "reference": "2e1a16e9c87f2a069aa8a0a14a314dd148de21e1",
                 "shasum": ""
             },
             "require": {
@@ -233,9 +233,9 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.386.2"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.387.1"
             },
-            "time": "2026-06-29T18:07:20+00:00"
+            "time": "2026-07-01T18:10:42+00:00"
         },
         {
             "name": "bezhansalleh/filament-panel-switch",
@@ -557,16 +557,16 @@
         },
         {
             "name": "blade-ui-kit/blade-icons",
-            "version": "1.10.0",
+            "version": "1.10.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/driesvints/blade-icons.git",
-                "reference": "74189a80bbaa4966aebaee54fec3a3c2ef0a5f3a"
+                "reference": "6e072d021ea6249986c330b93293c33d0c4f0e34"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/driesvints/blade-icons/zipball/74189a80bbaa4966aebaee54fec3a3c2ef0a5f3a",
-                "reference": "74189a80bbaa4966aebaee54fec3a3c2ef0a5f3a",
+                "url": "https://api.github.com/repos/driesvints/blade-icons/zipball/6e072d021ea6249986c330b93293c33d0c4f0e34",
+                "reference": "6e072d021ea6249986c330b93293c33d0c4f0e34",
                 "shasum": ""
             },
             "require": {
@@ -634,7 +634,7 @@
                     "type": "paypal"
                 }
             ],
-            "time": "2026-04-23T19:03:45+00:00"
+            "time": "2026-06-30T09:44:12+00:00"
         },
         {
             "name": "brick/math",
@@ -2207,16 +2207,16 @@
         },
         {
             "name": "finity-labs/fin-mail",
-            "version": "v1.8.0",
+            "version": "v1.8.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/finity-labs/fin-mail.git",
-                "reference": "962febc1c2049ffb50015ecd4333f2d0344294fe"
+                "reference": "7f722be35b9b91674d12925d884ee0d4d764d6bd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/finity-labs/fin-mail/zipball/962febc1c2049ffb50015ecd4333f2d0344294fe",
-                "reference": "962febc1c2049ffb50015ecd4333f2d0344294fe",
+                "url": "https://api.github.com/repos/finity-labs/fin-mail/zipball/7f722be35b9b91674d12925d884ee0d4d764d6bd",
+                "reference": "7f722be35b9b91674d12925d884ee0d4d764d6bd",
                 "shasum": ""
             },
             "require": {
@@ -2279,9 +2279,9 @@
             ],
             "support": {
                 "issues": "https://github.com/finity-labs/fin-mail/issues",
-                "source": "https://github.com/finity-labs/fin-mail/tree/v1.8.0"
+                "source": "https://github.com/finity-labs/fin-mail/tree/v1.8.1"
             },
-            "time": "2026-06-11T09:44:01+00:00"
+            "time": "2026-06-30T06:01:35+00:00"
         },
         {
             "name": "fruitcake/php-cors",
@@ -3037,16 +3037,16 @@
         },
         {
             "name": "kyle/filament-mail-manager",
-            "version": "v0.1.4",
+            "version": "v0.1.5",
             "source": {
                 "type": "git",
                 "url": "git@github.com:kyles71/filament-mail-manager.git",
-                "reference": "c2eac0f8bbe46d505df8f7c9fa355ac354c318f5"
+                "reference": "b266ac2ebe6b16839024965ef1c7acd42e291685"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kyles71/filament-mail-manager/zipball/c2eac0f8bbe46d505df8f7c9fa355ac354c318f5",
-                "reference": "c2eac0f8bbe46d505df8f7c9fa355ac354c318f5",
+                "url": "https://api.github.com/repos/kyles71/filament-mail-manager/zipball/b266ac2ebe6b16839024965ef1c7acd42e291685",
+                "reference": "b266ac2ebe6b16839024965ef1c7acd42e291685",
                 "shasum": ""
             },
             "require": {
@@ -3095,10 +3095,10 @@
             ],
             "description": "Registry-driven managed email templates and reusable layouts for Filament.",
             "support": {
-                "source": "https://github.com/kyles71/filament-mail-manager/tree/v0.1.4",
+                "source": "https://github.com/kyles71/filament-mail-manager/tree/v0.1.5",
                 "issues": "https://github.com/kyles71/filament-mail-manager/issues"
             },
-            "time": "2026-06-30T01:19:02+00:00"
+            "time": "2026-07-01T19:40:21+00:00"
         },
         {
             "name": "kyle/filament-theme-builder",
@@ -3172,16 +3172,16 @@
         },
         {
             "name": "laravel/framework",
-            "version": "v13.17.0",
+            "version": "v13.18.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/framework.git",
-                "reference": "0802b7a81f3252d78200b8037ac183a686a529f0"
+                "reference": "138e5806ed7e4e21591948b661119d3810f052cf"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/framework/zipball/0802b7a81f3252d78200b8037ac183a686a529f0",
-                "reference": "0802b7a81f3252d78200b8037ac183a686a529f0",
+                "url": "https://api.github.com/repos/laravel/framework/zipball/138e5806ed7e4e21591948b661119d3810f052cf",
+                "reference": "138e5806ed7e4e21591948b661119d3810f052cf",
                 "shasum": ""
             },
             "require": {
@@ -3392,7 +3392,7 @@
                 "issues": "https://github.com/laravel/framework/issues",
                 "source": "https://github.com/laravel/framework"
             },
-            "time": "2026-06-23T19:42:45+00:00"
+            "time": "2026-06-30T12:54:13+00:00"
         },
         {
             "name": "laravel/prompts",
@@ -13184,16 +13184,16 @@
         },
         {
             "name": "laravel/boost",
-            "version": "v2.4.10",
+            "version": "v2.4.11",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/boost.git",
-                "reference": "080189f51c8d27c0792a03483a70adc7770f6eeb"
+                "reference": "c98fc9d151de97a1864b51fc7c710fc03023ba17"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/boost/zipball/080189f51c8d27c0792a03483a70adc7770f6eeb",
-                "reference": "080189f51c8d27c0792a03483a70adc7770f6eeb",
+                "url": "https://api.github.com/repos/laravel/boost/zipball/c98fc9d151de97a1864b51fc7c710fc03023ba17",
+                "reference": "c98fc9d151de97a1864b51fc7c710fc03023ba17",
                 "shasum": ""
             },
             "require": {
@@ -13246,7 +13246,7 @@
                 "issues": "https://github.com/laravel/boost/issues",
                 "source": "https://github.com/laravel/boost"
             },
-            "time": "2026-06-09T10:21:08+00:00"
+            "time": "2026-06-26T08:21:49+00:00"
         },
         {
             "name": "laravel/mcp",
@@ -14950,11 +14950,11 @@
         },
         {
             "name": "phpstan/phpstan",
-            "version": "2.2.2",
+            "version": "2.2.3",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/e5cc34d491a90e79c216d824f60fe21fd4d93bd6",
-                "reference": "e5cc34d491a90e79c216d824f60fe21fd4d93bd6",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/4048833dd47b377287818841877fb3087289509c",
+                "reference": "4048833dd47b377287818841877fb3087289509c",
                 "shasum": ""
             },
             "require": {
@@ -15010,7 +15010,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-06-05T09:00:01+00:00"
+            "time": "2026-06-30T21:15:26+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",

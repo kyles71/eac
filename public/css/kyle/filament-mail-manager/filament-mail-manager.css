@@ -25,4 +25,11 @@
         white-space: normal;
         overflow-wrap: anywhere;
     }
+
+    &.fi-mail-manager-subject-editor {
+        .fi-fo-rich-editor-content,
+        .tiptap {
+            min-height: 3rem;
+        }
+    }
 }
