@@ -9,9 +9,11 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Student;
 use App\Models\User;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Illuminate\Contracts\Support\Htmlable;
 
 use function Pest\Livewire\livewire;
@@ -23,6 +25,34 @@ beforeEach(function () {
 it('can render the my classes page', function () {
     livewire(MyEnrollments::class)
         ->assertOk();
+});
+
+it('groups row actions at the start of the table', function () {
+    $component = livewire(MyEnrollments::class)
+        ->loadTable();
+
+    $recordActions = $component->instance()->getTable()->getRecordActions();
+
+    expect($component->instance()->getTable()->getRecordActionsPosition())
+        ->toBe(RecordActionsPosition::BeforeCells)
+        ->and($recordActions)
+        ->toHaveCount(1)
+        ->and($recordActions[0])
+        ->toBeInstanceOf(ActionGroup::class)
+        ->and($component->instance()->getTable()->getFlatRecordActions())
+        ->toHaveKeys(['viewCourseDetails', 'assignStudent', 'removeStudent']);
+});
+
+it('scopes the sticky action column styling to the my classes page', function () {
+    expect((new MyEnrollments)->getPageClasses())
+        ->toContain('fi-user-my-enrollments-page')
+        ->and(file_get_contents(resource_path('css/filament/user/theme.css')))
+        ->toContain('.fi-user-my-enrollments-page')
+        ->toContain('position: sticky')
+        ->toContain('inset-inline-start: 0')
+        ->toContain(':focus-within')
+        ->toContain('body:has(.fi-user-my-enrollments-page) .fi-dropdown-panel')
+        ->toContain('z-index: 50');
 });
 
 it('can assign an open purchased enrollment to a student', function () {

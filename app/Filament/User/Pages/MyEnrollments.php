@@ -16,6 +16,7 @@ use App\Support\UserAttention;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Concerns\HasTabs;
@@ -25,6 +26,7 @@ use Filament\Schemas\Schema;
 use Filament\Schemas\Schema as ComponentSchema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,6 +47,14 @@ final class MyEnrollments extends TablePage
     public function mount(): void
     {
         $this->loadDefaultActiveTab();
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function getPageClasses(): array
+    {
+        return ['fi-user-my-enrollments-page'];
     }
 
     public function content(Schema $schema): Schema
@@ -112,90 +122,92 @@ final class MyEnrollments extends TablePage
             ])
             ->recordAction('viewCourseDetails')
             ->recordActions([
-                ViewCourseDetailsAction::make(),
-                Action::make('assignStudent')
-                    ->label(fn (Enrollment $record): string => $record->student_id === null ? 'Assign Student' : 'Change Student')
-                    ->icon(Heroicon::OutlinedUser)
-                    ->visible(fn (Enrollment $record): bool => ! $this->courseHasConcluded($record) && ($record->student_id === null || $this->canChangeAssignedStudent($record)))
-                    ->schema([
-                        Select::make('student_id')
-                            ->label('Student')
-                            ->options(fn (): array => $this->studentOptions())
-                            ->default(fn (Enrollment $record): ?int => $record->student_id)
-                            ->required()
-                            ->searchable()
-                            ->createOptionForm(fn (ComponentSchema $schema): ComponentSchema => StudentForm::configure($schema))
-                            ->createOptionUsing(function (array $data): int {
+                ActionGroup::make([
+                    ViewCourseDetailsAction::make(),
+                    Action::make('assignStudent')
+                        ->label(fn (Enrollment $record): string => $record->student_id === null ? 'Assign Student' : 'Change Student')
+                        ->icon(Heroicon::OutlinedUser)
+                        ->visible(fn (Enrollment $record): bool => ! $this->courseHasConcluded($record) && ($record->student_id === null || $this->canChangeAssignedStudent($record)))
+                        ->schema([
+                            Select::make('student_id')
+                                ->label('Student')
+                                ->options(fn (): array => $this->studentOptions())
+                                ->default(fn (Enrollment $record): ?int => $record->student_id)
+                                ->required()
+                                ->searchable()
+                                ->createOptionForm(fn (ComponentSchema $schema): ComponentSchema => StudentForm::configure($schema))
+                                ->createOptionUsing(function (array $data): int {
+                                    /** @var \App\Models\User $user */
+                                    $user = auth()->user();
+
+                                    return $user->students()->create($data)->getKey();
+                                }),
+                        ])
+                        ->action(function (Enrollment $record, array $data): void {
+                            $student = Student::query()
+                                ->where('user_id', auth()->id())
+                                ->find($data['student_id']);
+
+                            if ($student === null) {
+                                Notification::make()
+                                    ->title('Student not found')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            try {
                                 /** @var \App\Models\User $user */
                                 $user = auth()->user();
 
-                                return $user->students()->create($data)->getKey();
-                            }),
-                    ])
-                    ->action(function (Enrollment $record, array $data): void {
-                        $student = Student::query()
-                            ->where('user_id', auth()->id())
-                            ->find($data['student_id']);
+                                app(AssignStudentToEnrollmentAction::class)->handle($record, $student, $user);
 
-                        if ($student === null) {
-                            Notification::make()
-                                ->title('Student not found')
-                                ->danger()
-                                ->send();
+                                $this->dispatch(UserAttention::UPDATED_EVENT);
+                                $this->dispatch('refresh-sidebar');
 
-                            return;
-                        }
+                                Notification::make()
+                                    ->title('Enrollment updated')
+                                    ->success()
+                                    ->send();
+                            } catch (InvalidArgumentException $exception) {
+                                Notification::make()
+                                    ->title('Could not update enrollment')
+                                    ->body($exception->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                    Action::make('removeStudent')
+                        ->label('Remove Student')
+                        ->icon(Heroicon::OutlinedXMark)
+                        ->color('danger')
+                        ->visible(fn (Enrollment $record): bool => $this->canUnassignStudent($record))
+                        ->requiresConfirmation()
+                        ->action(function (Enrollment $record): void {
+                            try {
+                                /** @var \App\Models\User $user */
+                                $user = auth()->user();
 
-                        try {
-                            /** @var \App\Models\User $user */
-                            $user = auth()->user();
+                                app(UnassignStudentFromEnrollmentAction::class)->handle($record, $user);
 
-                            app(AssignStudentToEnrollmentAction::class)->handle($record, $student, $user);
+                                $this->dispatch(UserAttention::UPDATED_EVENT);
+                                $this->dispatch('refresh-sidebar');
 
-                            $this->dispatch(UserAttention::UPDATED_EVENT);
-                            $this->dispatch('refresh-sidebar');
-
-                            Notification::make()
-                                ->title('Enrollment updated')
-                                ->success()
-                                ->send();
-                        } catch (InvalidArgumentException $exception) {
-                            Notification::make()
-                                ->title('Could not update enrollment')
-                                ->body($exception->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-                Action::make('removeStudent')
-                    ->label('Remove Student')
-                    ->icon(Heroicon::OutlinedXMark)
-                    ->color('danger')
-                    ->visible(fn (Enrollment $record): bool => $this->canUnassignStudent($record))
-                    ->requiresConfirmation()
-                    ->action(function (Enrollment $record): void {
-                        try {
-                            /** @var \App\Models\User $user */
-                            $user = auth()->user();
-
-                            app(UnassignStudentFromEnrollmentAction::class)->handle($record, $user);
-
-                            $this->dispatch(UserAttention::UPDATED_EVENT);
-                            $this->dispatch('refresh-sidebar');
-
-                            Notification::make()
-                                ->title('Student removed from enrollment')
-                                ->success()
-                                ->send();
-                        } catch (InvalidArgumentException $exception) {
-                            Notification::make()
-                                ->title('Could not remove student')
-                                ->body($exception->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-            ])
+                                Notification::make()
+                                    ->title('Student removed from enrollment')
+                                    ->success()
+                                    ->send();
+                            } catch (InvalidArgumentException $exception) {
+                                Notification::make()
+                                    ->title('Could not remove student')
+                                    ->body($exception->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                ]),
+            ], RecordActionsPosition::BeforeCells)
             ->modifyQueryUsing($this->modifyQueryWithActiveTab(...))
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('No classes')
