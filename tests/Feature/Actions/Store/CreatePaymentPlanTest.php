@@ -31,6 +31,26 @@ it('creates a payment plan with correct installments', function () {
         ->and($plan->installments)->toHaveCount(3);
 });
 
+it('creates installments from the stored payment plan principal and fee', function () {
+    $template = PaymentPlanTemplate::factory()->create([
+        'number_of_installments' => 4,
+        'frequency' => PaymentPlanFrequency::Monthly,
+    ]);
+    $order = Order::factory()->create([
+        'total' => 8150,
+        'payment_plan_principal' => 5000,
+        'payment_plan_fee' => 150,
+        'payment_plan_template_id' => $template->id,
+    ]);
+
+    $plan = (new CreatePaymentPlan)->handle($order, $template);
+
+    expect($plan->total_amount)->toBe(5150)
+        ->and($plan->installments)->toHaveCount(4)
+        ->and($plan->installments->sum('amount'))->toBe(5150)
+        ->and($plan->installments->sortBy('installment_number')->first()->amount)->toBe(1289);
+});
+
 it('marks first installment as paid', function () {
     $order = Order::factory()->create(['total' => 10000]);
     $template = PaymentPlanTemplate::factory()->create([

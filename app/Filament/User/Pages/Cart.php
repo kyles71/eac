@@ -16,7 +16,8 @@ use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
 use App\Services\CreditLedgerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
-use App\Support\PaymentPlanFee;
+use App\Support\PaymentPlans\PaymentPlanBreakdown;
+use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
@@ -185,6 +186,10 @@ final class Cart extends Page implements HasTable
      */
     public function getRestrictedCreditAmountProperty(): int
     {
+        if ($this->paymentPlanBreakdown !== null) {
+            return $this->paymentPlanBreakdown->restrictedCreditAmount;
+        }
+
         /** @var \App\Models\User $user */
         $user = auth()->user();
         $items = $this->cartItems->map(fn (CartItem $cartItem): array => [
@@ -204,6 +209,10 @@ final class Cart extends Page implements HasTable
      */
     public function getCreditAmountProperty(): int
     {
+        if ($this->paymentPlanBreakdown !== null) {
+            return $this->paymentPlanBreakdown->creditAmount;
+        }
+
         if (! $this->useCredit) {
             return 0;
         }
@@ -228,11 +237,11 @@ final class Cart extends Page implements HasTable
 
     public function getPaymentPlanFeeAmountProperty(): int
     {
-        if ($this->selectedTemplate === null) {
+        if ($this->paymentPlanBreakdown === null) {
             return 0;
         }
 
-        return PaymentPlanFee::calculate($this->totalBeforePaymentPlanFee);
+        return $this->paymentPlanBreakdown->fee;
     }
 
     /**
@@ -249,9 +258,7 @@ final class Cart extends Page implements HasTable
         return PaymentPlanTemplate::query()
             ->active()
             ->get()
-            ->filter(fn (PaymentPlanTemplate $template): bool => $this->cartItems->every(
-                fn (CartItem $cartItem): bool => $this->paymentPlanTemplateMatchesCartItem($template, $cartItem),
-            ))
+            ->filter(fn (PaymentPlanTemplate $template): bool => $this->paymentPlanBreakdownForTemplate($template)->hasPrincipal())
             ->values();
     }
 
@@ -274,13 +281,20 @@ final class Cart extends Page implements HasTable
      */
     public function getAmountDueTodayProperty(): int
     {
-        if ($this->selectedTemplate === null) {
+        if ($this->paymentPlanBreakdown === null) {
             return $this->grandTotal;
         }
 
-        $amounts = $this->selectedTemplate->installmentAmounts($this->grandTotal);
+        return $this->paymentPlanBreakdown->amountDueToday;
+    }
 
-        return $amounts['first'];
+    public function getPaymentPlanBreakdownProperty(): ?PaymentPlanBreakdown
+    {
+        if ($this->selectedTemplate === null) {
+            return null;
+        }
+
+        return $this->paymentPlanBreakdownForTemplate($this->selectedTemplate);
     }
 
     public function incrementQuantity(int $cartItemId): void
@@ -580,9 +594,18 @@ final class Cart extends Page implements HasTable
             },
             restrictedCreditAmount: fn (): int => $this->restrictedCreditAmount,
             creditAmount: fn (): int => $this->creditAmount,
+            paymentPlanItemsAmount: fn (): ?int => $this->paymentPlanBreakdown?->paymentPlanItemsAmount,
+            paymentPlanDiscountAmount: fn (): int => $this->paymentPlanBreakdown?->paymentPlanDiscountAmount ?? 0,
+            paymentPlanRestrictedCreditAmount: fn (): int => $this->paymentPlanBreakdown?->paymentPlanRestrictedCreditAmount ?? 0,
+            paymentPlanCreditAmount: fn (): int => $this->paymentPlanBreakdown?->paymentPlanCreditAmount ?? 0,
+            payTodayItemsAmount: fn (): ?int => $this->paymentPlanBreakdown?->payInFullItemsAmount,
+            payTodayDiscountAmount: fn (): int => $this->paymentPlanBreakdown?->payInFullDiscountAmount ?? 0,
+            payTodayRestrictedCreditAmount: fn (): int => $this->paymentPlanBreakdown?->payInFullRestrictedCreditAmount ?? 0,
+            payTodayCreditAmount: fn (): int => $this->paymentPlanBreakdown?->payInFullCreditAmount ?? 0,
             paymentPlanFeeAmount: fn (): int => $this->paymentPlanFeeAmount,
             total: fn (): int => $this->grandTotal,
             template: fn (): ?PaymentPlanTemplate => $this->selectedTemplate,
+            paymentPlanTotal: fn (): ?int => $this->paymentPlanBreakdown?->installmentTotal,
             amountDueToday: fn (): ?int => $this->selectedTemplate !== null ? $this->amountDueToday : null,
         ));
 
@@ -689,11 +712,6 @@ final class Cart extends Page implements HasTable
         return self::PAYMENT_OPTION_TEMPLATE_PREFIX.$template->id;
     }
 
-    private function paymentPlanTemplateMatchesCartItem(PaymentPlanTemplate $template, CartItem $cartItem): bool
-    {
-        return $template->matchesCartItem($cartItem);
-    }
-
     private function refreshCartState(): void
     {
         foreach ([
@@ -707,6 +725,7 @@ final class Cart extends Page implements HasTable
             'grandTotal',
             'paymentPlanTemplates',
             'selectedTemplate',
+            'paymentPlanBreakdown',
             'amountDueToday',
         ] as $property) {
             unset($this->{$property});
@@ -738,5 +757,46 @@ final class Cart extends Page implements HasTable
         $user = auth()->user();
 
         return app(CreditLedgerService::class)->previewUnrestrictedBalance($user);
+    }
+
+    private function paymentPlanBreakdownForTemplate(PaymentPlanTemplate $template): PaymentPlanBreakdown
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        $calculator = app(PaymentPlanBreakdownCalculator::class);
+        $itemsForCreditApplication = $calculator->itemsForCreditApplication($this->cartItems, $template);
+        $lineAmountsAfterDiscount = $calculator->lineAmountsAfterDiscount(
+            $this->cartItems,
+            $template,
+            $this->discountAmount,
+        );
+
+        $restrictedCreditApplication = app(CreditLedgerService::class)->previewRestrictedApplication(
+            $user,
+            $itemsForCreditApplication->map(fn (CartItem $cartItem): array => [
+                'key' => $cartItem->id,
+                'product' => $cartItem->product,
+                'amount' => $lineAmountsAfterDiscount[$cartItem->id] ?? 0,
+            ]),
+            max(0, array_sum($lineAmountsAfterDiscount)),
+        );
+
+        $creditAmount = 0;
+
+        if ($this->useCredit) {
+            $creditAmount = min(
+                $this->getPreviewStoreCreditBalance(),
+                max(0, $this->subtotal - $this->discountAmount - $restrictedCreditApplication['total']),
+            );
+        }
+
+        return $calculator->calculate(
+            items: $this->cartItems,
+            template: $template,
+            discountAmount: $this->discountAmount,
+            restrictedCreditByItemKey: $restrictedCreditApplication['by_key'],
+            creditAmount: $creditAmount,
+        );
     }
 }

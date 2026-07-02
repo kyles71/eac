@@ -22,7 +22,9 @@ final readonly class CreatePaymentPlan
         ?string $stripeCustomerId = null,
         ?string $stripePaymentMethodId = null,
     ): PaymentPlan {
-        $total = $order->total;
+        $total = $order->payment_plan_principal > 0
+            ? $order->paymentPlanInstallmentTotal()
+            : $order->total;
         $amounts = $template->installmentAmounts($total);
 
         /** @var PaymentPlan $paymentPlan */

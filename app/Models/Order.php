@@ -29,6 +29,11 @@ final class Order extends Model
         'credit_applied' => 'integer',
         'restricted_credit_applied' => 'integer',
         'payment_plan_fee' => 'integer',
+        'payment_plan_principal' => 'integer',
+        'payment_plan_subtotal' => 'integer',
+        'payment_plan_discount_amount' => 'integer',
+        'payment_plan_restricted_credit_applied' => 'integer',
+        'payment_plan_credit_applied' => 'integer',
         'payment_plan_template_id' => 'integer',
         'payment_plan_terms_version_id' => 'integer',
         'cart_items_cleared_at' => 'datetime',
@@ -98,15 +103,80 @@ final class Order extends Model
         return format_money($this->payment_plan_fee);
     }
 
+    public function paymentPlanInstallmentTotal(): int
+    {
+        if ($this->paymentPlanTemplate === null) {
+            return 0;
+        }
+
+        if ($this->payment_plan_principal <= 0) {
+            return $this->total;
+        }
+
+        return $this->payment_plan_principal + $this->payment_plan_fee;
+    }
+
+    public function payInFullAmount(): int
+    {
+        if ($this->paymentPlanTemplate === null) {
+            return $this->total;
+        }
+
+        return max(0, $this->total - $this->paymentPlanInstallmentTotal());
+    }
+
+    public function paymentPlanItemsSubtotal(): int
+    {
+        if ($this->paymentPlanTemplate === null) {
+            return 0;
+        }
+
+        if ($this->payment_plan_subtotal > 0) {
+            return $this->payment_plan_subtotal;
+        }
+
+        return max(
+            0,
+            $this->payment_plan_principal
+                + $this->payment_plan_discount_amount
+                + $this->payment_plan_restricted_credit_applied
+                + $this->payment_plan_credit_applied,
+        );
+    }
+
+    public function payInFullItemsSubtotal(): int
+    {
+        if ($this->paymentPlanTemplate === null) {
+            return $this->subtotal;
+        }
+
+        return max(0, $this->subtotal - $this->paymentPlanItemsSubtotal());
+    }
+
+    public function payInFullDiscountAmount(): int
+    {
+        return max(0, $this->discount_amount - $this->payment_plan_discount_amount);
+    }
+
+    public function payInFullRestrictedCreditAmount(): int
+    {
+        return max(0, $this->restricted_credit_applied - $this->payment_plan_restricted_credit_applied);
+    }
+
+    public function payInFullCreditAmount(): int
+    {
+        return max(0, $this->credit_applied - $this->payment_plan_credit_applied);
+    }
+
     public function amountPaidAtCheckout(): int
     {
         if ($this->paymentPlanTemplate === null) {
             return $this->total;
         }
 
-        $amounts = $this->paymentPlanTemplate->installmentAmounts($this->total);
+        $amounts = $this->paymentPlanTemplate->installmentAmounts($this->paymentPlanInstallmentTotal());
 
-        return $amounts['first'];
+        return $this->payInFullAmount() + $amounts['first'];
     }
 
     /**

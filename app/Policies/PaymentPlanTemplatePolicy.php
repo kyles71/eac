@@ -26,4 +26,18 @@ final class PaymentPlanTemplatePolicy
     {
         return $authUser->can('Update:PaymentPlanTemplate') && ! $paymentPlanTemplate->isUsed();
     }
+
+    public function deactivate(AuthUser $authUser, PaymentPlanTemplate $paymentPlanTemplate): bool
+    {
+        return $authUser->can('Update:PaymentPlanTemplate')
+            && $paymentPlanTemplate->isUsed()
+            && $paymentPlanTemplate->is_active;
+    }
+
+    public function reactivate(AuthUser $authUser, PaymentPlanTemplate $paymentPlanTemplate): bool
+    {
+        return $authUser->can('Update:PaymentPlanTemplate')
+            && $paymentPlanTemplate->isUsed()
+            && ! $paymentPlanTemplate->is_active;
+    }
 }

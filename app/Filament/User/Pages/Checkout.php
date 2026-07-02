@@ -133,14 +133,8 @@ final class Checkout extends Page
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        // Determine charge amount (first installment if payment plan, else full total)
-        $chargeAmount = $this->order->total;
         $template = $this->order->paymentPlanTemplate;
-
-        if ($template !== null) {
-            $amounts = $template->installmentAmounts($this->order->total);
-            $chargeAmount = $amounts['first'];
-        }
+        $chargeAmount = $this->order->amountPaidAtCheckout();
 
         $metadata = [
             'order_id' => (string) $this->order->id,
@@ -302,9 +296,19 @@ final class Checkout extends Page
             discountLabel: $discountLabel,
             restrictedCreditAmount: $this->order->restricted_credit_applied,
             creditAmount: $this->order->credit_applied,
+            paymentPlanItemsAmount: $this->order->paymentPlanItemsSubtotal(),
+            paymentPlanDiscountAmount: $this->order->payment_plan_discount_amount,
+            paymentPlanRestrictedCreditAmount: $this->order->payment_plan_restricted_credit_applied,
+            paymentPlanCreditAmount: $this->order->payment_plan_credit_applied,
+            payTodayItemsAmount: $this->order->paymentPlanTemplate !== null ? $this->order->payInFullItemsSubtotal() : null,
+            payTodayDiscountAmount: $this->order->payInFullDiscountAmount(),
+            payTodayRestrictedCreditAmount: $this->order->payInFullRestrictedCreditAmount(),
+            payTodayCreditAmount: $this->order->payInFullCreditAmount(),
             paymentPlanFeeAmount: $this->order->payment_plan_fee,
             total: $this->order->total,
             template: $this->order->paymentPlanTemplate,
+            paymentPlanTotal: $this->order->paymentPlanInstallmentTotal(),
+            amountDueToday: $this->order->paymentPlanTemplate !== null ? $this->order->amountPaidAtCheckout() : null,
         );
     }
 

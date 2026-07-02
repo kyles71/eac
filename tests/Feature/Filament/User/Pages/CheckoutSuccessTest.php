@@ -564,3 +564,39 @@ it('shows actual paid amount and payment plan details for payment plan orders', 
         ->assertSee('$103.00')
         ->assertSee('$77.25');
 });
+
+it('shows financed plan totals separately from mixed order totals', function () {
+    $product = Product::factory()->create(['price' => 8000]);
+    $template = PaymentPlanTemplate::factory()->create([
+        'number_of_installments' => 4,
+    ]);
+
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 8000,
+        'payment_plan_principal' => 5000,
+        'payment_plan_fee' => 150,
+        'total' => 8150,
+        'payment_plan_template_id' => $template->id,
+        'stripe_payment_intent_id' => 'pi_mixed_plan',
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+        'unit_price' => 8000,
+        'total_price' => 8000,
+    ]);
+
+    (new CreatePaymentPlan)->handle($order, $template);
+
+    Livewire::withQueryParams(['order_id' => $order->id])
+        ->test(CheckoutSuccess::class)
+        ->assertOk()
+        ->assertSee('Total Paid')
+        ->assertSee('$42.89')
+        ->assertSee('Payment Plan Details')
+        ->assertSee('$51.50')
+        ->assertSee('$38.61');
+});

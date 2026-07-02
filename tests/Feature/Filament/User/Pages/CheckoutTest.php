@@ -139,6 +139,72 @@ it('charges only the first fee-inclusive installment for payment plan checkout',
         ->assertSee("allow_redisplay: 'always'", false);
 });
 
+it('charges pay in full items plus the first installment for mixed payment plan checkout', function () {
+    auth()->user()->update(['stripe_id' => 'cus_test_123']);
+    auth()->user()->refresh();
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'number_of_installments' => 4,
+    ]);
+
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+        'subtotal' => 8000,
+        'payment_plan_principal' => 5000,
+        'payment_plan_subtotal' => 5000,
+        'payment_plan_fee' => 150,
+        'total' => 8150,
+        'payment_plan_template_id' => $template->id,
+    ]);
+
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'total_price' => 5000,
+    ]);
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'total_price' => 3000,
+    ]);
+
+    $paymentIntent = Stripe\PaymentIntent::constructFrom([
+        'id' => 'pi_mixed_plan_123',
+        'client_secret' => 'pi_mixed_plan_123_secret',
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldReceive('createPaymentIntent')
+        ->once()
+        ->withArgs(fn (User $user, int $amount, array $metadata, bool $setupFutureUsage): bool => $amount === 4289
+            && $metadata['order_id'] === (string) $order->id
+            && $setupFutureUsage === true)
+        ->andReturn($paymentIntent);
+    $stripeMock->shouldReceive('createCustomerSession')
+        ->once()
+        ->with('cus_test_123', false)
+        ->andReturn(Stripe\CustomerSession::constructFrom([
+            'client_secret' => 'cuss_test_secret',
+        ]));
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Checkout::class)
+        ->assertOk()
+        ->assertSet('clientSecret', 'pi_mixed_plan_123_secret')
+        ->assertDontSee('Subtotal')
+        ->assertSeeInOrder([
+            'Payment Plan Items',
+            '$50.00',
+            'Payment Plan Fee (3%)',
+            '$1.50',
+            'Pay Today Items',
+            '$30.00',
+            'Total',
+            '$81.50',
+        ])
+        ->assertSee('4 payments of $12.87')
+        ->assertSee('$42.89');
+});
+
 it('makes attached payment plan methods redisplayable during checkout', function () {
     auth()->user()->update(['stripe_id' => 'cus_test_123']);
     auth()->user()->refresh();

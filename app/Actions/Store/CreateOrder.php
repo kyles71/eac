@@ -11,6 +11,7 @@ use App\Enums\ProductQuestionType;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\ProductQuestion;
@@ -18,7 +19,7 @@ use App\Models\User;
 use App\Services\CreditLedgerService;
 use App\Services\ProductAvailabilityService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
-use App\Support\PaymentPlanFee;
+use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -31,6 +32,7 @@ final class CreateOrder
         private readonly SendOrderReceipt $sendOrderReceipt,
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly CreditLedgerService $creditLedger,
+        private readonly PaymentPlanBreakdownCalculator $paymentPlanBreakdownCalculator,
     ) {}
 
     public function handle(
@@ -41,6 +43,10 @@ final class CreateOrder
         array $questionAnswers = [],
     ): Order {
         return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate, $questionAnswers): Order {
+            if ($paymentPlanTemplate !== null && ! $paymentPlanTemplate->is_active) {
+                throw new InvalidArgumentException('The selected payment plan is no longer available.');
+            }
+
             $paymentPlanTermsVersion = $paymentPlanTemplate !== null
                 ? PaymentPlanTerms::currentVersion()
                 : null;
@@ -124,6 +130,11 @@ final class CreateOrder
                 'credit_applied' => 0,
                 'restricted_credit_applied' => 0,
                 'payment_plan_fee' => 0,
+                'payment_plan_principal' => 0,
+                'payment_plan_subtotal' => 0,
+                'payment_plan_discount_amount' => 0,
+                'payment_plan_restricted_credit_applied' => 0,
+                'payment_plan_credit_applied' => 0,
                 'payment_plan_template_id' => $paymentPlanTemplate?->id,
                 'payment_plan_terms_version_id' => $paymentPlanTermsVersion?->id,
             ]);
@@ -134,6 +145,9 @@ final class CreateOrder
             }
 
             $total = $subtotal;
+            $discountAmount = 0;
+            $actualCredit = 0;
+            $restrictedCreditByOrderItemId = [];
 
             // Apply discount code if provided
             if ($discountCode !== null) {
@@ -149,7 +163,35 @@ final class CreateOrder
                 $discountCode->increment('times_used');
             }
 
-            $restrictedCreditTotal = $this->creditLedger->applyRestrictedToOrder($order);
+            $order->load('orderItems.product.productable');
+
+            if ($paymentPlanTemplate !== null) {
+                $orderItemsForCreditApplication = $this->paymentPlanBreakdownCalculator->itemsForCreditApplication(
+                    $order->orderItems,
+                    $paymentPlanTemplate,
+                );
+                $lineAmountsAfterDiscount = $this->paymentPlanBreakdownCalculator->lineAmountsAfterDiscount(
+                    $order->orderItems,
+                    $paymentPlanTemplate,
+                    $discountAmount,
+                );
+
+                $restrictedCreditApplication = $this->creditLedger->applyRestrictedToOrderUsingLineAmounts(
+                    $order,
+                    $orderItemsForCreditApplication
+                        ->mapWithKeys(fn (OrderItem $orderItem): array => [
+                            $orderItem->id => $lineAmountsAfterDiscount[$orderItem->id] ?? 0,
+                        ])
+                        ->all(),
+                    max(0, array_sum($lineAmountsAfterDiscount)),
+                    $orderItemsForCreditApplication,
+                );
+
+                $restrictedCreditTotal = $restrictedCreditApplication['total'];
+                $restrictedCreditByOrderItemId = $restrictedCreditApplication['by_key'];
+            } else {
+                $restrictedCreditTotal = $this->creditLedger->applyRestrictedToOrder($order);
+            }
 
             if ($restrictedCreditTotal > 0) {
                 $total = max(0, $total - $restrictedCreditTotal);
@@ -175,11 +217,27 @@ final class CreateOrder
             }
 
             if ($paymentPlanTemplate !== null) {
-                $paymentPlanFee = PaymentPlanFee::calculate($total);
-                $total += $paymentPlanFee;
+                $paymentPlanBreakdown = $this->paymentPlanBreakdownCalculator->calculate(
+                    items: $order->orderItems,
+                    template: $paymentPlanTemplate,
+                    discountAmount: $discountAmount,
+                    restrictedCreditByItemKey: $restrictedCreditByOrderItemId,
+                    creditAmount: $actualCredit,
+                );
+
+                if (! $paymentPlanBreakdown->hasPrincipal()) {
+                    throw new InvalidArgumentException('The selected payment plan is no longer available for this cart.');
+                }
+
+                $total += $paymentPlanBreakdown->fee;
 
                 $order->update([
-                    'payment_plan_fee' => $paymentPlanFee,
+                    'payment_plan_principal' => $paymentPlanBreakdown->principal,
+                    'payment_plan_subtotal' => $paymentPlanBreakdown->paymentPlanItemsAmount,
+                    'payment_plan_discount_amount' => $paymentPlanBreakdown->paymentPlanDiscountAmount,
+                    'payment_plan_restricted_credit_applied' => $paymentPlanBreakdown->paymentPlanRestrictedCreditAmount,
+                    'payment_plan_credit_applied' => $paymentPlanBreakdown->paymentPlanCreditAmount,
+                    'payment_plan_fee' => $paymentPlanBreakdown->fee,
                     'total' => $total,
                 ]);
             }

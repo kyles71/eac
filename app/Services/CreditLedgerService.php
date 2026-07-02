@@ -128,6 +128,26 @@ final class CreditLedgerService
     {
         $order->loadMissing('orderItems.product');
 
+        $lineRemaining = $order->orderItems
+            ->mapWithKeys(fn (OrderItem $orderItem): array => [$orderItem->id => $orderItem->total_price])
+            ->all();
+
+        return $this->applyRestrictedToOrderUsingLineAmounts($order, $lineRemaining, $order->total)['total'];
+    }
+
+    /**
+     * @param  array<int, int>  $lineRemaining
+     * @param  Collection<int, OrderItem>|null  $items
+     * @return array{total: int, by_key: array<int, int>}
+     */
+    public function applyRestrictedToOrderUsingLineAmounts(
+        Order $order,
+        array $lineRemaining,
+        int $maximumAmount,
+        ?Collection $items = null,
+    ): array {
+        $order->loadMissing('orderItems.product');
+
         /** @var EloquentCollection<int, CreditGrant> $grants */
         $grants = CreditGrant::query()
             ->where('user_id', $order->user_id)
@@ -137,17 +157,25 @@ final class CreditLedgerService
             ->lockForUpdate()
             ->get();
 
-        $lineRemaining = $order->orderItems
-            ->mapWithKeys(fn (OrderItem $orderItem): array => [$orderItem->id => $orderItem->total_price])
-            ->all();
-
-        return $this->consumeRestrictedGrants(
+        $application = $this->calculateRestrictedApplication(
             grants: $grants,
-            orderItems: $order->orderItems,
+            items: $items ?? $order->orderItems,
             lineRemaining: $lineRemaining,
-            maximumAmount: $order->total,
-            order: $order,
+            maximumAmount: $maximumAmount,
         );
+
+        foreach ($application['by_grant'] as $grantId => $amount) {
+            $grant = $grants->firstWhere('id', $grantId);
+
+            if ($grant instanceof CreditGrant) {
+                $this->debitGrant($grant, $order, $amount);
+            }
+        }
+
+        return [
+            'total' => $application['total'],
+            'by_key' => $application['by_key'],
+        ];
     }
 
     public function applyUnrestrictedToOrder(Order $order, int $requestedAmount): int
@@ -254,6 +282,15 @@ final class CreditLedgerService
      */
     public function previewRestrictedAmount(User $user, Collection $items, int $maximumAmount): int
     {
+        return $this->previewRestrictedApplication($user, $items, $maximumAmount)['total'];
+    }
+
+    /**
+     * @param  Collection<int, array{key?: int, product: Product, amount: int}>  $items
+     * @return array{total: int, by_key: array<int, int>}
+     */
+    public function previewRestrictedApplication(User $user, Collection $items, int $maximumAmount): array
+    {
         /** @var EloquentCollection<int, CreditGrant> $grants */
         $grants = $user->creditGrants()->usable()->restricted()->with('products')->get();
         $pendingDebits = $this->pendingDebitAmounts($user);
@@ -262,76 +299,46 @@ final class CreditLedgerService
             $grant->remaining_amount += $pendingDebits[$grant->id] ?? 0;
         }
 
-        $orderItems = $items->values();
+        $orderItems = $items
+            ->values()
+            ->map(fn (array $item, int $index): array => [
+                'key' => (int) ($item['key'] ?? $index),
+                'product' => $item['product'],
+                'amount' => $item['amount'],
+            ]);
+
         $lineRemaining = $orderItems->mapWithKeys(
-            fn (array $item, int $index): array => [$index => $item['amount']],
+            fn (array $item): array => [$item['key'] => $item['amount']],
         )->all();
 
-        return $this->previewRestrictedGrants($grants, $orderItems, $lineRemaining, $maximumAmount);
+        $application = $this->calculateRestrictedApplication(
+            grants: $grants,
+            items: $orderItems,
+            lineRemaining: $lineRemaining,
+            maximumAmount: $maximumAmount,
+        );
+
+        return [
+            'total' => $application['total'],
+            'by_key' => $application['by_key'],
+        ];
     }
 
     /**
      * @param  EloquentCollection<int, CreditGrant>  $grants
-     * @param  EloquentCollection<int, OrderItem>  $orderItems
+     * @param  Collection<int, OrderItem|array{key?: int, product: Product, amount: int}>  $items
      * @param  array<int, int>  $lineRemaining
+     * @return array{total: int, by_key: array<int, int>, by_grant: array<int, int>}
      */
-    private function consumeRestrictedGrants(
-        EloquentCollection $grants,
-        EloquentCollection $orderItems,
-        array $lineRemaining,
-        int $maximumAmount,
-        Order $order,
-    ): int {
-        $totalApplied = 0;
-
-        foreach ($this->sortRestrictedGrants($grants, $orderItems) as $grant) {
-            $grantApplied = 0;
-
-            foreach ($orderItems as $orderItem) {
-                if ($totalApplied >= $maximumAmount || $grantApplied >= $grant->remaining_amount) {
-                    break;
-                }
-
-                if (! $grant->appliesToProduct($orderItem->product)) {
-                    continue;
-                }
-
-                $availableForLine = $lineRemaining[$orderItem->id] ?? 0;
-                $amount = min(
-                    $availableForLine,
-                    $grant->remaining_amount - $grantApplied,
-                    $maximumAmount - $totalApplied,
-                );
-
-                if ($amount <= 0) {
-                    continue;
-                }
-
-                $lineRemaining[$orderItem->id] -= $amount;
-                $grantApplied += $amount;
-                $totalApplied += $amount;
-            }
-
-            if ($grantApplied > 0) {
-                $this->debitGrant($grant, $order, $grantApplied);
-            }
-        }
-
-        return $totalApplied;
-    }
-
-    /**
-     * @param  EloquentCollection<int, CreditGrant>  $grants
-     * @param  Collection<int, array{product: Product, amount: int}>  $items
-     * @param  array<int, int>  $lineRemaining
-     */
-    private function previewRestrictedGrants(
+    private function calculateRestrictedApplication(
         EloquentCollection $grants,
         Collection $items,
         array $lineRemaining,
         int $maximumAmount,
-    ): int {
+    ): array {
         $totalApplied = 0;
+        $appliedByKey = [];
+        $appliedByGrant = [];
 
         foreach ($this->sortRestrictedGrants($grants, $items) as $grant) {
             $grantApplied = 0;
@@ -341,23 +348,36 @@ final class CreditLedgerService
                     break;
                 }
 
-                if (! $grant->appliesToProduct($item['product'])) {
+                $product = $item instanceof OrderItem ? $item->product : $item['product'];
+
+                if (! $grant->appliesToProduct($product)) {
                     continue;
                 }
 
+                $key = $item instanceof OrderItem ? $item->id : (int) ($item['key'] ?? $index);
                 $amount = min(
-                    $lineRemaining[$index] ?? 0,
+                    $lineRemaining[$key] ?? 0,
                     $grant->remaining_amount - $grantApplied,
                     $maximumAmount - $totalApplied,
                 );
 
-                $lineRemaining[$index] -= $amount;
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $lineRemaining[$key] -= $amount;
+                $appliedByKey[$key] = ($appliedByKey[$key] ?? 0) + $amount;
+                $appliedByGrant[$grant->id] = ($appliedByGrant[$grant->id] ?? 0) + $amount;
                 $grantApplied += $amount;
                 $totalApplied += $amount;
             }
         }
 
-        return $totalApplied;
+        return [
+            'total' => $totalApplied,
+            'by_key' => $appliedByKey,
+            'by_grant' => $appliedByGrant,
+        ];
     }
 
     /**

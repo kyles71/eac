@@ -164,6 +164,47 @@ it('hides edit for a used payment plan template', function () {
         ->assertActionHidden(TestAction::make(EditAction::class)->table($template));
 });
 
+it('can deactivate a used payment plan template without editing it', function () {
+    $template = PaymentPlanTemplate::factory()->create(['is_active' => true]);
+
+    Order::factory()->create([
+        'payment_plan_template_id' => $template->id,
+    ]);
+
+    livewire(ListPaymentPlanTemplates::class)
+        ->assertActionHidden(TestAction::make(EditAction::class)->table($template))
+        ->assertActionVisible(TestAction::make('deactivate')->table($template))
+        ->callAction(TestAction::make('deactivate')->table($template))
+        ->assertNotified();
+
+    expect($template->refresh()->is_active)->toBeFalse();
+
+    livewire(ListPaymentPlanTemplates::class)
+        ->assertActionHidden(TestAction::make('deactivate')->table($template))
+        ->assertActionVisible(TestAction::make('reactivate')->table($template));
+});
+
+it('can reactivate a used inactive payment plan template without editing it', function () {
+    $template = PaymentPlanTemplate::factory()->inactive()->create();
+
+    Order::factory()->create([
+        'payment_plan_template_id' => $template->id,
+    ]);
+
+    livewire(ListPaymentPlanTemplates::class)
+        ->assertActionHidden(TestAction::make(EditAction::class)->table($template))
+        ->assertActionHidden(TestAction::make('deactivate')->table($template))
+        ->assertActionVisible(TestAction::make('reactivate')->table($template))
+        ->callAction(TestAction::make('reactivate')->table($template))
+        ->assertNotified();
+
+    expect($template->refresh()->is_active)->toBeTrue();
+
+    livewire(ListPaymentPlanTemplates::class)
+        ->assertActionVisible(TestAction::make('deactivate')->table($template))
+        ->assertActionHidden(TestAction::make('reactivate')->table($template));
+});
+
 it('has required columns', function (string $column) {
     livewire(ListPaymentPlanTemplates::class)
         ->assertTableColumnExists($column);

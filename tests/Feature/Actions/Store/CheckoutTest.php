@@ -7,6 +7,7 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\CreditTransactionType;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
+use App\Enums\ProductType;
 use App\Models\CartItem;
 use App\Models\Costume;
 use App\Models\Course;
@@ -501,6 +502,8 @@ it('stores payment plan details and accepted terms on the order', function () {
 
     expect($order->status)->toBe(OrderStatus::Pending)
         ->and($order->payment_plan_fee)->toBe(300)
+        ->and($order->payment_plan_principal)->toBe(10000)
+        ->and($order->payment_plan_subtotal)->toBe(10000)
         ->and($order->total)->toBe(10300)
         ->and($order->payment_plan_template_id)->toBe($template->id)
         ->and($order->payment_plan_terms_version_id)->not->toBeNull();
@@ -522,7 +525,7 @@ it('combines discount code with auto-charge payment plan', function () {
     $discountCode = DiscountCode::factory()->percentage(20)->create(); // 20% of 10000 = 2000 off
     $template = PaymentPlanTemplate::factory()->create([
         'number_of_installments' => 4,
-        'min_price' => 1000,
+        'min_price' => 9000,
         'max_price' => 50000,
     ]);
 
@@ -536,8 +539,92 @@ it('combines discount code with auto-charge payment plan', function () {
     expect($order->subtotal)->toBe(10000)
         ->and($order->discount_amount)->toBe(2000)
         ->and($order->payment_plan_fee)->toBe(240)
+        ->and($order->payment_plan_principal)->toBe(8000)
+        ->and($order->payment_plan_subtotal)->toBe(10000)
+        ->and($order->payment_plan_discount_amount)->toBe(2000)
         ->and($order->total)->toBe(8240)
         ->and($order->payment_plan_template_id)->toBe($template->id);
+});
+
+it('stores only the eligible mixed cart balance on the payment plan principal', function () {
+    $standaloneProduct = Product::factory()->standalone()->create(['price' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $standaloneProduct->id,
+        'quantity' => 1,
+    ]);
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'number_of_installments' => 4,
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    $order = app(CreateOrder::class)->handle(
+        $this->user,
+        paymentPlanTemplate: $template,
+    );
+
+    expect($order->subtotal)->toBe(8000)
+        ->and($order->payment_plan_subtotal)->toBe(5000)
+        ->and($order->payment_plan_principal)->toBe(5000)
+        ->and($order->payment_plan_fee)->toBe(150)
+        ->and($order->total)->toBe(8150)
+        ->and($order->payInFullItemsSubtotal())->toBe(3000)
+        ->and($order->payInFullAmount())->toBe(3000)
+        ->and($order->amountPaidAtCheckout())->toBe(4289);
+});
+
+it('applies discounts and store credit to mixed cart payment plan items before pay today items', function () {
+    $standaloneProduct = Product::factory()->standalone()->create(['price' => 3000]);
+    CreditGrant::factory()->for($this->user)->amount(2000)->create();
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $standaloneProduct->id,
+        'quantity' => 1,
+    ]);
+
+    $discountCode = DiscountCode::factory()->fixedAmount(1000)->create();
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'number_of_installments' => 4,
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    $order = app(CreateOrder::class)->handle(
+        $this->user,
+        $discountCode,
+        creditToApply: 2000,
+        paymentPlanTemplate: $template,
+    );
+
+    expect($order->discount_amount)->toBe(1000)
+        ->and($order->credit_applied)->toBe(2000)
+        ->and($order->payment_plan_subtotal)->toBe(5000)
+        ->and($order->payment_plan_discount_amount)->toBe(1000)
+        ->and($order->payment_plan_credit_applied)->toBe(2000)
+        ->and($order->payment_plan_principal)->toBe(2000)
+        ->and($order->payment_plan_fee)->toBe(60)
+        ->and($order->total)->toBe(5060)
+        ->and($order->payInFullItemsSubtotal())->toBe(3000)
+        ->and($order->payInFullAmount())->toBe(3000)
+        ->and($order->amountPaidAtCheckout())->toBe(3515);
 });
 
 it('cancels existing pending orders before creating a new one', function () {

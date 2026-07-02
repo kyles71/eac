@@ -7,7 +7,6 @@ use App\Enums\CreditTransactionType;
 use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
-use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CreditGrant;
 use App\Models\DiscountCode;
@@ -323,9 +322,8 @@ it('uses custom gift card amounts for cart totals and payment plan eligibility',
         ->assertSee('4 Monthly Payments');
 });
 
-it('only shows templates eligible for every item in a mixed cart', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 4000]);
+it('shows templates that are eligible for at least one item in a mixed cart', function () {
+    $standaloneProduct = Product::factory()->standalone()->create(['price' => 4000]);
 
     CartItem::factory()->create([
         'user_id' => auth()->id(),
@@ -335,7 +333,7 @@ it('only shows templates eligible for every item in a mixed cart', function () {
 
     CartItem::factory()->create([
         'user_id' => auth()->id(),
-        'product_id' => $costumeProduct->id,
+        'product_id' => $standaloneProduct->id,
         'quantity' => 1,
     ]);
 
@@ -361,9 +359,102 @@ it('only shows templates eligible for every item in a mixed cart', function () {
     ]);
 
     livewire(Cart::class)
-        ->assertDontSee('3 Monthly Payments')
+        ->assertSee('3 Monthly Payments')
         ->assertDontSee('4 Monthly Payments')
         ->assertSee('5 Monthly Payments');
+});
+
+it('charges ineligible mixed cart items in full today when a payment plan is selected', function () {
+    $standaloneProduct = Product::factory()->standalone()->create(['price' => 3000]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $standaloneProduct->id,
+        'quantity' => 1,
+    ]);
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'number_of_installments' => 4,
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    livewire(Cart::class)
+        ->set('selectedPaymentOption', "template:{$template->id}")
+        ->assertSet('paymentPlanFeeAmount', 150)
+        ->assertSet('grandTotal', 8150)
+        ->assertSet('amountDueToday', 4289)
+        ->assertDontSee('Subtotal')
+        ->assertSeeInOrder([
+            'Payment Plan Items',
+            '$50.00',
+            'Payment Plan Fee (3%)',
+            '$1.50',
+            'Pay Today Items',
+            '$30.00',
+            'Total',
+            '$81.50',
+        ])
+        ->assertSee('4 payments of $12.87')
+        ->assertSee('$42.89');
+});
+
+it('applies discounts and store credit to payment plan items first in the order summary', function () {
+    $standaloneProduct = Product::factory()->standalone()->create(['price' => 3000]);
+    CreditGrant::factory()->for(auth()->user())->amount(2000)->create();
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $standaloneProduct->id,
+        'quantity' => 1,
+    ]);
+
+    $discountCode = DiscountCode::factory()->fixedAmount(1000)->create();
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'number_of_installments' => 4,
+        'min_price' => 5000,
+        'max_price' => 10000,
+    ]);
+
+    livewire(Cart::class)
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
+        ->set('useCredit', true)
+        ->set('selectedPaymentOption', "template:{$template->id}")
+        ->assertSet('paymentPlanFeeAmount', 60)
+        ->assertSet('grandTotal', 5060)
+        ->assertSet('amountDueToday', 3515)
+        ->assertDontSee('Subtotal')
+        ->assertSeeInOrder([
+            'Payment Plan Items',
+            '$50.00',
+            'Discount',
+            '-$10.00',
+            'Store Credit',
+            '-$20.00',
+            'Payment Plan Fee (3%)',
+            '$0.60',
+            'Pay Today Items',
+            '$30.00',
+            'Total',
+            '$50.60',
+        ])
+        ->assertSee('4 payments of $5.15')
+        ->assertSee('$35.15');
 });
 
 it('filters course payment plan templates by semester', function () {

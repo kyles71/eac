@@ -316,7 +316,7 @@ final class CheckoutSuccess extends Page
                 ->state($this->order->formattedPaymentPlanFee()),
             TextEntry::make('payment_plan_total')
                 ->label('Plan Total')
-                ->state($this->order->formattedTotal()),
+                ->state(format_money($this->order->paymentPlanInstallmentTotal())),
             TextEntry::make('payment_plan_paid_today')
                 ->label('Paid Today')
                 ->state(format_money($amountPaidToday)),

@@ -9,6 +9,7 @@ use App\Enums\ProductType;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\CreditGrant;
+use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\User;
 
@@ -86,6 +87,51 @@ it('combines restricted credit and optional unrestricted credit', function () {
         ->and($order->total)->toBe(2000)
         ->and($restrictedGrant->refresh()->remaining_amount)->toBe(0)
         ->and($unrestrictedGrant->refresh()->remaining_amount)->toBe(0);
+});
+
+it('applies restricted credit to the matching side of a mixed payment plan order', function () {
+    $courseGrant = CreditGrant::factory()
+        ->for($this->user)
+        ->amount(2000)
+        ->restrictedTo(ProductType::Course)
+        ->create();
+    $standaloneGrant = CreditGrant::factory()
+        ->for($this->user)
+        ->amount(1000)
+        ->restrictedTo(ProductType::Standalone)
+        ->create();
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->courseProduct->id,
+        'quantity' => 1,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->standaloneProduct->id,
+        'quantity' => 1,
+    ]);
+
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Course,
+        'number_of_installments' => 4,
+        'min_price' => 1000,
+        'max_price' => 10000,
+    ]);
+
+    $order = app(CreateOrder::class)->handle($this->user, paymentPlanTemplate: $template);
+
+    expect($order->restricted_credit_applied)->toBe(3000)
+        ->and($order->payment_plan_subtotal)->toBe(5000)
+        ->and($order->payment_plan_restricted_credit_applied)->toBe(2000)
+        ->and($order->payment_plan_principal)->toBe(3000)
+        ->and($order->payment_plan_fee)->toBe(90)
+        ->and($order->total)->toBe(5090)
+        ->and($order->payInFullItemsSubtotal())->toBe(3000)
+        ->and($order->payInFullRestrictedCreditAmount())->toBe(1000)
+        ->and($order->payInFullAmount())->toBe(2000)
+        ->and($courseGrant->refresh()->remaining_amount)->toBe(0)
+        ->and($standaloneGrant->refresh()->remaining_amount)->toBe(0);
 });
 
 it('partially applies restricted credit when the eligible item is cheaper', function () {
