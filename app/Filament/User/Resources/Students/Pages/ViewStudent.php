@@ -40,7 +40,11 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
+use LogicException;
 
+/**
+ * @property-read Schema $contactForm
+ */
 final class ViewStudent extends ViewRecord implements HasTable
 {
     use InteractsWithTable;
@@ -280,8 +284,8 @@ final class ViewStudent extends ViewRecord implements HasTable
         $status = EnrollmentStatus::for($enrollment);
 
         return [
-            'course' => $course?->name ?? 'Course',
-            'semester' => $course?->semester?->getLabel(),
+            'course' => $course->name,
+            'semester' => $course->semester->getLabel(),
             'teacher' => CourseStaffPresenter::render($course),
             'status' => $status,
             'starts_at' => $this->enrollmentMeetingTime($enrollment)
@@ -374,8 +378,11 @@ final class ViewStudent extends ViewRecord implements HasTable
 
     private function student(): Student
     {
-        /** @var Student $student */
         $student = $this->getRecord();
+
+        if (! $student instanceof Student) {
+            throw new LogicException('Student view pages require a student record.');
+        }
 
         return $student;
     }

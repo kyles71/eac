@@ -73,13 +73,13 @@ final class MyEnrollments extends TablePage
 
         return [
             CourseSemester::WinterSpring->value => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->semester(CourseSemester::WinterSpring, $now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applySemesterConstraint($query, CourseSemester::WinterSpring, $now)),
             CourseSemester::Summer->value => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->semester(CourseSemester::Summer, $now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applySemesterConstraint($query, CourseSemester::Summer, $now)),
             CourseSemester::Fall->value => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->semester(CourseSemester::Fall, $now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applySemesterConstraint($query, CourseSemester::Fall, $now)),
             'past' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->past($now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applyPastConstraint($query, $now)),
             'all' => Tab::make(),
         ];
     }
@@ -92,7 +92,7 @@ final class MyEnrollments extends TablePage
                     ->where('user_id', auth()->id())
                     ->with(['course.events', 'course.teachers.media', 'student'])
             )
-            ->recordTitle(fn (Enrollment $record): string => $record->course?->name ?? 'Enrollment')
+            ->recordTitle(fn (Enrollment $record): string => $record->course->name)
             ->columns([
                 TextColumn::make('course.name')
                     ->label('Course')

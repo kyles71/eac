@@ -42,6 +42,7 @@ final class Product extends Model implements HasMedia
         return $this->morphTo();
     }
 
+    /** @return BelongsTo<Course, $this> */
     public function requiresCourse(): BelongsTo
     {
         return $this->belongsTo(Course::class, 'requires_course_id');

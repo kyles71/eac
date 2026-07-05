@@ -23,7 +23,7 @@ final class LegalDocumentVersionController
     {
         $legalDocumentVersion->loadMissing('document');
 
-        if ($legalDocumentVersion->published_at !== null && in_array($legalDocumentVersion->document?->key, self::PUBLIC_DOCUMENT_KEYS, true)) {
+        if (in_array($legalDocumentVersion->document?->key, self::PUBLIC_DOCUMENT_KEYS, true)) {
             return view('legal-documents.version', [
                 'version' => $legalDocumentVersion,
             ]);

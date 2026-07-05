@@ -19,7 +19,7 @@ enum InstallmentStatus: string implements HasColor, HasLabel
         return $this->value;
     }
 
-    public function getColor(): string | array | null
+    public function getColor(): string
     {
         return match ($this) {
             self::Paid => 'success',

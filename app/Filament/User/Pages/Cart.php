@@ -14,6 +14,7 @@ use App\Filament\Shared\Schemas\ProductQuestionCheckoutSchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
+use App\Models\Product;
 use App\Services\CreditLedgerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdown;
@@ -39,8 +40,22 @@ use Filament\Tables\Table;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
-use Livewire\Component;
+use LogicException;
 
+/**
+ * @property-read Collection<int, CartItem> $cartItems
+ * @property-read int $subtotal
+ * @property-read int $discountAmount
+ * @property-read int $restrictedCreditAmount
+ * @property-read int $creditAmount
+ * @property-read int $grandTotal
+ * @property-read int $totalBeforePaymentPlanFee
+ * @property-read int $paymentPlanFeeAmount
+ * @property-read Collection<int, PaymentPlanTemplate> $paymentPlanTemplates
+ * @property-read PaymentPlanTemplate|null $selectedTemplate
+ * @property-read int $amountDueToday
+ * @property-read PaymentPlanBreakdown|null $paymentPlanBreakdown
+ */
 final class Cart extends Page implements HasTable
 {
     use InteractsWithTable {
@@ -100,7 +115,7 @@ final class Cart extends Page implements HasTable
                                         ->button()
                                         ->color('warning')
                                         ->size('sm')
-                                        ->action(function (Component $livewire): void {
+                                        ->action(function (self $livewire): void {
                                             $livewire->applyCode();
                                         })
                                         ->keyBindings(['enter']),
@@ -114,7 +129,7 @@ final class Cart extends Page implements HasTable
                                     ->color('danger')
                                     ->size('sm')
                                     ->link()
-                                    ->action(function (Component $livewire): void {
+                                    ->action(function (self $livewire): void {
                                         $livewire->removeDiscount();
                                     }),
                             ])
@@ -193,7 +208,7 @@ final class Cart extends Page implements HasTable
         /** @var \App\Models\User $user */
         $user = auth()->user();
         $items = $this->cartItems->map(fn (CartItem $cartItem): array => [
-            'product' => $cartItem->product,
+            'product' => $this->productForCartItem($cartItem),
             'amount' => $cartItem->lineTotal(),
         ]);
 
@@ -474,6 +489,9 @@ final class Cart extends Page implements HasTable
 
                 $termsVersion = PaymentPlanTerms::currentVersion();
                 $hasTerms = $termsVersion !== null;
+                $termsContent = $termsVersion === null
+                    ? '<p>Payment plan terms are not available.</p>'
+                    : $termsVersion->content;
 
                 return [
                     ...$questionSchema,
@@ -508,7 +526,7 @@ final class Cart extends Page implements HasTable
                                         "
                                         @scroll="unlockTermsIfReadable($event.target)"
                                     >
-                                    '.($termsVersion?->content ?? '<p>Payment plan terms are not available.</p>').'
+                                    '.$termsContent.'
                                     </div>')),
                             Checkbox::make('terms')
                                 ->label('I have read and agree to the terms and conditions')
@@ -595,13 +613,13 @@ final class Cart extends Page implements HasTable
             restrictedCreditAmount: fn (): int => $this->restrictedCreditAmount,
             creditAmount: fn (): int => $this->creditAmount,
             paymentPlanItemsAmount: fn (): ?int => $this->paymentPlanBreakdown?->paymentPlanItemsAmount,
-            paymentPlanDiscountAmount: fn (): int => $this->paymentPlanBreakdown?->paymentPlanDiscountAmount ?? 0,
-            paymentPlanRestrictedCreditAmount: fn (): int => $this->paymentPlanBreakdown?->paymentPlanRestrictedCreditAmount ?? 0,
-            paymentPlanCreditAmount: fn (): int => $this->paymentPlanBreakdown?->paymentPlanCreditAmount ?? 0,
+            paymentPlanDiscountAmount: fn (): int => $this->paymentPlanDiscountAmount(),
+            paymentPlanRestrictedCreditAmount: fn (): int => $this->paymentPlanRestrictedCreditAmount(),
+            paymentPlanCreditAmount: fn (): int => $this->paymentPlanCreditAmount(),
             payTodayItemsAmount: fn (): ?int => $this->paymentPlanBreakdown?->payInFullItemsAmount,
-            payTodayDiscountAmount: fn (): int => $this->paymentPlanBreakdown?->payInFullDiscountAmount ?? 0,
-            payTodayRestrictedCreditAmount: fn (): int => $this->paymentPlanBreakdown?->payInFullRestrictedCreditAmount ?? 0,
-            payTodayCreditAmount: fn (): int => $this->paymentPlanBreakdown?->payInFullCreditAmount ?? 0,
+            payTodayDiscountAmount: fn (): int => $this->payInFullDiscountAmount(),
+            payTodayRestrictedCreditAmount: fn (): int => $this->payInFullRestrictedCreditAmount(),
+            payTodayCreditAmount: fn (): int => $this->payInFullCreditAmount(),
             paymentPlanFeeAmount: fn (): int => $this->paymentPlanFeeAmount,
             total: fn (): int => $this->grandTotal,
             template: fn (): ?PaymentPlanTemplate => $this->selectedTemplate,
@@ -609,7 +627,7 @@ final class Cart extends Page implements HasTable
             amountDueToday: fn (): ?int => $this->selectedTemplate !== null ? $this->amountDueToday : null,
         ));
 
-        $components[] = $this->checkoutAction;
+        $components[] = $this->checkoutAction();
 
         return $components;
     }
@@ -776,7 +794,7 @@ final class Cart extends Page implements HasTable
             $user,
             $itemsForCreditApplication->map(fn (CartItem $cartItem): array => [
                 'key' => $cartItem->id,
-                'product' => $cartItem->product,
+                'product' => $this->productForCartItem($cartItem),
                 'amount' => $lineAmountsAfterDiscount[$cartItem->id] ?? 0,
             ]),
             max(0, array_sum($lineAmountsAfterDiscount)),
@@ -798,5 +816,58 @@ final class Cart extends Page implements HasTable
             restrictedCreditByItemKey: $restrictedCreditApplication['by_key'],
             creditAmount: $creditAmount,
         );
+    }
+
+    private function paymentPlanDiscountAmount(): int
+    {
+        $breakdown = $this->paymentPlanBreakdown;
+
+        return $breakdown instanceof PaymentPlanBreakdown ? $breakdown->paymentPlanDiscountAmount : 0;
+    }
+
+    private function paymentPlanRestrictedCreditAmount(): int
+    {
+        $breakdown = $this->paymentPlanBreakdown;
+
+        return $breakdown instanceof PaymentPlanBreakdown ? $breakdown->paymentPlanRestrictedCreditAmount : 0;
+    }
+
+    private function paymentPlanCreditAmount(): int
+    {
+        $breakdown = $this->paymentPlanBreakdown;
+
+        return $breakdown instanceof PaymentPlanBreakdown ? $breakdown->paymentPlanCreditAmount : 0;
+    }
+
+    private function payInFullDiscountAmount(): int
+    {
+        $breakdown = $this->paymentPlanBreakdown;
+
+        return $breakdown instanceof PaymentPlanBreakdown ? $breakdown->payInFullDiscountAmount : 0;
+    }
+
+    private function payInFullRestrictedCreditAmount(): int
+    {
+        $breakdown = $this->paymentPlanBreakdown;
+
+        return $breakdown instanceof PaymentPlanBreakdown ? $breakdown->payInFullRestrictedCreditAmount : 0;
+    }
+
+    private function payInFullCreditAmount(): int
+    {
+        $breakdown = $this->paymentPlanBreakdown;
+
+        return $breakdown instanceof PaymentPlanBreakdown ? $breakdown->payInFullCreditAmount : 0;
+    }
+
+    private function productForCartItem(CartItem $cartItem): Product
+    {
+        $product = $cartItem->product;
+
+        if (! $product instanceof Product) {
+            throw new LogicException('Cart items must have an associated product.');
+        }
+
+        return $product;
     }
 }

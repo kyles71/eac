@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\HasCapacity;
+use App\Contracts\Productable;
 use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Models\Order;
@@ -50,14 +51,14 @@ final readonly class CompleteOrder
                 /** @var HasCapacity&\Illuminate\Database\Eloquent\Model $locked */
                 $locked = $productable::query()
                     ->lockForUpdate()
-                    ->find($productable->id);
+                    ->find($productable->getKey());
 
                 $availableCapacity = $locked->getAvailableCapacity();
 
                 $productableClass = $productable::class;
 
                 if ($orderItem->quantity > $availableCapacity) {
-                    Log::warning("Order #{$order->id} failed: insufficient capacity for {$productableClass} #{$productable->id}.", [
+                    Log::warning("Order #{$order->id} failed: insufficient capacity for {$productableClass} #{$productable->getKey()}.", [
                         'requested' => $orderItem->quantity,
                         'available' => $availableCapacity,
                     ]);
@@ -82,7 +83,13 @@ final readonly class CompleteOrder
                 /** @var \App\Models\User $purchaser */
                 $purchaser = $order->user;
 
-                $fulfilled = $product->productable?->fulfillOrderItem($orderItem, $purchaser) ?? false;
+                $productable = $product->productable;
+
+                if (! $productable instanceof Productable) {
+                    continue;
+                }
+
+                $fulfilled = $productable->fulfillOrderItem($orderItem, $purchaser);
 
                 if ($fulfilled) {
                     $orderItem->markFulfilled();

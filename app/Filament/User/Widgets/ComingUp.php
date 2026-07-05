@@ -17,7 +17,7 @@ final class ComingUp extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    public function getColumnSpan(): int|string|array
+    public function getColumnSpan(): int|string
     {
         return NextPayment::canView() ? 1 : 'full';
     }

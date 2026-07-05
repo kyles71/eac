@@ -9,6 +9,9 @@ parameters:
     # Level 9 is the highest level
     level: 5
 
+    stubFiles:
+        - app/Support/PHPStan/filament-macros.stub
+
 #    ignoreErrors:
 #        - '#PHPDoc tag @var#'
 #

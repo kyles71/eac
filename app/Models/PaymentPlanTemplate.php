@@ -133,8 +133,8 @@ final class PaymentPlanTemplate extends Model
             return false;
         }
 
-        $semester = $product->productable->semester?->value;
+        $semester = $product->productable->semester->value;
 
-        return is_string($semester) && in_array($semester, $allowedSemesters, true);
+        return in_array($semester, $allowedSemesters, true);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Observers;
 
 use App\Contracts\Productable;
+use App\Models\Product;
 
 final class ProductableObserver
 {
@@ -12,7 +13,7 @@ final class ProductableObserver
     {
         $product = $productable->product()->first();
 
-        if ($product === null) {
+        if (! $product instanceof Product) {
             return true;
         }
 

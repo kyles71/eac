@@ -11,6 +11,7 @@ use Symfony\Component\Mailer\SentMessage;
 use Symfony\Component\Mailer\Transport\AbstractTransport;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Message;
 use Symfony\Component\Mime\MessageConverter;
 use TextMagic\ApiException;
 use TextMagic\Models\CreateEmailCampaignRequest;
@@ -40,7 +41,13 @@ final class TextmagicTransport extends AbstractTransport
 
     protected function doSend(SentMessage $message): void
     {
-        $email = MessageConverter::toEmail($message->getOriginalMessage());
+        $originalMessage = $message->getOriginalMessage();
+
+        if (! $originalMessage instanceof Message) {
+            throw new TransportException('Textmagic can only send MIME email messages.');
+        }
+
+        $email = MessageConverter::toEmail($originalMessage);
 
         $this->ensureSupported($email);
 
@@ -62,7 +69,7 @@ final class TextmagicTransport extends AbstractTransport
         } catch (ApiException $exception) {
             throw new TransportException(
                 sprintf('Request to Textmagic API failed. Reason: %s.', $exception->getMessage()),
-                is_int($exception->getCode()) ? $exception->getCode() : 0,
+                $exception->getCode(),
                 $exception,
             );
         } catch (InvalidArgumentException $exception) {
@@ -74,7 +81,7 @@ final class TextmagicTransport extends AbstractTransport
         } catch (Throwable $exception) {
             throw new TransportException(
                 sprintf('Textmagic email campaign could not be created. Reason: %s.', $exception->getMessage()),
-                is_int($exception->getCode()) ? $exception->getCode() : 0,
+                $exception->getCode(),
                 $exception,
             );
         }

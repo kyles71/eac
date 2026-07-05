@@ -18,7 +18,7 @@ enum CourseSemester: string implements HasColor, HasLabel
         return $this->value;
     }
 
-    public function getColor(): string|array|null
+    public function getColor(): string
     {
         return match ($this) {
             self::WinterSpring => 'info',

@@ -69,7 +69,6 @@ final class ManagedBannerScopeService
     public function matchingKeysFor(string $panelId, array $scopes): array
     {
         return collect($scopes)
-            ->filter(fn (mixed $scope): bool => is_string($scope))
             ->flatMap(fn (string $scope): array => [
                 $scope,
                 $this->keyFor($panelId, $scope),

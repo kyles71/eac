@@ -103,7 +103,8 @@ final class StudentResource extends Resource
 
     private static function canDeleteStudent(Model $record): bool
     {
-        return self::ownsStudent($record)
+        return $record instanceof Student
+            && $record->user_id === auth()->id()
             && $record->enrollments()->doesntExist();
     }
 }

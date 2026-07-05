@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\Pages;
 
 use App\Filament\Admin\Resources\Courses\CourseResource;
+use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Services\EventAttendanceService;
@@ -24,6 +25,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use LogicException;
 
 final class CourseAttendance extends ViewRecord implements HasTable
 {
@@ -75,7 +77,7 @@ final class CourseAttendance extends ViewRecord implements HasTable
      */
     private function attendanceRosterQuery(): Builder
     {
-        return $this->attendance()->courseRosterQuery($this->getRecord()->id);
+        return $this->attendance()->courseRosterQuery($this->course()->id);
     }
 
     /**
@@ -132,12 +134,23 @@ final class CourseAttendance extends ViewRecord implements HasTable
      */
     private function courseEvents(): \Illuminate\Database\Eloquent\Collection
     {
-        return $this->getRecord()
+        return $this->course()
             ->events()
             ->orderByRaw('start_time is null')
             ->orderBy('start_time')
             ->orderBy('id')
             ->get();
+    }
+
+    private function course(): Course
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Course) {
+            throw new LogicException('Course attendance pages require a course record.');
+        }
+
+        return $record;
     }
 
     private function eventColumnLabel(Event $event): string

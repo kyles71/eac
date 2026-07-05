@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Models\Student;
-use App\Models\User;
-use App\Support\Filament\SelectSearch;
+use App\Support\Filament\FilamentUiMacros;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -19,7 +17,6 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Facades\FilamentTimezone;
@@ -49,7 +46,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
 
         // When a field has multiple words like "due_date", the label changes from "Due date" to "Due Date".
         Field::configureUsing(function (Field $field) {
-            $field->label(function (Component $component) {
+            $field->label(function (Field $component) {
                 return str($component->getName())
                     ->afterLast('.')
                     ->kebab()
@@ -57,7 +54,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
                     ->ucwords();
             });
 
-            $field->validationAttribute(function (Component $component) {
+            $field->validationAttribute(function (Field $component) {
                 return $component->getLabel();
             });
 
@@ -82,45 +79,13 @@ final class FilamentUiServiceProvider extends ServiceProvider
         });
 
         // US based phone input, adjust for different countries
-        TextInput::macro('phone', function () {
-            return $this->mask('(999) 999-9999')
-                ->prefixIcon('heroicon-o-phone')
-                ->tel()
-                ->minLength(14)
-                ->maxLength(14)
-                ->validationMessages([
-                    'min' => 'Please enter a valid phone number including area code.',
-                ]);
-        });
+        TextInput::macro('phone', fn (): TextInput => FilamentUiMacros::phone($this));
 
-        TextInput::macro('moneyCents', function (float|int $minValue = 0): TextInput {
-            return $this
-                ->numeric()
-                ->prefix('$')
-                ->minValue($minValue)
-                ->formatStateUsing(fn (mixed $state): ?string => is_numeric($state) ? number_format(((int) $state) / 100, 2, '.', '') : null)
-                ->dehydrateStateUsing(fn (mixed $state): ?int => filled($state) ? (int) round(((float) str_replace(',', '', (string) $state)) * 100) : null);
-        });
+        TextInput::macro('moneyCents', fn (float|int $minValue = 0): TextInput => FilamentUiMacros::textInputMoneyCents($this, $minValue));
 
-        TextColumn::macro('moneyCents', function (?string $placeholder = null): TextColumn {
-            $column = $this->formatStateUsing(fn (mixed $state): ?string => is_numeric($state) ? format_money((int) $state) : null);
+        TextColumn::macro('moneyCents', fn (?string $placeholder = null): TextColumn => FilamentUiMacros::textColumnMoneyCents($this, $placeholder));
 
-            if ($placeholder !== null) {
-                $column->placeholder($placeholder);
-            }
-
-            return $column;
-        });
-
-        TextEntry::macro('moneyCents', function (?string $placeholder = null): TextEntry {
-            $entry = $this->formatStateUsing(fn (mixed $state): ?string => is_numeric($state) ? format_money((int) $state) : null);
-
-            if ($placeholder !== null) {
-                $entry->placeholder($placeholder);
-            }
-
-            return $entry;
-        });
+        TextEntry::macro('moneyCents', fn (?string $placeholder = null): TextEntry => FilamentUiMacros::textEntryMoneyCents($this, $placeholder));
 
         Select::macro('searchableRelationship', function (
             string $name,
@@ -130,7 +95,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
             array $orderBy = [],
             string $titleAttribute = 'id',
         ): Select {
-            return SelectSearch::relationship(
+            return FilamentUiMacros::searchableRelationship(
                 select: $this,
                 name: $name,
                 searchColumns: $searchColumns,
@@ -145,14 +110,10 @@ final class FilamentUiServiceProvider extends ServiceProvider
             string $name = 'user',
             ?Closure $modifyQueryUsing = null,
         ): Select {
-            return $this->searchableRelationship(
+            return FilamentUiMacros::userRelationship(
+                select: $this,
                 name: $name,
-                searchColumns: ['first_name', 'last_name', 'email'],
-                labelFromRecord: fn (User $user): string => filled($user->email)
-                    ? "{$user->fullName} ({$user->email})"
-                    : $user->fullName,
                 modifyQueryUsing: $modifyQueryUsing,
-                orderBy: ['first_name', 'last_name'],
             );
         });
 
@@ -160,12 +121,10 @@ final class FilamentUiServiceProvider extends ServiceProvider
             string $name = 'student',
             ?Closure $modifyQueryUsing = null,
         ): Select {
-            return $this->searchableRelationship(
+            return FilamentUiMacros::studentRelationship(
+                select: $this,
                 name: $name,
-                searchColumns: ['first_name', 'last_name'],
-                labelFromRecord: fn (Student $student): string => $student->fullName,
                 modifyQueryUsing: $modifyQueryUsing,
-                orderBy: ['first_name', 'last_name'],
             );
         });
 
@@ -174,11 +133,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->maxSize(config('app.file_uploads.max_size_kilobytes'));
         });
 
-        SpatieMediaLibraryFileUpload::macro('allowVideo', function (): SpatieMediaLibraryFileUpload {
-            return $this
-                ->maxSize(config('app.file_uploads.video_max_size_kilobytes'))
-                ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime']);
-        });
+        SpatieMediaLibraryFileUpload::macro('allowVideo', fn (): SpatieMediaLibraryFileUpload => FilamentUiMacros::allowVideo($this));
 
         // resource forms in this app often need room for media, repeaters, and grouped sections
         EditAction::configureUsing(function (EditAction $action) {

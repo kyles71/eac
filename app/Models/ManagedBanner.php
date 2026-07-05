@@ -35,6 +35,40 @@ final class ManagedBanner extends Model
         'is_dismissible' => 'boolean',
     ];
 
+    public static function applyActiveConstraint(Builder $query): Builder
+    {
+        return $query
+            ->where('is_active', true)
+            ->where(fn (Builder $query): Builder => $query
+                ->whereNull('published_at')
+                ->orWhere('published_at', '<=', now()))
+            ->where(fn (Builder $query): Builder => $query
+                ->whereNull('expires_at')
+                ->orWhere('expires_at', '>', now()));
+    }
+
+    public static function applyMatchingAudiencesConstraint(Builder $query, User $user): Builder
+    {
+        $audiences = collect(app(DashboardAudienceService::class)->audiencesFor($user))
+            ->map(fn (DashboardAudience $audience): string => $audience->value)
+            ->values()
+            ->all();
+
+        return $query->where(function (Builder $query) use ($audiences): void {
+            foreach ($audiences as $audience) {
+                $query->orWhereJsonContains('audiences', $audience);
+            }
+        });
+    }
+
+    public static function applyNotDismissedByConstraint(Builder $query, User $user): Builder
+    {
+        return $query->whereDoesntHave(
+            'dismissals',
+            fn (Builder $query): Builder => $query->where('user_id', $user->id),
+        );
+    }
+
     /**
      * @return HasMany<ManagedBannerDismissal, $this>
      */
@@ -45,14 +79,7 @@ final class ManagedBanner extends Model
 
     public function scopeActive(Builder $query): void
     {
-        $query
-            ->where('is_active', true)
-            ->where(fn (Builder $query): Builder => $query
-                ->whereNull('published_at')
-                ->orWhere('published_at', '<=', now()))
-            ->where(fn (Builder $query): Builder => $query
-                ->whereNull('expires_at')
-                ->orWhere('expires_at', '>', now()));
+        self::applyActiveConstraint($query);
     }
 
     public function scopeForRenderLocation(Builder $query, ManagedBannerRenderLocation|string $renderLocation): void
@@ -84,32 +111,23 @@ final class ManagedBanner extends Model
 
     public function scopeMatchingAudiences(Builder $query, User $user): void
     {
-        $audiences = collect(app(DashboardAudienceService::class)->audiencesFor($user))
-            ->map(fn (DashboardAudience $audience): string => $audience->value)
-            ->values()
-            ->all();
-
-        $query->where(function (Builder $query) use ($audiences): void {
-            foreach ($audiences as $audience) {
-                $query->orWhereJsonContains('audiences', $audience);
-            }
-        });
+        self::applyMatchingAudiencesConstraint($query, $user);
     }
 
     public function scopeNotDismissedBy(Builder $query, User $user): void
     {
-        $query->whereDoesntHave(
-            'dismissals',
-            fn (Builder $query): Builder => $query->where('user_id', $user->id),
-        );
+        self::applyNotDismissedByConstraint($query, $user);
     }
 
     public function scopeVisibleTo(Builder $query, User $user): void
     {
-        $query
-            ->active()
-            ->matchingAudiences($user)
-            ->notDismissedBy($user);
+        self::applyNotDismissedByConstraint(
+            self::applyMatchingAudiencesConstraint(
+                self::applyActiveConstraint($query),
+                $user,
+            ),
+            $user,
+        );
     }
 
     public function scopeDisplayOrdered(Builder $query): void
@@ -160,7 +178,7 @@ final class ManagedBanner extends Model
         return filled($this->cta_url) ? $this->cta_url : null;
     }
 
-    public function resolvedIcon(): BackedEnum|string|null
+    public function resolvedIcon(): BackedEnum|string
     {
         if (filled($this->icon)) {
             return $this->icon;

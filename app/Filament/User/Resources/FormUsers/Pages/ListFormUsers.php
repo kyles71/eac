@@ -19,18 +19,18 @@ final class ListFormUsers extends ListRecords
     {
         return [
             'pending' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->formIsActive()->pending())
-                ->badge(FormUser::query()->formIsActive()->pending()->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(fn (Builder $query): Builder => FormUser::applyPendingConstraint(FormUser::applyFormIsActiveConstraint($query)))
+                ->badge(FormUser::applyPendingConstraint(FormUser::applyFormIsActiveConstraint(FormUser::query()))->where('user_id', auth()->id())->count()),
             'completed' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->formIsActive()->completed()->orderByDesc('date_signed'))
-                ->badge(FormUser::query()->formIsActive()->completed()->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(fn (Builder $query): Builder => FormUser::applyCompletedConstraint(FormUser::applyFormIsActiveConstraint($query))->orderByDesc('date_signed'))
+                ->badge(FormUser::applyCompletedConstraint(FormUser::applyFormIsActiveConstraint(FormUser::query()))->where('user_id', auth()->id())->count()),
             'expired' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->formIsExpired())
-                ->badge(FormUser::query()->formIsExpired()->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(fn (Builder $query): Builder => FormUser::applyFormIsExpiredConstraint($query))
+                ->badge(FormUser::applyFormIsExpiredConstraint(FormUser::query())->where('user_id', auth()->id())->count()),
         ];
     }
 
-    public function getDefaultActiveTab(): string|int|null
+    public function getDefaultActiveTab(): string
     {
         $has_pending = FormUser::query()
             ->where('user_id', auth()->id())

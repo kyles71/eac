@@ -56,7 +56,7 @@ final class RedeemGiftCardAction extends Action
             });
     }
 
-    public static function getDefaultName(): ?string
+    public static function getDefaultName(): string
     {
         return 'redeemGiftCard';
     }

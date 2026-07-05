@@ -33,6 +33,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 
+/**
+ * @property-read bool $isFinalizingPayment
+ * @property-read bool $hasExceededStatusPolling
+ */
 final class CheckoutSuccess extends Page
 {
     private const int MAX_STATUS_POLLS = 10;
@@ -91,7 +95,6 @@ final class CheckoutSuccess extends Page
             return;
         }
 
-        $wasFinalizing = $this->isFinalizingPayment;
         $this->statusPolls++;
 
         $this->order = Order::query()
@@ -104,7 +107,7 @@ final class CheckoutSuccess extends Page
 
         unset($this->isFinalizingPayment, $this->hasExceededStatusPolling);
 
-        if ($wasFinalizing && ! $this->isFinalizingPayment) {
+        if (! $this->isFinalizingPayment) {
             $this->dispatchAttentionUpdated();
         }
     }
@@ -294,9 +297,13 @@ final class CheckoutSuccess extends Page
      */
     private function getPaymentPlanDetailsSchema(): array
     {
-        $template = $this->order?->paymentPlanTemplate;
+        if ($this->order === null) {
+            return [];
+        }
 
-        if ($template === null || $this->order === null) {
+        $template = $this->order->paymentPlanTemplate;
+
+        if ($template === null) {
             return [];
         }
 
@@ -363,7 +370,7 @@ final class CheckoutSuccess extends Page
             ->columnSpanFull();
 
         $schema[] = Actions::make([
-            $this->saveCourseAssignmentsAction,
+            $this->saveCourseAssignmentsAction(),
         ])
             ->fullWidth()
             ->columnSpanFull();
@@ -430,7 +437,7 @@ final class CheckoutSuccess extends Page
 
     private function assignmentLabel(Enrollment $enrollment): string
     {
-        $courseName = $enrollment->course?->name ?? 'Course';
+        $courseName = $enrollment->course->name;
         $sameCourseEnrollments = $this->unassignedCourseEnrollments()
             ->where('course_id', $enrollment->course_id)
             ->values();

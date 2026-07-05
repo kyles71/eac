@@ -11,9 +11,6 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 interface Productable
 {
-    /**
-     * @return MorphOne<Product, $this>
-     */
     public function product(): MorphOne;
 
     /**

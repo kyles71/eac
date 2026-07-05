@@ -23,7 +23,7 @@ final class ViewCourseDetailsAction
         return ViewAction::make('viewCourseDetails')
             ->label('View Details')
             ->icon(Heroicon::OutlinedAcademicCap)
-            ->modalHeading(fn (Enrollment $record): string => $record->course?->name ?? 'Class Details')
+            ->modalHeading(fn (Enrollment $record): string => $record->course->name)
             ->modalWidth('lg')
             ->slideOver(false)
             ->schema(self::schema())

@@ -70,6 +70,7 @@ final class Event extends Model implements HasMedia
         return $this->start_time !== null && $dateTime->lt($this->start_time);
     }
 
+    /** @return HasMany<EventAttendee, $this> */
     public function attendees(): HasMany
     {
         return $this->hasMany(EventAttendee::class);

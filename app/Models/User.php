@@ -30,6 +30,10 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Traits\HasRoles;
 use Throwable;
 
+/**
+ * @property-read string $fullName
+ * @property-read string $full_name
+ */
 final class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar, HasMedia, HasName
 {
     /** @use HasFactory<UserFactory> */
@@ -63,13 +67,17 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         );
     }
 
+    public function displayName(): string
+    {
+        return $this->fullName;
+    }
+
     /**
      * Get the user's full name.
      */
     public function getFilamentName(): string
     {
-        // @phpstan-ignore-next-line property.notFound
-        return $this->fullName;
+        return $this->displayName();
     }
 
     public function getFilamentAvatarUrl(): ?string

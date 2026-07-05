@@ -110,7 +110,9 @@ final class EventAttendanceService
 
     public function recordStudentName(Model $record): string
     {
-        return $this->studentForAttendanceRecord($record)?->fullName ?? 'Unknown Student';
+        $student = $this->studentForAttendanceRecord($record);
+
+        return $student instanceof Student ? $student->fullName : 'Unknown Student';
     }
 
     public function recordStudentAttended(Event $event, Model $record): bool

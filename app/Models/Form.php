@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FormTypes;
-use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +18,7 @@ final class Form extends Model
     /**
      * The attributes that should be cast to native types.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $casts = [
         'id' => 'integer',
@@ -27,6 +26,14 @@ final class Form extends Model
         'can_update' => 'boolean',
         'valid_until' => 'datetime',
     ];
+
+    public static function applyActiveConstraint(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q): void {
+            $q->whereNull('valid_until')
+                ->orWhere('valid_until', '>', now());
+        });
+    }
 
     public function courses(): BelongsToMany
     {
@@ -45,12 +52,9 @@ final class Form extends Model
         return $this->hasMany(FormUser::class);
     }
 
-    #[Scope]
-    protected function isActive(Builder $query): void
+    /** @param Builder<Form> $query */
+    public function scopeIsActive(Builder $query): void
     {
-        $query->where(function ($q) {
-            $q->whereNull('valid_until')
-                ->orWhere('valid_until', '>', now());
-        });
+        self::applyActiveConstraint($query);
     }
 }

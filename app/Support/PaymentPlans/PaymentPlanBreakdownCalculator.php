@@ -14,7 +14,7 @@ use Illuminate\Support\Collection;
 final class PaymentPlanBreakdownCalculator
 {
     /**
-     * @param  Collection<int, CartItem|OrderItem>  $items
+     * @param  Collection<int, CartItem>|Collection<int, OrderItem>  $items
      * @param  array<int, int>  $restrictedCreditByItemKey
      */
     public function calculate(
@@ -64,8 +64,10 @@ final class PaymentPlanBreakdownCalculator
     }
 
     /**
-     * @param  Collection<int, CartItem|OrderItem>  $items
-     * @return Collection<int, CartItem|OrderItem>
+     * @template TItem of CartItem|OrderItem
+     *
+     * @param  Collection<int, TItem>  $items
+     * @return Collection<int, TItem>
      */
     public function itemsForCreditApplication(Collection $items, PaymentPlanTemplate $template): Collection
     {
@@ -80,7 +82,7 @@ final class PaymentPlanBreakdownCalculator
     }
 
     /**
-     * @param  Collection<int, CartItem|OrderItem>  $items
+     * @param  Collection<int, CartItem>|Collection<int, OrderItem>  $items
      * @return array<int, int>
      */
     public function lineAmountsAfterDiscount(
@@ -98,7 +100,7 @@ final class PaymentPlanBreakdownCalculator
     }
 
     /**
-     * @param  Collection<int, CartItem|OrderItem>  $items
+     * @param  Collection<int, CartItem>|Collection<int, OrderItem>  $items
      * @return array<int, array{key: int, product: Product, amount: int, remaining: int, eligible: bool}>
      */
     private function rows(Collection $items, PaymentPlanTemplate $template): array
@@ -121,7 +123,7 @@ final class PaymentPlanBreakdownCalculator
     }
 
     /**
-     * @param  array<int, array{remaining: int, eligible: bool}>  $rows
+     * @param  array<int, array{key: int, amount: int, remaining: int, eligible: bool}>  $rows
      * @return array{payment_plan: int, pay_in_full: int}
      */
     private function applyReduction(array &$rows, int $amount): array
@@ -150,7 +152,7 @@ final class PaymentPlanBreakdownCalculator
     }
 
     /**
-     * @param  array<int, array{key: int, remaining: int, eligible: bool}>  $rows
+     * @param  array<int, array{key: int, amount: int, remaining: int, eligible: bool}>  $rows
      * @param  array<int, int>  $restrictedCreditByItemKey
      * @return array{payment_plan: int, pay_in_full: int}
      */
@@ -173,7 +175,7 @@ final class PaymentPlanBreakdownCalculator
         return $applied;
     }
 
-    /** @param array<int, array{amount: int, remaining: int, eligible: bool}> $rows */
+    /** @param array<int, array{key: int, amount: int, remaining: int, eligible: bool}> $rows */
     private function sum(array $rows, bool $eligible, string $field = 'remaining'): int
     {
         return (int) collect($rows)
@@ -181,7 +183,7 @@ final class PaymentPlanBreakdownCalculator
             ->sum($field);
     }
 
-    /** @param Collection<int, CartItem|OrderItem> $items */
+    /** @param Collection<int, CartItem>|Collection<int, OrderItem> $items */
     private function total(Collection $items): int
     {
         return (int) $items->sum(fn (CartItem|OrderItem $item): int => $this->lineAmount($item));

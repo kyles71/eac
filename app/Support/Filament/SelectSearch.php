@@ -15,7 +15,6 @@ final class SelectSearch
 {
     /**
      * @param  list<string>  $searchColumns
-     * @param  Closure(Model): string  $labelFromRecord
      * @param  array<int, string>|array<string, string>  $orderBy
      */
     public static function relationship(
@@ -61,7 +60,6 @@ final class SelectSearch
     /**
      * @param  Builder<Model>  $query
      * @param  list<string>  $searchColumns
-     * @param  Closure(Model): string  $labelFromRecord
      * @param  array<int, string>|array<string, string>  $orderBy
      * @return array<int|string, string>
      */
@@ -103,7 +101,6 @@ final class SelectSearch
 
     /**
      * @param  list<string>  $searchColumns
-     * @param  Closure(Model): string  $labelFromRecord
      * @param  array<int, string>|array<string, string>  $orderBy
      * @return array<int|string, string>
      */

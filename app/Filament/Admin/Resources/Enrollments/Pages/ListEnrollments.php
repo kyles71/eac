@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Enrollments\Pages;
 
 use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
+use App\Models\Enrollment;
 use Carbon\Carbon;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
@@ -21,15 +22,16 @@ final class ListEnrollments extends ListRecords
 
         return [
             'open' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->open()),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applyOpenConstraint($query)),
             'active' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->active($now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applyActiveConstraint($query, $now)),
             'future' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query->future($now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applyFutureConstraint($query, $now)),
             'past' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query) => $query
-                    ->whereNotNull('student_id')
-                    ->past($now)),
+                ->modifyQueryUsing(fn (Builder $query): Builder => Enrollment::applyPastConstraint(
+                    $query->whereNotNull('student_id'),
+                    $now,
+                )),
             'all' => Tab::make(),
             // ->modifyQueryUsing(fn (Builder $query) => $query->where('active', false)),
         ];

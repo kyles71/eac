@@ -24,6 +24,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Tags\HasTags;
 
+/**
+ * @property-read Product|null $product
+ * @property-read string|null $teacherDisplayName
+ */
 final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
@@ -154,7 +158,11 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     {
         $event = $this->lastScheduledEvent();
 
-        return $event?->end_time ?? $event?->start_time;
+        if ($event === null) {
+            return null;
+        }
+
+        return $event->end_time ?? $event->start_time;
     }
 
     public function scheduledDurationMinutes(?Event $event = null): ?int
@@ -239,7 +247,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         $duration = $this->scheduledDurationMinutes();
 
         return array_filter([
-            'Semester' => $this->semester?->getLabel(),
+            'Semester' => $this->semester->getLabel(),
             'Start Time' => $this->formattedStorefrontStartTime(),
             'Duration' => $duration !== null ? "{$duration} minutes" : null,
             'Teacher' => $this->teacherDisplayName,

@@ -21,7 +21,6 @@ use Filament\Schemas\Components\Image;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Contracts\Support\Htmlable;
 use InvalidArgumentException;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -71,9 +70,9 @@ final class ProductDetails extends Page
         $this->subheading = 'Review product details and add this item to your cart.';
     }
 
-    public function getTitle(): string|Htmlable
+    public function getTitle(): string
     {
-        return $this->product?->name ?? self::$title ?? 'Product Details';
+        return $this->product !== null ? $this->product->name : self::$title ?? 'Product Details';
     }
 
     public function content(Schema $schema): Schema
@@ -204,35 +203,41 @@ final class ProductDetails extends Page
      */
     private function getDetailsSchema(): array
     {
+        if ($this->product === null) {
+            return [];
+        }
+
+        $product = $this->product;
+
         $details = [
             TextEntry::make('price')
                 ->label('Price')
-                ->state(fn (): string => $this->product?->storefrontPriceLabel() ?? ''),
+                ->state(fn (): string => $product->storefrontPriceLabel()),
             TextEntry::make('description')
                 ->label('Description')
-                ->state(fn (): ?string => $this->product?->description)
+                ->state(fn (): ?string => $product->description)
                 ->placeholder('No description available.')
                 ->columnSpanFull(),
         ];
 
-        foreach ($this->product?->storefrontDetails() ?? [] as $label => $value) {
+        foreach ($product->storefrontDetails() as $label => $value) {
             $details[] = TextEntry::make('storefront_detail_'.count($details))
                 ->label($label)
                 ->state(
-                    $label === 'Teacher' && $this->product?->productable instanceof Course
-                        ? CourseStaffPresenter::render($this->product->productable)
+                    $label === 'Teacher' && $product->productable instanceof Course
+                        ? CourseStaffPresenter::render($product->productable)
                         : $value
                 );
         }
 
-        if ($this->product?->requiresCourse !== null) {
+        if ($product->requiresCourse !== null) {
             $details[] = TextEntry::make('requires_course')
                 ->label('Requires Enrollment In')
-                ->state($this->product->requiresCourse->name);
+                ->state($product->requiresCourse->name);
         }
 
         $details[] = Actions::make([
-            $this->addToCartAction,
+            $this->addToCartAction(),
         ])
             ->fullWidth()
             ->columnSpanFull();

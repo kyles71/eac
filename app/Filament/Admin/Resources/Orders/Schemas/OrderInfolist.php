@@ -32,8 +32,10 @@ final class OrderInfolist
                             ->color(fn (OrderStatus $state): string => match ($state) {
                                 OrderStatus::Completed => 'success',
                                 OrderStatus::Pending => 'warning',
+                                OrderStatus::Processing => 'info',
                                 OrderStatus::Failed => 'danger',
                                 OrderStatus::Refunded => 'gray',
+                                OrderStatus::Cancelled => 'gray',
                             }),
                         TextEntry::make('subtotal')
                             ->moneyCents(),

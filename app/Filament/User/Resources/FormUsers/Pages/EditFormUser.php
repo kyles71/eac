@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\User\Resources\FormUsers\Pages;
 
 use App\Filament\User\Resources\FormUsers\FormUserResource;
+use App\Models\FormUser;
 use App\Support\UserAttention;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Schema;
+use LogicException;
 
 final class EditFormUser extends EditRecord
 {
@@ -15,7 +17,7 @@ final class EditFormUser extends EditRecord
 
     public function form(Schema $schema): Schema
     {
-        $record = $this->getRecord();
+        $record = $this->formUser();
 
         $record->loadMissing(['form']);
 
@@ -24,7 +26,7 @@ final class EditFormUser extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        if ($this->getRecord()->formCanBeUpdated()) {
+        if ($this->formUser()->formCanBeUpdated()) {
             $data['signature'] = null;
             $data['date_signed'] = null;
         }
@@ -41,5 +43,16 @@ final class EditFormUser extends EditRecord
     {
         $this->dispatch(UserAttention::UPDATED_EVENT);
         $this->dispatch('refresh-sidebar');
+    }
+
+    private function formUser(): FormUser
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof FormUser) {
+            throw new LogicException('Form user edit pages require a form user record.');
+        }
+
+        return $record;
     }
 }

@@ -13,6 +13,9 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
+/**
+ * @property-read Product|null $product
+ */
 final class Costume extends Model implements HasMedia, Productable, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CostumeFactory> */

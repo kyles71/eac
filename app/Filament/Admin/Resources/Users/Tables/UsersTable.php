@@ -21,8 +21,15 @@ final class UsersTable
         return $table
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum([
                 'creditGrants as available_store_credit' => fn (Builder $query): Builder => $query
-                    ->available()
-                    ->unrestricted(),
+                    ->whereNull('revoked_at')
+                    ->where(function (Builder $query): void {
+                        $query
+                            ->whereNull('expires_on')
+                            ->orWhereDate('expires_on', '>=', now('America/New_York')->toDateString());
+                    })
+                    ->where('remaining_amount', '>', 0)
+                    ->whereNull('restricted_to_product_type')
+                    ->where('has_product_restrictions', false),
             ], 'remaining_amount'))
             ->columns([
                 SpatieMediaLibraryImageColumn::make('avatar')

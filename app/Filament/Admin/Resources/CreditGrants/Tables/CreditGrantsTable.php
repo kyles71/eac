@@ -92,8 +92,14 @@ final class CreditGrantsTable
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return match ($data['value'] ?? null) {
-                            'unrestricted' => $query->unrestricted(),
-                            'restricted' => $query->restricted(),
+                            'unrestricted' => $query
+                                ->whereNull('restricted_to_product_type')
+                                ->where('has_product_restrictions', false),
+                            'restricted' => $query->where(function (Builder $query): void {
+                                $query
+                                    ->whereNotNull('restricted_to_product_type')
+                                    ->orWhere('has_product_restrictions', true);
+                            }),
                             default => $query,
                         };
                     }),

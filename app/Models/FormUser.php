@@ -6,7 +6,6 @@ namespace App\Models;
 
 use App\Enums\FormTypes;
 use Database\Factories\FormUserFactory;
-use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +23,41 @@ final class FormUser extends Model
         'student_id' => 'integer',
         'date_signed' => 'date',
     ];
+
+    public static function applyPendingConstraint(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query
+                ->whereNull('signature')
+                ->orWhereNull('date_signed');
+        });
+    }
+
+    public static function applyCompletedConstraint(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('signature')
+            ->whereNotNull('date_signed');
+    }
+
+    public static function applyFormIsActiveConstraint(Builder $query): Builder
+    {
+        return $query->join('forms', function ($join): void {
+            $join->on('form_users.form_id', '=', 'forms.id')
+                ->where(function ($q): void {
+                    $q->whereNull('forms.valid_until')
+                        ->orWhere('forms.valid_until', '>', now());
+                });
+        });
+    }
+
+    public static function applyFormIsExpiredConstraint(Builder $query): Builder
+    {
+        return $query->join('forms', function ($join): void {
+            $join->on('form_users.form_id', '=', 'forms.id')
+                ->where('forms.valid_until', '<=', now());
+        });
+    }
 
     /** @return BelongsTo<Form, $this> */
     public function form(): BelongsTo
@@ -74,42 +108,27 @@ final class FormUser extends Model
         return $this->morphTo();
     }
 
-    #[Scope]
-    protected function pending(Builder $query): void
+    /** @param Builder<FormUser> $query */
+    public function scopePending(Builder $query): void
     {
-        $query->where(function (Builder $query): void {
-            $query
-                ->whereNull('signature')
-                ->orWhereNull('date_signed');
-        });
+        self::applyPendingConstraint($query);
     }
 
-    #[Scope]
-    protected function completed(Builder $query): void
+    /** @param Builder<FormUser> $query */
+    public function scopeCompleted(Builder $query): void
     {
-        $query
-            ->whereNotNull('signature')
-            ->whereNotNull('date_signed');
+        self::applyCompletedConstraint($query);
     }
 
-    #[Scope]
-    protected function formIsActive(Builder $query): void
+    /** @param Builder<FormUser> $query */
+    public function scopeFormIsActive(Builder $query): void
     {
-        $query->join('forms', function ($join) {
-            $join->on('form_users.form_id', '=', 'forms.id')
-                ->where(function ($q) {
-                    $q->whereNull('forms.valid_until')
-                        ->orWhere('forms.valid_until', '>', now());
-                });
-        });
+        self::applyFormIsActiveConstraint($query);
     }
 
-    #[Scope]
-    protected function formIsExpired(Builder $query): void
+    /** @param Builder<FormUser> $query */
+    public function scopeFormIsExpired(Builder $query): void
     {
-        $query->join('forms', function ($join) {
-            $join->on('form_users.form_id', '=', 'forms.id')
-                ->where('forms.valid_until', '<=', now());
-        });
+        self::applyFormIsExpiredConstraint($query);
     }
 }

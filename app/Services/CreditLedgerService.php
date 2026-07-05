@@ -278,7 +278,9 @@ final class CreditLedgerService
     }
 
     /**
-     * @param  Collection<int, array{product: Product, amount: int}>  $items
+     * @template TItem of array{key?: int, product: Product, amount: int}
+     *
+     * @param  Collection<int, TItem>  $items
      */
     public function previewRestrictedAmount(User $user, Collection $items, int $maximumAmount): int
     {
@@ -286,7 +288,9 @@ final class CreditLedgerService
     }
 
     /**
-     * @param  Collection<int, array{key?: int, product: Product, amount: int}>  $items
+     * @template TItem of array{key?: int, product: Product, amount: int}
+     *
+     * @param  Collection<int, TItem>  $items
      * @return array{total: int, by_key: array<int, int>}
      */
     public function previewRestrictedApplication(User $user, Collection $items, int $maximumAmount): array
@@ -326,7 +330,10 @@ final class CreditLedgerService
 
     /**
      * @param  EloquentCollection<int, CreditGrant>  $grants
-     * @param  Collection<int, OrderItem|array{key?: int, product: Product, amount: int}>  $items
+     *
+     * @template TItem of array{key?: int, product: Product, amount: int}
+     *
+     * @param  Collection<int, OrderItem>|Collection<int, TItem>  $items
      * @param  array<int, int>  $lineRemaining
      * @return array{total: int, by_key: array<int, int>, by_grant: array<int, int>}
      */
@@ -381,10 +388,8 @@ final class CreditLedgerService
     }
 
     /**
-     * @template TItem of OrderItem|array{product: Product, amount: int}
-     *
      * @param  EloquentCollection<int, CreditGrant>  $grants
-     * @param  Collection<int, TItem>  $items
+     * @param  Collection<int, OrderItem>|Collection<int, array{key?: int, product: Product, amount: int}>  $items
      * @return Collection<int, CreditGrant>
      */
     private function sortRestrictedGrants(EloquentCollection $grants, Collection $items): Collection
@@ -399,9 +404,7 @@ final class CreditLedgerService
     }
 
     /**
-     * @template TItem of OrderItem|array{product: Product, amount: int}
-     *
-     * @param  Collection<int, TItem>  $items
+     * @param  Collection<int, OrderItem>|Collection<int, array{key?: int, product: Product, amount: int}>  $items
      */
     private function eligibleItemCount(CreditGrant $grant, Collection $items): int
     {

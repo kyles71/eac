@@ -284,8 +284,11 @@ final class PeopleAndGroupsPicker
     }
 
     /**
-     * @param  HasMany<EventAttendee|CalendarAudience, Event|Calendar>  $query
-     * @param  array<int, array<string, mixed>>  $state
+     * @template TRelated of EventAttendee|CalendarAudience
+     * @template TParent of Event|Calendar
+     *
+     * @param  HasMany<TRelated, TParent>  $query
+     * @param  array<int, mixed>  $state
      */
     private static function syncMorphRecords(HasMany $query, array $state, string $typeKey, string $idKey): void
     {

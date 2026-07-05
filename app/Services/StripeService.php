@@ -30,7 +30,7 @@ final readonly class StripeService implements StripeServiceContract
 
         $customer = $this->client->customers->create([
             'email' => $user->email,
-            'name' => $user->full_name, // @phpstan-ignore property.notFound
+            'name' => $user->displayName(),
             'metadata' => [
                 'user_id' => (string) $user->id,
             ],

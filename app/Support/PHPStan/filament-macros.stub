@@ -1,0 +1,66 @@
+<?php
+
+namespace Filament\Forms\Components {
+    /**
+     * @method $this searchableRelationship(string $name, list<string> $searchColumns, \Closure $labelFromRecord, ?\Closure $modifyQueryUsing = null, array<int, string>|array<string, string> $orderBy = [], string $titleAttribute = 'id')
+     * @method $this userRelationship(string $name = 'user', ?\Closure $modifyQueryUsing = null)
+     * @method $this studentRelationship(string $name = 'student', ?\Closure $modifyQueryUsing = null)
+     */
+    class Select
+    {
+    }
+
+    /**
+     * @method $this allowVideo()
+     */
+    class SpatieMediaLibraryFileUpload
+    {
+    }
+
+    /**
+     * @method $this phone()
+     * @method $this moneyCents(float|int $minValue = 0)
+     */
+    class TextInput
+    {
+    }
+}
+
+namespace Filament\Infolists\Components {
+    /**
+     * @method $this moneyCents(?string $placeholder = null)
+     */
+    class TextEntry
+    {
+    }
+}
+
+namespace Filament\Tables\Columns {
+    /**
+     * @method $this moneyCents(?string $placeholder = null)
+     */
+    class TextColumn
+    {
+    }
+}
+
+namespace Filament\Schemas\Components {
+    /**
+     * @method $this activeTab(int|string|null $activeTab)
+     */
+    class Component
+    {
+    }
+}
+
+namespace Filament\Support\Components {
+    class Component
+    {
+        /**
+         * @param callable|string|null $value
+         * @param array<string, mixed> $namedInjections
+         * @param array<class-string, mixed> $typedInjections
+         */
+        public function evaluate(mixed $value, array $namedInjections = [], array $typedInjections = []): mixed {}
+    }
+}

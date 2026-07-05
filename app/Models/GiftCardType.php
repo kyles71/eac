@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
+/**
+ * @property-read Product|null $product
+ */
 final class GiftCardType extends Model implements Productable, ProvidesStorefrontDetails, RequiresAddToCartInformation
 {
     /** @use HasFactory<\Database\Factories\GiftCardTypeFactory> */

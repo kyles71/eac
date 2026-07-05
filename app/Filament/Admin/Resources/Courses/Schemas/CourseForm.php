@@ -109,7 +109,7 @@ final class CourseForm
                             ->relationship(
                                 name: 'forms',
                                 titleAttribute: 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query->isActive()->orderBy('name'),
+                                modifyQueryUsing: fn (Builder $query): Builder => self::activeFormsQuery($query)->orderBy('name'),
                             )
                             ->default(fn (): array => ($form = Form::query()
                                 ->isActive()
@@ -174,6 +174,18 @@ final class CourseForm
             return $query;
         }
 
-        return $query->role('teacher');
+        return $query->whereHas(
+            'roles',
+            fn (Builder $query): Builder => $query->where('name', 'teacher'),
+        );
+    }
+
+    public static function activeFormsQuery(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query
+                ->whereNull('valid_until')
+                ->orWhere('valid_until', '>', now());
+        });
     }
 }

@@ -11,6 +11,7 @@ use App\Filament\User\Resources\FormUsers\Pages\ViewFormUser;
 use App\Filament\User\Resources\FormUsers\Schemas\FormUserForm;
 use App\Filament\User\Resources\FormUsers\Schemas\FormUserInfolist;
 use App\Filament\User\Resources\FormUsers\Tables\FormUsersTable;
+use App\Models\Form;
 use App\Models\FormUser;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -82,13 +83,13 @@ final class FormUserResource extends Resource
         $count = FormUser::query()
             ->where('user_id', auth()->id())
             ->pending()
-            ->whereHas('form', fn ($query) => $query->isActive())
+            ->whereHas('form', fn (Builder $query): Builder => Form::applyActiveConstraint($query))
             ->count();
 
         return $count > 0 ? (string) $count : null;
     }
 
-    public static function getNavigationBadgeColor(): ?string
+    public static function getNavigationBadgeColor(): string
     {
         return 'warning';
     }
@@ -118,7 +119,7 @@ final class FormUserResource extends Resource
 
     private static function canEditFormUser(Model $record): bool
     {
-        if (! self::ownsFormUser($record)) {
+        if (! $record instanceof FormUser || $record->user_id !== auth()->id()) {
             return false;
         }
 

@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\FormTypes;
 use App\Enums\MedicalWaiverStatus;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Tags\HasTags;
 
+/**
+ * @property-read string $fullName
+ */
 final class Student extends Model
 {
     use HasFactory, HasTags;
@@ -25,7 +29,7 @@ final class Student extends Model
     /**
      * The attributes that should be cast to native types.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $casts = [
         'id' => 'integer',
@@ -38,6 +42,11 @@ final class Student extends Model
         return Attribute::make(
             get: fn ($value, $attributes): string => $attributes['first_name'].' '.$attributes['last_name']
         );
+    }
+
+    public function displayName(): string
+    {
+        return $this->fullName;
     }
 
     public function age(): Attribute
@@ -113,7 +122,7 @@ final class Student extends Model
     public function latestValidCompletedMedicalWaiver(): ?FormUser
     {
         return $this->completedMedicalWaivers()
-            ->whereHas('form', fn ($query) => $query->isActive())
+            ->whereHas('form', fn (Builder $query): Builder => Form::applyActiveConstraint($query))
             ->latest('updated_at')
             ->latest('id')
             ->first();
@@ -131,9 +140,9 @@ final class Student extends Model
     {
         return $this->forms()
             ->pending()
-            ->whereHas('form', fn ($query) => $query
-                ->where('form_type', FormTypes::StudentWaiver)
-                ->isActive())
+            ->whereHas('form', fn (Builder $query): Builder => Form::applyActiveConstraint(
+                $query->where('form_type', FormTypes::StudentWaiver),
+            ))
             ->latest('updated_at')
             ->latest('id')
             ->first();

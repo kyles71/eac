@@ -317,7 +317,9 @@ final class ProductForm
 
     private static function usesCustomerEnteredPricing(Get $get): bool
     {
-        return self::selectedGiftCardType($get)?->allows_custom_amount ?? false;
+        $giftCardType = self::selectedGiftCardType($get);
+
+        return $giftCardType instanceof GiftCardType && $giftCardType->allows_custom_amount;
     }
 
     private static function selectedGiftCardType(Get $get): ?GiftCardType

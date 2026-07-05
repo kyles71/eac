@@ -8,7 +8,6 @@ use App\Enums\DashboardAudience;
 use App\Enums\ProductAvailabilityStatus;
 use App\Models\GiftCardType;
 use App\Models\Product;
-use App\Models\ProductEarlyAccessWindow;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -258,10 +257,7 @@ final readonly class ProductAvailabilityService
                 ->orWhere('available_until', '>', $at));
     }
 
-    /**
-     * @param  Builder<ProductEarlyAccessWindow>  $query
-     * @param  list<string>  $audienceValues
-     */
+    /** @param list<string> $audienceValues */
     private function matchingWindowQuery(Builder $query, User $user, array $audienceValues): Builder
     {
         return $query->where(function (Builder $query) use ($audienceValues, $user): void {

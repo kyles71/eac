@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Enums\FormTypes;
+use App\Models\Form;
 use App\Models\FormUser;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 final readonly class UserAttention
@@ -15,7 +17,7 @@ final readonly class UserAttention
 
     public function openEnrollmentCount(User $user): int
     {
-        return $user->enrollments()->open()->count();
+        return $user->enrollments()->whereNull('student_id')->count();
     }
 
     /**
@@ -27,7 +29,7 @@ final readonly class UserAttention
             ->with(['form', 'student'])
             ->where('user_id', $user->id)
             ->pending()
-            ->whereHas('form', fn ($query) => $query->isActive())
+            ->whereHas('form', fn (Builder $query): Builder => Form::applyActiveConstraint($query))
             ->get();
     }
 
