@@ -229,6 +229,7 @@ final class Store extends TablePage
             ->label('Add to Cart')
             ->icon(Heroicon::OutlinedShoppingCart)
             ->color('primary')
+            ->modalHidden(fn (Product $record): bool => ! $record->requiresAddToCartInformation())
             ->modalHeading(fn (Product $record): string => $record->allowsCustomGiftCardAmount()
                 ? 'Choose Gift Card Amount'
                 : 'Add to Cart')

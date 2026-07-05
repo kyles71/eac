@@ -106,6 +106,7 @@ final class ProductDetails extends Page
             ->label('Add to Cart')
             ->icon(Heroicon::OutlinedShoppingCart)
             ->color('primary')
+            ->modalHidden(fn (): bool => $this->product?->requiresAddToCartInformation() !== true)
             ->modalHeading(fn (): string => $this->product?->allowsCustomGiftCardAmount() === true
                 ? 'Choose Gift Card Amount'
                 : 'Add to Cart')

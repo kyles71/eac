@@ -78,6 +78,20 @@ it('derives valid pricing for name your price gift card products', function () {
         ->and($invalidCustomGiftCard->availabilityFor($user))->toBe(ProductAvailabilityStatus::InvalidPrice);
 });
 
+it('knows when add to cart needs extra information', function () {
+    $standardProduct = Product::factory()->create(['price' => 5000]);
+    $fixedGiftCard = Product::factory()
+        ->forGiftCardType(GiftCardType::factory()->denomination(5000)->create())
+        ->create();
+    $customGiftCard = Product::factory()
+        ->forGiftCardType(GiftCardType::factory()->denomination(5000)->customAmount(500)->create())
+        ->create();
+
+    expect($standardProduct->requiresAddToCartInformation())->toBeFalse()
+        ->and($fixedGiftCard->requiresAddToCartInformation())->toBeFalse()
+        ->and($customGiftCard->requiresAddToCartInformation())->toBeTrue();
+});
+
 it('uses only product images by default', function () {
     Storage::fake(MediaDisks::public());
 

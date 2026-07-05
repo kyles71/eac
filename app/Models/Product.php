@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Contracts\RequiresAddToCartInformation;
 use App\Enums\ProductAvailabilityStatus;
 use App\Services\ProductAvailabilityService;
 use App\Support\MediaDisks;
@@ -97,6 +98,14 @@ final class Product extends Model implements HasMedia
     public function allowsCustomGiftCardAmount(): bool
     {
         return $this->usesCustomerEnteredPricing();
+    }
+
+    public function requiresAddToCartInformation(): bool
+    {
+        $this->loadMissing('productable');
+
+        return $this->productable instanceof RequiresAddToCartInformation
+            && $this->productable->requiresAddToCartInformation();
     }
 
     public function usesCustomerEnteredPricing(): bool

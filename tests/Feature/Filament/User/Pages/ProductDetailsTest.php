@@ -109,6 +109,18 @@ it('can add one item to the cart', function () {
         ->value('quantity'))->toBe(1);
 });
 
+it('adds products without opening a modal when no extra information is needed', function () {
+    livewire(ProductDetails::class, ['product' => $this->product])
+        ->mountAction('addToCart')
+        ->assertActionNotMounted()
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->value('quantity'))->toBe(1);
+});
+
 it('can add a custom amount gift card', function () {
     $giftCardType = GiftCardType::factory()
         ->denomination(5000)
@@ -128,6 +140,19 @@ it('can add a custom amount gift card', function () {
         ->where('user_id', auth()->id())
         ->where('product_id', $giftCardProduct->id)
         ->value('custom_gift_card_amount'))->toBe(7500);
+});
+
+it('opens the add to cart modal when extra information is needed', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    livewire(ProductDetails::class, ['product' => $giftCardProduct])
+        ->mountAction('addToCart')
+        ->assertActionMounted('addToCart')
+        ->assertSchemaComponentExists('custom_gift_card_amount', 'mountedActionSchema0');
 });
 
 it('disables adding to cart when capacity is sold out', function () {

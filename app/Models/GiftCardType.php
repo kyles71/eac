@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Actions\Store\FulfillGiftCard;
 use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Contracts\RequiresAddToCartInformation;
 use App\Enums\ProductType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-final class GiftCardType extends Model implements Productable, ProvidesStorefrontDetails
+final class GiftCardType extends Model implements Productable, ProvidesStorefrontDetails, RequiresAddToCartInformation
 {
     /** @use HasFactory<\Database\Factories\GiftCardTypeFactory> */
     use HasFactory;
@@ -38,6 +39,11 @@ final class GiftCardType extends Model implements Productable, ProvidesStorefron
         $fulfillGiftCard->handle($orderItem, $purchaser);
 
         return true;
+    }
+
+    public function requiresAddToCartInformation(): bool
+    {
+        return $this->allows_custom_amount;
     }
 
     /**

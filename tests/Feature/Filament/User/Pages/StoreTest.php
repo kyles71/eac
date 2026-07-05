@@ -246,6 +246,18 @@ it('can still quickly add a product to the cart from the table', function () {
         ->value('quantity'))->toBe(1);
 });
 
+it('adds products from the table without opening a modal when no extra information is needed', function () {
+    livewire(Store::class)
+        ->mountAction(TestAction::make('addToCart')->table($this->product))
+        ->assertActionNotMounted()
+        ->assertNotified('Added to cart');
+
+    expect(CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->value('quantity'))->toBe(1);
+});
+
 it('can add a custom amount gift card from the table', function () {
     $giftCardType = GiftCardType::factory()
         ->denomination(5000)
@@ -266,6 +278,19 @@ it('can add a custom amount gift card from the table', function () {
         ->where('user_id', auth()->id())
         ->where('product_id', $giftCardProduct->id)
         ->value('custom_gift_card_amount'))->toBe(7500);
+});
+
+it('opens the add to cart modal from the table when extra information is needed', function () {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
+
+    livewire(Store::class)
+        ->mountAction(TestAction::make('addToCart')->table($giftCardProduct))
+        ->assertActionMounted(TestAction::make('addToCart')->table($giftCardProduct))
+        ->assertSchemaComponentExists('custom_gift_card_amount', 'mountedActionSchema0');
 });
 
 it('keeps product navigation and quick add available in card view', function () {
