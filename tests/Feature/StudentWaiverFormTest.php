@@ -28,6 +28,8 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
 
@@ -167,6 +169,47 @@ it('defaults waiver signature dates to today', function (): void {
             'responseable.media_release_signed_on' => $today,
             'date_signed' => $today,
         ]);
+});
+
+it('uses browser side visibility for emergency contact other relationships', function (): void {
+    $form = Form::factory()->create([
+        'form_type' => FormTypes::StudentWaiver,
+        'valid_until' => now()->addMonth(),
+    ]);
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $waiver = StudentWaiver::query()->create();
+    $formUser = FormUser::factory()
+        ->forStudent($student)
+        ->unsigned()
+        ->create([
+            'form_id' => $form->id,
+            'user_id' => auth()->id(),
+            'responseable_type' => $waiver->getMorphClass(),
+            'responseable_id' => $waiver->id,
+        ]);
+
+    $component = livewire(EditFormUser::class, ['record' => $formUser->id]);
+    $schema = StudentWaiverSchema::configure(Schema::make($component->instance()), withRelationships: false);
+    $emergencyContactsRepeater = $schema->getComponent(
+        fn (Component $component): bool => $component instanceof Repeater && $component->getName() === 'emergency_contacts',
+        withHidden: true,
+    );
+    $relationshipOptionField = $emergencyContactsRepeater?->getChildSchema()?->getComponent(
+        fn (Component $component): bool => $component instanceof Select && $component->getName() === 'relationship_option',
+        withHidden: true,
+    );
+    $relationshipField = $emergencyContactsRepeater?->getChildSchema()?->getComponent(
+        fn (Component $component): bool => $component instanceof TextInput && $component->getName() === 'relationship',
+        withHidden: true,
+    );
+
+    expect($relationshipOptionField)->toBeInstanceOf(Select::class)
+        ->and($relationshipField)->toBeInstanceOf(TextInput::class)
+        ->and($relationshipOptionField->isLive())->toBeFalse()
+        ->and(implode("\n", $relationshipOptionField->getAfterStateUpdatedJs()))
+        ->toContain("\$set('relationship', \$state === 'Other' ? null : \$state)")
+        ->and(mb_trim($relationshipField->getVisibleJs() ?? ''))
+        ->toBe("\$get('relationship_option') === 'Other'");
 });
 
 it('links student waiver policy copy to published legal documents', function (): void {

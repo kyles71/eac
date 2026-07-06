@@ -10,6 +10,8 @@ use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 
@@ -166,13 +168,8 @@ it('shows an Other text input and only requires it for required questions', func
         'user_id' => auth()->id(),
         'product_id' => $product->id,
     ]);
-    $requiredOtherPath = "question_answers.{$cartItem->id}.1.question_{$requiredQuestion->id}_other";
-    $optionalOtherPath = "question_answers.{$cartItem->id}.1.question_{$optionalQuestion->id}_other";
-
     $component = livewire(Cart::class)
         ->mountAction('checkout')
-        ->assertSchemaComponentHidden($requiredOtherPath)
-        ->assertSchemaComponentHidden($optionalOtherPath)
         ->fillForm([
             'question_answers' => [
                 $cartItem->id => [
@@ -182,16 +179,30 @@ it('shows an Other text input and only requires it for required questions', func
                     ],
                 ],
             ],
-        ])
-        ->assertSchemaComponentVisible($requiredOtherPath)
-        ->assertSchemaComponentVisible($optionalOtherPath);
+        ]);
 
     $schemaName = $component->instance()->getMountedActionSchemaName();
     $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+    $requiredSelectField = $fields->first(fn ($field): bool => $field->getName() === "question_{$requiredQuestion->id}");
+    $optionalSelectField = $fields->first(fn ($field): bool => $field->getName() === "question_{$optionalQuestion->id}");
     $requiredOtherField = $fields->first(fn ($field): bool => $field->getName() === "question_{$requiredQuestion->id}_other");
     $optionalOtherField = $fields->first(fn ($field): bool => $field->getName() === "question_{$optionalQuestion->id}_other");
 
-    expect($requiredOtherField->isRequired())->toBeTrue()
+    expect($requiredSelectField)->toBeInstanceOf(Select::class)
+        ->and($optionalSelectField)->toBeInstanceOf(Select::class)
+        ->and($requiredOtherField)->toBeInstanceOf(TextInput::class)
+        ->and($optionalOtherField)->toBeInstanceOf(TextInput::class)
+        ->and($requiredSelectField->isLive())->toBeFalse()
+        ->and($optionalSelectField->isLive())->toBeFalse()
+        ->and(implode("\n", $requiredSelectField->getAfterStateUpdatedJs()))
+        ->toContain("\$set('question_{$requiredQuestion->id}_other', null)")
+        ->and(implode("\n", $optionalSelectField->getAfterStateUpdatedJs()))
+        ->toContain("\$set('question_{$optionalQuestion->id}_other', null)")
+        ->and(mb_trim($requiredOtherField->getVisibleJs() ?? ''))
+        ->toBe("\$get('question_{$requiredQuestion->id}') === 'Other'")
+        ->and(mb_trim($optionalOtherField->getVisibleJs() ?? ''))
+        ->toBe("\$get('question_{$optionalQuestion->id}') === 'Other'")
+        ->and($requiredOtherField->isRequired())->toBeTrue()
         ->and($optionalOtherField->isRequired())->toBeFalse();
 });
 

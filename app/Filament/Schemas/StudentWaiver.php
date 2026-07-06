@@ -23,7 +23,6 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Illuminate\Contracts\Support\Htmlable;
@@ -96,16 +95,16 @@ final class StudentWaiver
                             'Guardian' => 'Guardian',
                             'Other' => 'Other',
                         ])
-                        ->live()
-                        ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
-                            'relationship',
-                            $state === 'Other' ? null : $state,
-                        ))
+                        ->afterStateUpdatedJs(<<<'JS'
+                            $set('relationship', $state === 'Other' ? null : $state)
+                            JS)
                         ->required(),
                     TextInput::make('relationship')
                         ->label('Other Relationship')
                         ->maxLength(255)
-                        ->visible(fn (Get $get): bool => $get('relationship_option') === 'Other')
+                        ->visibleJs(<<<'JS'
+                            $get('relationship_option') === 'Other'
+                            JS)
                         ->required(fn (Get $get): bool => $get('relationship_option') === 'Other'),
                 ]),
                 TextInput::make('phone_number')
