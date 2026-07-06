@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Forms;
 
+use App\Filament\Admin\Resources\Forms\Pages\CreateForm;
+use App\Filament\Admin\Resources\Forms\Pages\EditForm;
 use App\Filament\Admin\Resources\Forms\Pages\ListForms;
 use App\Filament\Admin\Resources\Forms\Pages\ViewForm;
+use App\Filament\Admin\Resources\Forms\RelationManagers\AnswerGroupsRelationManager;
+use App\Filament\Admin\Resources\Forms\RelationManagers\AssignmentsRelationManager;
+use App\Filament\Admin\Resources\Forms\RelationManagers\VersionsRelationManager;
 use App\Filament\Admin\Resources\Forms\Schemas\FormForm;
 use App\Filament\Admin\Resources\Forms\Schemas\FormInfolist;
 use App\Filament\Admin\Resources\Forms\Tables\FormsTable;
@@ -47,7 +52,9 @@ final class FormResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            VersionsRelationManager::class,
+            AssignmentsRelationManager::class,
+            AnswerGroupsRelationManager::class,
         ];
     }
 
@@ -55,7 +62,9 @@ final class FormResource extends Resource
     {
         return [
             'index' => ListForms::route('/'),
+            'create' => CreateForm::route('/create'),
             'view' => ViewForm::route('/{record}'),
+            'edit' => EditForm::route('/{record}/edit'),
         ];
     }
 }

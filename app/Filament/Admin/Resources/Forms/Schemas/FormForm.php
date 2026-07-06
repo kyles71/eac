@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Forms\Schemas;
 
-use App\Enums\FormTypes;
-use Filament\Forms\Components\DateTimePicker;
+use App\Enums\FormPurpose;
+use App\Enums\FormUpdateStrategy;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -24,16 +24,17 @@ final class FormForm
                     ->schema([
                         TextInput::make('name')
                             ->required(),
-                        Select::make('form_type')
-                            ->label('Type')
-                            ->options(FormTypes::class)
+                        Select::make('purpose')
+                            ->options(FormPurpose::class)
                             ->required(),
-                        Toggle::make('can_update')
-                            ->label('Can Be Updated')
+                        Toggle::make('updates_allowed')
+                            ->label('Updates Allowed')
                             ->default(true)
                             ->required(),
-                        DateTimePicker::make('valid_until')
-                            ->label('Valid Until'),
+                        Select::make('update_strategy')
+                            ->options(FormUpdateStrategy::class)
+                            ->default(FormUpdateStrategy::Revision)
+                            ->required(),
                     ]),
             ]);
     }

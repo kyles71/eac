@@ -13,9 +13,9 @@ return new class() extends Migration
         Schema::create('forms', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('form_type');
-            $table->boolean('can_update')->default(true);
-            $table->dateTime('valid_until')->nullable();
+            $table->string('purpose');
+            $table->boolean('updates_allowed')->default(true);
+            $table->string('update_strategy');
             $table->timestamps();
         });
     }

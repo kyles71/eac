@@ -4,29 +4,36 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers\Pages;
 
-use App\Enums\FormTypes;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
-use App\Models\FormUser;
+use App\Filament\User\Resources\FormUsers\Schemas\FormUserInfolist;
+use App\Models\FormAssignment;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Schema;
 
 final class ViewFormUser extends ViewRecord
 {
     protected static string $resource = FormUserResource::class;
 
+    public function infolist(Schema $schema): Schema
+    {
+        return FormUserInfolist::configure($schema, $this->assignment());
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('reviseWaiver')
-                ->label('Update')
-                ->url(fn (): string => FormUserResource::getUrl('revise', ['record' => $this->getRecord()]))
-                ->visible(function (): bool {
-                    /** @var FormUser $record */
-                    $record = $this->getRecord();
-
-                    return $record->form?->form_type === FormTypes::StudentWaiver
-                        && $record->formCanBeUpdated();
-                }),
+            Action::make('update')
+                ->url(fn (): string => $this->getResource()::getUrl('revise', ['record' => $this->getRecord()]))
+                ->visible(fn (): bool => $this->assignment()->formCanBeUpdated()),
         ];
+    }
+
+    private function assignment(): FormAssignment
+    {
+        /** @var FormAssignment $assignment */
+        $assignment = $this->getRecord();
+
+        return $assignment;
     }
 }

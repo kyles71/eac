@@ -4,29 +4,26 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers;
 
-use App\Enums\FormTypes;
 use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
 use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Filament\User\Resources\FormUsers\Pages\ViewFormUser;
-use App\Filament\User\Resources\FormUsers\Schemas\FormUserForm;
-use App\Filament\User\Resources\FormUsers\Schemas\FormUserInfolist;
 use App\Filament\User\Resources\FormUsers\Tables\FormUsersTable;
-use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 
 final class FormUserResource extends Resource
 {
     protected static ?string $slug = 'my-forms';
 
-    protected static ?string $model = FormUser::class;
+    protected static ?string $model = FormAssignment::class;
 
     protected static bool $isGloballySearchable = false;
 
@@ -34,43 +31,43 @@ final class FormUserResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFolder;
 
-    // protected static ?string $recordTitleAttribute = 'form.name';
-
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('user_id', auth()->id());
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query
+            ->where('respondent_type', $user->getMorphClass())
+            ->where('respondent_id', $user->getKey());
     }
 
-    public static function getViewAnyAuthorizationResponse(): Response
+    public static function canViewAny(): bool
     {
-        return auth()->check()
-            ? Response::allow()
-            : Response::deny();
+        return auth()->check();
     }
 
-    public static function getViewAuthorizationResponse(Model $record): Response
+    public static function canView(Model $record): bool
     {
-        return self::ownsFormUser($record)
-            ? Response::allow()
-            : Response::deny();
+        return $record instanceof FormAssignment && Gate::allows('view', $record);
     }
 
-    public static function getEditAuthorizationResponse(Model $record): Response
+    public static function canEdit(Model $record): bool
     {
-        return self::canEditFormUser($record)
-            ? Response::allow()
-            : Response::deny();
+        return $record instanceof FormAssignment && Gate::allows('update', $record);
     }
 
-    public static function form(Schema $schema, ?FormTypes $form_type = null): Schema
+    public static function form(Schema $schema): Schema
     {
-        return FormUserForm::configure($schema, $form_type);
+        return $schema;
     }
 
     public static function infolist(Schema $schema): Schema
     {
-        return FormUserInfolist::configure($schema);
+        return $schema;
     }
 
     public static function table(Table $table): Table
@@ -80,10 +77,16 @@ final class FormUserResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = FormUser::query()
-            ->where('user_id', auth()->id())
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $count = FormAssignment::query()
+            ->forRespondent($user)
             ->pending()
-            ->whereHas('form', fn (Builder $query): Builder => Form::applyActiveConstraint($query))
+            ->formIsActive()
             ->count();
 
         return $count > 0 ? (string) $count : null;
@@ -107,25 +110,7 @@ final class FormUserResource extends Resource
             'index' => ListFormUsers::route('/'),
             'view' => ViewFormUser::route('/{record}'),
             'edit' => EditFormUser::route('/{record}/sign'),
-            'revise' => Pages\ReviseFormUser::route('/{record}/revise'),
+            'revise' => EditFormUser::route('/{record}/revise'),
         ];
-    }
-
-    private static function ownsFormUser(Model $record): bool
-    {
-        return $record instanceof FormUser
-            && $record->user_id === auth()->id();
-    }
-
-    private static function canEditFormUser(Model $record): bool
-    {
-        if (! $record instanceof FormUser || $record->user_id !== auth()->id()) {
-            return false;
-        }
-
-        $record->loadMissing('form');
-
-        return $record->form->form_type !== FormTypes::StudentWaiver
-            || ! $record->isCompleted();
     }
 }

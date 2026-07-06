@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\FormUsers\Tables;
 
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -12,27 +13,38 @@ use Filament\Tables\Table;
 
 final class FormUsersTable
 {
-    public static function configure(Table $table, bool $only_my_forms = false): Table
+    public static function configure(Table $table, bool $onlyMyForms = false): Table
     {
         return $table
-            ->query(fn () => FormUser::query()
-                ->when($only_my_forms, function ($query): void {
-                    $query->where('user_id', auth()->id());
+            ->query(fn () => FormAssignment::query()
+                ->with(['form', 'respondent', 'subject', 'version', 'latestSubmittedResponse'])
+                ->when($onlyMyForms, function ($query): void {
+                    $user = auth()->user();
+
+                    $query->when(
+                        $user instanceof User,
+                        fn ($query) => $query->forRespondent($user),
+                        fn ($query) => $query->whereRaw('1 = 0'),
+                    );
                 })
             )
             ->columns([
                 TextColumn::make('form.name')
                     ->searchable(),
-                TextColumn::make('user.full_name')
+                TextColumn::make('respondent_label')
                     ->label('User')
-                    ->hidden($only_my_forms)
-                    ->searchable(['first_name', 'last_name']),
-                TextColumn::make('student.full_name')
+                    ->hidden($onlyMyForms)
+                    ->state(fn (FormAssignment $record): string => self::modelLabel($record->respondent)),
+                TextColumn::make('subject_label')
                     ->label('Student')
-                    ->searchable(['first_name', 'last_name']),
-                TextColumn::make('signature')
+                    ->state(fn (FormAssignment $record): string => self::modelLabel($record->subject)),
+                TextColumn::make('version.version')
+                    ->label('Version'),
+                TextColumn::make('latestSubmittedResponse.signature')
+                    ->label('Signature')
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('date_signed')
+                TextColumn::make('latestSubmittedResponse.date_signed')
+                    ->label('Date Signed')
                     ->date()
                     ->sortable()
                     ->toggleable(),
@@ -56,5 +68,26 @@ final class FormUsersTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function modelLabel(?\Illuminate\Database\Eloquent\Model $model): string
+    {
+        if ($model === null) {
+            return '-';
+        }
+
+        if (method_exists($model, 'displayName')) {
+            return (string) $model->displayName();
+        }
+
+        if (filled($model->getAttribute('fullName'))) {
+            return (string) $model->getAttribute('fullName');
+        }
+
+        if (filled($model->getAttribute('name'))) {
+            return (string) $model->getAttribute('name');
+        }
+
+        return class_basename($model).' #'.$model->getKey();
     }
 }

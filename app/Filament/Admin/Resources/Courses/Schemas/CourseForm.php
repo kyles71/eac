@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
 use App\Enums\CourseSemester;
-use App\Enums\FormTypes;
+use App\Enums\FormPurpose;
 use App\Enums\ScheduleFrequency;
 use App\Models\Calendar;
 use App\Models\Course;
@@ -113,8 +113,8 @@ final class CourseForm
                             )
                             ->default(fn (): array => ($form = Form::query()
                                 ->isActive()
-                                ->where('form_type', FormTypes::StudentWaiver)
-                                ->orderBy('valid_until', 'desc')
+                                ->where('purpose', FormPurpose::MedicalWaiver)
+                                ->latest('updated_at')
                                 ->first()) === null ? [] : [$form->id]),
                         Select::make('teachers')
                             ->label('Teachers')
@@ -182,10 +182,8 @@ final class CourseForm
 
     public static function activeFormsQuery(Builder $query): Builder
     {
-        return $query->where(function (Builder $query): void {
-            $query
-                ->whereNull('valid_until')
-                ->orWhere('valid_until', '>', now());
-        });
+        Form::applyActiveConstraint($query);
+
+        return $query;
     }
 }

@@ -18,7 +18,7 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
@@ -108,7 +108,7 @@ it('seeds the development database with all models', function (): void {
         ->and(ShowcaseParticipation::count())->toBeGreaterThanOrEqual(1)
         ->and(StudentEmail::count())->toBe(10)
         ->and(EmergencyContact::count())->toBeGreaterThanOrEqual(2)
-        ->and(FormUser::count())->toBeGreaterThanOrEqual(2)
+        ->and(FormAssignment::count())->toBeGreaterThanOrEqual(2)
         ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(11)
         ->and(Role::findByName('super_admin')->hasPermissionTo('ViewAny:Holiday'))->toBeTrue()
         ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue()

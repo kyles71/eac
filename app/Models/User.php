@@ -141,9 +141,9 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
             ->withTimestamps();
     }
 
-    public function forms(): HasMany
+    public function formAssignments(): MorphMany
     {
-        return $this->hasMany(FormUser::class);
+        return $this->morphMany(FormAssignment::class, 'respondent');
     }
 
     public function purchasedCourses(): BelongsToMany

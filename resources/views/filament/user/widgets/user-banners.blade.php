@@ -12,19 +12,16 @@
         ])
     @endif
 
-    @foreach (\App\Enums\FormTypes::cases() as $formType)
-        @php
-            $bannerView = $formType->getBannerView();
-            $assignments = $attention->assignmentsForFormType($pendingForms, $formType);
-        @endphp
+    @php
+        $waiverAssignments = $attention->assignmentsForPurpose($pendingForms, \App\Enums\FormPurpose::MedicalWaiver);
+    @endphp
 
-        @if ($bannerView !== null && $assignments->isNotEmpty())
-            @include($bannerView, [
-                'assignments' => $assignments,
-                'formsUrl' => $this->formsUrl(),
-            ])
-        @endif
-    @endforeach
+    @if ($waiverAssignments->isNotEmpty())
+        @include('filament.banners.waiver-banner', [
+            'assignments' => $waiverAssignments,
+            'formsUrl' => $this->formsUrl(),
+        ])
+    @endif
 
     @php
         $genericForms = $attention->genericForms($pendingForms);

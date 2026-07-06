@@ -2,19 +2,36 @@
 
 declare(strict_types=1);
 
-use App\Enums\FormTypes;
+use App\Enums\FormPurpose;
+use App\Enums\FormResponseStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormResponse;
+use App\Models\FormVersion;
 use App\Models\Student;
-use App\Models\StudentWaiver;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
 
+function createPublishedRequiredForm(array $attributes = []): Form
+{
+    $form = Form::factory()->create([
+        'purpose' => FormPurpose::MedicalWaiver,
+        ...$attributes,
+    ]);
+
+    FormVersion::factory()
+        ->for($form)
+        ->published()
+        ->create(['valid_until' => null]);
+
+    return $form;
+}
+
 it('assigns required forms when a student is assigned to an enrollment', function (): void {
-    $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $form = createPublishedRequiredForm();
     $course = Course::factory()->create();
     $course->forms()->attach($form);
     $student = Student::factory()->create();
@@ -24,17 +41,18 @@ it('assigns required forms when a student is assigned to an enrollment', functio
         'user_id' => $student->user_id,
     ]);
 
-    $assignment = FormUser::query()
+    $assignment = FormAssignment::query()
         ->where('form_id', $form->id)
-        ->where('student_id', $student->id)
+        ->whereMorphedTo('subject', $student)
         ->firstOrFail();
 
-    expect($assignment->responseable)->toBeInstanceOf(StudentWaiver::class)
-        ->and($assignment->user_id)->toBe($student->user_id);
+    expect($assignment->respondent_id)->toBe($student->user_id)
+        ->and($assignment->respondent_type)->toBe($student->user->getMorphClass())
+        ->and($assignment->form_version_id)->toBe($form->currentVersion->id);
 });
 
 it('backfills new course requirements and removes stale pending assignments', function (): void {
-    $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $form = createPublishedRequiredForm();
     $course = Course::factory()->create();
     $student = Student::factory()->create();
 
@@ -45,20 +63,18 @@ it('backfills new course requirements and removes stale pending assignments', fu
 
     $course->forms()->attach($form);
 
-    $assignment = FormUser::query()
+    $assignment = FormAssignment::query()
         ->where('form_id', $form->id)
-        ->where('student_id', $student->id)
+        ->whereMorphedTo('subject', $student)
         ->firstOrFail();
-    $responseableId = $assignment->responseable_id;
 
     $course->forms()->detach($form);
 
-    assertDatabaseMissing(FormUser::class, ['id' => $assignment->id]);
-    assertDatabaseMissing(StudentWaiver::class, ['id' => $responseableId]);
+    assertDatabaseMissing(FormAssignment::class, ['id' => $assignment->id]);
 });
 
 it('preserves completed forms that are no longer required', function (): void {
-    $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $form = createPublishedRequiredForm();
     $course = Course::factory()->create();
     $student = Student::factory()->create();
 
@@ -68,22 +84,26 @@ it('preserves completed forms that are no longer required', function (): void {
     ]);
     $course->forms()->attach($form);
 
-    $assignment = FormUser::query()
+    $assignment = FormAssignment::query()
         ->where('form_id', $form->id)
-        ->where('student_id', $student->id)
+        ->whereMorphedTo('subject', $student)
         ->firstOrFail();
-    $assignment->update([
+    FormResponse::factory()->create([
+        'form_assignment_id' => $assignment->id,
+        'form_version_id' => $assignment->form_version_id,
+        'status' => FormResponseStatus::Submitted,
         'signature' => 'Parent Name',
         'date_signed' => today(),
+        'submitted_at' => now(),
     ]);
 
     $course->forms()->detach($form);
 
-    assertDatabaseHas(FormUser::class, ['id' => $assignment->id]);
+    assertDatabaseHas(FormAssignment::class, ['id' => $assignment->id]);
 });
 
 it('keeps a pending assignment while another enrolled course still requires it', function (): void {
-    $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $form = createPublishedRequiredForm();
     $firstCourse = Course::factory()->create();
     $secondCourse = Course::factory()->create();
     $student = Student::factory()->create();
@@ -101,14 +121,14 @@ it('keeps a pending assignment while another enrolled course still requires it',
 
     $firstCourse->forms()->detach($form);
 
-    expect(FormUser::query()
+    expect(FormAssignment::query()
         ->where('form_id', $form->id)
-        ->where('student_id', $student->id)
+        ->whereMorphedTo('subject', $student)
         ->count())->toBe(1);
 });
 
 it('removes pending assignments when a student no longer belongs to a user', function (): void {
-    $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $form = createPublishedRequiredForm();
     $course = Course::factory()->create();
     $course->forms()->attach($form);
     $student = Student::factory()->create();
@@ -119,8 +139,8 @@ it('removes pending assignments when a student no longer belongs to a user', fun
 
     $student->update(['user_id' => null]);
 
-    expect(FormUser::query()
+    expect(FormAssignment::query()
         ->where('form_id', $form->id)
-        ->where('student_id', $student->id)
+        ->whereMorphedTo('subject', $student)
         ->exists())->toBeFalse();
 });

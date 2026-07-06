@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace App\Actions\Forms;
 
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
 use App\Models\Student;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use LogicException;
 
 final readonly class ReconcileRequiredForms
 {
+    public function __construct(private UpgradeFormAssignmentToVersion $upgradeAssignment) {}
+
     public function handle(Student $student): void
     {
         $requiredForms = $this->requiredForms($student);
@@ -22,7 +24,7 @@ final readonly class ReconcileRequiredForms
             return;
         }
 
-        $requiredForms->each(fn (Form $form): FormUser => $this->ensureAssignment($student, $form));
+        $requiredForms->each(fn (Form $form): FormAssignment => $this->ensureAssignment($student, $form));
         $this->removeStalePendingAssignments($student, $requiredForms->pluck('id')->all());
     }
 
@@ -33,37 +35,44 @@ final readonly class ReconcileRequiredForms
     {
         return Form::query()
             ->isActive()
+            ->with('currentVersion')
             ->whereHas('courses.enrollments', fn ($query) => $query->where('enrollments.student_id', $student->id))
             ->get();
     }
 
-    private function ensureAssignment(Student $student, Form $form): FormUser
+    private function ensureAssignment(Student $student, Form $form): FormAssignment
     {
-        $assignment = FormUser::query()
+        $version = $form->currentVersion;
+
+        if ($version === null) {
+            throw new LogicException('Required forms must have a published current version before assignment.');
+        }
+
+        $assignment = FormAssignment::query()
             ->where('form_id', $form->id)
-            ->where('student_id', $student->id)
+            ->where('subject_type', $student->getMorphClass())
+            ->where('subject_id', $student->id)
             ->first();
 
         if ($assignment !== null) {
-            if (! $assignment->isCompleted() && $assignment->user_id !== $student->user_id) {
-                $assignment->update(['user_id' => $student->user_id]);
+            if (! $assignment->isCompleted() && $assignment->respondent_id !== $student->user_id) {
+                $assignment->respondent()->associate($student->user);
+                $assignment->save();
+            }
+
+            if (! $assignment->isCompleted() && $assignment->form_version_id !== $version->id) {
+                $this->upgradeAssignment->handle($assignment, $version);
             }
 
             return $assignment;
         }
 
-        /** @var class-string<Model> $responseableClass */
-        $responseableClass = $form->form_type->value;
-        /** @var Model $responseable */
-        $responseable = new $responseableClass();
-        $responseable->save();
-
-        $assignment = new FormUser([
+        $assignment = new FormAssignment([
             'form_id' => $form->id,
-            'user_id' => $student->user_id,
-            'student_id' => $student->id,
+            'form_version_id' => $version->id,
         ]);
-        $assignment->responseable()->associate($responseable);
+        $assignment->respondent()->associate($student->user);
+        $assignment->subject()->associate($student);
         $assignment->save();
 
         return $assignment;
@@ -74,19 +83,15 @@ final readonly class ReconcileRequiredForms
      */
     private function removeStalePendingAssignments(Student $student, array $requiredFormIds): void
     {
-        $student->forms()
+        $student->formAssignments()
             ->pending()
             ->when(
                 $requiredFormIds !== [],
                 fn ($query) => $query->whereNotIn('form_id', $requiredFormIds),
             )
-            ->with('responseable')
             ->get()
-            ->each(function (FormUser $assignment): void {
-                $responseable = $assignment->responseable;
-
+            ->each(function (FormAssignment $assignment): void {
                 $assignment->delete();
-                $responseable?->delete();
             });
     }
 }

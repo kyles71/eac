@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\User\Resources\FormUsers\Pages;
 
 use App\Filament\User\Resources\FormUsers\FormUserResource;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\User;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Tables\Table;
@@ -19,31 +20,44 @@ final class ListFormUsers extends ListRecords
     {
         return [
             'pending' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query): Builder => FormUser::applyPendingConstraint(FormUser::applyFormIsActiveConstraint($query)))
-                ->badge(FormUser::applyPendingConstraint(FormUser::applyFormIsActiveConstraint(FormUser::query()))->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(function (Builder $query): Builder {
+                    FormAssignment::applyPendingConstraint($query);
+                    FormAssignment::applyActiveConstraint($query);
+
+                    return $query;
+                })
+                ->badge($this->badgeCount('pending')),
             'completed' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query): Builder => FormUser::applyCompletedConstraint(FormUser::applyFormIsActiveConstraint($query))->orderByDesc('date_signed'))
-                ->badge(FormUser::applyCompletedConstraint(FormUser::applyFormIsActiveConstraint(FormUser::query()))->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(function (Builder $query): Builder {
+                    FormAssignment::applyCompletedConstraint($query);
+                    FormAssignment::applyActiveConstraint($query);
+
+                    return $query->latest('updated_at');
+                })
+                ->badge($this->badgeCount('completed')),
             'expired' => Tab::make()
-                ->modifyQueryUsing(fn (Builder $query): Builder => FormUser::applyFormIsExpiredConstraint($query))
-                ->badge(FormUser::applyFormIsExpiredConstraint(FormUser::query())->where('user_id', auth()->id())->count()),
+                ->modifyQueryUsing(function (Builder $query): Builder {
+                    FormAssignment::applyExpiredConstraint($query);
+
+                    return $query;
+                })
+                ->badge($this->badgeCount('expired')),
         ];
     }
 
     public function getDefaultActiveTab(): string
     {
-        $has_pending = FormUser::query()
-            ->where('user_id', auth()->id())
-            ->pending()
-            ->exists();
+        $query = $this->baseBadgeQuery();
+        FormAssignment::applyPendingConstraint($query);
+        FormAssignment::applyActiveConstraint($query);
 
-        return $has_pending ? 'pending' : 'all';
+        return $query->exists() ? 'pending' : 'all';
     }
 
     protected function makeTable(): Table
     {
         return parent::makeTable()
-            ->recordUrl(function (FormUser $record) {
+            ->recordUrl(function (FormAssignment $record) {
                 $action = 'edit';
 
                 if ($record->isCompleted()) {
@@ -52,5 +66,45 @@ final class ListFormUsers extends ListRecords
 
                 return $this->getResourceUrl($action, ['record' => $record]);
             });
+    }
+
+    private function badgeCount(string $scope): int
+    {
+        $query = $this->baseBadgeQuery();
+
+        if ($scope === 'pending') {
+            FormAssignment::applyPendingConstraint($query);
+            FormAssignment::applyActiveConstraint($query);
+
+            return $query->count();
+        }
+
+        if ($scope === 'completed') {
+            FormAssignment::applyCompletedConstraint($query);
+            FormAssignment::applyActiveConstraint($query);
+
+            return $query->count();
+        }
+
+        if ($scope === 'expired') {
+            FormAssignment::applyExpiredConstraint($query);
+
+            return $query->count();
+        }
+
+        return 0;
+    }
+
+    /** @return Builder<FormAssignment> */
+    private function baseBadgeQuery(): Builder
+    {
+        $query = FormAssignment::query();
+        $user = auth()->user();
+
+        return $user instanceof User
+            ? $query
+                ->where('respondent_type', $user->getMorphClass())
+                ->where('respondent_id', $user->getKey())
+            : $query->whereRaw('1 = 0');
     }
 }

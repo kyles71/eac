@@ -20,16 +20,16 @@ final class FormInfolist
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('name'),
-                        TextEntry::make('form_type')
-                            ->label('Type')
+                        TextEntry::make('purpose')
                             ->badge(),
-                        IconEntry::make('can_update')
-                            ->label('Can Be Updated')
+                        IconEntry::make('updates_allowed')
+                            ->label('Updates Allowed')
                             ->boolean(),
-                        TextEntry::make('valid_until')
-                            ->label('Valid Until')
-                            ->dateTime()
-                            ->placeholder('-'),
+                        TextEntry::make('update_strategy')
+                            ->badge(),
+                        TextEntry::make('currentVersion.version')
+                            ->label('Current Version')
+                            ->placeholder('No published version'),
                     ]),
                 Section::make('Record')
                     ->columns(2)

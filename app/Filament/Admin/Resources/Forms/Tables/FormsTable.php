@@ -18,15 +18,18 @@ final class FormsTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),
-                TextColumn::make('form_type')
-                    ->label('Type')
+                TextColumn::make('purpose')
                     ->badge()
                     ->searchable(),
-                IconColumn::make('can_update')
-                    ->label('Can Be Updated')
+                IconColumn::make('updates_allowed')
+                    ->label('Updates')
                     ->boolean(),
-                TextColumn::make('valid_until')
-                    ->label('Valid Until')
+                TextColumn::make('currentVersion.version')
+                    ->label('Current Version')
+                    ->placeholder('-')
+                    ->sortable(),
+                TextColumn::make('currentVersion.valid_until')
+                    ->label('Current Valid Until')
                     ->dateTime()
                     ->sortable(),
                 TextColumn::make('created_at')
@@ -42,7 +45,8 @@ final class FormsTable
                 //
             ])
             ->recordActions([
-
+                \Filament\Actions\ViewAction::make(),
+                \Filament\Actions\EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

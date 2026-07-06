@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Models\FormUser;
+use App\Models\FormResponse;
 use Carbon\CarbonInterface;
 use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentTimezone;
@@ -22,13 +22,13 @@ it('uses the same default datetime display format for tables and infolists', fun
         ->and(Table::make($tableLivewire)->getDefaultDateTimeDisplayFormat())->toBe('M j, Y g:i A');
 });
 
-it('casts form signature dates as dates instead of datetimes', function (): void {
-    $formUser = FormUser::factory()->create([
+it('casts form response signature dates as dates instead of datetimes', function (): void {
+    $formResponse = FormResponse::factory()->create([
         'date_signed' => '2026-05-24',
     ]);
 
-    expect($formUser->date_signed)
+    expect($formResponse->date_signed)
         ->toBeInstanceOf(CarbonInterface::class)
-        ->and($formUser->date_signed->toDateString())->toBe('2026-05-24')
-        ->and($formUser->date_signed->format('H:i:s'))->toBe('00:00:00');
+        ->and($formResponse->date_signed->toDateString())->toBe('2026-05-24')
+        ->and($formResponse->date_signed->format('H:i:s'))->toBe('00:00:00');
 });

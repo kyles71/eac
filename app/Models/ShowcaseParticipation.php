@@ -14,8 +14,18 @@ final class ShowcaseParticipation extends Model
     /** @use HasFactory<ShowcaseParticipationFactory> */
     use HasFactory;
 
-    public function userForm(): MorphOne
+    public function formResponse(): MorphOne
     {
-        return $this->morphOne(FormUser::class, 'responseable');
+        return $this->morphOne(FormResponse::class, 'projection');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_participating' => 'boolean',
+        ];
     }
 }
