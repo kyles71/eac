@@ -8,17 +8,23 @@ use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
 use App\Filament\Admin\Resources\Costumes\Schemas\CostumeForm;
 use App\Filament\Admin\Resources\Costumes\Tables\CostumesTable;
 use App\Models\Costume;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 final class CostumeResource extends Resource
 {
     protected static ?string $model = Costume::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
+
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;
+
+    protected static ?int $navigationSort = AdminNavigation::StoreCostumes;
 
     protected static ?string $recordTitleAttribute = 'name';
 

@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Users\Tables;
 
 use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Actions\SendEmailAction;
+use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -19,18 +20,20 @@ final class UsersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum([
-                'creditGrants as available_store_credit' => fn (Builder $query): Builder => $query
-                    ->whereNull('revoked_at')
-                    ->where(function (Builder $query): void {
-                        $query
-                            ->whereNull('expires_on')
-                            ->orWhereDate('expires_on', '>=', now('America/New_York')->toDateString());
-                    })
-                    ->where('remaining_amount', '>', 0)
-                    ->whereNull('restricted_to_product_type')
-                    ->where('has_product_restrictions', false),
-            ], 'remaining_amount'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with('roles')
+                ->withSum([
+                    'creditGrants as available_store_credit' => fn (Builder $query): Builder => $query
+                        ->whereNull('revoked_at')
+                        ->where(function (Builder $query): void {
+                            $query
+                                ->whereNull('expires_on')
+                                ->orWhereDate('expires_on', '>=', now('America/New_York')->toDateString());
+                        })
+                        ->where('remaining_amount', '>', 0)
+                        ->whereNull('restricted_to_product_type')
+                        ->where('has_product_restrictions', false),
+                ], 'remaining_amount'))
             ->columns([
                 SpatieMediaLibraryImageColumn::make('avatar')
                     ->collection('avatars')
@@ -38,14 +41,18 @@ final class UsersTable
                     ->visibility('private')
                     // ->conversion('thumb')
                     ->circular(),
-                TextColumn::make('first_name')
-                    ->sortable()
-                    ->searchable(),
-                TextColumn::make('last_name')
-                    ->sortable()
-                    ->searchable(),
+                TextColumn::make('full_name')
+                    ->label('Name')
+                    ->state(fn (User $record): string => $record->fullName)
+                    ->sortable(['last_name', 'first_name'])
+                    ->searchable(['first_name', 'last_name']),
                 TextColumn::make('email')
                     ->searchable(),
+                TextColumn::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->separator(',')
+                    ->toggleable(),
                 TextColumn::make('available_store_credit')
                     ->label('Store Credit')
                     ->moneyCents()

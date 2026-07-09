@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\DashboardMessages\Schemas\DashboardMessageForm;
 use App\Filament\Admin\Resources\DashboardMessages\Tables\DashboardMessagesTable;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\DashboardMessage;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -26,6 +27,8 @@ final class DashboardMessageResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
 
     protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = AdminNavigation::SettingsDashboardMessages;
 
     protected static ?string $navigationLabel = 'Dashboard Messages';
 

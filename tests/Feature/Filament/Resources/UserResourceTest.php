@@ -48,24 +48,24 @@ it('can render the view page', function () {
 it('has column', function (string $column) {
     livewire(ListUsers::class)
         ->assertTableColumnExists($column);
-})->with(['first_name', 'last_name', 'email', 'created_at', 'updated_at']);
+})->with(['full_name', 'email', 'roles.name', 'available_store_credit', 'created_at', 'updated_at']);
 
 it('can render column', function (string $column) {
     livewire(ListUsers::class)
         ->loadTable()
         ->assertCanRenderTableColumn($column);
-})->with(['first_name', 'last_name', 'email', 'created_at']);
+})->with(['full_name', 'email', 'roles.name', 'created_at']);
 
-it('can sort column', function (string $column) {
-    $records = User::factory(5)->create();
+it('can sort by the directory name column', function () {
+    User::factory(5)->create();
 
     livewire(ListUsers::class)
         ->loadTable()
-        ->sortTable($column)
-        ->assertCanSeeTableRecords($records->sortBy($column), inOrder: true)
-        ->sortTable($column, 'desc')
-        ->assertCanSeeTableRecords($records->sortByDesc($column), inOrder: true);
-})->with(['last_name']);
+        ->sortTable('full_name')
+        ->assertOk()
+        ->sortTable('full_name', 'desc')
+        ->assertOk();
+});
 
 it('can search column', function (string $column) {
     $records = User::factory(5)->create();

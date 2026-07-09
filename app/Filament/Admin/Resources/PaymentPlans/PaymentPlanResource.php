@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\PaymentPlans\Pages\ViewPaymentPlan;
 use App\Filament\Admin\Resources\PaymentPlans\Schemas\PaymentPlanInfolist;
 use App\Filament\Admin\Resources\PaymentPlans\Tables\PaymentPlansTable;
 use App\Models\PaymentPlan;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -22,7 +23,9 @@ final class PaymentPlanResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Purchases';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::SalesAndBilling;
+
+    protected static ?int $navigationSort = AdminNavigation::BillingPaymentPlans;
 
     protected static ?string $navigationLabel = 'Payment Plans';
 

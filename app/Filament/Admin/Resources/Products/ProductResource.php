@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\Products\Schemas\ProductInfolist;
 use App\Filament\Admin\Resources\Products\Tables\ProductsTable;
 use App\Models\GiftCardType;
 use App\Models\Product;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -24,7 +25,9 @@ final class ProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingBag;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;
+
+    protected static ?int $navigationSort = AdminNavigation::StoreProducts;
 
     protected static ?string $recordTitleAttribute = 'name';
 

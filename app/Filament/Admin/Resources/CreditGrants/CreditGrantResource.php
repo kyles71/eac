@@ -12,6 +12,7 @@ use App\Filament\Admin\Resources\CreditGrants\Schemas\CreditGrantInfolist;
 use App\Filament\Admin\Resources\CreditGrants\Tables\CreditGrantsTable;
 use App\Filament\Admin\Resources\CreditGrants\Widgets\CreditGrantStats;
 use App\Models\CreditGrant;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -25,7 +26,9 @@ final class CreditGrantResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Purchases';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::SalesAndBilling;
+
+    protected static ?int $navigationSort = AdminNavigation::BillingStoreCredit;
 
     protected static ?string $modelLabel = 'Store Credit Grant';
 

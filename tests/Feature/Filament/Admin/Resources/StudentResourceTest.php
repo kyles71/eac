@@ -22,3 +22,13 @@ it('stores general student tags', function (): void {
 
     expect($student->tagsWithType(Student::GENERAL_TAG_TYPE)->pluck('name')->all())->toBe(['has sibling']);
 });
+
+it('shows student directory columns with parent context', function (): void {
+    livewire(ListStudents::class)
+        ->assertTableColumnExists('full_name')
+        ->assertTableColumnExists('nickname')
+        ->assertTableColumnExists('birthdate')
+        ->assertTableColumnExists('age')
+        ->assertTableColumnExists('user.full_name')
+        ->assertTableColumnExists('user.email');
+});
