@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Mail\HandcraftedEmail;
 use Kyle\FilamentMailManager\Data\EmailTypeDefinition;
 use Kyle\FilamentMailManager\EmailTypeRegistry;
 use Kyle\FilamentMailManager\Enums\LayoutMode;
@@ -233,4 +234,17 @@ it('uses the handcrafted email type layout for freeform emails', function (): vo
     expect($rendered->subject)->toBe('Class update')
         ->and($rendered->html)->toContain('Managed handcrafted header')
         ->toContain('See you soon.');
+});
+
+it('renders freeform handcrafted email body line breaks as safe html', function (): void {
+    $rendered = (new HandcraftedEmail(
+        emailSubject: 'Class update',
+        emailBody: "Line one\nLine two\n\nLine three <unsafe>",
+    ))->getRenderedEmail();
+
+    expect($rendered->html)
+        ->toContain('<p>Line one<br>')
+        ->toContain('Line two</p>')
+        ->toContain('<p>Line three &lt;unsafe&gt;</p>')
+        ->not->toContain('<unsafe>');
 });
