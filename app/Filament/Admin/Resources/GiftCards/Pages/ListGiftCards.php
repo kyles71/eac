@@ -15,7 +15,18 @@ final class ListGiftCards extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()
+                ->mutateDataUsing(function (array $data): array {
+                    $initialAmount = (int) $data['initial_amount'];
+
+                    return [
+                        ...$data,
+                        'remaining_amount' => $initialAmount,
+                        'redeemed_by_user_id' => null,
+                        'redeemed_at' => null,
+                        'is_active' => true,
+                    ];
+                }),
         ];
     }
 }

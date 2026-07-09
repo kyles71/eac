@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\GiftCards\Tables;
 
+use App\Filament\Actions\AssignAndRedeemGiftCardAction;
 use App\Models\GiftCard;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -68,7 +69,7 @@ final class GiftCardsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('is_active')
-                    ->label('Active')
+                    ->label('Enabled')
                     ->boolean()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('redeemed_at')
@@ -90,7 +91,7 @@ final class GiftCardsTable
                     ->searchable()
                     ->preload(),
                 TernaryFilter::make('is_active')
-                    ->label('Active'),
+                    ->label('Enabled'),
                 TernaryFilter::make('redeemed')
                     ->label('Redeemed')
                     ->queries(
@@ -98,7 +99,9 @@ final class GiftCardsTable
                         false: fn ($query) => $query->whereNull('redeemed_at'),
                     ),
             ])
-            ->recordActions([])
+            ->recordActions([
+                AssignAndRedeemGiftCardAction::make(),
+            ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
