@@ -64,7 +64,15 @@ it('has the expected table columns', function () {
     livewire(ListGiftCards::class)
         ->loadTable()
         ->assertTableColumnExists('code')
+        ->assertTableColumnExists('giftCardType.name')
         ->assertTableColumnExists('initial_amount')
         ->assertTableColumnExists('remaining_amount')
-        ->assertTableColumnExists('is_active');
+        ->assertTableColumnExists('redemption_status')
+        ->assertTableColumnExists('purchasedBy.full_name')
+        ->assertTableColumnExists('redeemedBy.full_name')
+        ->assertTableColumnExists('order.id')
+        ->assertTableColumnExists('is_active')
+        ->assertTableFilterExists('gift_card_type_id')
+        ->assertTableFilterExists('is_active')
+        ->assertTableFilterExists('redeemed');
 });

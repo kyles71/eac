@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\DiscountCodes\Pages\ListDiscountCodes;
 use App\Filament\Admin\Resources\DiscountCodes\Schemas\DiscountCodeForm;
 use App\Filament\Admin\Resources\DiscountCodes\Tables\DiscountCodesTable;
 use App\Models\DiscountCode;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -21,7 +22,9 @@ final class DiscountCodeResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;
+
+    protected static ?int $navigationSort = AdminNavigation::StoreDiscountCodes;
 
     protected static ?string $recordTitleAttribute = 'code';
 

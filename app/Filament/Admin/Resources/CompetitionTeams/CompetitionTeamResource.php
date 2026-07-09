@@ -14,6 +14,7 @@ use App\Filament\Admin\Resources\CompetitionTeams\Schemas\CompetitionTeamForm;
 use App\Filament\Admin\Resources\CompetitionTeams\Schemas\CompetitionTeamInfolist;
 use App\Filament\Admin\Resources\CompetitionTeams\Tables\CompetitionTeamsTable;
 use App\Models\CompetitionTeam;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -27,9 +28,9 @@ final class CompetitionTeamResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Competition';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Competition;
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = AdminNavigation::CompetitionTeams;
 
     protected static ?string $recordTitleAttribute = 'name';
 

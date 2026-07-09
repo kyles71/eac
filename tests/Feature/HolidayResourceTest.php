@@ -11,6 +11,7 @@ use App\Filament\Clusters\Settings\Resources\Holidays\Pages\ManageHolidays;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\Event;
 use App\Models\Holiday;
+use App\Support\Filament\AdminNavigation;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 
@@ -76,8 +77,8 @@ it('places the selected definition resources in the settings cluster', function 
         ->and(FormResource::getCluster())->toBe(SettingsCluster::class)
         ->and(HolidayResource::getCluster())->toBe(SettingsCluster::class)
         ->and(LegalDocumentResource::getCluster())->toBe(SettingsCluster::class)
-        ->and(CalendarResource::getNavigationSort())->toBe(1)
-        ->and(FormResource::getNavigationSort())->toBe(2)
-        ->and(HolidayResource::getNavigationSort())->toBe(3)
-        ->and(LegalDocumentResource::getNavigationSort())->toBe(4);
+        ->and(CalendarResource::getNavigationSort())->toBe(AdminNavigation::SettingsCalendars)
+        ->and(FormResource::getNavigationSort())->toBe(AdminNavigation::SettingsForms)
+        ->and(LegalDocumentResource::getNavigationSort())->toBe(AdminNavigation::SettingsLegalDocuments)
+        ->and(HolidayResource::getNavigationSort())->toBe(AdminNavigation::SettingsHolidays);
 });
