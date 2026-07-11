@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\PaymentPlanTemplates\Pages\ListPaymentPlanTempl
 use App\Filament\Admin\Resources\PaymentPlanTemplates\Schemas\PaymentPlanTemplateForm;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\Tables\PaymentPlanTemplatesTable;
 use App\Models\PaymentPlanTemplate;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -21,7 +22,9 @@ final class PaymentPlanTemplateResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Store';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;
+
+    protected static ?int $navigationSort = AdminNavigation::StorePaymentPlanTemplates;
 
     protected static ?string $navigationLabel = 'Plan Templates';
 

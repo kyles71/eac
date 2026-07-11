@@ -9,6 +9,7 @@ use App\Filament\Clusters\Settings\Resources\Holidays\Pages\ManageHolidays;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\Holiday;
 use App\Services\HolidayConflictService;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -37,7 +38,7 @@ final class HolidayResource extends Resource
 
     protected static ?string $cluster = SettingsCluster::class;
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = AdminNavigation::SettingsHolidays;
 
     protected static ?string $recordTitleAttribute = 'name';
 

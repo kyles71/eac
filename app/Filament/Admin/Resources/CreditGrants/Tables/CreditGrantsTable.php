@@ -23,6 +23,10 @@ final class CreditGrantsTable
                     ->label('Recipient')
                     ->searchable(['first_name', 'last_name', 'email'])
                     ->sortable(['first_name', 'last_name']),
+                TextColumn::make('user.email')
+                    ->label('Recipient Email')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('description')
                     ->searchable()
                     ->wrap(),
@@ -51,6 +55,11 @@ final class CreditGrantsTable
                     ->label('Issued By')
                     ->placeholder('Gift card / migration')
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('grantedBy.email')
+                    ->label('Issuer Email')
+                    ->placeholder('Gift card / migration')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label('Issued At')
                     ->dateTime()
@@ -59,6 +68,7 @@ final class CreditGrantsTable
             ])
             ->filters([
                 SelectFilter::make('user')
+                    ->label('Recipient')
                     ->relationship('user', 'email')
                     ->searchable()
                     ->preload(),

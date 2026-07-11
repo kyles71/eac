@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\GiftCards\Pages\ListGiftCards;
 use App\Filament\Admin\Resources\GiftCards\Schemas\GiftCardForm;
 use App\Filament\Admin\Resources\GiftCards\Tables\GiftCardsTable;
 use App\Models\GiftCard;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -21,7 +22,9 @@ final class GiftCardResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGift;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Purchases';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::SalesAndBilling;
+
+    protected static ?int $navigationSort = AdminNavigation::BillingGiftCards;
 
     protected static ?string $recordTitleAttribute = 'code';
 

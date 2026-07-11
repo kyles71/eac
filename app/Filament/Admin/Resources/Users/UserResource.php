@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\Users\Schemas\UserForm;
 use App\Filament\Admin\Resources\Users\Schemas\UserInfolist;
 use App\Filament\Admin\Resources\Users\Tables\UsersTable;
 use App\Models\User;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -24,7 +25,9 @@ final class UserResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Users';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::PeopleAndAccess;
+
+    protected static ?int $navigationSort = AdminNavigation::PeopleUsers;
 
     protected static ?string $recordTitleAttribute = 'fullName';
 

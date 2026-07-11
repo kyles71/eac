@@ -34,7 +34,6 @@ final class GiftCardTypeForm
                             ->required(),
                         Toggle::make('allows_custom_amount')
                             ->label('Allow custom amount')
-                            ->live()
                             ->default(false),
                         TextInput::make('minimum_custom_amount')
                             ->label('Minimum Custom Amount')
@@ -43,7 +42,9 @@ final class GiftCardTypeForm
                             ->multipleOf(1)
                             ->default(100)
                             ->required(fn (Get $get): bool => (bool) $get('allows_custom_amount'))
-                            ->visible(fn (Get $get): bool => (bool) $get('allows_custom_amount')),
+                            ->visibleJs(<<<'JS'
+                                $get('allows_custom_amount') === true
+                                JS),
                     ]),
                 Section::make('Restrictions')
                     ->columns(2)

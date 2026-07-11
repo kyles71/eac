@@ -18,20 +18,30 @@ final class StudentsTable
     {
         return $table
             ->columns([
-                TextColumn::make('first_name')
-                    ->searchable(),
-                TextColumn::make('last_name')
-                    ->searchable(),
+                TextColumn::make('full_name')
+                    ->label('Student')
+                    ->state(fn (Student $record): string => $record->fullName)
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 TextColumn::make('nickname')
                     ->searchable()
                     ->placeholder('-'),
                 TextColumn::make('birthdate')
                     ->date()
                     ->sortable(),
+                TextColumn::make('age')
+                    ->state(fn (Student $record): int => $record->age)
+                    ->numeric()
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('user.full_name')
                     ->label('Parent / User')
                     ->searchable(['first_name', 'last_name'])
                     ->sortable(['first_name', 'last_name']),
+                TextColumn::make('user.email')
+                    ->label('Parent Email')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 SpatieTagsColumn::make('tags')
                     ->label('Student Tags')
                     ->type(Student::GENERAL_TAG_TYPE)
@@ -48,6 +58,7 @@ final class StudentsTable
             ->filters([
                 //
             ])
+            ->defaultSort('last_name')
             ->recordActions([
                 SendEmailAction::make()
                     ->to(fn (Student $record): array => [$record]),

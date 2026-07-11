@@ -24,7 +24,7 @@ final class HandcraftedEmail extends ManagedMailable implements ShouldQueue
                 'email.subject' => $this->emailSubject,
             ],
             slots: [
-                'content' => $this->emailBody,
+                'content' => $this->formattedEmailBody(),
             ],
         );
     }
@@ -32,5 +32,28 @@ final class HandcraftedEmail extends ManagedMailable implements ShouldQueue
     protected function shouldSendManagedEmail(): bool
     {
         return app(MailManager::class)->isEnabled('handcrafted');
+    }
+
+    private function formattedEmailBody(): string
+    {
+        $body = str_replace(["\r\n", "\r"], "\n", mb_trim($this->emailBody));
+        $body = preg_replace("/\n[ \t]*\n/u", "\n\n", $body) ?? $body;
+        $paragraphs = preg_split("/\n{2,}/u", $body) ?: [];
+        $html = '';
+
+        foreach ($paragraphs as $paragraph) {
+            $paragraph = mb_trim($paragraph);
+
+            if ($paragraph === '') {
+                continue;
+            }
+
+            $html .= '<p>'.nl2br(
+                htmlspecialchars($paragraph, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                false,
+            ).'</p>';
+        }
+
+        return $html;
     }
 }

@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Orders\Schemas\OrderInfolist;
 use App\Filament\Admin\Resources\Orders\Tables\OrdersTable;
 use App\Models\Order;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -22,7 +23,9 @@ final class OrderResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingCart;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Purchases';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::SalesAndBilling;
+
+    protected static ?int $navigationSort = AdminNavigation::BillingOrders;
 
     public static function infolist(Schema $schema): Schema
     {

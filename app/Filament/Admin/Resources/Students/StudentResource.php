@@ -10,6 +10,7 @@ use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Filament\Admin\Resources\Students\Schemas\StudentInfolist;
 use App\Filament\Admin\Resources\Students\Tables\StudentsTable;
 use App\Models\Student;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -21,9 +22,11 @@ final class StudentResource extends Resource
 {
     protected static ?string $model = Student::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedAcademicCap;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Users';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::PeopleAndAccess;
+
+    protected static ?int $navigationSort = AdminNavigation::PeopleStudents;
 
     protected static ?string $recordTitleAttribute = 'fullName';
 

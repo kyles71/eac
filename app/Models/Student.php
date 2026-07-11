@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Tags\HasTags;
 
 /**
+ * @property-read int $age
  * @property-read string $fullName
  */
 final class Student extends Model

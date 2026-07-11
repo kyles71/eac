@@ -19,7 +19,6 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
-use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Support\HtmlString;
 
 final readonly class FormSchemaCompiler
@@ -33,20 +32,17 @@ final readonly class FormSchemaCompiler
             $version->schema,
             $assignment,
             $disabled,
-            $this->visibilityDependencyKeys($version->schema),
         );
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $blocks
-     * @param  array<int, string>  $visibilityDependencyKeys
      * @return array<int, Component>
      */
     private function compileBlocks(
         array $blocks,
         ?FormAssignment $assignment,
         bool $disabled,
-        array $visibilityDependencyKeys,
     ): array {
         $components = [];
 
@@ -58,7 +54,7 @@ final readonly class FormSchemaCompiler
                     ->description(filled($data['description'] ?? null) ? (string) $data['description'] : null)
                     ->columnSpanFull()
                     ->columns((int) ($data['columns'] ?? 1))
-                    ->schema($this->compileBlocks($data['components'] ?? [], $assignment, $disabled, $visibilityDependencyKeys)),
+                    ->schema($this->compileBlocks($data['components'] ?? [], $assignment, $disabled)),
                 'text' => Text::make(($data['is_html'] ?? false)
                     ? new HtmlString((string) ($data['content'] ?? ''))
                     : (string) ($data['content'] ?? ''))->columnSpanFull(),
@@ -67,7 +63,7 @@ final readonly class FormSchemaCompiler
                     ->content($this->assignedSubjectName($assignment))
                     ->columnSpanFull(),
                 'emergency_contacts' => $this->emergencyContacts($data, $disabled),
-                default => $this->question($type, $data, $disabled, $visibilityDependencyKeys),
+                default => $this->question($type, $data, $disabled),
             };
 
             if ($component instanceof Component) {
@@ -80,9 +76,8 @@ final readonly class FormSchemaCompiler
 
     /**
      * @param  array<string, mixed>  $data
-     * @param  array<int, string>  $visibilityDependencyKeys
      */
-    private function question(string $type, array $data, bool $disabled, array $visibilityDependencyKeys): ?Field
+    private function question(string $type, array $data, bool $disabled): ?Field
     {
         $key = (string) ($data['key'] ?? '');
         $name = "answers.{$key}";
@@ -117,52 +112,14 @@ final readonly class FormSchemaCompiler
             ->columnSpan((int) ($data['column_span'] ?? 1))
             ->disabled($disabled);
 
-        if (in_array($key, $visibilityDependencyKeys, true)) {
-            $field->live();
-        }
-
         if (filled($data['visible_when_key'] ?? null)) {
             $dependentKey = (string) $data['visible_when_key'];
-            $expectedValue = $data['visible_when_value'] ?? null;
-            $field->visible(fn (Get $get): bool => $this->visibilityValueMatches(
-                $get("answers.{$dependentKey}"),
-                $expectedValue,
-            ));
+            $expectedValue = json_encode((string) ($data['visible_when_value'] ?? ''), JSON_THROW_ON_ERROR);
+
+            $field->visibleJs("String(\$get('answers.{$dependentKey}')) === {$expectedValue}");
         }
 
         return $field;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $blocks
-     * @return array<int, string>
-     */
-    private function visibilityDependencyKeys(array $blocks): array
-    {
-        $keys = [];
-
-        foreach ($blocks as $block) {
-            $data = is_array($block['data'] ?? null) ? $block['data'] : [];
-
-            if (is_array($data['components'] ?? null)) {
-                $keys = [...$keys, ...$this->visibilityDependencyKeys($data['components'])];
-            }
-
-            if (filled($data['visible_when_key'] ?? null)) {
-                $keys[] = (string) $data['visible_when_key'];
-            }
-        }
-
-        return array_values(array_unique($keys));
-    }
-
-    private function visibilityValueMatches(mixed $actualValue, mixed $expectedValue): bool
-    {
-        if (is_bool($actualValue)) {
-            return filter_var($expectedValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === $actualValue;
-        }
-
-        return (string) $actualValue === (string) $expectedValue;
     }
 
     private function assignedSubjectName(?FormAssignment $assignment): string

@@ -231,7 +231,7 @@ return [
                 'viewAny', 'view', 'create', 'update', 'deleteAny',
             ],
             GiftCardResource::class => [
-                'viewAny', 'create', 'deleteAny',
+                'viewAny', 'create', 'deleteAny', 'redeem',
             ],
             GiftCardTypeResource::class => [
                 'viewAny', 'create', 'delete', 'deleteAny',

@@ -8,17 +8,23 @@ use App\Filament\Admin\Resources\Enrollments\Pages\ListEnrollments;
 use App\Filament\Admin\Resources\Enrollments\Schemas\EnrollmentForm;
 use App\Filament\Admin\Resources\Enrollments\Tables\EnrollmentsTable;
 use App\Models\Enrollment;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 final class EnrollmentResource extends Resource
 {
     protected static ?string $model = Enrollment::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
+
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::ClassesAndSchedule;
+
+    protected static ?int $navigationSort = AdminNavigation::ScheduleEnrollments;
 
     public static function form(Schema $schema): Schema
     {

@@ -17,18 +17,33 @@ final class OrdersTable
             ->columns([
                 TextColumn::make('id')
                     ->label('Order #')
-                    ->sortable(),
+                    ->sortable()
+                    ->copyable(),
                 TextColumn::make('user.full_name')
                     ->label('Customer')
-                    ->searchable(['first_name', 'last_name']),
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 TextColumn::make('user.email')
                     ->label('Email')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('status')
+                    ->badge(),
+                TextColumn::make('order_items_count')
+                    ->label('Items')
+                    ->counts('orderItems')
                     ->badge(),
                 TextColumn::make('total')
                     ->moneyCents()
                     ->sortable(),
+                TextColumn::make('paymentPlanTemplate.name')
+                    ->label('Payment Plan')
+                    ->placeholder('Paid in full')
+                    ->toggleable(),
+                TextColumn::make('discountCode.code')
+                    ->label('Discount')
+                    ->placeholder('None')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label('Date')
                     ->dateTime()

@@ -71,3 +71,27 @@ it('lists every assigned enrollment for the same active course', function (): vo
         ->assertCanSeeTableRecords([$firstEnrollment, $secondEnrollment])
         ->assertCanNotSeeTableRecords([$openEnrollment, $futureEnrollment, $pastEnrollment]);
 });
+
+it('shows assignment state and schedule context on the enrollment table', function (): void {
+    $course = Course::factory()->create(['name' => 'Ballet 2']);
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => Carbon::now()->addWeek(),
+        'end_time' => Carbon::now()->addWeek()->addHour(),
+    ]);
+    $openEnrollment = Enrollment::factory()->create([
+        'course_id' => $course->id,
+        'student_id' => null,
+    ]);
+
+    livewire(ListEnrollments::class)
+        ->set('activeTab', 'all')
+        ->loadTable()
+        ->assertCanSeeTableRecords([$openEnrollment])
+        ->assertTableColumnExists('course.semester')
+        ->assertTableColumnExists('next_class')
+        ->assertTableColumnExists('assignment_status')
+        ->assertTableColumnStateSet('assignment_status', 'Needs student', $openEnrollment)
+        ->assertTableFilterExists('assignment_status')
+        ->assertTableFilterExists('course_id');
+});

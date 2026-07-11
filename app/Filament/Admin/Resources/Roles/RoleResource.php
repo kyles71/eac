@@ -12,6 +12,7 @@ use App\Filament\Shared\Forms\Components\PermissionCheckboxList;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AccessManagerService;
+use App\Support\Filament\AdminNavigation;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource as ShieldRoleResource;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -32,6 +33,18 @@ use Override;
 
 final class RoleResource extends ShieldRoleResource
 {
+    #[Override]
+    public static function getNavigationGroup(): string
+    {
+        return AdminNavigation::PeopleAndAccess;
+    }
+
+    #[Override]
+    public static function getNavigationSort(): int
+    {
+        return AdminNavigation::PeopleRoles;
+    }
+
     #[Override]
     public static function form(Schema $schema): Schema
     {

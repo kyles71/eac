@@ -8,7 +8,7 @@ use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\OrderItem;
 use App\Models\User;
-use Illuminate\Support\Str;
+use App\Support\GiftCards\GiftCardCodeGenerator;
 
 final readonly class FulfillGiftCard
 {
@@ -33,7 +33,7 @@ final readonly class FulfillGiftCard
         for ($i = 0; $i < $orderItem->quantity; $i++) {
             /** @var GiftCard $giftCard */
             $giftCard = GiftCard::query()->create([
-                'code' => $this->generateUniqueCode(),
+                'code' => app(GiftCardCodeGenerator::class)->generate(),
                 'gift_card_type_id' => $giftCardType->id,
                 'initial_amount' => $amount,
                 'remaining_amount' => $amount,
@@ -46,17 +46,5 @@ final readonly class FulfillGiftCard
         }
 
         return $giftCards;
-    }
-
-    /**
-     * Generate a unique gift card code.
-     */
-    private function generateUniqueCode(): string
-    {
-        do {
-            $code = mb_strtoupper(Str::random(16));
-        } while (GiftCard::query()->where('code', $code)->exists());
-
-        return $code;
     }
 }

@@ -9,7 +9,9 @@ use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 final class FormUsersTable
 {
@@ -30,13 +32,23 @@ final class FormUsersTable
             )
             ->columns([
                 TextColumn::make('form.name')
-                    ->searchable(),
+                    ->label('Form')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('completion_status')
+                    ->label('Status')
+                    ->state(fn (FormAssignment $record): string => $record->isCompleted() ? 'Completed' : 'Needs signature')
+                    ->badge()
+                    ->color(fn (FormAssignment $record): string => $record->isCompleted() ? 'success' : 'warning')
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('respondent_label')
-                    ->label('User')
+                    ->label('Parent / User')
                     ->hidden($onlyMyForms)
                     ->state(fn (FormAssignment $record): string => self::modelLabel($record->respondent)),
                 TextColumn::make('subject_label')
                     ->label('Student')
+                    ->placeholder('Family / user-level form')
                     ->state(fn (FormAssignment $record): string => self::modelLabel($record->subject)),
                 TextColumn::make('version.version')
                     ->label('Version'),
@@ -46,6 +58,7 @@ final class FormUsersTable
                 TextColumn::make('latestSubmittedResponse.date_signed')
                     ->label('Date Signed')
                     ->date()
+                    ->placeholder('Not signed')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('created_at')
@@ -58,8 +71,28 @@ final class FormUsersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('completion_status')
+                    ->label('Status')
+                    ->options([
+                        'completed' => 'Completed',
+                        'pending' => 'Needs signature',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        match ($data['value'] ?? null) {
+                            'completed' => FormAssignment::applyCompletedConstraint($query),
+                            'pending' => FormAssignment::applyPendingConstraint($query),
+                            default => null,
+                        };
+
+                        return $query;
+                    }),
+                SelectFilter::make('form_id')
+                    ->label('Form')
+                    ->relationship('form', 'name')
+                    ->searchable()
+                    ->preload(),
             ])
+            ->defaultSort('updated_at', 'desc')
             ->recordActions([
 
             ])

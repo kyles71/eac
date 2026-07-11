@@ -7,10 +7,12 @@ namespace App\Filament\Admin\Resources\Enrollments\Tables;
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Enrollment;
 use App\Models\Student;
+use Carbon\CarbonInterface;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -20,6 +22,7 @@ final class EnrollmentsTable
     {
         return $table
             ->query(fn () => Enrollment::query()
+                ->with(['course.events', 'student', 'user'])
                 ->when($only_my_enrollments, function ($query): void {
                     $query->where('user_id', auth()->id());
                 })
@@ -27,14 +30,37 @@ final class EnrollmentsTable
             ->recordTitle(fn ($record) => $record->course->name)
             ->columns([
                 TextColumn::make('course.name')
-                    ->searchable(),
+                    ->label('Course')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('course.semester')
+                    ->label('Semester')
+                    ->badge()
+                    ->toggleable(),
+                TextColumn::make('next_class')
+                    ->label('Next Class')
+                    ->state(fn (Enrollment $record): ?CarbonInterface => $record->course?->nextMeetingStartsAt())
+                    ->dateTime()
+                    ->placeholder('No upcoming class')
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('user.full_name')
-                    ->label('User')
+                    ->label('Parent / User')
                     ->hidden($only_my_enrollments)
-                    ->searchable(['first_name', 'last_name']),
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 TextColumn::make('student.full_name')
                     ->label('Student')
-                    ->searchable(['first_name', 'last_name']),
+                    ->placeholder('Needs student')
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
+                TextColumn::make('assignment_status')
+                    ->label('Assignment')
+                    ->state(fn (Enrollment $record): string => $record->student_id === null ? 'Needs student' : 'Assigned')
+                    ->badge()
+                    ->color(fn (Enrollment $record): string => $record->student_id === null ? 'warning' : 'success')
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -45,8 +71,24 @@ final class EnrollmentsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('assignment_status')
+                    ->label('Assignment')
+                    ->options([
+                        'open' => 'Needs student',
+                        'assigned' => 'Assigned',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'open' => $query->whereNull('student_id'),
+                        'assigned' => $query->whereNotNull('student_id'),
+                        default => $query,
+                    }),
+                SelectFilter::make('course_id')
+                    ->label('Course')
+                    ->relationship('course', 'name')
+                    ->searchable()
+                    ->preload(),
             ])
+            ->defaultSort('created_at', 'desc')
             ->recordActions([
                 EditAction::make()
                     ->label('Assign Student')

@@ -13,7 +13,6 @@ use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Collection;
 
 final class ProductQuestionCheckoutSchema
@@ -92,16 +91,19 @@ final class ProductQuestionCheckoutSchema
                     ->options($options)
                     ->required($question->is_required)
                     ->searchable(false)
-                    ->live($question->allows_other)
-                    ->afterStateUpdated(function (Set $set, ?string $state) use ($fieldName): void {
-                        if ($state !== 'Other') {
-                            $set("{$fieldName}_other", null);
-                        }
-                    }),
+                    ->afterStateUpdatedJs(fn (): ?string => $question->allows_other
+                        ? <<<JS
+                            if (\$state !== 'Other') {
+                                \$set('{$fieldName}_other', null)
+                            }
+                            JS
+                        : null),
                 TextInput::make("{$fieldName}_other")
                     ->label('Other Answer')
                     ->maxLength(255)
-                    ->visible(fn (Get $get): bool => $get($fieldName) === 'Other')
+                    ->visibleJs(<<<JS
+                        \$get('{$fieldName}') === 'Other'
+                        JS)
                     ->required(fn (Get $get): bool => $question->is_required && $get($fieldName) === 'Other'),
             ]),
         ];

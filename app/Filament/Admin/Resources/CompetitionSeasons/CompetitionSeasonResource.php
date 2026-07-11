@@ -13,6 +13,7 @@ use App\Filament\Admin\Resources\CompetitionSeasons\Schemas\CompetitionSeasonFor
 use App\Filament\Admin\Resources\CompetitionSeasons\Schemas\CompetitionSeasonInfolist;
 use App\Filament\Admin\Resources\CompetitionSeasons\Tables\CompetitionSeasonsTable;
 use App\Models\CompetitionSeason;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -26,9 +27,9 @@ final class CompetitionSeasonResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
-    protected static UnitEnum|string|null $navigationGroup = 'Competition';
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Competition;
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = AdminNavigation::CompetitionSeasons;
 
     protected static ?string $recordTitleAttribute = 'name';
 

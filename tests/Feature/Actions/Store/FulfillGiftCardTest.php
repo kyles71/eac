@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -63,6 +64,35 @@ it('creates multiple gift cards for quantity > 1', function () {
     // Each should have a unique code
     $codes = array_map(fn (GiftCard $gc) => $gc->code, $giftCards);
     expect(array_unique($codes))->toHaveCount(3);
+});
+
+it('uses the shared collision-safe code generator when fulfilling gift cards', function () {
+    GiftCard::factory()->create(['code' => 'DUPLICATECODE123']);
+
+    Str::createRandomStringsUsingSequence([
+        'duplicatecode123',
+        'uniquecode000001',
+    ]);
+
+    $giftCards = [];
+
+    try {
+        $orderItem = OrderItem::factory()->create([
+            'order_id' => $this->order->id,
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'unit_price' => 5000,
+            'total_price' => 5000,
+        ]);
+
+        $orderItem->load('product.productable');
+
+        $giftCards = (new FulfillGiftCard)->handle($orderItem, $this->user);
+    } finally {
+        Str::createRandomStringsNormally();
+    }
+
+    expect($giftCards[0]->code)->toBe('UNIQUECODE000001');
 });
 
 it('uses denomination amount when set on the gift card type', function () {

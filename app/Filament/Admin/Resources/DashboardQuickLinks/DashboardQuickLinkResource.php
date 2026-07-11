@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\DashboardQuickLinks\Schemas\DashboardQuickLinkF
 use App\Filament\Admin\Resources\DashboardQuickLinks\Tables\DashboardQuickLinksTable;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\DashboardQuickLink;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -26,6 +27,8 @@ final class DashboardQuickLinkResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLink;
 
     protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = AdminNavigation::SettingsDashboardQuickLinks;
 
     protected static ?string $navigationLabel = 'Dashboard Quick Links';
 

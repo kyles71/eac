@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\LegalDocuments\Pages\ListLegalDocuments;
 use App\Filament\Admin\Resources\LegalDocuments\Tables\LegalDocumentsTable;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\LegalDocument;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -21,7 +22,7 @@ final class LegalDocumentResource extends Resource
 
     protected static ?string $cluster = SettingsCluster::class;
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = AdminNavigation::SettingsLegalDocuments;
 
     protected static ?string $navigationLabel = 'Legal Documents';
 

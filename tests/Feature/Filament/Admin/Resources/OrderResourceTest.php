@@ -81,7 +81,17 @@ it('can filter orders by status', function () {
 it('has required columns', function (string $column) {
     livewire(ListOrders::class)
         ->assertTableColumnExists($column);
-})->with(['id', 'user.full_name', 'user.email', 'status', 'total', 'created_at']);
+})->with([
+    'id',
+    'user.full_name',
+    'user.email',
+    'status',
+    'order_items_count',
+    'total',
+    'paymentPlanTemplate.name',
+    'discountCode.code',
+    'created_at',
+]);
 
 it('can search orders by customer name', function () {
     $user1 = User::factory()->create(['first_name' => 'John', 'last_name' => 'Doe']);

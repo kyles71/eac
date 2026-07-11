@@ -9,6 +9,7 @@ use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Mail\GiftCardAssignedRedemptionContentService;
 use App\Services\Mail\GiftCardDeliveryContentService;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\EmailTypeRegistry;
@@ -48,6 +49,57 @@ it('registers and renders the editable gift card delivery email', function (): v
         ->toContain("#{$order->id}")
         ->toContain(Billing::getUrl(['tab' => 'credits'], panel: 'user'))
         ->toContain('Redeem Gift Card')
+        ->not->toContain('<script>');
+});
+
+it('registers and renders the editable assigned gift card redemption email', function (): void {
+    $recipient = User::factory()->create([
+        'first_name' => 'Riley',
+        'last_name' => 'Recipient',
+        'email' => 'recipient@example.com',
+    ]);
+    $purchaser = User::factory()->create([
+        'first_name' => 'Pat <script>',
+        'last_name' => 'Purchaser',
+        'email' => 'purchaser@example.com',
+    ]);
+    $giftCardType = GiftCardType::factory()->denomination(5000)->create();
+    $giftCard = GiftCard::factory()
+        ->forType($giftCardType)
+        ->amount(5000)
+        ->redeemed($recipient)
+        ->create([
+            'code' => 'ASSIGNED-<unsafe>',
+            'purchased_by_user_id' => $purchaser->id,
+        ]);
+
+    $definition = app(EmailTypeRegistry::class)->get('gift-card-assigned-redemption');
+    $payload = app(GiftCardAssignedRedemptionContentService::class)->for($giftCard, $recipient);
+    $rendered = app(MailManager::class)->render(
+        emailTypeKey: 'gift-card-assigned-redemption',
+        tokens: $payload['tokens'],
+        slots: $payload['slots'],
+    );
+
+    expect($definition->category)->toBe('transactional')
+        ->and(array_keys($definition->tokensByKey()))->toContain(
+            'recipient.first_name',
+            'recipient.full_name',
+            'purchaser.first_name',
+            'purchaser.full_name',
+            'purchaser.email',
+            'gift_card.code',
+            'gift_card.value',
+            'gift_card.restrictions',
+            'gift_card.redemption_date',
+        )
+        ->and(array_keys($definition->slotsByMergeTag()))->toBe(['slot.billing-action'])
+        ->and($rendered->subject)->toBe('$50.00 in store credit has been added to your '.config('app.name').' account')
+        ->and($rendered->html)
+        ->toContain('ASSIGNED-&lt;unsafe&gt;')
+        ->toContain('Pat &lt;script&gt; Purchaser')
+        ->toContain(Billing::getUrl(['tab' => 'credits'], panel: 'user'))
+        ->toContain('View Store Credit')
         ->not->toContain('<script>');
 });
 

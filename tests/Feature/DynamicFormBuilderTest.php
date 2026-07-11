@@ -11,6 +11,7 @@ use App\Enums\FormResponseStatus;
 use App\Enums\FormUpdateStrategy;
 use App\Enums\FormVersionStatus;
 use App\Forms\Contracts\FormMappingProvider;
+use App\Forms\FormSchemaCompiler;
 use App\Forms\FormVersionComparator;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -22,6 +23,9 @@ use App\Models\FormVersion;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -276,6 +280,41 @@ it('does not require fields while their visibility condition is not met', functi
     expect(fn () => app(SubmitFormResponse::class)->handle($assignment, [
         'answers' => [$toggleKey => true],
     ]))->toThrow(ValidationException::class);
+});
+
+it('uses browser side visibility for dynamic conditional fields', function (): void {
+    $toggleKey = (string) Str::uuid();
+    $detailsKey = (string) Str::uuid();
+    $version = FormVersion::factory()->create([
+        'schema' => [
+            [
+                'type' => 'toggle',
+                'data' => [
+                    'key' => $toggleKey,
+                    'label' => 'Add details?',
+                ],
+            ],
+            [
+                'type' => 'short_text',
+                'data' => [
+                    'key' => $detailsKey,
+                    'label' => 'Details',
+                    'visible_when_key' => $toggleKey,
+                    'visible_when_value' => 'true',
+                ],
+            ],
+        ],
+    ]);
+
+    $schema = Schema::make()
+        ->components(app(FormSchemaCompiler::class)->components($version));
+    [$toggle, $details] = $schema->getComponents(withHidden: true);
+
+    expect($toggle)->toBeInstanceOf(Toggle::class)
+        ->and($details)->toBeInstanceOf(TextInput::class)
+        ->and($toggle->isLive())->toBeFalse()
+        ->and($details->getVisibleJs())
+        ->toBe("String(\$get('answers.{$toggleKey}')) === \"true\"");
 });
 
 it('does not submit expired assignments', function (): void {

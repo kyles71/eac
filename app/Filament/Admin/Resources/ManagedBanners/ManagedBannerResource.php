@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\ManagedBanners\Schemas\ManagedBannerForm;
 use App\Filament\Admin\Resources\ManagedBanners\Tables\ManagedBannersTable;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\ManagedBanner;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -26,6 +27,8 @@ final class ManagedBannerResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMegaphone;
 
     protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = AdminNavigation::SettingsBanners;
 
     protected static ?string $navigationLabel = 'Banners';
 

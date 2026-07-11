@@ -7,6 +7,7 @@ namespace App\Filament\Clusters\Settings\Pages;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Models\User;
 use App\Settings\DashboardAppearanceSettings;
+use App\Support\Filament\AdminNavigation;
 use App\Support\MediaDisks;
 use BackedEnum;
 use Filament\Forms\Components\FileUpload;
@@ -23,6 +24,8 @@ final class ManageDashboardAppearance extends SettingsPage
     protected static string $settings = DashboardAppearanceSettings::class;
 
     protected static ?string $cluster = SettingsCluster::class;
+
+    protected static ?int $navigationSort = AdminNavigation::SettingsDashboardAppearance;
 
     protected static ?string $navigationLabel = 'Dashboard Appearance';
 

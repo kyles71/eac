@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\FormUsers\Pages\ViewFormUser;
 use App\Filament\Admin\Resources\FormUsers\Schemas\FormUserInfolist;
 use App\Filament\Admin\Resources\FormUsers\Tables\FormUsersTable;
 use App\Models\FormAssignment;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -22,11 +23,17 @@ final class FormUserResource extends Resource
 
     protected static ?string $model = FormAssignment::class;
 
-    protected static ?string $modelLabel = 'User Form';
+    protected static ?string $modelLabel = 'Form Assignment';
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static ?string $pluralModelLabel = 'Form Assignments';
 
-    protected static UnitEnum|string|null $navigationGroup = 'Users';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
+
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::PeopleAndAccess;
+
+    protected static ?int $navigationSort = AdminNavigation::PeopleFormAssignments;
+
+    protected static ?string $navigationLabel = 'Form Assignments';
 
     public static function form(Schema $schema): Schema
     {
