@@ -10,23 +10,34 @@ require 'recipe/laravel.php';
 set('keep_releases', 5);
 set('repository', 'https://github.com/kyles71/eac.git');
 
-add('shared_files', ['.env']);
-add('shared_dirs', ['storage']);
+set('shared_files', ['.env']);
+set('shared_dirs', ['storage']);
 
 set('http_user', 'www-data');
 set('writable_mode', 'acl');
+set('writable_use_sudo', false);
 set('writable_recursive', true);
 
+set('composer_options', '--verbose --prefer-dist --no-progress --no-interaction --no-dev --optimize-autoloader');
+
 // Hosts
-host(getenv('DEPLOY_HOST'))
+host('dev')
+    ->setHostname(getenv('DEPLOY_HOST'))
     ->setLabels([
         'env' => 'dev',
     ])
     ->set('branch', 'dev')
-    ->set('composer_options', '--verbose --prefer-dist --no-progress --no-interaction --optimize-autoloader')
     ->set('remote_user', getenv('DEPLOY_USER'))
-    ->set('sudo_password', getenv('DEPLOY_PASSWORD'))
     ->set('deploy_path', '/var/www/html/eac-test');
+
+host('production')
+    ->setHostname(getenv('DEPLOY_HOST'))
+    ->setLabels([
+        'env' => 'production',
+    ])
+    ->set('branch', 'master')
+    ->set('remote_user', getenv('DEPLOY_USER'))
+    ->set('deploy_path', '/var/www/html/eac');
 
 // Tasks
 desc('Install & build npm packages');
@@ -35,5 +46,6 @@ task('npm:build', function () {
 });
 
 // Hooks
-after('artisan:migrate', 'npm:build');
+after('deploy:vendors', 'npm:build');
+after('deploy:symlink', 'artisan:queue:restart');
 after('deploy:failed', 'deploy:unlock');
