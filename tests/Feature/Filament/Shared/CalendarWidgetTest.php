@@ -19,6 +19,7 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Product;
+use App\Models\ProductQuestion;
 use App\Models\Student;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -1019,6 +1020,30 @@ it('adds an event course product to the cart from the user event modal', functio
         ->where('user_id', $user->id)
         ->where('product_id', $product->id)
         ->value('quantity'))->toBe(1);
+});
+
+it('hides the calendar quick add but keeps view in store for products with add-time questions', function (): void {
+    $user = User::factory()->create();
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $course = Course::factory()->create(['capacity' => 5]);
+    $product = Product::factory()->forCourse($course)->create([
+        'price' => 5000,
+        'ask_purchaser_questions_when_adding_to_cart' => true,
+    ]);
+    ProductQuestion::factory()->for($product)->required()->create();
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'calendar_id' => $calendar->id,
+        'start_time' => Carbon::parse('2027-01-15 18:00:00'),
+        'end_time' => Carbon::parse('2027-01-15 19:00:00'),
+    ]);
+
+    $this->actingAs($user);
+
+    livewire(CalendarWidget::class)
+        ->call('onEventClick', ['id' => $event->id])
+        ->assertActionHidden('addCourseProductToCart')
+        ->assertActionVisible('viewCourseProductInStore');
 });
 
 it('hides event course product actions when the product is scheduled for later', function (): void {

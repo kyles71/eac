@@ -160,6 +160,63 @@ it('shows per-unit questions in the final checkout action modal', function (): v
         ->and($questionSections->every(fn (Section $section): bool => $section->getColumns('lg') === null))->toBeTrue();
 });
 
+it('omits add-time questions from checkout and saves both answer sources in a mixed cart', function (): void {
+    $addTimeProduct = Product::factory()->standalone()->create([
+        'name' => 'Team Jacket',
+        'ask_purchaser_questions_when_adding_to_cart' => true,
+    ]);
+    $addTimeQuestion = ProductQuestion::factory()->for($addTimeProduct)->required()->create([
+        'question' => 'Jacket name',
+    ]);
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $addTimeProduct->id,
+        'question_answers' => [
+            1 => ["question_{$addTimeQuestion->id}" => 'Avery'],
+        ],
+    ]);
+
+    $checkoutProduct = Product::factory()->standalone()->create(['name' => 'Team Shirt']);
+    $checkoutQuestion = ProductQuestion::factory()->for($checkoutProduct)->required()->create([
+        'question' => 'Shirt name',
+    ]);
+    $checkoutCartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $checkoutProduct->id,
+    ]);
+
+    $component = livewire(Cart::class)
+        ->mountAction('checkout')
+        ->assertActionMounted('checkout');
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->contains(fn ($field): bool => $field->getName() === "question_{$addTimeQuestion->id}"))->toBeFalse()
+        ->and($fields->contains(fn ($field): bool => $field->getName() === "question_{$checkoutQuestion->id}"))->toBeTrue();
+
+    $component
+        ->fillForm([
+            'question_answers' => [
+                $checkoutCartItem->id => [
+                    1 => ["question_{$checkoutQuestion->id}" => 'Jordan'],
+                ],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors();
+
+    $order = auth()->user()->orders()->latest()->firstOrFail();
+    $answersByProduct = $order->orderItems()
+        ->with('questionAnswers')
+        ->get()
+        ->mapWithKeys(fn ($orderItem): array => [
+            $orderItem->product_id => $orderItem->questionAnswers->first()?->formattedAnswer(),
+        ]);
+
+    expect($answersByProduct->get($addTimeProduct->id))->toBe('Avery')
+        ->and($answersByProduct->get($checkoutProduct->id))->toBe('Jordan');
+});
+
 it('shows an Other text input and only requires it for required questions', function (): void {
     $product = Product::factory()->standalone()->create();
     $requiredQuestion = ProductQuestion::factory()->for($product)->required()->select(['Small'], allowsOther: true)->create();
@@ -256,6 +313,46 @@ it('rejects unavailable select choices', function (): void {
         ],
     ]);
 })->throws(InvalidArgumentException::class, 'selected answer');
+
+it('revalidates stored add-time answers when question choices change', function (): void {
+    $user = User::factory()->create();
+    $product = Product::factory()->standalone()->create([
+        'ask_purchaser_questions_when_adding_to_cart' => true,
+    ]);
+    $question = ProductQuestion::factory()->for($product)->required()->select(['Small', 'Large'])->create([
+        'question' => 'Size',
+    ]);
+    $cartItem = CartItem::factory()->create([
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Large'],
+        ],
+    ]);
+    $question->update(['options' => ['Small']]);
+
+    app(CreateOrder::class)->handle($user);
+})->throws(InvalidArgumentException::class, 'selected answer');
+
+it('ignores answers for purchaser questions that were deleted before checkout', function (): void {
+    $user = User::factory()->create();
+    $product = Product::factory()->standalone()->create([
+        'ask_purchaser_questions_when_adding_to_cart' => true,
+    ]);
+    $question = ProductQuestion::factory()->for($product)->required()->create();
+    CartItem::factory()->create([
+        'user_id' => $user->id,
+        'product_id' => $product->id,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Avery'],
+        ],
+    ]);
+    $question->delete();
+
+    $order = app(CreateOrder::class)->handle($user);
+
+    expect($order->orderItems()->firstOrFail()->questionAnswers()->count())->toBe(0);
+});
 
 it('requires an Other answer only when the select question is required', function (): void {
     $user = User::factory()->create();

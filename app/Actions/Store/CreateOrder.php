@@ -7,17 +7,16 @@ namespace App\Actions\Store;
 use App\Contracts\HasCapacity;
 use App\Enums\OrderStatus;
 use App\Enums\ProductAvailabilityStatus;
-use App\Enums\ProductQuestionType;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
-use App\Models\ProductQuestion;
 use App\Models\User;
 use App\Services\CreditLedgerService;
 use App\Services\ProductAvailabilityService;
+use App\Services\ProductQuestionAnswerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +32,7 @@ final class CreateOrder
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly CreditLedgerService $creditLedger,
         private readonly PaymentPlanBreakdownCalculator $paymentPlanBreakdownCalculator,
+        private readonly ProductQuestionAnswerService $productQuestionAnswers,
     ) {}
 
     public function handle(
@@ -113,9 +113,11 @@ final class CreateOrder
                         'custom_gift_card_amount' => $cartItem->custom_gift_card_amount,
                         'purchase_notification_requested' => $product->send_purchase_notification,
                     ],
-                    'question_answers' => $this->normalizeQuestionAnswers(
+                    'question_answers' => $this->productQuestionAnswers->orderRows(
                         $cartItem,
-                        $questionAnswers[$cartItem->id] ?? [],
+                        $product->asksPurchaserQuestionsWhenAddingToCart()
+                            ? $cartItem->storedQuestionAnswers()
+                            : ($questionAnswers[$cartItem->id] ?? []),
                     ),
                 ];
             }
@@ -274,104 +276,5 @@ final class CreateOrder
             ProductAvailabilityStatus::Expired => "\"{$product->name}\" is no longer available for purchase.",
             default => "\"{$product->name}\" is not available for purchase.",
         };
-    }
-
-    /**
-     * @param  array<int|string, mixed>  $submittedUnits
-     * @return list<array<string, mixed>>
-     */
-    private function normalizeQuestionAnswers(CartItem $cartItem, array $submittedUnits): array
-    {
-        $rows = [];
-
-        for ($unitNumber = 1; $unitNumber <= $cartItem->quantity; $unitNumber++) {
-            $submittedAnswers = $submittedUnits[$unitNumber] ?? [];
-            $submittedAnswers = is_array($submittedAnswers) ? $submittedAnswers : [];
-
-            /** @var ProductQuestion $question */
-            foreach ($cartItem->product->questions as $question) {
-                $fieldName = "question_{$question->id}";
-                $submittedAnswer = $submittedAnswers[$fieldName] ?? null;
-                $selectedOption = null;
-                $answer = null;
-
-                if ($question->type === ProductQuestionType::Text) {
-                    $answer = $this->normalizeStringAnswer($submittedAnswer);
-
-                    if ($question->is_required && $answer === null) {
-                        throw new InvalidArgumentException($this->requiredQuestionMessage($cartItem, $question, $unitNumber));
-                    }
-
-                    if ($answer !== null && $question->max_length !== null && mb_strlen($answer) > $question->max_length) {
-                        throw new InvalidArgumentException(
-                            "Your answer to \"{$question->question}\" may not be longer than {$question->max_length} characters.",
-                        );
-                    }
-                } else {
-                    $selectedOption = $this->normalizeStringAnswer($submittedAnswer);
-
-                    if ($question->is_required && $selectedOption === null) {
-                        throw new InvalidArgumentException($this->requiredQuestionMessage($cartItem, $question, $unitNumber));
-                    }
-
-                    if ($selectedOption === 'Other') {
-                        if (! $question->allows_other) {
-                            throw new InvalidArgumentException("Other is not a valid answer to \"{$question->question}\".");
-                        }
-
-                        $answer = $this->normalizeStringAnswer($submittedAnswers["{$fieldName}_other"] ?? null);
-
-                        if ($question->is_required && $answer === null) {
-                            throw new InvalidArgumentException("Please specify the Other answer for \"{$question->question}\".");
-                        }
-
-                        if ($answer !== null && mb_strlen($answer) > 255) {
-                            throw new InvalidArgumentException("The Other answer to \"{$question->question}\" may not be longer than 255 characters.");
-                        }
-
-                        $answer ??= 'Other';
-                    } elseif ($selectedOption !== null && ! in_array($selectedOption, $question->options ?? [], true)) {
-                        throw new InvalidArgumentException("The selected answer to \"{$question->question}\" is no longer available.");
-                    }
-                }
-
-                $rows[] = [
-                    'product_question_id' => $question->id,
-                    'unit_number' => $unitNumber,
-                    'question' => $question->question,
-                    'question_type' => $question->type,
-                    'was_required' => $question->is_required,
-                    'question_order' => $question->sort_order,
-                    'selected_option' => $selectedOption,
-                    'answer' => $answer,
-                ];
-            }
-        }
-
-        return $rows;
-    }
-
-    private function normalizeStringAnswer(mixed $answer): ?string
-    {
-        if ($answer === null) {
-            return null;
-        }
-
-        if (! is_string($answer)) {
-            throw new InvalidArgumentException('A purchaser question answer had an invalid format.');
-        }
-
-        $answer = mb_trim($answer);
-
-        return $answer === '' ? null : $answer;
-    }
-
-    private function requiredQuestionMessage(CartItem $cartItem, ProductQuestion $question, int $unitNumber): string
-    {
-        $item = $cartItem->quantity === 1
-            ? $cartItem->product->name
-            : "{$cartItem->product->name} item {$unitNumber}";
-
-        return "Please answer \"{$question->question}\" for {$item}.";
     }
 }

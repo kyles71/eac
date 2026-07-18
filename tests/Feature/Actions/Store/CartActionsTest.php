@@ -11,6 +11,7 @@ use App\Models\Enrollment;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
 use App\Models\User;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -49,6 +50,36 @@ it('increments quantity when adding the same product again', function () {
 
     expect($cartItem->quantity)->toBe(2);
 });
+
+it('stores distinct purchaser answers when the same product is added repeatedly', function () {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+
+    $action = new AddToCart;
+    $action->handle($this->user, $this->product->refresh(), questionAnswers: [
+        1 => ["question_{$question->id}" => 'Avery'],
+    ]);
+    $cartItem = $action->handle($this->user, $this->product->refresh(), questionAnswers: [
+        1 => ["question_{$question->id}" => 'Jordan'],
+    ]);
+
+    expect($cartItem->quantity)->toBe(2)
+        ->and($cartItem->storedQuestionAnswers())->toBe([
+            1 => ["question_{$question->id}" => 'Avery'],
+            2 => ["question_{$question->id}" => 'Jordan'],
+        ]);
+});
+
+it('requires configured purchaser answers when adding to cart', function () {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+
+    (new AddToCart)->handle($this->user, $this->product->refresh());
+})->throws(InvalidArgumentException::class, 'Please answer "Dancer name"');
 
 it('stores custom gift card amounts on separate cart lines', function () {
     $giftCardType = GiftCardType::factory()
@@ -211,6 +242,37 @@ it('can update cart item quantity', function () {
     $updated = $action->handle($this->user, $cartItem->id, 3);
 
     expect($updated->quantity)->toBe(3);
+});
+
+it('appends answers when quantity increases and trims the final unit when it decreases', function () {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+    $cartItem = CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Avery'],
+        ],
+    ]);
+
+    $action = new UpdateCartQuantity;
+    $updated = $action->handle($this->user, $cartItem->id, 2, [
+        1 => ["question_{$question->id}" => 'Jordan'],
+    ]);
+
+    expect($updated->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => 'Avery'],
+        2 => ["question_{$question->id}" => 'Jordan'],
+    ]);
+
+    $decremented = $action->handle($this->user, $cartItem->id, 1);
+
+    expect($decremented->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => 'Avery'],
+    ]);
 });
 
 it('rejects updating quantity beyond course capacity', function () {

@@ -203,7 +203,12 @@ final class CalendarWidget extends FullCalendarWidget
                     ->label('Add to Cart')
                     ->icon(Heroicon::OutlinedShoppingCart)
                     ->color('primary')
-                    ->visible(fn (): bool => $this->courseEventProduct() instanceof Product)
+                    ->visible(function (): bool {
+                        $product = $this->courseEventProduct();
+
+                        return $product instanceof Product
+                            && ! $product->asksPurchaserQuestionsWhenAddingToCart();
+                    })
                     ->disabled(fn (): bool => $this->courseEventProductIsSoldOut())
                     ->action(function (): void {
                         $this->addCourseEventProductToCart();

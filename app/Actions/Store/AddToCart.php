@@ -10,15 +10,26 @@ use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\ProductAvailabilityService;
+use App\Services\ProductQuestionAnswerService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 final readonly class AddToCart
 {
-    public function handle(User $user, Product $product, int $quantity = 1, ?int $customGiftCardAmount = null): CartItem
-    {
-        return DB::transaction(function () use ($user, $product, $quantity, $customGiftCardAmount): CartItem {
-            $product->loadMissing('productable');
+    /** @param array<int|string, mixed> $questionAnswers */
+    public function handle(
+        User $user,
+        Product $product,
+        int $quantity = 1,
+        ?int $customGiftCardAmount = null,
+        array $questionAnswers = [],
+    ): CartItem {
+        return DB::transaction(function () use ($user, $product, $quantity, $customGiftCardAmount, $questionAnswers): CartItem {
+            if ($quantity < 1) {
+                throw new InvalidArgumentException('Quantity must be at least 1.');
+            }
+
+            $product->loadMissing(['productable', 'questions']);
             $availability = app(ProductAvailabilityService::class)->resultFor($product, $user);
 
             if (! $availability->isPurchasable()) {
@@ -32,10 +43,10 @@ final readonly class AddToCart
                 ->where('product_id', $product->id)
                 ->where('custom_gift_card_amount', $customGiftCardAmount)
                 ->first();
+            $existingQuantity = $cartItem instanceof CartItem ? $cartItem->quantity : 0;
 
             if ($product->productable instanceof HasCapacity) {
                 $availableCapacity = $product->productable->getAvailableCapacity();
-                $existingQuantity = $cartItem->quantity ?? 0;
 
                 $totalRequested = $existingQuantity + $quantity;
 
@@ -46,9 +57,25 @@ final readonly class AddToCart
                 }
             }
 
+            $storedQuestionAnswers = $cartItem instanceof CartItem
+                ? $cartItem->storedQuestionAnswers()
+                : [];
+
+            if ($product->asksPurchaserQuestionsWhenAddingToCart()) {
+                $newQuestionAnswers = app(ProductQuestionAnswerService::class)->normalizeUnits(
+                    $product,
+                    $questionAnswers,
+                    $quantity,
+                    firstUnitNumber: $existingQuantity + 1,
+                    totalQuantity: $existingQuantity + $quantity,
+                );
+                $storedQuestionAnswers = array_replace($storedQuestionAnswers, $newQuestionAnswers);
+            }
+
             if ($cartItem !== null) {
                 $cartItem->update([
                     'quantity' => $cartItem->quantity + $quantity,
+                    'question_answers' => $storedQuestionAnswers === [] ? null : $storedQuestionAnswers,
                     'reminder_sent_at' => null,
                 ]);
 
@@ -60,6 +87,7 @@ final readonly class AddToCart
                 'product_id' => $product->id,
                 'quantity' => $quantity,
                 'custom_gift_card_amount' => $customGiftCardAmount,
+                'question_answers' => $storedQuestionAnswers === [] ? null : $storedQuestionAnswers,
             ]);
         });
     }

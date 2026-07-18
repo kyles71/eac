@@ -8,18 +8,20 @@ use App\Contracts\HasCapacity;
 use App\Models\CartItem;
 use App\Models\User;
 use App\Services\ProductAvailabilityService;
+use App\Services\ProductQuestionAnswerService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 final readonly class UpdateCartQuantity
 {
-    public function handle(User $user, int $cartItemId, int $quantity): CartItem
+    /** @param array<int|string, mixed> $questionAnswers */
+    public function handle(User $user, int $cartItemId, int $quantity, array $questionAnswers = []): CartItem
     {
-        return DB::transaction(function () use ($user, $cartItemId, $quantity): CartItem {
+        return DB::transaction(function () use ($user, $cartItemId, $quantity, $questionAnswers): CartItem {
             $cartItem = CartItem::query()
                 ->where('id', $cartItemId)
                 ->where('user_id', $user->id)
-                ->with('product.productable')
+                ->with(['product.productable', 'product.questions'])
                 ->first();
 
             if ($cartItem === null) {
@@ -49,8 +51,31 @@ final readonly class UpdateCartQuantity
                 }
             }
 
+            $storedQuestionAnswers = $cartItem->storedQuestionAnswers();
+
+            if ($quantity > $cartItem->quantity && $product->asksPurchaserQuestionsWhenAddingToCart()) {
+                $addedQuantity = $quantity - $cartItem->quantity;
+                $newQuestionAnswers = app(ProductQuestionAnswerService::class)->normalizeUnits(
+                    $product,
+                    $questionAnswers,
+                    $addedQuantity,
+                    firstUnitNumber: $cartItem->quantity + 1,
+                    totalQuantity: $quantity,
+                );
+                $storedQuestionAnswers = array_replace($storedQuestionAnswers, $newQuestionAnswers);
+            }
+
+            if ($quantity < $cartItem->quantity) {
+                $storedQuestionAnswers = array_filter(
+                    $storedQuestionAnswers,
+                    fn (int|string $unitNumber): bool => (int) $unitNumber <= $quantity,
+                    ARRAY_FILTER_USE_KEY,
+                );
+            }
+
             $cartItem->update([
                 'quantity' => $quantity,
+                'question_answers' => $storedQuestionAnswers === [] ? null : $storedQuestionAnswers,
                 'reminder_sent_at' => null,
             ]);
 

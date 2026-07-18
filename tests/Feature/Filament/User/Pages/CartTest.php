@@ -17,6 +17,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\ProductQuestion;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use Filament\Actions\Testing\TestAction;
@@ -77,6 +78,108 @@ it('can increment item quantity via table action', function () {
         ->callAction(TestAction::make('increment')->table($cartItem));
 
     expect($cartItem->refresh()->quantity)->toBe(2);
+});
+
+it('asks questions for the new unit when incrementing and trims its answers when decrementing', function (): void {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Avery'],
+        ],
+    ]);
+
+    $component = livewire(Cart::class)
+        ->mountAction(TestAction::make('increment')->table($cartItem));
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->contains(fn ($field): bool => $field->getName() === "question_{$question->id}"))->toBeTrue();
+
+    $component
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => 'Jordan'],
+            ],
+        ])
+        ->callMountedAction();
+
+    expect($cartItem->refresh()->quantity)->toBe(2)
+        ->and($cartItem->storedQuestionAnswers())->toBe([
+            1 => ["question_{$question->id}" => 'Avery'],
+            2 => ["question_{$question->id}" => 'Jordan'],
+        ]);
+
+    livewire(Cart::class)
+        ->callAction(TestAction::make('decrement')->table($cartItem));
+
+    expect($cartItem->refresh()->quantity)->toBe(1)
+        ->and($cartItem->storedQuestionAnswers())->toBe([
+            1 => ["question_{$question->id}" => 'Avery'],
+        ]);
+});
+
+it('can edit purchaser answers for every unit from the cart', function (): void {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Avery'],
+            2 => ["question_{$question->id}" => 'Jordan'],
+        ],
+    ]);
+
+    $component = livewire(Cart::class)
+        ->mountAction(TestAction::make('editQuestionAnswers')->table($cartItem));
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->filter(fn ($field): bool => $field->getName() === "question_{$question->id}"))->toHaveCount(2);
+
+    $component
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => 'Alex'],
+                2 => ["question_{$question->id}" => 'Taylor'],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->assertNotified('Purchaser answers updated');
+
+    expect($cartItem->refresh()->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => 'Alex'],
+        2 => ["question_{$question->id}" => 'Taylor'],
+    ]);
+});
+
+it('halts checkout when an add-time required question is incomplete', function (): void {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+        'question_answers' => null,
+    ]);
+
+    livewire(Cart::class)
+        ->mountAction('checkout')
+        ->assertNotified('Purchaser answers needed');
+
+    expect(Order::query()->where('user_id', auth()->id())->exists())->toBeFalse();
 });
 
 it('can decrement item quantity via table action', function () {

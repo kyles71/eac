@@ -13,6 +13,7 @@ use App\Models\GiftCardType;
 use App\Models\ManagedBanner;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
 use App\Services\UserBannerRenderHookRegistrarService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -291,6 +292,61 @@ it('opens the add to cart modal from the table when extra information is needed'
         ->mountAction(TestAction::make('addToCart')->table($giftCardProduct))
         ->assertActionMounted(TestAction::make('addToCart')->table($giftCardProduct))
         ->assertSchemaComponentExists('custom_gift_card_amount', 'mountedActionSchema0');
+});
+
+it('asks purchaser questions in the table add to cart modal and stores the answer', function (): void {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+
+    $component = livewire(Store::class)
+        ->mountAction(TestAction::make('addToCart')->table($this->product->refresh()))
+        ->assertActionMounted(TestAction::make('addToCart')->table($this->product));
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->contains(fn ($field): bool => $field->getName() === "question_{$question->id}"))->toBeTrue();
+
+    $component
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => 'Avery'],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->firstOrFail();
+
+    expect($cartItem->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => 'Avery'],
+    ]);
+});
+
+it('shows custom gift card amount and purchaser questions in the same table modal', function (): void {
+    $giftCardType = GiftCardType::factory()
+        ->denomination(5000)
+        ->customAmount(500)
+        ->create();
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create([
+        'ask_purchaser_questions_when_adding_to_cart' => true,
+    ]);
+    $question = ProductQuestion::factory()->for($giftCardProduct)->required()->create([
+        'question' => 'Recipient name',
+    ]);
+
+    $component = livewire(Store::class)
+        ->mountAction(TestAction::make('addToCart')->table($giftCardProduct))
+        ->assertSchemaComponentExists('custom_gift_card_amount', 'mountedActionSchema0');
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->contains(fn ($field): bool => $field->getName() === "question_{$question->id}"))->toBeTrue();
 });
 
 it('keeps product navigation and quick add available in card view', function () {

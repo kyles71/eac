@@ -11,6 +11,7 @@ use App\Models\Event;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Carbon\CarbonImmutable;
@@ -153,6 +154,40 @@ it('opens the add to cart modal when extra information is needed', function () {
         ->mountAction('addToCart')
         ->assertActionMounted('addToCart')
         ->assertSchemaComponentExists('custom_gift_card_amount', 'mountedActionSchema0');
+});
+
+it('asks purchaser questions when adding from product details and stores the answer', function (): void {
+    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+
+    $component = livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+        ->mountAction('addToCart')
+        ->assertActionMounted('addToCart');
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->contains(fn ($field): bool => $field->getName() === "question_{$question->id}"))->toBeTrue();
+
+    $component
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => 'Avery'],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->firstOrFail();
+
+    expect($cartItem->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => 'Avery'],
+    ]);
 });
 
 it('disables adding to cart when capacity is sold out', function () {

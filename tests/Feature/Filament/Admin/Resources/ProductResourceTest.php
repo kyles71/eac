@@ -147,6 +147,7 @@ it('can configure ordered purchaser questions and purchase notifications', funct
             'price' => '50.00',
             'is_active' => true,
             'send_purchase_notification' => true,
+            'ask_purchaser_questions_when_adding_to_cart' => true,
             'productable_type' => null,
             'productable_id' => null,
             'questions' => [
@@ -180,6 +181,7 @@ it('can configure ordered purchaser questions and purchase notifications', funct
     $questions = $product->questions()->get();
 
     expect($product->send_purchase_notification)->toBeTrue()
+        ->and($product->ask_purchaser_questions_when_adding_to_cart)->toBeTrue()
         ->and($questions)->toHaveCount(2)
         ->and($questions->pluck('question')->all())->toBe(['Dancer name', 'Shirt size'])
         ->and($questions->first()->type)->toBe(ProductQuestionType::Text)
@@ -188,6 +190,25 @@ it('can configure ordered purchaser questions and purchase notifications', funct
         ->and($questions->last()->max_length)->toBeNull()
         ->and($questions->last()->options)->toBe(['Small', 'Medium', 'Large'])
         ->and($questions->last()->allows_other)->toBeTrue();
+
+    livewire(ViewProduct::class, ['record' => $product->id])
+        ->assertSee('Questions Asked')
+        ->assertSee('When Added to Cart');
+});
+
+it('can change when purchaser questions are asked while editing', function (): void {
+    $product = Product::factory()->create();
+
+    livewire(ViewProduct::class, ['record' => $product->id])
+        ->mountAction(EditAction::class)
+        ->fillForm([
+            'ask_purchaser_questions_when_adding_to_cart' => true,
+        ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    expect($product->refresh()->ask_purchaser_questions_when_adding_to_cart)->toBeTrue();
 });
 
 it('shows the include linked item images field after selecting a linked item', function () {
