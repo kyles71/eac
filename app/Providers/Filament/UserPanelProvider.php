@@ -21,6 +21,7 @@ final class UserPanelProvider extends BasePanelProvider
 
         return $panel
             ->brandName('EAC Dancer')
+            ->breadcrumbs(false)
             ->viteTheme('resources/css/filament/user/theme.css')
             ->registration(Register::class)
             ->middleware([
