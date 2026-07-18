@@ -1,7 +1,59 @@
 @import '../global-theme.css';
+@import 'photoswipe/style.css';
 
 @source '../../../../app/Filament/User/**/*';
 @source '../../../../resources/views/filament/user/**/*';
+
+.eac-product-gallery-thumbnails {
+    align-items: center;
+    background: rgb(0 0 0 / 0.72);
+    bottom: 0;
+    display: flex;
+    gap: 0.5rem;
+    inset-inline: 0;
+    justify-content: safe center;
+    overflow-x: auto;
+    padding: 0.75rem max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+    position: absolute;
+    scrollbar-width: thin;
+    z-index: 20;
+}
+
+.eac-product-gallery-thumbnail {
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    flex: 0 0 auto;
+    height: 4rem;
+    opacity: 0.72;
+    overflow: hidden;
+    transition: border-color 150ms ease, opacity 150ms ease, transform 150ms ease;
+    width: 4rem;
+}
+
+.eac-product-gallery-thumbnail:hover,
+.eac-product-gallery-thumbnail:focus-visible {
+    opacity: 1;
+    outline: 2px solid rgb(255 255 255 / 0.9);
+    outline-offset: 2px;
+}
+
+.eac-product-gallery-thumbnail[aria-current='true'] {
+    border-color: rgb(96 165 250);
+    opacity: 1;
+    transform: translateY(-0.125rem);
+}
+
+.eac-product-gallery-thumbnail img {
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .eac-product-gallery-thumbnail {
+        transition: none;
+    }
+}
 
 @media (max-width: 1023px) {
     .fi-panel-user.fi-body-has-topbar {

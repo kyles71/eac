@@ -17,13 +17,12 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Image;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use InvalidArgumentException;
 use Spatie\MediaLibrary\HasMedia;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 final class ProductDetails extends Page
 {
@@ -177,24 +176,10 @@ final class ProductDetails extends Page
         }
 
         return [
-            Grid::make()
-                ->columns([
-                    'default' => 1,
-                    'sm' => 2,
-                ])
-                ->schema(
-                    $images
-                        ->map(fn (Media $media): Image => Image::make(
-                            $media->getUrl(),
-                            $media->name,
-                        )
-                            ->imageHeight('16rem')
-                            ->imageWidth('100%')
-                            ->extraAttributes([
-                                'class' => 'rounded-lg object-cover ring-1 ring-gray-950/10 dark:ring-white/10',
-                            ]))
-                        ->all()
-                ),
+            View::make('filament.user.pages.product-gallery')
+                ->viewData([
+                    'images' => $images,
+                ]),
         ];
     }
 

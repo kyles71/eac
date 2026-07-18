@@ -93,9 +93,36 @@ it('renders product and linked item gallery images', function () {
 
     $this->product->update(['include_productable_images' => true]);
 
-    livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+    $component = livewire(ProductDetails::class, ['product' => $this->product->refresh()])
         ->assertSee('product-gallery.jpg')
-        ->assertSee('course-gallery.jpg');
+        ->assertSee('course-gallery.jpg')
+        ->assertSeeInOrder([
+            'product-gallery.jpg',
+            'course-gallery.jpg',
+        ])
+        ->assertSeeHtml('<eac-product-gallery')
+        ->assertSeeHtml('data-js-as-module="true"')
+        ->assertSeeHtml('data-product-gallery-item')
+        ->assertSee('Open product-gallery in the image viewer')
+        ->assertSee('Open course-gallery in the image viewer');
+
+    expect(mb_substr_count($component->html(), 'data-product-gallery-item'))->toBe(2);
+});
+
+it('renders the lightbox hook for a single gallery image', function () {
+    $this->product->addMedia(UploadedFile::fake()->image('only-gallery-image.jpg'))
+        ->toMediaCollection('images');
+
+    livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+        ->assertSeeHtml('<eac-product-gallery')
+        ->assertSee('only-gallery-image.jpg')
+        ->assertDontSee('No product images are available.');
+});
+
+it('keeps the existing empty gallery state without loading the viewer', function () {
+    livewire(ProductDetails::class, ['product' => $this->product])
+        ->assertSee('No product images are available.')
+        ->assertDontSeeHtml('<eac-product-gallery');
 });
 
 it('can add one item to the cart', function () {
