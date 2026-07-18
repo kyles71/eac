@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Enums\FormResponseStatus;
 use App\Models\FormAssignment;
 use App\Models\FormResponse;
 use App\Models\FormVersion;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 
 /**
  * @extends Factory<FormResponse>

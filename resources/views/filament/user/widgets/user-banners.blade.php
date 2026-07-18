@@ -13,7 +13,7 @@
     @endif
 
     @php
-        $waiverAssignments = $attention->assignmentsForPurpose($pendingForms, \App\Enums\FormPurpose::MedicalWaiver);
+        $waiverAssignments = $attention->assignmentsForKey($pendingForms, 'student-waiver');
     @endphp
 
     @if ($waiverAssignments->isNotEmpty())

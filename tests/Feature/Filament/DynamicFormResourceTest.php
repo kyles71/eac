@@ -2,25 +2,42 @@
 
 declare(strict_types=1);
 
-use App\Actions\Forms\PublishFormVersion;
-use App\Actions\Forms\SubmitFormResponse;
-use App\Enums\FormVersionStatus;
+use App\Filament\Admin\Resources\Forms\FormResource;
+use App\Filament\Admin\Resources\Forms\Pages\EditFormVersion;
 use App\Filament\Admin\Resources\Forms\Pages\ViewForm;
-use App\Filament\Admin\Resources\Forms\RelationManagers\AssignmentsRelationManager;
-use App\Filament\Admin\Resources\Forms\RelationManagers\VersionsRelationManager;
+use App\Filament\Admin\Resources\Forms\Pages\ViewFormAnalytics;
+use App\Filament\Admin\Resources\Forms\Pages\ViewResponse;
 use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
+use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Filament\User\Resources\FormUsers\Pages\ViewFormUser;
-use App\Forms\FormVersionComparator;
+use App\Filament\User\Resources\Students\Pages\ListStudents;
+use App\Filament\User\Resources\Students\Pages\ViewStudent;
+use App\Forms\Eac\EacFormContentProvider;
 use App\Models\Form;
 use App\Models\FormAnswer;
 use App\Models\FormAssignment;
+use App\Models\LegalDocument;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Kyle\FilamentFormBuilder\Actions\PublishFormVersion;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
+use Kyle\FilamentFormBuilder\Filament\Resources\Forms\RelationManagers\AssignmentsRelationManager;
+use Kyle\FilamentFormBuilder\Filament\Resources\Forms\RelationManagers\ResponsesRelationManager;
+use Kyle\FilamentFormBuilder\Filament\Resources\Forms\RelationManagers\VersionsRelationManager;
+use Kyle\FilamentFormBuilder\Support\FormVersionComparator;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertDatabaseHas;
@@ -30,12 +47,45 @@ beforeEach(function (): void {
     Filament::setCurrentPanel('user');
 });
 
+it('lists the signed-in users assignments from the package table', function (): void {
+    $user = User::factory()->create();
+    actingAs($user);
+    $student = Student::factory()->create(['user_id' => $user->id]);
+    $form = Form::factory()->create();
+    $version = App\Models\FormVersion::factory()->for($form)->published()->create();
+    $assignment = FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $version->id,
+        'respondent_type' => $user->getMorphClass(),
+        'respondent_id' => $user->id,
+        'subject_type' => $student->getMorphClass(),
+        'subject_id' => $student->id,
+    ]);
+
+    livewire(ListFormUsers::class)
+        ->assertOk()
+        ->loadTable()
+        ->assertCanSeeTableRecords([$assignment]);
+});
+
+it('hides breadcrumbs throughout the user panel', function (): void {
+    $user = User::factory()->create();
+    actingAs($user);
+    $student = Student::factory()->create(['user_id' => $user->id]);
+
+    livewire(ListFormUsers::class)->assertOk();
+    livewire(ListStudents::class)->assertOk();
+    livewire(ViewStudent::class, ['record' => $student->id])->assertOk();
+
+    expect(Filament::getPanel('user')->hasBreadcrumbs())->toBeFalse();
+});
+
 it('saves and submits a dynamically compiled user form', function (): void {
     $user = User::factory()->create();
     actingAs($user);
 
     $fieldKey = (string) Str::uuid();
-    $form = Form::factory()->create();
+    $form = Form::factory()->create(['name' => 'Showcase Participation']);
     $version = $form->versions()->create([
         'version' => 1,
         'status' => FormVersionStatus::Draft,
@@ -89,29 +139,50 @@ it('saves and submits a dynamically compiled user form', function (): void {
         'value_string' => 'Green',
     ]);
 
-    livewire(ViewFormUser::class, ['record' => $assignment->id])
+    $viewPage = livewire(ViewFormUser::class, ['record' => $assignment->id])
         ->assertOk()
         ->assertSee('Green');
+
+    $topLevelComponents = $viewPage->instance()->getSchema('infolist')->getComponents();
+
+    expect($viewPage->instance()->getTitle())->toBe('Showcase Participation')
+        ->and(collect($topLevelComponents)
+            ->filter(fn (Component $component): bool => $component instanceof Section)
+            ->map(fn (Section $section): ?string => $section->getHeading())
+            ->values()
+            ->all())->toBe(['Signature'])
+        ->and($topLevelComponents[array_key_last($topLevelComponents)])->toBeInstanceOf(Section::class);
 });
 
-it('renders version management and searchable typed response columns', function (): void {
+it('renders version management, assignments, responses, and analytics', function (): void {
     Filament::setCurrentPanel('admin');
-    Gate::before(fn (): bool => true);
-    actingAs(User::factory()->create());
 
+    $conditionKey = (string) Str::uuid();
     $fieldKey = (string) Str::uuid();
     $form = Form::factory()->create();
     $version = $form->versions()->create([
         'version' => 1,
         'status' => FormVersionStatus::Draft,
-        'schema' => [[
-            'type' => 'short_text',
-            'data' => [
-                'key' => $fieldKey,
-                'label' => 'Favorite Color',
-                'required' => true,
+        'schema' => [
+            [
+                'type' => 'select',
+                'data' => [
+                    'key' => $conditionKey,
+                    'label' => 'Participation choice',
+                    'options' => ['yes' => 'Yes', 'no' => 'No'],
+                    'column_span' => 1,
+                ],
             ],
-        ]],
+            [
+                'type' => 'short_text',
+                'data' => [
+                    'key' => $fieldKey,
+                    'label' => 'Favorite Color',
+                    'required' => true,
+                    'column_span' => 1,
+                ],
+            ],
+        ],
     ]);
     app(PublishFormVersion::class)->handle($version, auth()->user());
 
@@ -119,42 +190,97 @@ it('renders version management and searchable typed response columns', function 
         'form_id' => $form->id,
         'form_version_id' => $version->id,
     ]);
-    app(SubmitFormResponse::class)->handle($assignment, [
+    $response = app(SubmitFormResponse::class)->handle($assignment, [
         'answers' => [$fieldKey => 'Blue'],
     ]);
     $secondAssignment = FormAssignment::factory()->create([
         'form_id' => $form->id,
         'form_version_id' => $version->id,
     ]);
-    app(SubmitFormResponse::class)->handle($secondAssignment, [
+    $secondResponse = app(SubmitFormResponse::class)->handle($secondAssignment, [
         'answers' => [$fieldKey => 'Amber'],
     ]);
-    $field = $form->fields()->where('key', $fieldKey)->firstOrFail();
 
-    livewire(VersionsRelationManager::class, [
+    livewire(ViewResponse::class, ['record' => $form->id, 'response' => $response->id])
+        ->assertSet("responseData.answers.{$fieldKey}", 'Blue')
+        ->assertSee($version->versionLabel());
+
+    livewire(ViewFormAnalytics::class, ['record' => $form->id])
+        ->assertSet('versionId', $version->id)
+        ->assertSee('Responses Counted');
+    $versionsManager = livewire(VersionsRelationManager::class, [
         'ownerRecord' => $form,
         'pageClass' => ViewForm::class,
     ])
         ->assertOk()
         ->loadTable()
         ->assertCanSeeTableRecords([$version])
+        ->assertTableColumnExists('current_status')
+        ->assertTableColumnExists('respondent_count')
+        ->assertActionVisible(TestAction::make('analytics')->table($version))
+        ->mountAction(TestAction::make('analytics')->table($version))
+        ->assertMountedActionModalSee('Responses Counted')
+        ->unmountAction()
+        ->assertActionVisible(TestAction::make('preview')->table($version))
+        ->mountAction(TestAction::make(CreateAction::class)->table())
+        ->assertMountedActionModalSee('Start from scratch')
+        ->assertMountedActionModalSee('Current');
+
+    expect($versionsManager->instance()->getMountedAction()?->isModalSlideOver())->toBeFalse();
+
+    $recordActions = $versionsManager->instance()->getTable()->getRecordActions();
+
+    expect($recordActions)->toHaveCount(1)
+        ->and($recordActions[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($recordActions[0]->getLabel())->toBe('Actions')
+        ->and(array_keys($recordActions[0]->getFlatActions()))->toBe([
+            'analytics',
+            'preview',
+            'edit',
+            'publish',
+            'reschedule',
+            'cancelSchedule',
+            'compare',
+            'delete',
+        ]);
+
+    $versionsManager
+        ->unmountAction()
         ->callAction(TestAction::make(CreateAction::class)->table(), data: [
-            'requires_signature' => false,
-            'schema' => [[
-                'type' => 'short_text',
-                'data' => [
-                    'key' => (string) Str::uuid(),
-                    'label' => 'New Draft Question',
-                    'required' => false,
-                    'column_span' => 1,
-                ],
-            ]],
+            'source' => "version:{$version->id}",
+            'label' => 'Copied current version',
         ])
         ->assertNotified();
 
     expect($form->versions()->where('version', 2)->where('status', FormVersionStatus::Draft)->exists())->toBeTrue();
 
     $draft = $form->versions()->where('version', 2)->firstOrFail();
+
+    $versionsManager->assertRedirect(FormResource::getUrl('edit-version', [
+        'record' => $form,
+        'version' => $draft,
+    ]));
+
+    expect($draft->schema)->toBe($version->schema)
+        ->and($draft->requires_signature)->toBe($version->refresh()->requires_signature)
+        ->and($draft->label)->toBe('Copied current version');
+
+    livewire(EditFormVersion::class, ['record' => $form->id, 'version' => $draft->id])
+        ->assertOk()
+        ->assertSet('data.label', 'Copied current version')
+        ->assertSee('Favorite Color')
+        ->fillForm([
+            'label' => 'Edited copied version',
+            'requires_signature' => true,
+            'schema' => $draft->schema,
+        ])
+        ->assertSet('data.requires_signature', true)
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertNotified();
+
+    expect($draft->refresh()->label)->toBe('Edited copied version')
+        ->and($draft->requires_signature)->toBeTrue();
 
     livewire(VersionsRelationManager::class, [
         'ownerRecord' => $form,
@@ -171,6 +297,9 @@ it('renders version management and searchable typed response columns', function 
         'pageClass' => ViewForm::class,
     ])
         ->loadTable()
+        ->mountAction(TestAction::make('preview')->table($draft->refresh()))
+        ->assertMountedActionModalSee('Favorite Color')
+        ->unmountAction()
         ->assertActionVisible(TestAction::make('compare')->table($draft->refresh()))
         ->mountAction(TestAction::make('compare')->table($draft->refresh()))
         ->assertActionMounted(TestAction::make('compare')->table($draft->refresh()))
@@ -191,16 +320,86 @@ it('renders version management and searchable typed response columns', function 
     ])
         ->assertOk()
         ->loadTable()
-        ->assertTableColumnExists("answer_{$field->id}")
-        ->searchTable('Blue')
-        ->assertCanSeeTableRecords([$assignment])
-        ->assertCanNotSeeTableRecords([$secondAssignment]);
+        ->assertTableColumnExists('response_status')
+        ->assertTableColumnExists('responses_max_updated_at')
+        ->assertCanSeeTableRecords([$assignment, $secondAssignment])
+        ->filterTable('response_status', 'completed')
+        ->assertCanSeeTableRecords([$assignment, $secondAssignment]);
 
-    livewire(AssignmentsRelationManager::class, [
+    $responsesManager = livewire(ResponsesRelationManager::class, [
         'ownerRecord' => $form,
         'pageClass' => ViewForm::class,
     ])
         ->loadTable()
-        ->sortTable("answer_{$field->id}")
-        ->assertCanSeeTableRecords([$secondAssignment, $assignment], inOrder: true);
+        ->assertTableColumnExists('revision_count')
+        ->assertActionVisible(TestAction::make('view')->table($response))
+        ->assertActionVisible(TestAction::make('view')->table($secondResponse))
+        ->assertCanSeeTableRecords([$response, $secondResponse]);
+
+    expect($responsesManager->instance()->getTable()->getRecordActionsPosition())
+        ->toBe(RecordActionsPosition::BeforeColumns);
+});
+
+it('renders the stored emergency contact relationship on an admin response', function (): void {
+    Filament::setCurrentPanel('admin');
+    Gate::before(fn (): bool => true);
+    actingAs(User::factory()->create());
+    $contactsKey = (string) Str::uuid();
+    $textPolicy = LegalDocument::factory()->create(['key' => TextMessageUpdatesPolicy::KEY]);
+    $textPolicyVersion = $textPolicy->publishVersion('Text Message Updates v1', '<p>Policy</p>');
+    $form = Form::factory()->create();
+    $version = $form->versions()->create([
+        'version' => 1,
+        'status' => FormVersionStatus::Draft,
+        'schema' => [[
+            'type' => 'emergency_contacts',
+            'data' => [
+                'key' => $contactsKey,
+                'label' => 'Emergency Contacts',
+                'min_items' => 1,
+                'default_items' => 1,
+                'text_message_policy_reference' => EacFormContentProvider::textMessageUpdatesPolicyReference($textPolicyVersion),
+            ],
+        ]],
+    ]);
+    app(PublishFormVersion::class)->handle($version, auth()->user());
+    $assignment = FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $version->id,
+    ]);
+    $response = app(SubmitFormResponse::class)->handle($assignment, [
+        'answers' => [
+            $contactsKey => [[
+                'name' => 'Amaya Zieme',
+                'relationship' => 'Guardian',
+                'phone_number' => '(963) 210-0975',
+                'email' => 'jamie33@example.org',
+                'wants_text_updates' => false,
+            ]],
+        ],
+    ]);
+
+    $page = livewire(ViewResponse::class, ['record' => $form->id, 'response' => $response->id])
+        ->assertSet("responseData.answers.{$contactsKey}.0.relationship", 'Guardian');
+    $repeater = $page->instance()
+        ->getSchema('content')
+        ->getComponent(
+            findComponentUsing: fn (Component $component): bool => $component instanceof Repeater
+                && $component->getName() === "answers.{$contactsKey}",
+            withActions: false,
+            withHidden: true,
+        );
+
+    expect($repeater)->toBeInstanceOf(Repeater::class);
+
+    if (! $repeater instanceof Repeater) {
+        throw new LogicException('The emergency contacts response repeater did not render.');
+    }
+
+    expect($repeater->getChildSchema()?->getComponents(withHidden: true))
+        ->toContainOnlyInstancesOf(Component::class)
+        ->and(collect($repeater->getChildSchema()?->getFlatComponents(withHidden: true))
+            ->contains(fn (Component $component): bool => $component instanceof TextInput
+                && $component->getName() === 'relationship'))
+        ->toBeTrue();
 });

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Enums\FormVersionStatus;
 use App\Models\Form;
 use App\Models\FormVersion;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
 
 /**
  * @extends Factory<FormVersion>
@@ -27,7 +27,12 @@ final class FormVersionFactory extends Factory
             'status' => FormVersionStatus::Draft,
             'schema' => [],
             'requires_signature' => false,
-            'valid_until' => fake()->optional()->dateTimeBetween('now', '+1 year'),
+            'label' => null,
+            'activation_starts_at' => null,
+            'activation_ends_at' => null,
+            'activated_at' => null,
+            'deactivated_at' => null,
+            'published_by_type' => null,
             'published_by_id' => null,
             'published_at' => null,
         ];
@@ -35,9 +40,15 @@ final class FormVersionFactory extends Factory
 
     public function published(): static
     {
-        return $this->state(fn (array $attributes): array => [
-            'status' => FormVersionStatus::Published,
-            'published_at' => now(),
-        ]);
+        return $this
+            ->state(fn (array $attributes): array => [
+                'status' => FormVersionStatus::Published,
+                'activation_starts_at' => now(),
+                'activated_at' => now(),
+                'published_at' => now(),
+            ])
+            ->afterCreating(function (FormVersion $version): void {
+                $version->form()->update(['active_version_id' => $version->id]);
+            });
     }
 }

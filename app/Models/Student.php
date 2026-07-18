@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Enums\FormPurpose;
 use App\Enums\MedicalWaiverStatus;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Spatie\Tags\HasTags;
 
 /**
@@ -131,8 +131,13 @@ final class Student extends Model
 
     public function latestCompletedMedicalWaiver(): ?FormAssignment
     {
-        return $this->completedMedicalWaivers()
-            ->latest('updated_at')
+        return $this->medicalWaiverAssignments()
+            ->whereHas('responses', fn (Builder $query): Builder => $query->where('status', FormResponseStatus::Submitted))
+            ->withMax(
+                ['responses as latest_submitted_at' => fn (Builder $query): Builder => $query->where('status', FormResponseStatus::Submitted)],
+                'submitted_at',
+            )
+            ->orderByDesc('latest_submitted_at')
             ->latest('id')
             ->first();
     }
@@ -142,7 +147,7 @@ final class Student extends Model
         return $this->formAssignments()
             ->pending()
             ->formIsActive()
-            ->whereHas('form', fn (Builder $query): Builder => $query->where('purpose', FormPurpose::MedicalWaiver))
+            ->whereHas('form', fn (Builder $query): Builder => $query->where('key', 'student-waiver'))
             ->latest('updated_at')
             ->latest('id')
             ->first();
@@ -151,8 +156,14 @@ final class Student extends Model
     /** @return MorphMany<FormAssignment, $this> */
     private function completedMedicalWaivers(): MorphMany
     {
+        return $this->medicalWaiverAssignments()
+            ->completed();
+    }
+
+    /** @return MorphMany<FormAssignment, $this> */
+    private function medicalWaiverAssignments(): MorphMany
+    {
         return $this->formAssignments()
-            ->completed()
-            ->whereHas('form', fn (Builder $query): Builder => $query->where('purpose', FormPurpose::MedicalWaiver));
+            ->whereHas('form', fn (Builder $query): Builder => $query->where('key', 'student-waiver'));
     }
 }

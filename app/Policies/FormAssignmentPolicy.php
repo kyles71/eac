@@ -14,7 +14,7 @@ final class FormAssignmentPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('ViewAny:FormUser');
+        return $user->can('ViewAny:FormAssignment');
     }
 
     /**
@@ -22,7 +22,7 @@ final class FormAssignmentPolicy
      */
     public function view(User $user, FormAssignment $formAssignment): bool
     {
-        return $this->isRespondent($user, $formAssignment) || $user->can('View:FormUser');
+        return $this->isRespondent($user, $formAssignment) || $user->can('View:FormAssignment');
     }
 
     /**
@@ -30,7 +30,7 @@ final class FormAssignmentPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('Create:FormUser');
+        return $user->can('Create:FormAssignment');
     }
 
     /**
@@ -38,7 +38,7 @@ final class FormAssignmentPolicy
      */
     public function update(User $user, FormAssignment $formAssignment): bool
     {
-        return $user->can('Update:FormUser')
+        return $user->can('Update:FormAssignment')
             || (
                 $this->isRespondent($user, $formAssignment)
                 && $formAssignment->isActive()
@@ -51,12 +51,12 @@ final class FormAssignmentPolicy
      */
     public function delete(User $user, FormAssignment $formAssignment): bool
     {
-        return $user->can('Delete:FormUser');
+        return $user->can('Delete:FormAssignment');
     }
 
     public function deleteAny(User $user): bool
     {
-        return $user->can('DeleteAny:FormUser');
+        return $user->can('DeleteAny:FormAssignment');
     }
 
     /**
@@ -64,7 +64,7 @@ final class FormAssignmentPolicy
      */
     public function restore(User $user, FormAssignment $formAssignment): bool
     {
-        return $user->can('Restore:FormUser');
+        return $user->can('Restore:FormAssignment');
     }
 
     /**
@@ -72,22 +72,22 @@ final class FormAssignmentPolicy
      */
     public function forceDelete(User $user, FormAssignment $formAssignment): bool
     {
-        return $user->can('ForceDelete:FormUser');
+        return $user->can('ForceDelete:FormAssignment');
     }
 
     public function forceDeleteAny(User $user): bool
     {
-        return $user->can('ForceDeleteAny:FormUser');
+        return $user->can('ForceDeleteAny:FormAssignment');
     }
 
     public function restoreAny(User $user): bool
     {
-        return $user->can('RestoreAny:FormUser');
+        return $user->can('RestoreAny:FormAssignment');
     }
 
     private function isRespondent(User $user, FormAssignment $formAssignment): bool
     {
         return $formAssignment->respondent_type === $user->getMorphClass()
-            && (int) $formAssignment->respondent_id === (int) $user->getKey();
+            && (string) $formAssignment->respondent_id === (string) $user->getKey();
     }
 }

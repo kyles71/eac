@@ -7,7 +7,10 @@ namespace App\Actions\Forms;
 use App\Models\Form;
 use App\Models\FormAssignment;
 use App\Models\Student;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Kyle\FilamentFormBuilder\Actions\UpgradeFormAssignmentToVersion;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use LogicException;
 
 final readonly class ReconcileRequiredForms
@@ -36,7 +39,18 @@ final readonly class ReconcileRequiredForms
         return Form::query()
             ->isActive()
             ->with('currentVersion')
-            ->whereHas('courses.enrollments', fn ($query) => $query->where('enrollments.student_id', $student->id))
+            ->whereHas('courses', fn (Builder $query): Builder => $query
+                ->whereHas('enrollments', fn (Builder $query): Builder => $query
+                    ->where('enrollments.student_id', $student->id))
+                ->where(fn (Builder $query): Builder => $query
+                    ->whereDoesntHave('events')
+                    ->orWhereHas('events', fn (Builder $query): Builder => $query->where(function (Builder $query): void {
+                        $query
+                            ->where('end_time', '>=', now())
+                            ->orWhere(function (Builder $query): void {
+                                $query->whereNull('end_time')->where('start_time', '>=', now());
+                            });
+                    }))))
             ->get();
     }
 
@@ -60,7 +74,10 @@ final readonly class ReconcileRequiredForms
                 $assignment->save();
             }
 
-            if (! $assignment->isCompleted() && $assignment->form_version_id !== $version->id) {
+            if (
+                $assignment->form_version_id !== $version->id
+                && ($version->require_completed_again || ! $assignment->isCompleted())
+            ) {
                 $this->upgradeAssignment->handle($assignment, $version);
             }
 
@@ -84,14 +101,32 @@ final readonly class ReconcileRequiredForms
     private function removeStalePendingAssignments(Student $student, array $requiredFormIds): void
     {
         $student->formAssignments()
-            ->pending()
             ->when(
                 $requiredFormIds !== [],
                 fn ($query) => $query->whereNotIn('form_id', $requiredFormIds),
             )
+            ->with('responses')
             ->get()
             ->each(function (FormAssignment $assignment): void {
-                $assignment->delete();
+                $latestSubmitted = $assignment->responses
+                    ->where('status', FormResponseStatus::Submitted)
+                    ->sortBy([
+                        ['submitted_at', 'desc'],
+                        ['id', 'desc'],
+                    ])
+                    ->first();
+
+                if ($latestSubmitted === null) {
+                    $assignment->delete();
+
+                    return;
+                }
+
+                $assignment->responses()
+                    ->where('status', FormResponseStatus::Draft)
+                    ->delete();
+                $assignment->form_version_id = $latestSubmitted->form_version_id;
+                $assignment->save();
             });
     }
 }

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Enums\FormPurpose;
-use App\Enums\FormUpdateStrategy;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
+use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Form>
@@ -21,8 +21,8 @@ final class FormFactory extends Factory
     public function definition(): array
     {
         return [
+            'key' => Str::slug($this->faker->unique()->words(3, true)),
             'name' => $this->faker->sentence(3),
-            'purpose' => $this->faker->randomElement(FormPurpose::cases()),
             'updates_allowed' => $this->faker->boolean(),
             'update_strategy' => $this->faker->randomElement(FormUpdateStrategy::cases()),
         ];

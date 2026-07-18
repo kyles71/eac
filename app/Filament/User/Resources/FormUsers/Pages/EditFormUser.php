@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers\Pages;
 
-use App\Actions\Forms\SaveFormResponseDraft;
-use App\Actions\Forms\SubmitFormResponse;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\FormUsers\Schemas\FormUserForm;
 use App\Models\FormAssignment;
@@ -14,10 +12,19 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Schema;
+use Kyle\FilamentFormBuilder\Actions\SaveFormResponseDraft;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
+use Kyle\FilamentFormBuilder\Support\FormDefinition;
 
 final class EditFormUser extends EditRecord
 {
     protected static string $resource = FormUserResource::class;
+
+    public function getTitle(): string
+    {
+        return $this->assignment()->form->name;
+    }
 
     public function form(Schema $schema): Schema
     {
@@ -48,7 +55,17 @@ final class EditFormUser extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $assignment = $this->assignment();
-        $response = $assignment->draftResponse()->first() ?? $assignment->latestSubmittedResponse()->first();
+        $response = $assignment->responses()
+            ->where('form_version_id', $assignment->form_version_id)
+            ->where('status', FormResponseStatus::Draft)
+            ->latest('id')
+            ->first()
+            ?? $assignment->responses()
+                ->where('form_version_id', $assignment->form_version_id)
+                ->where('status', FormResponseStatus::Submitted)
+                ->latest('submitted_at')
+                ->latest('id')
+                ->first();
 
         if ($response === null) {
             return [];
@@ -56,9 +73,16 @@ final class EditFormUser extends EditRecord
 
         $state = $response->response_state;
 
-        if ($assignment->isCompleted()) {
+        if ($response->status === FormResponseStatus::Submitted) {
+            $today = now((string) config('app.display_timezone'))->toDateString();
             $state['signature'] = null;
-            $state['date_signed'] = null;
+            $state['date_signed'] = $today;
+
+            foreach (app(FormDefinition::class)->fields($assignment->version->schema) as $field) {
+                if (is_string($field['mapping']) && str_ends_with($field['mapping'], '_signed_on')) {
+                    $state['answers'][$field['key']] = $today;
+                }
+            }
         }
 
         return $state;

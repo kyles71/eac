@@ -2,17 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Actions\Forms\PublishFormVersion;
-use App\Actions\Forms\SaveFormResponseDraft;
-use App\Actions\Forms\SubmitFormResponse;
-use App\Enums\FormAnswerType;
-use App\Enums\FormPurpose;
-use App\Enums\FormResponseStatus;
-use App\Enums\FormUpdateStrategy;
-use App\Enums\FormVersionStatus;
-use App\Forms\Contracts\FormMappingProvider;
-use App\Forms\FormSchemaCompiler;
-use App\Forms\FormVersionComparator;
+use App\Forms\Eac\EacFormContentProvider;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Form;
@@ -20,23 +10,39 @@ use App\Models\FormAnswer;
 use App\Models\FormAssignment;
 use App\Models\FormResponse;
 use App\Models\FormVersion;
+use App\Models\LegalDocument;
 use App\Models\Student;
 use App\Models\StudentWaiver;
 use App\Models\User;
+use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Kyle\FilamentFormBuilder\Actions\PublishFormVersion;
+use Kyle\FilamentFormBuilder\Actions\SaveFormResponseDraft;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Contracts\FormMappingProvider;
+use Kyle\FilamentFormBuilder\Enums\FormAnswerType;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
+use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
+use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
+use Kyle\FilamentFormBuilder\Support\FormMapping;
+use Kyle\FilamentFormBuilder\Support\FormProjectionTarget;
+use Kyle\FilamentFormBuilder\Support\FormSchemaCompiler;
+use Kyle\FilamentFormBuilder\Support\FormVersionComparator;
+use Kyle\FilamentFormBuilder\Support\FormVersionManager;
 
 use function Pest\Laravel\assertDatabaseHas;
 
 it('publishes a dynamic form and stores submitted answers in typed relational columns', function (): void {
+    $textPolicy = LegalDocument::factory()->create(['key' => TextMessageUpdatesPolicy::KEY]);
+    $textPolicyVersion = $textPolicy->publishVersion('Text Message Updates v1', '<p>Policy</p>');
     $medicalConditionsKey = (string) Str::uuid();
     $emergencyContactsKey = (string) Str::uuid();
     $form = Form::factory()->create([
-        'purpose' => FormPurpose::MedicalWaiver,
+        'key' => 'student-waiver',
         'updates_allowed' => true,
         'update_strategy' => FormUpdateStrategy::Revision,
     ]);
@@ -66,6 +72,7 @@ it('publishes a dynamic form and stores submitted answers in typed relational co
                                 'key' => $emergencyContactsKey,
                                 'label' => 'Emergency Contacts',
                                 'min_items' => 1,
+                                'text_message_policy_reference' => EacFormContentProvider::textMessageUpdatesPolicyReference($textPolicyVersion),
                             ],
                         ],
                     ],
@@ -99,7 +106,7 @@ it('publishes a dynamic form and stores submitted answers in typed relational co
                 [
                     'name' => 'Taylor Parent',
                     'relationship' => 'Mother',
-                    'phone_number' => '555-0100',
+                    'phone_number' => '(555) 555-0100',
                     'email' => 'taylor@example.test',
                     'wants_text_updates' => true,
                 ],
@@ -127,9 +134,9 @@ it('publishes a dynamic form and stores submitted answers in typed relational co
     ]);
 });
 
-it('moves pending assignments to a published version and carries compatible draft answers', function (): void {
+it('moves pending assignments to a published version and discards old drafts', function (): void {
     $fieldKey = (string) Str::uuid();
-    $form = Form::factory()->create(['purpose' => FormPurpose::Generic]);
+    $form = Form::factory()->create();
     $firstVersion = $form->versions()->create([
         'version' => 1,
         'status' => FormVersionStatus::Draft,
@@ -140,15 +147,14 @@ it('moves pending assignments to a published version and carries compatible draf
     ]);
     app(PublishFormVersion::class)->handle($firstVersion, auth()->user());
 
+    $course = Course::factory()->create();
+    $course->forms()->attach($form);
     $student = Student::factory()->create();
-    $assignment = FormAssignment::factory()->create([
-        'form_id' => $form->id,
-        'form_version_id' => $firstVersion->id,
-        'respondent_type' => (new User())->getMorphClass(),
-        'respondent_id' => $student->user_id,
-        'subject_type' => (new Student())->getMorphClass(),
-        'subject_id' => $student->id,
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $student->user_id,
     ]);
+    $assignment = FormAssignment::query()->whereMorphedTo('subject', $student)->firstOrFail();
     app(SaveFormResponseDraft::class)->handle($assignment, [
         'answers' => [$fieldKey => 'Blue'],
     ]);
@@ -164,16 +170,15 @@ it('moves pending assignments to a published version and carries compatible draf
     app(PublishFormVersion::class)->handle($secondVersion, auth()->user());
 
     $assignment->refresh();
-    $draft = $assignment->draftResponse()->firstOrFail();
 
     expect($assignment->form_version_id)->toBe($secondVersion->id)
-        ->and($draft->form_version_id)->toBe($secondVersion->id)
-        ->and($draft->response_state['answers'][$fieldKey])->toBe('Blue');
+        ->and($assignment->responses()->where('status', FormResponseStatus::Draft)->exists())->toBeFalse()
+        ->and($assignment->responses()->exists())->toBeFalse();
 });
 
 it('keeps completed assignments pinned unless publishing requires completion again', function (): void {
     $fieldKey = (string) Str::uuid();
-    $form = Form::factory()->create(['purpose' => FormPurpose::Generic]);
+    $form = Form::factory()->create();
     $firstVersion = FormVersion::factory()->for($form)->published()->create([
         'version' => 1,
         'schema' => [[
@@ -182,10 +187,14 @@ it('keeps completed assignments pinned unless publishing requires completion aga
         ]],
     ]);
     $form->fields()->create(['key' => $fieldKey, 'answer_type' => 'string']);
-    $assignment = FormAssignment::factory()->create([
-        'form_id' => $form->id,
-        'form_version_id' => $firstVersion->id,
+    $course = Course::factory()->create();
+    $course->forms()->attach($form);
+    $student = Student::factory()->create();
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $student->user_id,
     ]);
+    $assignment = FormAssignment::query()->whereMorphedTo('subject', $student)->firstOrFail();
     FormResponse::factory()->create([
         'form_assignment_id' => $assignment->id,
         'form_version_id' => $firstVersion->id,
@@ -321,12 +330,12 @@ it('does not submit expired assignments', function (): void {
     $fieldKey = (string) Str::uuid();
     $form = Form::factory()->create();
     $version = FormVersion::factory()->for($form)->published()->create([
-        'valid_until' => now()->subMinute(),
         'schema' => [[
             'type' => 'short_text',
             'data' => ['key' => $fieldKey, 'label' => 'Answer'],
         ]],
     ]);
+    app(FormVersionManager::class)->deactivate($form, now()->subMinute());
     $form->fields()->create(['key' => $fieldKey, 'answer_type' => 'string']);
     $assignment = FormAssignment::factory()->create([
         'form_id' => $form->id,
@@ -391,7 +400,7 @@ it('rejects unknown builder blocks and visibility rules that do not target earli
     ]);
 
     expect(fn () => app(PublishFormVersion::class)->handle($invalidVisibility, auth()->user()))
-        ->toThrow(InvalidArgumentException::class, 'Visibility rules may only depend on an earlier scalar answer field.');
+        ->toThrow(InvalidArgumentException::class, 'Visibility rules may only depend on an earlier answer field.');
 });
 
 it('allows only one mutable draft and requires replacement field identity for type changes', function (): void {
@@ -456,11 +465,10 @@ it('replaces the previous submitted response for in-place updates', function ():
 });
 
 it('uses registered mapping providers for generic projection behavior', function (): void {
-    GenericFormMappingProviderForTest::$projectedAnswer = null;
-    config(['forms.mapping_providers' => [GenericFormMappingProviderForTest::class]]);
+    config(['filament-form-builder.mapping_providers' => [GenericFormMappingProviderForTest::class]]);
 
     $fieldKey = (string) Str::uuid();
-    $form = Form::factory()->create(['purpose' => FormPurpose::Generic]);
+    $form = Form::factory()->create(['key' => 'generic-projection']);
     $version = $form->versions()->create([
         'version' => 1,
         'status' => FormVersionStatus::Draft,
@@ -479,47 +487,44 @@ it('uses registered mapping providers for generic projection behavior', function
         'form_version_id' => $version->id,
     ]);
 
-    app(SubmitFormResponse::class)->handle($assignment, [
+    $response = app(SubmitFormResponse::class)->handle($assignment, [
         'answers' => [$fieldKey => 'Portable'],
     ]);
 
-    expect(GenericFormMappingProviderForTest::$projectedAnswer)->toBe('Portable');
+    expect($assignment->respondent->refresh()->first_name)->toBe('Portable')
+        ->and($response->projection?->is($assignment->respondent))->toBeTrue();
 });
 
 final class GenericFormMappingProviderForTest implements FormMappingProvider
 {
-    public static ?string $projectedAnswer = null;
-
-    public function supports(FormPurpose $purpose): bool
+    public function supports(Kyle\FilamentFormBuilder\Models\Form $form): bool
     {
-        return $purpose === FormPurpose::Generic;
+        return $form->key === 'generic-projection';
     }
 
-    public function options(FormPurpose $purpose, ?FormAnswerType $answerType = null): array
+    public function mappings(Kyle\FilamentFormBuilder\Models\Form $form): array
     {
-        if (! $this->supports($purpose)) {
-            return [];
-        }
-
-        if ($answerType !== null && $answerType !== FormAnswerType::String) {
-            return [];
-        }
-
-        return ['generic.answer' => 'Generic Answer'];
+        return [
+            new FormMapping(
+                key: 'generic.answer',
+                label: 'Generic Answer',
+                answerType: FormAnswerType::String,
+                target: 'respondent',
+                attribute: 'first_name',
+            ),
+        ];
     }
 
-    public function validate(FormPurpose $purpose, FormAnswerType $answerType, ?string $mapping): void
+    public function targets(Kyle\FilamentFormBuilder\Models\Form $form): array
     {
-        if ($mapping !== 'generic.answer' || $answerType !== FormAnswerType::String) {
-            throw new InvalidArgumentException('Unexpected generic mapping.');
-        }
-    }
-
-    public function project(FormResponse $response): ?Model
-    {
-        $answer = $response->answers->first();
-        self::$projectedAnswer = is_string($answer?->value()) ? $answer->value() : null;
-
-        return null;
+        return [
+            new FormProjectionTarget(
+                key: 'respondent',
+                label: 'Respondent',
+                model: User::class,
+                resolve: fn (Kyle\FilamentFormBuilder\Models\FormResponse $response): User => $response->assignment->respondent,
+                primary: true,
+            ),
+        ];
     }
 }

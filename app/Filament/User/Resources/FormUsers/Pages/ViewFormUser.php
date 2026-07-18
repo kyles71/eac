@@ -15,6 +15,11 @@ final class ViewFormUser extends ViewRecord
 {
     protected static string $resource = FormUserResource::class;
 
+    public function getTitle(): string
+    {
+        return $this->assignment()->form->name;
+    }
+
     public function infolist(Schema $schema): Schema
     {
         return FormUserInfolist::configure($schema, $this->assignment());

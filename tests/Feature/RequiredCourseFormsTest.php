@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Enums\FormPurpose;
-use App\Enums\FormResponseStatus;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Form;
@@ -11,6 +9,7 @@ use App\Models\FormAssignment;
 use App\Models\FormResponse;
 use App\Models\FormVersion;
 use App\Models\Student;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
@@ -18,16 +17,16 @@ use function Pest\Laravel\assertDatabaseMissing;
 function createPublishedRequiredForm(array $attributes = []): Form
 {
     $form = Form::factory()->create([
-        'purpose' => FormPurpose::MedicalWaiver,
+        'key' => 'student-waiver',
         ...$attributes,
     ]);
 
     FormVersion::factory()
         ->for($form)
         ->published()
-        ->create(['valid_until' => null]);
+        ->create();
 
-    return $form;
+    return $form->refresh();
 }
 
 it('assigns required forms when a student is assigned to an enrollment', function (): void {

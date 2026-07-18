@@ -19,6 +19,7 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Form;
 use App\Models\FormAssignment;
+use App\Models\FormResponse;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
@@ -46,6 +47,7 @@ use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\LegalDocuments\PortalTerms;
 use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Support\Facades\DB;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
@@ -105,10 +107,14 @@ it('seeds the development database with all models', function (): void {
         ->and(ProductQuestion::count())->toBe(2)
         ->and(ProductQuestionAnswer::count())->toBe(2)
         ->and(StudentWaiver::count())->toBeGreaterThanOrEqual(1)
-        ->and(ShowcaseParticipation::count())->toBeGreaterThanOrEqual(1)
+        ->and(ShowcaseParticipation::count())->toBe(0)
         ->and(StudentEmail::count())->toBe(10)
         ->and(EmergencyContact::count())->toBeGreaterThanOrEqual(2)
         ->and(FormAssignment::count())->toBeGreaterThanOrEqual(2)
+        ->and(FormResponse::query()
+            ->where('status', FormResponseStatus::Submitted)
+            ->where(fn ($query) => $query->whereNull('signature')->orWhereNull('date_signed'))
+            ->exists())->toBeFalse()
         ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(11)
         ->and(Role::findByName('super_admin')->hasPermissionTo('ViewAny:Holiday'))->toBeTrue()
         ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue()

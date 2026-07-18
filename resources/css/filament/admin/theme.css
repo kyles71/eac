@@ -8,6 +8,8 @@
 @source '../../../../vendor/awcodes/mason/resources/**/*.blade.php';
 @source '../../../../vendor/guava/filament-icon-picker/resources/**/*';
 @source '../../../../vendor/kyle/filament-mail-manager/resources/**/*.blade.php';
+@source '../../../../vendor/kyle/filament-form-builder/src/**/*.php';
+@source '../../../../vendor/kyle/filament-form-builder/resources/**/*.blade.php';
 
 @media (min-width: 1280px) {
     .managed-banner-preview-pane {

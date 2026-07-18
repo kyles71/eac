@@ -17,8 +17,10 @@ final class FormUsersTable
             ->query(function () {
                 $user = auth()->user();
 
-                return FormAssignment::query()
-                    ->select('form_assignments.*')
+                $query = FormAssignment::query();
+
+                return $query
+                    ->select($query->getModel()->qualifyColumn('*'))
                     ->with(['form', 'subject', 'version', 'latestSubmittedResponse'])
                     ->when(
                         $user instanceof User,

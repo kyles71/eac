@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Forms;
 
-use App\Models\LegalDocumentVersion;
-use App\Support\LegalDocuments\HealthSafetyPolicy;
-use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
+use App\Forms\Eac\EacFormContentProvider;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
+use Kyle\FilamentFormBuilder\Blueprints\FormBlueprint;
+use Kyle\FilamentFormBuilder\Enums\FormHelpPosition;
+use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
+use Kyle\FilamentFormBuilder\Support\InstructionRichText;
 
 final readonly class DefaultFormDefinitions
 {
@@ -40,13 +44,73 @@ final readonly class DefaultFormDefinitions
 
     public const ShowcaseParticipation = '645fb77b-d2e0-4937-a0ce-638bfcd8a8b7';
 
-    private const string LinkClasses = 'fi-link fi-size-sm fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-400';
+    public function __construct(private EacFormContentProvider $content) {}
+
+    /** @return list<string> */
+    public static function signatureDateKeys(): array
+    {
+        return [
+            self::MedicalReleaseSignedOn,
+            self::HealthSafetyPolicySignedOn,
+            self::MediaReleaseSignedOn,
+        ];
+    }
+
+    public function studentWaiverBlueprint(
+        ?CarbonInterface $at = null,
+        ?string $healthSafetyPolicyReference = null,
+        ?string $textMessageUpdatesPolicyReference = null,
+    ): FormBlueprint {
+        [$timezone, $startYear, $endYear] = $this->season($at);
+        $healthSafetyPolicyReference ??= $this->content->currentHealthSafetyPolicyReference();
+        $textMessageUpdatesPolicyReference ??= $this->content->currentTextMessageUpdatesPolicyReference();
+
+        return new FormBlueprint(
+            formKey: 'student-waiver',
+            name: 'Student Waiver',
+            updatesAllowed: true,
+            updateStrategy: FormUpdateStrategy::Revision,
+            versionKey: "{$startYear}-{$endYear}",
+            versionLabel: "September {$startYear} – August {$endYear}",
+            schema: $this->medicalWaiver($healthSafetyPolicyReference, $textMessageUpdatesPolicyReference),
+            requiresSignature: true,
+            requireCompletedAgain: true,
+            activatesAt: CarbonImmutable::parse("{$startYear}-09-01 00:00:00", $timezone)->utc(),
+            deactivatesAt: CarbonImmutable::parse("{$endYear}-09-01 00:00:00", $timezone)->utc(),
+        );
+    }
+
+    public function studentWaiverVersionKey(?CarbonInterface $at = null): string
+    {
+        [, $startYear, $endYear] = $this->season($at);
+
+        return "{$startYear}-{$endYear}";
+    }
+
+    public function showcaseParticipationBlueprint(): FormBlueprint
+    {
+        return new FormBlueprint(
+            formKey: 'showcase-participation',
+            name: 'Showcase Participation',
+            updatesAllowed: false,
+            updateStrategy: null,
+            versionKey: 'initial',
+            versionLabel: 'Initial',
+            schema: $this->showcaseParticipation(),
+            requiresSignature: true,
+        );
+    }
 
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function medicalWaiver(): array
-    {
+    public function medicalWaiver(
+        ?string $healthSafetyPolicyReference = null,
+        ?string $textMessageUpdatesPolicyReference = null,
+    ): array {
+        $healthSafetyPolicyReference ??= $this->content->currentHealthSafetyPolicyReference();
+        $textMessageUpdatesPolicyReference ??= $this->content->currentTextMessageUpdatesPolicyReference();
+
         return [
             $this->section(
                 '1e378a6e-206e-4e97-b95d-09fc0e4298da',
@@ -80,6 +144,7 @@ final readonly class DefaultFormDefinitions
                             'Legal Guardian' => 'Legal Guardian',
                             'Self - I am 18+' => 'Self - I am 18+',
                         ],
+                        columnSpan: 1,
                     ),
                     $this->question(
                         'long_text',
@@ -94,7 +159,8 @@ final readonly class DefaultFormDefinitions
                             'key' => self::EmergencyContacts,
                             'label' => 'Emergency Contacts',
                             'min_items' => 1,
-                            'text_updates_help' => $this->textMessageUpdatesPolicyHelperText(),
+                            'default_items' => 2,
+                            'text_message_policy_reference' => $textMessageUpdatesPolicyReference,
                         ],
                     ],
                 ],
@@ -114,7 +180,8 @@ final readonly class DefaultFormDefinitions
                     $this->question('long_text', self::Medications, 'Please list any medication the student may take/need during class.', 'student_waiver.medications', 'Include over the counter and prescriptions. If none, please type "N/A".'),
                     $this->instructions(
                         '637a63f9-cf95-4213-a18f-05f7bc472aaa',
-                        'Consent to Medical Treatment',
+                        '<strong>Consent to Medical Treatment</strong>',
+                        isHtml: true,
                     ),
                     $this->instructions(
                         'c8101f06-a319-4fbc-a59e-3c9658a88715',
@@ -128,9 +195,30 @@ final readonly class DefaultFormDefinitions
                         '286db35e-00c7-4f4a-a89d-9a2e6d6908f3',
                         'I understand that Elite Arts Company, LLC, its owners, staff, instructors, and designated adults are not responsible for medical costs, emergency transportation, treatment expenses, injuries, illnesses, or medical conditions that may occur during or as a result of participation in EAC activities.',
                     ),
-                    $this->question('checkbox', self::MedicalReleaseConsent, 'I consent', 'student_waiver.medical_release_consent', accepted: true),
-                    $this->question('long_text', self::BehavioralNotes, 'Does your dancer have any attitude, behavioral, or social/emotional challenges that we should be aware of?', 'student_waiver.behavioral_notes', 'Examples: ADHD, OCD, anxiety, etc.', required: false),
-                    $this->question('date', self::MedicalReleaseSignedOn, 'Today\'s Date', 'student_waiver.medical_release_signed_on', 'Please enter today\'s date to validate your electronic signature.', defaultToday: true),
+                    $this->question(
+                        'checkbox',
+                        self::MedicalReleaseConsent,
+                        'I consent',
+                        'student_waiver.medical_release_consent',
+                        columnSpan: 1,
+                    ),
+                    $this->question(
+                        'long_text',
+                        self::BehavioralNotes,
+                        'Does your dancer have any attitude, behavioral, or social/emotional challenges that we should be aware of?',
+                        'student_waiver.behavioral_notes',
+                        'Examples: ADHD, OCD, anxiety, etc. Please note: While we aim to adjust our instructional methods when possible to better support each dancer, we are unable to cater to every individual need. Our goal is to provide a positive learning environment for all, but certain challenges may require strategies beyond what we can accommodate within the class structure.',
+                        required: false,
+                    ),
+                    $this->question(
+                        'date',
+                        self::MedicalReleaseSignedOn,
+                        'Today\'s Date',
+                        'student_waiver.medical_release_signed_on',
+                        'Please enter today\'s date to validate your electronic signature.',
+                        defaultToday: true,
+                        columnSpan: 1,
+                    ),
                 ],
                 columns: 2,
             ),
@@ -138,8 +226,23 @@ final readonly class DefaultFormDefinitions
                 '06d8c32b-3875-42f2-8616-d3792ff421a2',
                 'EAC Health & Safety Policy',
                 [
-                    $this->question('checkbox', self::HealthSafetyPolicyConsent, 'I have read, understood, and agree to comply with the EAC Health & Safety Policy.', 'student_waiver.health_safety_policy_consent', $this->legalDocumentLink(HealthSafetyPolicy::currentVersion(), 'View and print the EAC Health & Safety Policy'), accepted: true, helpIsHtml: true),
-                    $this->question('date', self::HealthSafetyPolicySignedOn, 'Today\'s Date', 'student_waiver.health_safety_policy_signed_on', 'Please enter today\'s date to validate your electronic signature on the above Health & Safety Policy.', defaultToday: true),
+                    $this->question(
+                        'checkbox',
+                        self::HealthSafetyPolicyConsent,
+                        'I have read, understood, and agree to comply with the EAC Health & Safety Policy.',
+                        'student_waiver.health_safety_policy_consent',
+                        helpReference: $healthSafetyPolicyReference,
+                        helpPosition: FormHelpPosition::Below,
+                    ),
+                    $this->question(
+                        'date',
+                        self::HealthSafetyPolicySignedOn,
+                        'Today\'s Date',
+                        'student_waiver.health_safety_policy_signed_on',
+                        'Please enter today\'s date to validate your electronic signature on the above Health & Safety Policy.',
+                        defaultToday: true,
+                        columnSpan: 1,
+                    ),
                 ],
                 columns: 2,
             ),
@@ -175,8 +278,24 @@ final readonly class DefaultFormDefinitions
                         'e86809ab-19e1-44a9-86f7-7b8e3129ce92',
                         'By signing, I acknowledge that I have read and understand this Media Release and grant permission for Elite Arts Company, LLC to use photos, videos, and other media of my child for studio-related promotional, advertising, and communication purposes.',
                     ),
-                    $this->question('toggle', self::MediaReleaseConsent, 'Media Release Consent', 'student_waiver.media_release_consent'),
-                    $this->question('date', self::MediaReleaseSignedOn, 'Today\'s Date', 'student_waiver.media_release_signed_on', 'Please enter today\'s date to validate your electronic signature.', defaultToday: true),
+                    $this->question(
+                        'boolean_radio',
+                        self::MediaReleaseConsent,
+                        'Media Release Consent',
+                        'student_waiver.media_release_consent',
+                        trueLabel: 'I consent',
+                        falseLabel: 'I do not consent',
+                        columnSpan: 1,
+                    ),
+                    $this->question(
+                        'date',
+                        self::MediaReleaseSignedOn,
+                        'Today\'s Date',
+                        'student_waiver.media_release_signed_on',
+                        'Please enter today\'s date to validate your electronic signature.',
+                        defaultToday: true,
+                        columnSpan: 1,
+                    ),
                 ],
                 columns: 2,
             ),
@@ -200,7 +319,13 @@ final readonly class DefaultFormDefinitions
                             'label' => 'Student',
                         ],
                     ],
-                    $this->question('toggle', self::ShowcaseParticipation, 'Is Participating', 'showcase_participation.is_participating'),
+                    $this->question(
+                        'toggle',
+                        self::ShowcaseParticipation,
+                        'Is Participating',
+                        'showcase_participation.is_participating',
+                        columnSpan: 1,
+                    ),
                 ],
             ),
         ];
@@ -223,12 +348,18 @@ final readonly class DefaultFormDefinitions
      */
     private function instructions(string $key, string $content, bool $isHtml = false): array
     {
+        if (! $isHtml) {
+            $content = '<p>'.e($content).'</p>';
+        }
+
+        $content = app(InstructionRichText::class)->sanitize($content);
+
         return [
             'type' => 'text',
             'data' => [
                 'key' => $key,
                 'content' => $content,
-                'is_html' => $isHtml,
+                'is_html' => true,
             ],
         ];
     }
@@ -244,10 +375,14 @@ final readonly class DefaultFormDefinitions
         string $mapping,
         ?string $help = null,
         bool $required = true,
-        bool $accepted = false,
         bool $defaultToday = false,
         array $options = [],
         bool $helpIsHtml = false,
+        ?string $helpReference = null,
+        ?string $trueLabel = null,
+        ?string $falseLabel = null,
+        FormHelpPosition $helpPosition = FormHelpPosition::Above,
+        int $columnSpan = 2,
     ): array {
         return [
             'type' => $type,
@@ -256,30 +391,26 @@ final readonly class DefaultFormDefinitions
                 'label' => $label,
                 'mapping' => $mapping,
                 'help' => $help,
-                'required' => $required,
-                'accepted' => $accepted,
+                ...($type === 'checkbox' ? [] : ['required' => $required]),
                 'default_today' => $defaultToday,
                 'options' => $options,
                 'help_is_html' => $helpIsHtml,
-                'column_span' => 2,
+                'help_reference' => $helpReference,
+                'help_position' => $helpPosition->value,
+                'true_label' => $trueLabel,
+                'false_label' => $falseLabel,
+                'column_span' => $columnSpan,
             ],
         ];
     }
 
-    private function textMessageUpdatesPolicyHelperText(): string
+    /** @return array{string, int, int} */
+    private function season(?CarbonInterface $at): array
     {
-        $helperText = 'Text message updates are only utilized for urgent updates, such as class cancellation due to weather conditions or a health/safety issue.';
-        $link = $this->legalDocumentLink(TextMessageUpdatesPolicy::currentVersion(), 'Click here to view our full Text Message Updates Policy');
+        $timezone = (string) config('app.display_timezone', config('app.timezone'));
+        $at = ($at ?? now($timezone))->toImmutable()->setTimezone($timezone);
+        $startYear = $at->month >= 9 ? $at->year : $at->year - 1;
 
-        return $link === null ? $helperText : $helperText.' '.$link;
-    }
-
-    private function legalDocumentLink(?LegalDocumentVersion $version, string $label): ?string
-    {
-        if ($version === null) {
-            return null;
-        }
-
-        return '<a class="'.self::LinkClasses.'" href="'.e(route('legal-documents.versions.show', $version)).'" target="_blank" rel="noopener noreferrer">'.e($label).'</a>';
+        return [$timezone, $startYear, $startYear + 1];
     }
 }

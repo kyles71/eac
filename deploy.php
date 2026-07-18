@@ -34,6 +34,20 @@ task('npm:build', function () {
     run('cd {{release_path}} && npm ci && npm run build');
 });
 
+desc('Snapshot and validate legacy forms before migrations');
+task('forms:prepare-migration', function () {
+    run('cd {{release_path}} && php artisan forms:legacy-snapshot --no-interaction');
+    run('cd {{release_path}} && php artisan forms:legacy-preflight --no-interaction');
+});
+
+desc('Ensure defaults and verify the migrated form graph');
+task('forms:finalize-migration', function () {
+    run('cd {{release_path}} && php artisan forms:ensure-defaults --no-interaction');
+    run('cd {{release_path}} && php artisan forms:legacy-verify --no-interaction');
+});
+
 // Hooks
-after('artisan:migrate', 'npm:build');
+before('artisan:migrate', 'forms:prepare-migration');
+after('artisan:migrate', 'forms:finalize-migration');
+after('forms:finalize-migration', 'npm:build');
 after('deploy:failed', 'deploy:unlock');

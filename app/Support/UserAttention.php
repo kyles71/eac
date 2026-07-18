@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Enums\FormPurpose;
 use App\Models\FormAssignment;
 use App\Models\Student;
 use App\Models\User;
@@ -52,10 +51,10 @@ final readonly class UserAttention
      * @param  Collection<int, FormAssignment>  $pendingForms
      * @return Collection<int, FormAssignment>
      */
-    public function assignmentsForPurpose(Collection $pendingForms, FormPurpose $purpose): Collection
+    public function assignmentsForKey(Collection $pendingForms, string $formKey): Collection
     {
         return $pendingForms
-            ->filter(fn (FormAssignment $assignment): bool => $assignment->form->purpose === $purpose)
+            ->filter(fn (FormAssignment $assignment): bool => $assignment->form->key === $formKey)
             ->values();
     }
 
@@ -66,7 +65,7 @@ final readonly class UserAttention
     public function genericForms(Collection $pendingForms): Collection
     {
         return $pendingForms
-            ->reject(fn (FormAssignment $assignment): bool => $assignment->form->purpose === FormPurpose::MedicalWaiver)
+            ->reject(fn (FormAssignment $assignment): bool => $assignment->form->key === 'student-waiver')
             ->values();
     }
 }

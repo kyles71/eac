@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\StripeServiceContract;
-use App\Events\Forms\FormVersionPublished;
+use App\Filament\Shared\Forms\Components\PreviewBuilder;
 use App\Listeners\Forms\ReconcileRequiredFormsForPublishedVersion;
 use App\Models\Costume;
 use App\Models\Course;
@@ -24,15 +24,19 @@ use App\Observers\StudentObserver;
 use App\Services\StripeService;
 use App\Support\TextmagicMailTransportFactory;
 use BezhanSalleh\PanelSwitch\PanelSwitch;
+use Filament\Forms\Components\Builder;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
+use Kyle\FilamentFormBuilder\Events\FormVersionActivated;
 use Stripe\StripeClient;
 
 final class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(Builder::class, PreviewBuilder::class);
+
         $this->app->singleton(StripeServiceContract::class, function (): StripeService {
             return new StripeService(
                 new StripeClient(config('services.stripe.secret')),
@@ -50,7 +54,7 @@ final class AppServiceProvider extends ServiceProvider
         Holiday::observe(HolidayObserver::class);
         Student::observe(StudentObserver::class);
         Costume::observe(ProductableObserver::class);
-        EventFacade::listen(FormVersionPublished::class, ReconcileRequiredFormsForPublishedVersion::class);
+        EventFacade::listen(FormVersionActivated::class, ReconcileRequiredFormsForPublishedVersion::class);
 
         Mail::extend('textmagic', fn (array $config) => TextmagicMailTransportFactory::make($config));
 

@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace App\Forms\Eac;
 
-use App\Enums\FormPurpose;
-use App\Forms\Contracts\FormAssignmentUpdatePolicy;
-use App\Models\FormAssignment;
 use App\Models\Student;
+use Kyle\FilamentFormBuilder\Contracts\FormAssignmentUpdatePolicy;
+use Kyle\FilamentFormBuilder\Models\FormAssignment;
 
 final readonly class EacMedicalWaiverUpdatePolicy implements FormAssignmentUpdatePolicy
 {
     public function supports(FormAssignment $assignment): bool
     {
-        return $assignment->form->purpose === FormPurpose::MedicalWaiver;
+        return $assignment->form->key === 'student-waiver';
     }
 
     public function canUpdate(FormAssignment $assignment): bool

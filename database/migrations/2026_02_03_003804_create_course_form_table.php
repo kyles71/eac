@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Form;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -13,7 +14,7 @@ return new class() extends Migration
         Schema::create('course_forms', function (Blueprint $table) {
             $table->id();
             $table->foreignId('course_id')->constrained()->onDelete('cascade');
-            $table->foreignId('form_id')->constrained()->onDelete('cascade');
+            $table->foreignId('form_id')->constrained((new Form())->getTable())->cascadeOnDelete();
             $table->timestamps();
 
             $table->unique(['course_id', 'form_id']);

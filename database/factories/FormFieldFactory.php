@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Enums\FormAnswerType;
 use App\Models\Form;
 use App\Models\FormField;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Kyle\FilamentFormBuilder\Enums\FormAnswerType;
 
 /**
  * @extends Factory<FormField>

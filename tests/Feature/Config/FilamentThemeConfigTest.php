@@ -10,6 +10,14 @@ it('includes shared Filament classes in both panel themes', function (): void {
         ->toContain("@source '../../../resources/views/filament/shared/**/*';");
 });
 
+it('includes form builder package classes in the admin theme', function (): void {
+    $adminTheme = file_get_contents(resource_path('css/filament/admin/theme.css'));
+
+    expect($adminTheme)
+        ->toContain("@source '../../../../vendor/kyle/filament-form-builder/src/**/*.php';")
+        ->toContain("@source '../../../../vendor/kyle/filament-form-builder/resources/**/*.blade.php';");
+});
+
 it('pins the user panel topbar on mobile viewports', function (): void {
     $userTheme = file_get_contents(resource_path('css/filament/user/theme.css'));
 

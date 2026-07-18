@@ -4,12 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Actions\Forms\SubmitFormResponse;
 use App\Enums\CreditTransactionType;
-use App\Enums\FormPurpose;
-use App\Enums\FormResponseStatus;
-use App\Enums\FormUpdateStrategy;
-use App\Enums\FormVersionStatus;
 use App\Enums\ProductType;
 use App\Forms\DefaultFormDefinitions;
 use App\Models\Calendar;
@@ -54,6 +49,8 @@ use App\Support\LegalDocuments\HealthSafetyPolicy;
 use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Spatie\Tags\Tag;
 
 final class DatabaseSeeder extends Seeder
@@ -107,7 +104,7 @@ final class DatabaseSeeder extends Seeder
             ->assignRole('super_admin');
 
         $this->seedLegalDocumentVersions();
-        $defaultForms = $this->seedDefaultForms($adminUser);
+        $defaultForms = $this->seedDefaultForms();
 
         if (config('app.env') !== 'production' && config('app.seed_demo_data')) {
             $this->seedDevData($adminUser, $defaultForms);
@@ -154,70 +151,17 @@ final class DatabaseSeeder extends Seeder
     /**
      * @return array{waiver: Form, showcase: Form}
      */
-    private function seedDefaultForms(User $publisher): array
+    private function seedDefaultForms(): array
     {
-        $definitions = app(DefaultFormDefinitions::class);
-
-        $waiverForm = Form::query()->firstOrCreate(
-            ['purpose' => FormPurpose::MedicalWaiver],
-            [
-                'name' => 'Student Waiver 25-26',
-                'updates_allowed' => true,
-                'update_strategy' => FormUpdateStrategy::Revision,
-            ],
-        );
-
-        $showcaseForm = Form::query()->firstOrCreate(
-            ['purpose' => FormPurpose::ShowcaseParticipation],
-            [
-                'name' => 'Showcase Participation 25-26',
-                'updates_allowed' => false,
-                'update_strategy' => FormUpdateStrategy::InPlace,
-            ],
-        );
-
-        $this->publishDefaultVersion(
-            form: $waiverForm,
-            schema: $definitions->medicalWaiver(),
-            requiresSignature: true,
-            publisher: $publisher,
-        );
-
-        $this->publishDefaultVersion(
-            form: $showcaseForm,
-            schema: $definitions->showcaseParticipation(),
-            requiresSignature: false,
-            publisher: $publisher,
-        );
+        $this->call([
+            StudentWaiverFormSeeder::class,
+            ShowcaseParticipationFormSeeder::class,
+        ]);
 
         return [
-            'waiver' => $waiverForm->refresh(),
-            'showcase' => $showcaseForm->refresh(),
+            'waiver' => Form::query()->where('key', 'student-waiver')->firstOrFail(),
+            'showcase' => Form::query()->where('key', 'showcase-participation')->firstOrFail(),
         ];
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $schema
-     */
-    private function publishDefaultVersion(Form $form, array $schema, bool $requiresSignature, User $publisher): void
-    {
-        if ($form->currentVersion()->exists()) {
-            return;
-        }
-
-        $version = $form->versions()->firstOrCreate(
-            ['version' => 1],
-            [
-                'status' => FormVersionStatus::Draft,
-                'schema' => $schema,
-                'requires_signature' => $requiresSignature,
-                'valid_until' => now()->addYear(),
-            ],
-        );
-
-        if ($version->status !== FormVersionStatus::Published) {
-            app(\App\Actions\Forms\PublishFormVersion::class)->handle($version, $publisher);
-        }
     }
 
     /**
@@ -690,10 +634,14 @@ final class DatabaseSeeder extends Seeder
             ->limit(5)
             ->get()
             ->each(function (FormAssignment $assignment): void {
+                $today = now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
+
                 app(SubmitFormResponse::class)->handle($assignment, [
                     'answers' => [
                         DefaultFormDefinitions::ShowcaseParticipation => fake()->boolean(),
                     ],
+                    'signature' => fake()->name(),
+                    'date_signed' => $today,
                 ]);
             });
     }
@@ -718,7 +666,7 @@ final class DatabaseSeeder extends Seeder
                     [
                         'name' => fake()->name(),
                         'relationship' => fake()->randomElement(['Mother', 'Father', 'Guardian']),
-                        'phone_number' => fake()->phoneNumber(),
+                        'phone_number' => fake()->numerify('(###) ###-####'),
                         'email' => fake()->safeEmail(),
                         'wants_text_updates' => fake()->boolean(),
                     ],

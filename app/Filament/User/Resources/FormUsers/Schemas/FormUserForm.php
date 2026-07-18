@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers\Schemas;
 
-use App\Forms\FormSchemaCompiler;
 use App\Models\FormAssignment;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Kyle\FilamentFormBuilder\Support\FormSchemaCompiler;
 
 final class FormUserForm
 {
@@ -21,10 +21,7 @@ final class FormUserForm
         return $schema
             ->columns(2)
             ->components([
-                Section::make($assignment->form->name)
-                    ->columns(2)
-                    ->columnSpanFull()
-                    ->schema($components),
+                ...$components,
                 Section::make('Signature')
                     ->columns(2)
                     ->columnSpanFull()
@@ -34,9 +31,17 @@ final class FormUserForm
                             ->required($assignment->version->requires_signature),
                         DatePicker::make('date_signed')
                             ->label('Date Signed')
-                            ->default(fn (): string => now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
+                            ->default(fn (): string => self::today())
+                            ->afterStateHydrated(fn (DatePicker $component, mixed $state): mixed => blank($state)
+                                ? $component->state(self::today())
+                                : null)
                             ->required($assignment->version->requires_signature),
                     ]),
             ]);
+    }
+
+    private static function today(): string
+    {
+        return now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
     }
 }

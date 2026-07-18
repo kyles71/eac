@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
 use App\Enums\CourseSemester;
-use App\Enums\FormPurpose;
 use App\Enums\ScheduleFrequency;
 use App\Models\Calendar;
 use App\Models\Course;
@@ -23,6 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
 use Spatie\Permission\Models\Role;
 
 final class CourseForm
@@ -113,7 +113,7 @@ final class CourseForm
                             )
                             ->default(fn (): array => ($form = Form::query()
                                 ->isActive()
-                                ->where('purpose', FormPurpose::MedicalWaiver)
+                                ->where('key', 'student-waiver')
                                 ->latest('updated_at')
                                 ->first()) === null ? [] : [$form->id]),
                         Select::make('teachers')
@@ -182,8 +182,12 @@ final class CourseForm
 
     public static function activeFormsQuery(Builder $query): Builder
     {
-        Form::applyActiveConstraint($query);
-
-        return $query;
+        return $query->where(function (Builder $query): void {
+            $query
+                ->whereNotNull('active_version_id')
+                ->orWhereHas('versions', fn (Builder $query): Builder => $query
+                    ->where('status', FormVersionStatus::Published)
+                    ->where('activation_starts_at', '>', now()));
+        });
     }
 }
