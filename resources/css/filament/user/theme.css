@@ -11,10 +11,14 @@
 
     .fi-panel-user.fi-body-has-topbar .fi-topbar-ctn {
         position: fixed;
-        inset-block-start: env(safe-area-inset-top, 0px);
+        inset-block-start: calc(env(safe-area-inset-top, 0px) + var(--eac-managed-banner-height, 0px));
         inset-inline: 0;
         width: 100%;
         z-index: 30;
+    }
+
+    .fi-panel-user.fi-body-has-topbar [data-managed-banners-location='panels::topbar.before'] {
+        inset-block-start: env(safe-area-inset-top, 0px);
     }
 
     .fi-panel-user.fi-body-has-topbar .fi-layout {

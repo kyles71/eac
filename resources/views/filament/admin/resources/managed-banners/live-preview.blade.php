@@ -1,7 +1,7 @@
 @php
     use App\Enums\ManagedBannerRenderLocation;
 
-    $renderPreviewBanner = fn (ManagedBannerRenderLocation $location): string => $renderLocation === $location
+    $renderPreviewBanner = fn(ManagedBannerRenderLocation $location): string => $renderLocation === $location
         ? (string) view('filament.admin.resources.managed-banners.live-preview-banner', [
             'activeRenderLocation' => $location,
             'ctaLabel' => $ctaLabel,
@@ -15,16 +15,13 @@
         : '';
 @endphp
 
-<div
-    class="space-y-3"
-    data-managed-banner-preview-active="{{ $renderLocation->value }}"
->
-    <div
-        class="overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm dark:border-white/10 dark:bg-gray-950"
-        data-managed-banner-preview-canvas
-    >
+<div class="space-y-3" data-managed-banner-preview-active="{{ $renderLocation->value }}">
+    <div class="overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm dark:border-white/10 dark:bg-gray-950"
+        data-managed-banner-preview-canvas>
+        {!! $renderPreviewBanner(ManagedBannerRenderLocation::TopbarBefore) !!}
         <div class="flex min-h-[34rem] flex-col 2xl:flex-row">
-            <aside class="border-b border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 2xl:w-72 2xl:border-b-0 2xl:border-r">
+            <aside
+                class="border-b border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 2xl:w-72 2xl:border-b-0 2xl:border-r">
                 <div class="mb-4 flex items-center gap-3">
                     <div class="h-9 w-9 rounded-md bg-primary-500"></div>
                     <div>
@@ -56,7 +53,8 @@
             </aside>
 
             <div class="flex min-w-0 flex-1 flex-col bg-gray-100 dark:bg-gray-950">
-                <div class="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 dark:border-white/10 dark:bg-gray-900">
+                <div
+                    class="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 dark:border-white/10 dark:bg-gray-900">
                     <div class="h-2.5 w-36 rounded-full bg-gray-300 dark:bg-gray-700"></div>
                     <div class="flex items-center gap-2">
                         <div class="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-800"></div>
@@ -67,10 +65,12 @@
                 <main class="min-w-0 flex-1 space-y-4 p-4">
                     {!! $renderPreviewBanner(ManagedBannerRenderLocation::ContentStart) !!}
 
-                    <section class="space-y-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
+                    <section
+                        class="space-y-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
                         {!! $renderPreviewBanner(ManagedBannerRenderLocation::PageStart) !!}
 
-                        <header class="flex flex-col gap-3 border-b border-gray-100 pb-4 dark:border-white/10 sm:flex-row sm:items-start sm:justify-between">
+                        <header
+                            class="flex flex-col gap-3 border-b border-gray-100 pb-4 dark:border-white/10 sm:flex-row sm:items-start sm:justify-between">
                             <div class="space-y-2">
                                 <div class="h-3 w-52 rounded-full bg-gray-900 dark:bg-white"></div>
                                 <div class="h-2.5 w-64 max-w-full rounded-full bg-gray-300 dark:bg-gray-700"></div>

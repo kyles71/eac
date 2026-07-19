@@ -6,6 +6,16 @@
 @source '../../../vendor/bezhansalleh/filament-panel-switch/resources/views/**/*.blade.php';
 @source '../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
+.fi-body-has-topbar [data-managed-banners-location='panels::topbar.before'] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 31;
+}
+
+.fi-body-has-topbar .fi-topbar-ctn {
+    inset-block-start: var(--eac-managed-banner-height, 0px);
+}
+
 .fi-sidebar-nav {
     border-right: 1px solid #e4e4e5;
 }
