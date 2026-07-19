@@ -113,6 +113,7 @@ it('manages banners from the admin panel', function (): void {
                 ManagedBannerRenderLocation::PageFooterWidgetsAfter->value => 'After footer widgets',
                 ManagedBannerRenderLocation::SidebarNavStart->value => 'Sidebar nav start',
                 ManagedBannerRenderLocation::SidebarNavEnd->value => 'Sidebar nav end',
+                ManagedBannerRenderLocation::TopbarBefore->value => 'Above topbar',
             ],
         )
         ->assertSchemaComponentExists(
@@ -325,6 +326,25 @@ it('collapses empty managed banner hook roots and spaces populated roots', funct
         ->assertSeeHtml('class="mt-2"')
         ->assertSeeHtml('data-managed-banners-empty="false"')
         ->assertDontSeeHtml('data-managed-banners-empty="true"');
+});
+
+it('keeps banners above the topbar in the sticky topbar stack', function (): void {
+    $owner = User::factory()->isOwner()->create();
+    $this->actingAs($owner);
+
+    ManagedBanner::factory()
+        ->forRenderLocation(ManagedBannerRenderLocation::TopbarBefore)
+        ->create([
+            'audiences' => [DashboardAudience::Owner->value],
+        ]);
+
+    livewire(ManagedBanners::class, [
+        'renderLocation' => ManagedBannerRenderLocation::TopbarBefore->value,
+        'scopes' => [Dashboard::class],
+    ])
+        ->assertSeeHtml('data-managed-banners-location="panels::topbar.before"')
+        ->assertSeeHtml('class="pb-2"')
+        ->assertSeeHtml('--eac-managed-banner-height');
 });
 
 it('renders managed banners on admin panel pages when scoped there', function (): void {

@@ -7,7 +7,9 @@ it('includes shared Filament classes in both panel themes', function (): void {
 
     expect($globalTheme)
         ->toContain("@source '../../../app/Filament/Shared/**/*';")
-        ->toContain("@source '../../../resources/views/filament/shared/**/*';");
+        ->toContain("@source '../../../resources/views/filament/shared/**/*';")
+        ->toContain("[data-managed-banners-location='panels::topbar.before']")
+        ->toContain('inset-block-start: var(--eac-managed-banner-height, 0px)');
 });
 
 it('pins the user panel topbar on mobile viewports', function (): void {
@@ -18,7 +20,8 @@ it('pins the user panel topbar on mobile viewports', function (): void {
         ->toContain('--eac-user-mobile-topbar-offset')
         ->toContain('.fi-panel-user.fi-body-has-topbar .fi-topbar-ctn')
         ->toContain('position: fixed')
-        ->toContain('inset-block-start: env(safe-area-inset-top, 0px)')
+        ->toContain("[data-managed-banners-location='panels::topbar.before']")
+        ->toContain('inset-block-start: calc(env(safe-area-inset-top, 0px) + var(--eac-managed-banner-height, 0px))')
         ->toContain('.fi-panel-user.fi-body-has-topbar .fi-layout')
         ->toContain('padding-block-start: var(--eac-user-mobile-topbar-offset)');
 });

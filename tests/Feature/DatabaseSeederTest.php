@@ -45,12 +45,19 @@ use App\Support\LegalDocuments\HealthSafetyPolicy;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\LegalDocuments\PortalTerms;
 use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
+use App\Support\MediaDisks;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 it('seeds the development database with all models', function (): void {
+    Storage::fake(MediaDisks::public());
+
     $this->seed();
+
+    $seededProductImageCounts = Product::all()
+        ->map(fn (Product $product): int => $product->getMedia('images')->count());
 
     expect(User::count())->toBeGreaterThanOrEqual(16)
         ->and(Student::count())->toBeGreaterThanOrEqual(15)
@@ -78,6 +85,7 @@ it('seeds the development database with all models', function (): void {
         ->and(Course::count())->toBeGreaterThanOrEqual(10)
         ->and(Product::count())->toBeGreaterThanOrEqual(20)
         ->and(Product::query()->whereNull('price')->exists())->toBeTrue()
+        ->and($seededProductImageCounts->unique()->sort()->values()->all())->toBe([0, 1, 2, 3])
         ->and(Costume::count())->toBe(5)
         ->and(GiftCardType::count())->toBe(4)
         ->and(GiftCardType::query()->where('allows_custom_amount', true)->exists())->toBeTrue()

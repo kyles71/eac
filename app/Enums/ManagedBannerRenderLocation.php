@@ -18,6 +18,7 @@ enum ManagedBannerRenderLocation: string implements HasLabel
     case PageFooterWidgetsAfter = 'panels::page.footer-widgets.after';
     case SidebarNavStart = 'panels::sidebar.nav.start';
     case SidebarNavEnd = 'panels::sidebar.nav.end';
+    case TopbarBefore = 'panels::topbar.before';
 
     public function getLabel(): string
     {
@@ -32,6 +33,7 @@ enum ManagedBannerRenderLocation: string implements HasLabel
             self::PageFooterWidgetsAfter => 'After footer widgets',
             self::SidebarNavStart => 'Sidebar nav start',
             self::SidebarNavEnd => 'Sidebar nav end',
+            self::TopbarBefore => 'Above topbar',
         };
     }
 }
