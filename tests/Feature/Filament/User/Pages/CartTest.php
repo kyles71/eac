@@ -20,6 +20,7 @@ use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\User;
 use App\Support\LegalDocuments\PaymentPlanTerms;
+use Filament\Actions\Action;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
@@ -47,6 +48,71 @@ it('displays cart items in the table for the authenticated user', function () {
     livewire(Cart::class)
         ->loadTable()
         ->assertCanSeeTableRecords([$cartItem]);
+});
+
+it("displays each unit's product details beneath the product name", function (): void {
+    $nameQuestion = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+        'sort_order' => 0,
+    ]);
+    $sizeQuestion = ProductQuestion::factory()->for($this->product)->select(
+        ['Small', 'Medium'],
+        allowsOther: true,
+    )->create([
+        'question' => 'Shirt size',
+        'sort_order' => 1,
+    ]);
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 2,
+        'question_answers' => [
+            1 => [
+                "question_{$nameQuestion->id}" => 'Avery',
+                "question_{$sizeQuestion->id}" => 'Other',
+                "question_{$sizeQuestion->id}_other" => 'Youth XL',
+            ],
+            2 => [
+                "question_{$nameQuestion->id}" => 'Jordan',
+            ],
+        ],
+    ]);
+
+    livewire(Cart::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$cartItem])
+        ->assertSeeInOrder([
+            'Item 1 of 2',
+            'Dancer name',
+            'Avery',
+            'Shirt size',
+            'Youth XL',
+            'Item 2 of 2',
+            'Jordan',
+            'Not answered',
+        ])
+        ->assertSeeHtml('<dt class="font-bold">Dancer name</dt>')
+        ->assertDontSee('Dancer name:')
+        ->assertDontSee('Shirt size:');
+});
+
+it('shows Edit Details as a background-free text action', function (): void {
+    $question = ProductQuestion::factory()->for($this->product)->required()->create();
+    $cartItem = CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Avery'],
+        ],
+    ]);
+
+    livewire(Cart::class)
+        ->assertActionExists(
+            TestAction::make('editQuestionAnswers')->table($cartItem),
+            fn (Action $action): bool => $action->isLink()
+                && $action->getLabel() === 'Edit Details'
+                && $action->getColor() === 'primary',
+        );
 });
 
 it('does not display other users cart items in the table', function () {
@@ -81,7 +147,6 @@ it('can increment item quantity via table action', function () {
 });
 
 it('asks questions for the new unit when incrementing and trims its answers when decrementing', function (): void {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     $question = ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);
@@ -125,7 +190,6 @@ it('asks questions for the new unit when incrementing and trims its answers when
 });
 
 it('can edit purchaser answers for every unit from the cart', function (): void {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     $question = ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);
@@ -163,8 +227,7 @@ it('can edit purchaser answers for every unit from the cart', function (): void 
     ]);
 });
 
-it('halts checkout when an add-time required question is incomplete', function (): void {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
+it('halts checkout when a required product detail is incomplete', function (): void {
     ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);
@@ -177,7 +240,7 @@ it('halts checkout when an add-time required question is incomplete', function (
 
     livewire(Cart::class)
         ->mountAction('checkout')
-        ->assertNotified('Purchaser answers needed');
+        ->assertNotified('Product details needed');
 
     expect(Order::query()->where('user_id', auth()->id())->exists())->toBeFalse();
 });

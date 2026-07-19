@@ -40,9 +40,8 @@ final class CreateOrder
         ?DiscountCode $discountCode = null,
         int $creditToApply = 0,
         ?PaymentPlanTemplate $paymentPlanTemplate = null,
-        array $questionAnswers = [],
     ): Order {
-        return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate, $questionAnswers): Order {
+        return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate): Order {
             if ($paymentPlanTemplate !== null && ! $paymentPlanTemplate->is_active) {
                 throw new InvalidArgumentException('The selected payment plan is no longer available.');
             }
@@ -115,9 +114,7 @@ final class CreateOrder
                     ],
                     'question_answers' => $this->productQuestionAnswers->orderRows(
                         $cartItem,
-                        $product->asksPurchaserQuestionsWhenAddingToCart()
-                            ? $cartItem->storedQuestionAnswers()
-                            : ($questionAnswers[$cartItem->id] ?? []),
+                        $cartItem->storedQuestionAnswers(),
                     ),
                 ];
             }

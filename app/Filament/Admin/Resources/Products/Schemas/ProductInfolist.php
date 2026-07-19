@@ -107,11 +107,6 @@ final class ProductInfolist
                             ->badge()
                             ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')
                             ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
-                        TextEntry::make('ask_purchaser_questions_when_adding_to_cart')
-                            ->label('Questions Asked')
-                            ->badge()
-                            ->formatStateUsing(fn (bool $state): string => $state ? 'When Added to Cart' : 'At Checkout')
-                            ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
                         TextEntry::make('question_count')
                             ->label('Questions')
                             ->state(fn (Product $record): int => $record->questions()->count()),

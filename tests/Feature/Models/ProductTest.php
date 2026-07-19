@@ -81,15 +81,8 @@ it('derives valid pricing for name your price gift card products', function () {
 
 it('knows when add to cart needs extra information', function () {
     $standardProduct = Product::factory()->create(['price' => 5000]);
-    $questionProduct = Product::factory()->create([
-        'price' => 5000,
-        'ask_purchaser_questions_when_adding_to_cart' => true,
-    ]);
+    $questionProduct = Product::factory()->create(['price' => 5000]);
     ProductQuestion::factory()->for($questionProduct)->create();
-    $enabledWithoutQuestions = Product::factory()->create([
-        'price' => 5000,
-        'ask_purchaser_questions_when_adding_to_cart' => true,
-    ]);
     $fixedGiftCard = Product::factory()
         ->forGiftCardType(GiftCardType::factory()->denomination(5000)->create())
         ->create();
@@ -98,11 +91,9 @@ it('knows when add to cart needs extra information', function () {
         ->create();
 
     expect($standardProduct->requiresAddToCartInformation())->toBeFalse()
-        ->and($standardProduct->asksPurchaserQuestionsWhenAddingToCart())->toBeFalse()
-        ->and($questionProduct->asksPurchaserQuestionsWhenAddingToCart())->toBeTrue()
+        ->and($standardProduct->hasPurchaserQuestions())->toBeFalse()
+        ->and($questionProduct->hasPurchaserQuestions())->toBeTrue()
         ->and($questionProduct->requiresAddToCartInformation())->toBeTrue()
-        ->and($enabledWithoutQuestions->asksPurchaserQuestionsWhenAddingToCart())->toBeFalse()
-        ->and($enabledWithoutQuestions->requiresAddToCartInformation())->toBeFalse()
         ->and($fixedGiftCard->requiresAddToCartInformation())->toBeFalse()
         ->and($customGiftCard->requiresAddToCartInformation())->toBeTrue();
 });

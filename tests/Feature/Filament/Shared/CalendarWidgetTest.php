@@ -1026,10 +1026,7 @@ it('hides the calendar quick add but keeps view in store for products with add-t
     $user = User::factory()->create();
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
     $course = Course::factory()->create(['capacity' => 5]);
-    $product = Product::factory()->forCourse($course)->create([
-        'price' => 5000,
-        'ask_purchaser_questions_when_adding_to_cart' => true,
-    ]);
+    $product = Product::factory()->forCourse($course)->create(['price' => 5000]);
     ProductQuestion::factory()->for($product)->required()->create();
     $event = Event::factory()->create([
         'course_id' => $course->id,

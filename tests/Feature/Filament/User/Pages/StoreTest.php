@@ -295,7 +295,6 @@ it('opens the add to cart modal from the table when extra information is needed'
 });
 
 it('asks purchaser questions in the table add to cart modal and stores the answer', function (): void {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     $question = ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);
@@ -333,9 +332,7 @@ it('shows custom gift card amount and purchaser questions in the same table moda
         ->denomination(5000)
         ->customAmount(500)
         ->create();
-    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create([
-        'ask_purchaser_questions_when_adding_to_cart' => true,
-    ]);
+    $giftCardProduct = Product::factory()->forGiftCardType($giftCardType)->create();
     $question = ProductQuestion::factory()->for($giftCardProduct)->required()->create([
         'question' => 'Recipient name',
     ]);

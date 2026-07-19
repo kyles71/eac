@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Enums\ProductQuestionType;
 use App\Models\CartItem;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductQuestion;
+use App\Models\ProductQuestionAnswer;
 use InvalidArgumentException;
 
 final readonly class ProductQuestionAnswerService
@@ -127,6 +129,84 @@ final readonly class ProductQuestionAnswerService
     }
 
     /**
+     * @return list<array{label: string, answers: list<array{question: string, answer: string}>}>
+     */
+    public function cartDisplayUnits(CartItem $cartItem): array
+    {
+        $cartItem->loadMissing('product.questions');
+
+        $product = $cartItem->product;
+
+        if ($product->questions->isEmpty()) {
+            return [];
+        }
+
+        $storedUnits = $cartItem->storedQuestionAnswers();
+        $displayUnits = [];
+
+        for ($unitNumber = 1; $unitNumber <= $cartItem->quantity; $unitNumber++) {
+            $storedAnswers = $storedUnits[$unitNumber] ?? [];
+
+            if (! is_array($storedAnswers)) {
+                $storedAnswers = [];
+            }
+
+            $answers = [];
+
+            /** @var ProductQuestion $question */
+            foreach ($product->questions as $question) {
+                $answers[] = [
+                    'question' => $question->question,
+                    'answer' => $this->cartDisplayAnswer($question, $storedAnswers),
+                ];
+            }
+
+            $displayUnits[] = [
+                'label' => $this->displayUnitLabel($cartItem->quantity, $unitNumber),
+                'answers' => $answers,
+            ];
+        }
+
+        return $displayUnits;
+    }
+
+    /**
+     * @return list<array{label: string, answers: list<array{question: string, answer: string}>}>
+     */
+    public function orderDisplayUnits(OrderItem $orderItem): array
+    {
+        $orderItem->loadMissing('questionAnswers');
+
+        if ($orderItem->questionAnswers->isEmpty()) {
+            return [];
+        }
+
+        $displayUnits = [];
+
+        for ($unitNumber = 1; $unitNumber <= $orderItem->quantity; $unitNumber++) {
+            $answers = $orderItem->questionAnswers
+                ->where('unit_number', $unitNumber)
+                ->map(fn (ProductQuestionAnswer $answer): array => [
+                    'question' => $answer->question,
+                    'answer' => $answer->formattedAnswer(),
+                ])
+                ->values()
+                ->all();
+
+            if ($answers === []) {
+                continue;
+            }
+
+            $displayUnits[] = [
+                'label' => $this->displayUnitLabel($orderItem->quantity, $unitNumber),
+                'answers' => $answers,
+            ];
+        }
+
+        return $displayUnits;
+    }
+
+    /**
      * @param  array<int|string, mixed>  $submittedAnswers
      * @return array<string, string|null>
      */
@@ -206,6 +286,38 @@ final readonly class ProductQuestionAnswerService
         $answer = mb_trim($answer);
 
         return $answer === '' ? null : $answer;
+    }
+
+    /** @param array<string, mixed> $storedAnswers */
+    private function cartDisplayAnswer(ProductQuestion $question, array $storedAnswers): string
+    {
+        $fieldName = self::fieldName($question);
+        $answer = $this->displayString($storedAnswers[$fieldName] ?? null);
+
+        if ($question->type === ProductQuestionType::Select && $answer === 'Other') {
+            return $this->displayString($storedAnswers[self::otherFieldName($question)] ?? null)
+                ?? 'Other';
+        }
+
+        return $answer ?? 'Not answered';
+    }
+
+    private function displayString(mixed $answer): ?string
+    {
+        if (! is_string($answer)) {
+            return null;
+        }
+
+        $answer = mb_trim($answer);
+
+        return $answer === '' ? null : $answer;
+    }
+
+    private function displayUnitLabel(int $quantity, int $unitNumber): string
+    {
+        return $quantity === 1
+            ? 'Item 1'
+            : "Item {$unitNumber} of {$quantity}";
     }
 
     private function requiredQuestionMessage(

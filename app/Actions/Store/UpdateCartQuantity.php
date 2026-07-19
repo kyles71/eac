@@ -53,7 +53,7 @@ final readonly class UpdateCartQuantity
 
             $storedQuestionAnswers = $cartItem->storedQuestionAnswers();
 
-            if ($quantity > $cartItem->quantity && $product->asksPurchaserQuestionsWhenAddingToCart()) {
+            if ($quantity > $cartItem->quantity && $product->hasPurchaserQuestions()) {
                 $addedQuantity = $quantity - $cartItem->quantity;
                 $newQuestionAnswers = app(ProductQuestionAnswerService::class)->normalizeUnits(
                     $product,

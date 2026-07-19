@@ -52,7 +52,6 @@ it('increments quantity when adding the same product again', function () {
 });
 
 it('stores distinct purchaser answers when the same product is added repeatedly', function () {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     $question = ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);
@@ -73,7 +72,6 @@ it('stores distinct purchaser answers when the same product is added repeatedly'
 });
 
 it('requires configured purchaser answers when adding to cart', function () {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);
@@ -245,7 +243,6 @@ it('can update cart item quantity', function () {
 });
 
 it('appends answers when quantity increases and trims the final unit when it decreases', function () {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     $question = ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);

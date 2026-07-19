@@ -184,7 +184,6 @@ it('opens the add to cart modal when extra information is needed', function () {
 });
 
 it('asks purchaser questions when adding from product details and stores the answer', function (): void {
-    $this->product->update(['ask_purchaser_questions_when_adding_to_cart' => true]);
     $question = ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
     ]);

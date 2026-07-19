@@ -32,7 +32,6 @@ final class Product extends Model implements HasMedia
         'is_active' => 'boolean',
         'include_productable_images' => 'boolean',
         'send_purchase_notification' => 'boolean',
-        'ask_purchaser_questions_when_adding_to_cart' => 'boolean',
         'requires_course_id' => 'integer',
         'available_from' => 'datetime',
         'available_until' => 'datetime',
@@ -106,17 +105,13 @@ final class Product extends Model implements HasMedia
     {
         $this->loadMissing('productable');
 
-        return $this->asksPurchaserQuestionsWhenAddingToCart()
+        return $this->hasPurchaserQuestions()
             || ($this->productable instanceof RequiresAddToCartInformation
                 && $this->productable->requiresAddToCartInformation());
     }
 
-    public function asksPurchaserQuestionsWhenAddingToCart(): bool
+    public function hasPurchaserQuestions(): bool
     {
-        if (! $this->ask_purchaser_questions_when_adding_to_cart) {
-            return false;
-        }
-
         $this->loadMissing('questions');
 
         return $this->questions->isNotEmpty();

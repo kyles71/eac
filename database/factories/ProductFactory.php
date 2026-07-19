@@ -32,7 +32,6 @@ final class ProductFactory extends Factory
             'is_active' => true,
             'include_productable_images' => false,
             'send_purchase_notification' => false,
-            'ask_purchaser_questions_when_adding_to_cart' => false,
             'requires_course_id' => null,
             'available_from' => null,
             'available_until' => null,

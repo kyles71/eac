@@ -14,7 +14,6 @@ it('collects and edits add-time purchaser answers from the store and cart', func
     $product = Product::factory()->standalone()->create([
         'name' => 'Competition Jacket',
         'price' => 5000,
-        'ask_purchaser_questions_when_adding_to_cart' => true,
     ]);
     $question = ProductQuestion::factory()->for($product)->required()->create([
         'question' => 'Dancer name',
@@ -31,7 +30,10 @@ it('collects and edits add-time purchaser answers from the store and cart', func
 
     visit('/dancefam/cart')
         ->assertSee('Competition Jacket')
-        ->click('[aria-label="Edit Answers"]')
+        ->assertSee('Item 1')
+        ->assertSee('Dancer name')
+        ->assertSee('Avery')
+        ->click('Edit Details')
         ->assertSee('Dancer name')
         ->fill("mountedActionSchema0.question_answers.1.question_{$question->id}", 'Taylor')
         ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
@@ -52,7 +54,6 @@ it('collects add-time purchaser answers from product details', function (): void
     $product = Product::factory()->standalone()->create([
         'name' => 'Competition Shirt',
         'price' => 3500,
-        'ask_purchaser_questions_when_adding_to_cart' => true,
     ]);
     $question = ProductQuestion::factory()->for($product)->required()->create([
         'question' => 'Shirt name',

@@ -173,10 +173,6 @@ final class ProductForm
                         Toggle::make('send_purchase_notification')
                             ->label('Email EAC when this product is purchased')
                             ->default(false),
-                        Toggle::make('ask_purchaser_questions_when_adding_to_cart')
-                            ->label('Ask purchaser questions when adding to cart')
-                            ->helperText('Ask the questions for each unit when it is added, instead of during checkout.')
-                            ->default(false),
                         Repeater::make('questions')
                             ->label('Purchaser Questions')
                             ->relationship()

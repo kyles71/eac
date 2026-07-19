@@ -61,7 +61,7 @@ final readonly class AddToCart
                 ? $cartItem->storedQuestionAnswers()
                 : [];
 
-            if ($product->asksPurchaserQuestionsWhenAddingToCart()) {
+            if ($product->hasPurchaserQuestions()) {
                 $newQuestionAnswers = app(ProductQuestionAnswerService::class)->normalizeUnits(
                     $product,
                     $questionAnswers,

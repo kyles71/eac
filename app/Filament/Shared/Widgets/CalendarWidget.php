@@ -207,7 +207,7 @@ final class CalendarWidget extends FullCalendarWidget
                         $product = $this->courseEventProduct();
 
                         return $product instanceof Product
-                            && ! $product->asksPurchaserQuestionsWhenAddingToCart();
+                            && ! $product->hasPurchaserQuestions();
                     })
                     ->disabled(fn (): bool => $this->courseEventProductIsSoldOut())
                     ->action(function (): void {

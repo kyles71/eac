@@ -9,6 +9,7 @@ use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\Order;
 use App\Models\PaymentPlan;
+use App\Services\ProductQuestionAnswerService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -42,7 +43,7 @@ final class Checkout extends Page
         $this->order = Order::query()
             ->where('user_id', auth()->id())
             ->where('status', OrderStatus::Pending)
-            ->with(['orderItems.product', 'discountCode', 'paymentPlanTemplate'])
+            ->with(['orderItems.product', 'orderItems.questionAnswers', 'discountCode', 'paymentPlanTemplate'])
             ->latest()
             ->first();
 
@@ -213,16 +214,29 @@ final class Checkout extends Page
             /** @var \App\Models\OrderItem $item */
             /** @var \App\Models\Product $product */
             $product = $item->product;
+            $displayUnits = app(ProductQuestionAnswerService::class)->orderDisplayUnits($item);
 
-            $rows[] = Flex::make([
+            $components = [
                 Text::make($product->name)
                     ->columnSpanFull(),
-                Text::make("Qty: {$item->quantity}")
-                    ->color('neutral')
-                    ->grow(false),
-                Text::make(format_money($item->total_price))
-                    ->grow(false),
-            ]);
+            ];
+
+            if ($displayUnits !== []) {
+                $components[] = View::make('filament.shared.product-question-details')
+                    ->viewData([
+                        'units' => $displayUnits,
+                    ])
+                    ->key("order-item-{$item->id}-details")
+                    ->columnSpanFull();
+            }
+
+            $components[] = Text::make("Qty: {$item->quantity}")
+                ->color('neutral')
+                ->grow(false);
+            $components[] = Text::make(format_money($item->total_price))
+                ->grow(false);
+
+            $rows[] = Flex::make($components);
         }
 
         return [
