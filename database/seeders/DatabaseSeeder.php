@@ -48,7 +48,9 @@ use App\Support\LegalDocuments\HealthSafetyPolicy;
 use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\File;
 use Spatie\Tags\Tag;
+use Symfony\Component\Finder\SplFileInfo;
 
 final class DatabaseSeeder extends Seeder
 {
@@ -235,6 +237,8 @@ final class DatabaseSeeder extends Seeder
         $standaloneProducts = Product::factory(2)->standalone()->create();
 
         $allProducts = $courseProducts->merge($giftCardProducts)->merge($costumeProducts)->merge($standaloneProducts);
+
+        $this->seedProductImages($allProducts);
 
         $courseProducts
             ->take(2)
@@ -585,6 +589,46 @@ final class DatabaseSeeder extends Seeder
             'managed_banner_id' => $managedBanners->first()->id,
             'user_id' => $customGiftCardOwner->id,
         ]);
+    }
+
+    /**
+     * @param  Collection<int, Product>  $products
+     */
+    private function seedProductImages(Collection $products): void
+    {
+        $imageDirectory = database_path('seeders/assets/products');
+
+        if (! File::isDirectory($imageDirectory)) {
+            return;
+        }
+
+        $imagePaths = collect(File::files($imageDirectory))
+            ->filter(fn (SplFileInfo $file): bool => in_array(
+                mb_strtolower($file->getExtension()),
+                ['gif', 'jpeg', 'jpg', 'png', 'webp'],
+                true,
+            ))
+            ->map(fn (SplFileInfo $file): string => $file->getPathname())
+            ->values();
+
+        if ($imagePaths->isEmpty()) {
+            return;
+        }
+
+        foreach ($products->shuffle()->values() as $index => $product) {
+            $imageCount = min($index % 4, $imagePaths->count());
+
+            if ($imageCount === 0) {
+                continue;
+            }
+
+            foreach (fake()->randomElements($imagePaths->all(), $imageCount) as $imagePath) {
+                $product
+                    ->addMedia($imagePath)
+                    ->preservingOriginal()
+                    ->toMediaCollection('images');
+            }
+        }
     }
 
     /**
