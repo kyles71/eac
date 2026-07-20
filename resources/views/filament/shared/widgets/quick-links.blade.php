@@ -1,5 +1,5 @@
 <x-filament-widgets::widget>
-    <x-filament::section heading="Quick Links" icon="heroicon-o-link">
+    <x-filament::section heading="Quick Links" icon="heroicon-o-link" class="h-full">
         @php($bulletImageUrl = $this->bulletImageUrl())
 
         <ul class="max-h-72 overflow-y-auto pr-2">

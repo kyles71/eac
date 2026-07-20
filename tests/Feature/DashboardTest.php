@@ -211,6 +211,7 @@ it('renders dashboard communication and action widgets without exposing audience
         ->assertSee('Enrollment closes Friday.')
         ->assertDontSee('Owner Audience')
         ->assertSeeHtml('src="'.$settings->messagesBulletImageUrl().'"')
+        ->assertSeeHtml('class="fi-section fi-section-has-header h-full"')
         ->assertSeeHtml('class="max-h-72 overflow-y-auto pr-2"')
         ->assertDontSeeHtml('border border-gray-200');
 
@@ -225,6 +226,7 @@ it('renders dashboard communication and action widgets without exposing audience
         ->assertSee('Studio Website')
         ->assertDontSee('Owner Audience')
         ->assertSeeHtml('src="'.$settings->quickLinksBulletImageUrl().'"')
+        ->assertSeeHtml('class="fi-section fi-section-has-header h-full"')
         ->assertSeeHtml('class="max-h-72 overflow-y-auto pr-2"')
         ->assertDontSeeHtml('border border-gray-200')
         ->assertSeeHtml('target="_blank"')
