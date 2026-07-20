@@ -73,6 +73,7 @@ final class AdminPanelProvider extends BasePanelProvider
                     ->authorizeUsing('Manage:ThemeBuilder'),
                 FilamentMailManagerPlugin::make()
                     ->emailTypeEditActionSlideOver()
+                    ->enableSentEmails(false)
                     ->navigationGroup(AdminNavigation::Email),
             ])
             ->globalSearchFieldSuffix(fn (): ?string => match (Platform::detect()) {

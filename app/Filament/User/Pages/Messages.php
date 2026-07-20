@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Filament\Shared\Schemas\SentEmailPreviewSchema;
 use App\Models\User;
 use App\Services\Mail\UserVisibleSentEmailsService;
 use BackedEnum;
@@ -12,8 +13,6 @@ use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use FinityLabs\FinMail\Resources\SentEmailResource\Schemas\SentEmailInfolist;
-use Illuminate\Support\Str;
 use Kyle\FilamentMailManager\Models\ManagedSentEmail;
 use RuntimeException;
 
@@ -47,14 +46,6 @@ final class Messages extends TablePage
                     ->sortable()
                     ->wrap()
                     ->limit(80),
-                TextColumn::make('message_type')
-                    ->label('Type')
-                    ->state(fn (ManagedSentEmail $record): string => $this->messageTypeLabel($record))
-                    ->badge()
-                    ->color('gray'),
-                TextColumn::make('sender')
-                    ->label('From')
-                    ->limit(50),
             ])
             ->recordAction('view')
             ->recordActions([
@@ -63,7 +54,7 @@ final class Messages extends TablePage
                     ->icon(Heroicon::OutlinedEye)
                     ->modal()
                     ->modalHeading(fn (ManagedSentEmail $record): string => $record->subject)
-                    ->schema(SentEmailInfolist::schema())
+                    ->schema(SentEmailPreviewSchema::schema())
                     ->modalWidth(Width::FiveExtraLarge)
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
@@ -72,21 +63,6 @@ final class Messages extends TablePage
             ->emptyStateHeading('No email history')
             ->emptyStateDescription('Messages sent to your account email will appear here.')
             ->emptyStateIcon(Heroicon::OutlinedEnvelope);
-    }
-
-    private function messageTypeLabel(ManagedSentEmail $email): string
-    {
-        if (filled($email->template?->name)) {
-            return $email->template->name;
-        }
-
-        $emailTypeKey = $email->getAttribute('email_type_key');
-
-        if (is_string($emailTypeKey) && filled($emailTypeKey)) {
-            return Str::headline($emailTypeKey);
-        }
-
-        return 'Email';
     }
 
     private function user(): User

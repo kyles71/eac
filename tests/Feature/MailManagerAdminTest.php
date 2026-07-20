@@ -2,16 +2,21 @@
 
 declare(strict_types=1);
 
+use App\Filament\Admin\Resources\SentEmails\Pages\ListSentEmails;
+use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use FinityLabs\FinMail\Enums\EmailStatus;
 use FinityLabs\FinMail\Resources\EmailThemeResource\EmailThemeResource;
 use Kyle\FilamentMailManager\Enums\LayoutMode;
 use Kyle\FilamentMailManager\Filament\Pages\CompareEmailTemplateVersions;
 use Kyle\FilamentMailManager\Filament\Pages\ManageEmailTypes;
 use Kyle\FilamentMailManager\Filament\Pages\ManageLayoutSettings;
 use Kyle\FilamentMailManager\Filament\Resources\MailLayouts\Pages\ListMailLayouts;
+use Kyle\FilamentMailManager\Filament\Resources\SentEmails\SentEmailResource as PackageSentEmailResource;
 use Kyle\FilamentMailManager\Models\ManagedEmailTemplate;
+use Kyle\FilamentMailManager\Models\ManagedSentEmail;
 use Kyle\FilamentMailManager\Repositories\ManagedTemplateRepository;
 use Spatie\Permission\Models\Permission;
 
@@ -39,7 +44,39 @@ it('registers the mail manager administration surfaces', function (): void {
         ->assertSee('Default Layout');
 
     expect(Filament::getCurrentPanel()->getResources())
-        ->not->toContain(EmailThemeResource::class);
+        ->toContain(SentEmailResource::class)
+        ->not->toContain(EmailThemeResource::class)
+        ->not->toContain(PackageSentEmailResource::class)
+        ->and(config('filament-shield.resources.exclude'))
+        ->toContain(SentEmailResource::class);
+});
+
+it('omits unreliable sender information from sent email administration', function (): void {
+    $email = ManagedSentEmail::create([
+        'sender' => 'unreliable@example.com',
+        'to' => ['recipient@example.com'],
+        'cc' => [],
+        'bcc' => [],
+        'subject' => 'Administrative email preview',
+        'rendered_body' => '<p>Message body</p>',
+        'attachments' => [],
+        'status' => EmailStatus::Sent,
+        'sent_at' => now(),
+        'metadata' => [],
+        'email_type_key' => 'handcrafted',
+    ]);
+
+    livewire(ListSentEmails::class)
+        ->loadTable()
+        ->assertTableColumnExists('subject')
+        ->assertTableColumnDoesNotExist('sender.name')
+        ->assertCanSeeTableRecords([$email])
+        ->mountAction(TestAction::make('view')->table($email))
+        ->assertActionMounted(TestAction::make('view')->table($email))
+        ->assertSchemaComponentDoesNotExist('sender', 'mountedActionSchema0')
+        ->assertSchemaComponentExists('subject', 'mountedActionSchema0')
+        ->assertSee('Administrative email preview')
+        ->assertDontSee('unreliable@example.com');
 });
 
 it('renders two immutable email versions side by side', function (): void {

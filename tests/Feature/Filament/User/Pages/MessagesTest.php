@@ -60,8 +60,8 @@ it('lists only sent emails addressed to the authenticated account by to or cc', 
         ->loadTable()
         ->assertTableColumnExists('sent_at')
         ->assertTableColumnExists('subject')
-        ->assertTableColumnExists('message_type')
-        ->assertTableColumnExists('sender')
+        ->assertTableColumnDoesNotExist('message_type')
+        ->assertTableColumnDoesNotExist('sender')
         ->assertCanSeeTableRecords([$toEmail, $ccEmail])
         ->assertCanNotSeeTableRecords([$otherEmail, $bccOnlyEmail, $queuedEmail, $failedEmail])
         ->assertSee('Class reminder')
@@ -113,10 +113,10 @@ it('opens a read only preview for a visible sent email', function (): void {
         ->mountAction(TestAction::make('view')->table($email))
         ->assertActionMounted(TestAction::make('view')->table($email))
         ->assertSchemaComponentExists('subject', 'mountedActionSchema0')
+        ->assertSchemaComponentDoesNotExist('sender', 'mountedActionSchema0')
         ->assertSchemaComponentExists('rendered_body', 'mountedActionSchema0')
         ->assertSchemaComponentVisible('rendered_body', 'mountedActionSchema0')
-        ->assertSee('Preview this email')
-        ->assertSee('Order Receipt');
+        ->assertSee('Preview this email');
 });
 
 /**

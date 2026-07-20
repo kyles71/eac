@@ -25,6 +25,7 @@ use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
+use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
@@ -268,7 +269,7 @@ return [
             ],
         ],
         'exclude' => [
-            //
+            SentEmailResource::class,
         ],
     ],
 
