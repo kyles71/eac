@@ -8,8 +8,6 @@ use App\Filament\User\Pages\Auth\Register;
 use App\Filament\User\Pages\Dashboard;
 use App\Http\Middleware\UserBanners;
 use Filament\Panel;
-use Filament\Support\Assets\Js;
-use Illuminate\Support\Facades\Vite;
 
 final class UserPanelProvider extends BasePanelProvider
 {
@@ -25,11 +23,6 @@ final class UserPanelProvider extends BasePanelProvider
             ->brandName('EAC Dancer')
             ->breadcrumbs(false)
             ->viteTheme('resources/css/filament/user/theme.css')
-            ->assets([
-                Js::make('product-gallery', Vite::asset('resources/js/filament/user/product-gallery.js'))
-                    ->module()
-                    ->loadedOnRequest(),
-            ])
             ->registration(Register::class)
             ->middleware([
                 UserBanners::class,

@@ -1,9 +1,8 @@
 @php
-    use Filament\Support\Facades\FilamentAsset;
     use Filament\Support\Icons\Heroicon;
     use Illuminate\Support\Facades\Vite;
 
-    $galleryScriptSrc = FilamentAsset::getScriptSrc('product-gallery');
+    $galleryScriptSrc = Vite::asset('resources/js/filament/user/product-gallery.js');
 
     if (! Vite::isRunningHot()) {
         $galleryScriptSrc = '/'.ltrim((string) parse_url($galleryScriptSrc, PHP_URL_PATH), '/');

@@ -18,11 +18,17 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Vite;
 
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
     config(['app.display_timezone' => 'America/Los_Angeles']);
+
+    Vite::partialMock()
+        ->shouldReceive('asset')
+        ->with('resources/js/filament/user/product-gallery.js')
+        ->andReturn('/build/assets/product-gallery.js');
 
     Filament::setCurrentPanel('user');
     Storage::fake('public');
@@ -103,6 +109,7 @@ it('renders product and linked item gallery images', function () {
         ])
         ->assertSeeHtml('<eac-product-gallery')
         ->assertSeeHtml('data-js-as-module="true"')
+        ->assertSeeHtml("x-load-js=\"['\\/build\\/assets\\/product-gallery.js']\"")
         ->assertSeeHtml('data-product-gallery-item')
         ->assertSee('Open product-gallery in the image viewer')
         ->assertSee('Open course-gallery in the image viewer');

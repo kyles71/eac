@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Providers\Filament\UserPanelProvider;
+use Filament\Panel;
+use Illuminate\Support\Facades\Vite;
+
+it('configures the user panel without resolving Vite assets', function (): void {
+    Vite::shouldReceive('asset')->never();
+
+    (new UserPanelProvider(app()))->panel(Panel::make());
+});
+
 it('includes shared Filament classes in both panel themes', function (): void {
     $globalTheme = file_get_contents(resource_path('css/filament/global-theme.css'));
 
