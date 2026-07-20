@@ -28,6 +28,7 @@
         "nunomaduro/essentials": "^1.0",
         "saade/filament-fullcalendar": "^4.0",
         "sentry/sentry-laravel": "^4.25",
+        "spatie/laravel-backup": "^10.0",
         "stripe/stripe-php": "^19.4",
         "textmagic/textmagic-rest-php-v2": "^3.0"
     },

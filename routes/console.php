@@ -43,3 +43,32 @@ Schedule::command('cart:send-abandoned-reminders')
     ->withoutOverlapping()
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
+
+Schedule::command('backup:clean', ['--disable-notifications' => true])
+    ->dailyAt('03:10')
+    ->timezone('America/New_York')
+    ->environments('production')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->onFailure(fn () => report(new RuntimeException('Scheduled database backup cleanup failed.')))
+    ->name('cleanup-database-backups')
+    ->description('Remove database backups outside the configured retention policy');
+
+Schedule::command('backup:database')
+    ->dailyAt('03:40')
+    ->timezone('America/New_York')
+    ->environments('production')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('backup-database')
+    ->description('Create an encrypted database backup on private IONOS object storage');
+
+Schedule::command('backup:monitor', ['--disable-notifications' => true])
+    ->dailyAt('06:10')
+    ->timezone('America/New_York')
+    ->environments('production')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->onFailure(fn () => report(new RuntimeException('Scheduled database backup monitoring failed.')))
+    ->name('monitor-database-backups')
+    ->description('Monitor the age and retained size of database backups');
