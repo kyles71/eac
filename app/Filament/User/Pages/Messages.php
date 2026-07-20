@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages;
 
 use App\Models\User;
-use App\Services\Mail\UserVisibleSentEmails;
+use App\Services\Mail\UserVisibleSentEmailsService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Support\Enums\Width;
@@ -36,7 +36,7 @@ final class Messages extends TablePage
     protected function makeTable(): Table
     {
         return $this->makeBaseTable()
-            ->query(app(UserVisibleSentEmails::class)->query($this->user()))
+            ->query(app(UserVisibleSentEmailsService::class)->query($this->user()))
             ->columns([
                 TextColumn::make('sent_at')
                     ->label('Sent')
