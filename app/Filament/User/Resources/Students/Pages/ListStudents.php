@@ -16,6 +16,8 @@ final class ListStudents extends ListRecords
     {
         return [
             CreateAction::make()
+                ->label('Add Student')
+                ->createAnother(false)
                 ->mutateDataUsing(function (array $data): array {
                     $data['user_id'] = auth()->id();
 

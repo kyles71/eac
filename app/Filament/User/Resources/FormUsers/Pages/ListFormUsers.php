@@ -32,17 +32,45 @@ final class ListFormUsers extends ListRecords
 
     public function getDefaultActiveTab(): string
     {
-        $has_pending = FormUser::query()
-            ->where('user_id', auth()->id())
-            ->pending()
-            ->exists();
+        $userForms = FormUser::query()
+            ->where('user_id', auth()->id());
 
-        return $has_pending ? 'pending' : 'all';
+        $hasPendingForms = FormUser::applyPendingConstraint(
+            FormUser::applyFormIsActiveConstraint(clone $userForms),
+        )->exists();
+
+        if ($hasPendingForms) {
+            return 'pending';
+        }
+
+        $hasCompletedForms = FormUser::applyCompletedConstraint(
+            FormUser::applyFormIsActiveConstraint(clone $userForms),
+        )->exists();
+
+        if ($hasCompletedForms) {
+            return 'completed';
+        }
+
+        if (FormUser::applyFormIsExpiredConstraint(clone $userForms)->exists()) {
+            return 'expired';
+        }
+
+        return 'pending';
     }
 
     protected function makeTable(): Table
     {
         return parent::makeTable()
+            ->emptyStateHeading(fn (): string => match ($this->activeTab) {
+                'completed' => 'No completed forms',
+                'expired' => 'No expired forms',
+                default => 'No forms to complete',
+            })
+            ->emptyStateDescription(fn (): string => match ($this->activeTab) {
+                'completed' => 'Completed forms will appear here.',
+                'expired' => 'Expired forms will appear here.',
+                default => 'Forms that need your attention will appear here.',
+            })
             ->recordUrl(function (FormUser $record) {
                 $action = 'edit';
 

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Filament\User\Resources\FormUsers\FormUserResource;
+use App\Filament\User\Resources\Students\Pages\CreateStudent;
 use App\Filament\User\Resources\Students\Pages\ListStudents;
 use App\Filament\User\Resources\Students\Pages\ViewStudent;
 use App\Filament\User\Resources\Students\StudentResource;
@@ -29,8 +30,18 @@ beforeEach(function () {
 });
 
 it('can render the students index page', function () {
-    livewire(ListStudents::class)
-        ->assertOk();
+    $component = livewire(ListStudents::class)
+        ->assertOk()
+        ->assertSee('Add Student');
+    $createAction = $component->instance()->getAction('create');
+
+    expect($createAction)->toBeInstanceOf(CreateAction::class)
+        ->and($createAction?->getLabel())->toBe('Add Student')
+        ->and($createAction?->canCreateAnother())->toBeFalse();
+
+    livewire(CreateStudent::class)
+        ->assertOk()
+        ->assertDontSee('Create & create another');
 });
 
 it('keeps user panel resources out of global search', function (): void {
@@ -287,6 +298,7 @@ it('shows current classes and progressively loads past enrollment history', func
         ->assertSee('Past Course 1')
         ->assertSee('Alvin Ailey')
         ->assertSee('Alvin taught this past class.')
+        ->assertDontSee('&lt;!--[if', false)
         ->assertSee('Past Course 5')
         ->assertSee($pastMeetingWithoutEnd
             ->timezone((string) config('app.display_timezone', config('app.timezone')))

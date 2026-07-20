@@ -9,7 +9,10 @@ use Illuminate\Support\Facades\Vite;
 it('configures the user panel without resolving Vite assets', function (): void {
     Vite::shouldReceive('asset')->never();
 
-    (new UserPanelProvider(app()))->panel(Panel::make());
+    $panel = (new UserPanelProvider(app()))->panel(Panel::make());
+
+    expect($panel->getBrandName())->toBe('EAC Plié Portal')
+        ->and(file_get_contents(base_path('.env.example')))->toContain('APP_NAME="EAC Plié Portal"');
 });
 
 it('includes shared Filament classes in both panel themes', function (): void {

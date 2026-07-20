@@ -184,7 +184,7 @@ Create `/var/www/html/eac/shared/.env` before the first deploy. It is shared bet
 At minimum, review these core values:
 
 ```dotenv
-APP_NAME="EAC Portal"
+APP_NAME="EAC Plié Portal"
 APP_ENV=production
 APP_KEY=<unique-generated-key>
 APP_DEBUG=false

@@ -40,7 +40,7 @@ it('shows dedicated waiver banners before the generic forms fallback', function 
         ->assertSeeText('Waivers Needed')
         ->assertSeeText('The following students need waivers signed: '.$student->first_name)
         ->assertSeeText('Forms Needed')
-        ->assertSeeText('You have 1 form(s) that need to be completed.');
+        ->assertSeeText('You have 1 form that needs to be completed.');
 });
 
 it('does not render global banners on the checkout success page', function (): void {
@@ -90,6 +90,7 @@ it('refreshes enrollment and form banners without a page navigation', function (
 
     $component = livewire(UserBanners::class)
         ->assertSee('Complete Enrollments')
+        ->assertSee('You have 1 enrollment that needs to be assigned to a student.')
         ->assertDontSee('Waivers Needed');
 
     $enrollment->update(['student_id' => $student->id]);

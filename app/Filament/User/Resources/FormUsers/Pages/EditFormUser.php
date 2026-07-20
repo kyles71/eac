@@ -15,6 +15,14 @@ final class EditFormUser extends EditRecord
 {
     protected static string $resource = FormUserResource::class;
 
+    public function getTitle(): string
+    {
+        $record = $this->formUser()->loadMissing('form');
+        $verb = $record->isCompleted() ? 'Update' : 'Complete';
+
+        return "{$verb} {$record->form->name}";
+    }
+
     public function form(Schema $schema): Schema
     {
         $record = $this->formUser();

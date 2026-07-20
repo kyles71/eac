@@ -17,7 +17,7 @@ it('registers the customizable open enrollment reminder with user and enrollment
 
     expect($definition->category)->toBe('transactional')
         ->and(array_keys($definition->tokensByKey()))
-        ->toContain('user.first_name', 'user.email', 'open_enrollments.count')
+        ->toContain('user.first_name', 'user.email', 'open_enrollments.count', 'open_enrollments.label')
         ->and(array_keys($definition->slotsByMergeTag()))->toBe(['slot.open-enrollments']);
 });
 
@@ -69,7 +69,7 @@ it('batches all eligible open enrollments into one reminder per user and sends e
         return $mail->emailTypeKey === 'open-enrollment-reminder'
             && $mail->hasTo('open-enrollments@example.com')
             && $mail->usesMailer('transactional')
-            && $rendered->subject === 'Complete your 2 open enrollment(s)'
+            && $rendered->subject === 'Complete your 2 open enrollments'
             && str_contains($rendered->html, 'Ballet &lt;One&gt;')
             && str_contains($rendered->html, 'Jazz Two')
             && ! str_contains($rendered->html, 'New Course');
@@ -96,8 +96,10 @@ it('runs open enrollment reminders through the command', function (): void {
     Enrollment::factory()->create(['created_at' => now()->subDays(8)]);
 
     $this->artisan('enrollments:send-open-reminders')
-        ->expectsOutput('Reminded 1 user(s) about 1 open enrollment(s).')
+        ->expectsOutput('Reminded 1 user about 1 open enrollment.')
         ->assertSuccessful();
 
     Mail::assertQueued(ManagedMail::class, 1);
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->getRenderedEmail()->subject === 'Complete your 1 open enrollment'
+        && str_contains($mail->getRenderedEmail()->html, 'following enrollment by assigning a student'));
 });

@@ -25,7 +25,7 @@ final class ProductPurchaseNotificationEmailType implements EmailTypeContract
                 {{ slot.purchase-details }}
                 HTML],
             tokens: [
-                new Token('app.name', 'Application name', example: 'EAC Portal'),
+                new Token('app.name', 'Application name', example: 'EAC Plié Portal'),
                 new Token('purchaser.name', 'Purchaser name', example: 'Kyle Smith'),
                 new Token('purchaser.email', 'Purchaser email', example: 'kyle@example.com'),
                 new Token('order.number', 'Order number', example: '1234'),
