@@ -1,12 +1,14 @@
 # EAC Production Activation Runbook
 
-Last reviewed: 2026-07-18  
-Application: Laravel 13 / Filament 5  
+Last reviewed: 2026-07-20
+Application: Laravel 13 / Filament 5
 Production deployment target: `/var/www/html/eac` from the `master` branch
 
 ## Purpose
 
 This runbook describes the infrastructure, credentials, operating processes, and activation sequence required to turn up a production EAC instance. It is based on the application's current code, `.env.example`, GitHub Actions workflows, and `deploy.php`.
+
+For routine maintenance, incident triage, debugging, and recovery after activation, use `APPLICATION_MAINTENANCE_RUNBOOK.md`.
 
 Do not copy credentials from the test environment. Production must have its own application key, database, Stripe live-mode resources, storage credentials, monitoring environment, and verified mail configuration.
 
@@ -276,9 +278,9 @@ All managed, welcome, password-reset, verification, receipt, reminder, gift-card
 Example Supervisor program:
 
 ```ini
-[program:eac-production-queue]
+[program:eac-laravel-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=/usr/bin/php /var/www/html/eac/current/artisan queue:work database --sleep=3 --tries=3 --timeout=120 --max-time=3600
+command=/usr/bin/php8.4 /var/www/html/eac/current/artisan queue:work database --sleep=3 --tries=3 --timeout=120 --max-time=3600
 directory=/var/www/html/eac/current
 user=www-data
 numprocs=1
@@ -295,23 +297,33 @@ Confirm the PHP binary path and user for the target host. The deployment's `queu
 
 ### Scheduler
 
-Install one scheduler entry on exactly one production host:
+Install the scheduler in `www-data`'s personal crontab on exactly one production host:
+
+```bash
+sudo crontab -u www-data -e
+```
+
+Add this entry. A personal crontab does not include a username column:
 
 ```cron
-* * * * * www-data cd /var/www/html/eac/current && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /var/www/html/eac/current && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
 ```
+
+The alternative system-crontab format used in `/etc/crontab` or `/etc/cron.d/*` does include `www-data` between the schedule and command. Do not paste a system-crontab entry into a personal crontab.
 
 The current schedule includes:
 
-- Every minute: synchronize scheduled form-version activations.
 - 12:01 a.m. Eastern: process payment-plan installments.
 - 12:01 a.m. Eastern: cancel orders abandoned for more than 24 hours.
+- 3:10 a.m. Eastern: remove database backups outside the retention policy.
+- 3:40 a.m. Eastern: create an encrypted production database backup.
+- 6:10 a.m. Eastern: monitor production backup age and retained size.
 - 8:00 a.m. Eastern: notify staff about newly past-due installments.
 - 8:00 a.m. Eastern: send two-week event reminders.
 - 8:00 a.m. Eastern: remind users about unassigned open enrollments.
 - 8:00 a.m. Eastern: send abandoned-cart reminders.
 
-Run `php artisan schedule:list` after deployment and confirm the displayed UTC execution times correspond to Eastern time, including daylight-saving behavior.
+Run `sudo -u www-data /usr/bin/php8.4 artisan schedule:list` after deployment and confirm the displayed UTC execution times correspond to Eastern time, including daylight-saving behavior.
 
 ## 6. First activation sequence
 
@@ -391,6 +403,7 @@ These findings do not all block a single-server launch, but they should be track
 
 ## References
 
+- EAC application maintenance and debugging: `APPLICATION_MAINTENANCE_RUNBOOK.md`
 - Laravel 13 deployment: <https://laravel.com/docs/13.x/deployment>
 - Laravel 13 queues and process monitoring: <https://laravel.com/docs/13.x/queues>
 - Laravel 13 filesystem: <https://laravel.com/docs/13.x/filesystem>

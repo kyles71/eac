@@ -59,9 +59,12 @@ it('uses the agreed backup health and tiered retention policy', function (): voi
 it('schedules production backup operations without overlap', function (): void {
     $events = collect(Schedule::events());
 
-    assertScheduledBackupEvent($events, 'backup:clean', '0 1 * * *', ['--disable-notifications']);
-    assertScheduledBackupEvent($events, 'backup:database', '30 1 * * *');
-    assertScheduledBackupEvent($events, 'backup:monitor', '0 4 * * *', ['--disable-notifications']);
+    assertScheduledBackupEvent($events, 'backup:clean', '10 3 * * *', ['--disable-notifications']);
+    assertScheduledBackupEvent($events, 'backup:database', '40 3 * * *');
+    assertScheduledBackupEvent($events, 'backup:monitor', '10 6 * * *');
+
+    expect(scheduledBackupEvent('backup:monitor', $events)->command)
+        ->not->toContain('--disable-notifications');
 });
 
 it('reports scheduled cleanup and monitoring failures', function (): void {
