@@ -4,7 +4,17 @@
             <p class="font-medium text-gray-950 dark:text-white">{{ $item['course'] }}</p>
 
             <p class="text-sm text-gray-500 dark:text-gray-400">
-                {{ collect([$item['semester'], $item['teacher']])->filter()->join(' · ') }}
+                @if (filled($item['semester']))
+                    {{ $item['semester'] }}
+                @endif
+
+                @if (filled($item['teacher']))
+                    @if (filled($item['semester']))
+                        <span aria-hidden="true"> · </span>
+                    @endif
+
+                    {!! $item['teacher'] !!}
+                @endif
             </p>
         </div>
 

@@ -12,6 +12,7 @@ use App\Models\Event;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
 use App\Models\Student;
 use App\Models\User;
 use App\Support\MediaDisks;
@@ -80,6 +81,8 @@ it('derives valid pricing for name your price gift card products', function () {
 
 it('knows when add to cart needs extra information', function () {
     $standardProduct = Product::factory()->create(['price' => 5000]);
+    $questionProduct = Product::factory()->create(['price' => 5000]);
+    ProductQuestion::factory()->for($questionProduct)->create();
     $fixedGiftCard = Product::factory()
         ->forGiftCardType(GiftCardType::factory()->denomination(5000)->create())
         ->create();
@@ -88,6 +91,9 @@ it('knows when add to cart needs extra information', function () {
         ->create();
 
     expect($standardProduct->requiresAddToCartInformation())->toBeFalse()
+        ->and($standardProduct->hasPurchaserQuestions())->toBeFalse()
+        ->and($questionProduct->hasPurchaserQuestions())->toBeTrue()
+        ->and($questionProduct->requiresAddToCartInformation())->toBeTrue()
         ->and($fixedGiftCard->requiresAddToCartInformation())->toBeFalse()
         ->and($customGiftCard->requiresAddToCartInformation())->toBeTrue();
 });

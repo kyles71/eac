@@ -12,6 +12,7 @@ use App\Models\OrderItem;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\ProductQuestionAnswer;
 use App\Models\User;
 use Filament\Facades\Filament;
 
@@ -45,6 +46,46 @@ it('loads the pending order without a query param', function () {
     livewire(Checkout::class)
         ->assertOk()
         ->assertSet('order.id', $order->id);
+});
+
+it("shows each unit's purchaser questions and answers in the checkout cart", function (): void {
+    $product = Product::factory()->create(['name' => 'Competition Shirt']);
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+    ]);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+        'quantity' => 2,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'unit_number' => 1,
+        'question' => 'Dancer name',
+        'answer' => 'Avery',
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'unit_number' => 2,
+        'question' => 'Dancer name',
+        'answer' => 'Jordan',
+    ]);
+
+    livewire(Checkout::class)
+        ->assertOk()
+        ->assertSeeInOrder([
+            'Item 1 of 2',
+            'Dancer name',
+            'Avery',
+            'Item 2 of 2',
+            'Dancer name',
+            'Jordan',
+        ])
+        ->assertSeeHtml('<dt class="font-bold">Dancer name</dt>')
+        ->assertDontSee('Dancer name:');
 });
 
 it('redirects to cart when no pending order exists', function () {

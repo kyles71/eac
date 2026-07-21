@@ -37,6 +37,8 @@ final class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(Builder::class, PreviewBuilder::class);
 
+        $this->configureDatabaseDumpOptions();
+
         $this->app->singleton(StripeServiceContract::class, function (): StripeService {
             return new StripeService(
                 new StripeClient(config('services.stripe.secret')),
@@ -61,5 +63,19 @@ final class AppServiceProvider extends ServiceProvider
         PanelSwitch::configureUsing(function (PanelSwitch $panelSwitch) {
             $panelSwitch->simple();
         });
+    }
+
+    private function configureDatabaseDumpOptions(): void
+    {
+        foreach (['mysql', 'mariadb'] as $connection) {
+            $dumpConfiguration = (array) config("database.connections.{$connection}.dump", []);
+
+            config()->set("database.connections.{$connection}.dump", [
+                ...$dumpConfiguration,
+                'use_single_transaction' => true,
+                'use_quick' => true,
+                'timeout' => 600,
+            ]);
+        }
     }
 }

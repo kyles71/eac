@@ -122,15 +122,16 @@ it('queues the receipt and staff notification after a zero-balance order complet
     $question = ProductQuestion::factory()->for($product)->required()->create([
         'question' => 'Dancer name',
     ]);
-    $cartItem = CartItem::factory()->create([
+    CartItem::factory()->create([
         'user_id' => $user->id,
         'product_id' => $product->id,
+        'question_answers' => [
+            1 => ["question_{$question->id}" => 'Avery'],
+        ],
     ]);
     $discount = DiscountCode::factory()->fixedAmount(5000)->create();
 
-    $order = app(CreateOrder::class)->handle($user, $discount, questionAnswers: [
-        $cartItem->id => [1 => ["question_{$question->id}" => 'Avery']],
-    ])->refresh();
+    $order = app(CreateOrder::class)->handle($user, $discount)->refresh();
 
     expect($order->status)->toBe(OrderStatus::Completed)
         ->and($order->receipt_queued_at)->not->toBeNull()

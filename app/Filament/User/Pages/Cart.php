@@ -10,12 +10,13 @@ use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
-use App\Filament\Shared\Schemas\ProductQuestionCheckoutSchema;
+use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\CartItem;
 use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Services\CreditLedgerService;
+use App\Services\ProductQuestionAnswerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdown;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
@@ -37,6 +38,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
@@ -312,7 +314,8 @@ final class Cart extends Page implements HasTable
         return $this->paymentPlanBreakdownForTemplate($this->selectedTemplate);
     }
 
-    public function incrementQuantity(int $cartItemId): void
+    /** @param array<int|string, mixed> $questionAnswers */
+    public function incrementQuantity(int $cartItemId, array $questionAnswers = []): void
     {
         try {
             $cartItem = CartItem::query()
@@ -324,8 +327,12 @@ final class Cart extends Page implements HasTable
                 return;
             }
 
-            $updateQuantity = new UpdateCartQuantity;
-            $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity + 1);
+            app(UpdateCartQuantity::class)->handle(
+                auth()->user(),
+                $cartItemId,
+                $cartItem->quantity + 1,
+                $questionAnswers,
+            );
 
             $this->refreshCartState();
             $this->dispatch('refresh-sidebar');
@@ -354,8 +361,7 @@ final class Cart extends Page implements HasTable
                 return;
             }
 
-            $updateQuantity = new UpdateCartQuantity;
-            $updateQuantity->handle(auth()->user(), $cartItemId, $cartItem->quantity - 1);
+            app(UpdateCartQuantity::class)->handle(auth()->user(), $cartItemId, $cartItem->quantity - 1);
 
             $this->refreshCartState();
             $this->dispatch('refresh-sidebar');
@@ -385,6 +391,47 @@ final class Cart extends Page implements HasTable
             Notification::make()
                 ->title('Could not remove item')
                 ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /** @param array<int|string, mixed> $questionAnswers */
+    public function saveQuestionAnswers(int $cartItemId, array $questionAnswers): void
+    {
+        $cartItem = CartItem::query()
+            ->where('id', $cartItemId)
+            ->where('user_id', auth()->id())
+            ->with(['product.productable', 'product.questions'])
+            ->first();
+
+        if (! $cartItem instanceof CartItem || ! $cartItem->product->hasPurchaserQuestions()) {
+            return;
+        }
+
+        try {
+            $normalizedAnswers = app(ProductQuestionAnswerService::class)->normalizeUnits(
+                $cartItem->product,
+                $questionAnswers,
+                $cartItem->quantity,
+                totalQuantity: $cartItem->quantity,
+            );
+
+            $cartItem->update([
+                'question_answers' => $normalizedAnswers,
+                'reminder_sent_at' => null,
+            ]);
+
+            $this->refreshCartState();
+
+            Notification::make()
+                ->title('Purchaser answers updated')
+                ->success()
+                ->send();
+        } catch (InvalidArgumentException $exception) {
+            Notification::make()
+                ->title('Could not update purchaser answers')
+                ->body($exception->getMessage())
                 ->danger()
                 ->send();
         }
@@ -473,18 +520,27 @@ final class Cart extends Page implements HasTable
             ->size('lg')
             ->disabled(fn (): bool => $this->cartItems->isEmpty())
             ->slideOver(false)
-            ->modalHeading(fn (): string => $this->selectedTemplate === null
-                ? 'Purchase Details'
-                : 'Purchase Details & Payment Plan Terms')
-            ->modalSubmitActionLabel(fn (): string => $this->selectedTemplate === null
-                ? 'Continue to Payment'
-                : 'Agree & Continue to Payment')
-            ->modalHidden(fn (): bool => $this->selectedTemplate === null && ! $this->hasProductQuestions())
-            ->schema(function (): array {
-                $questionSchema = ProductQuestionCheckoutSchema::make($this->cartItems);
+            ->modalHeading('Payment Plan Terms & Conditions')
+            ->modalSubmitActionLabel('Agree & Continue to Payment')
+            ->modalHidden(fn (): bool => $this->selectedTemplate === null)
+            ->before(function (Action $action): void {
+                $incompleteCartItem = $this->firstCartItemWithIncompleteQuestionAnswers();
 
+                if (! $incompleteCartItem instanceof CartItem) {
+                    return;
+                }
+
+                Notification::make()
+                    ->title('Product details needed')
+                    ->body("Complete the missing details for \"{$incompleteCartItem->product->name}\" using Edit Details before checking out.")
+                    ->warning()
+                    ->send();
+
+                $action->halt();
+            })
+            ->schema(function (): array {
                 if ($this->selectedTemplate === null) {
-                    return $questionSchema;
+                    return [];
                 }
 
                 $termsVersion = PaymentPlanTerms::currentVersion();
@@ -494,7 +550,6 @@ final class Cart extends Page implements HasTable
                     : $termsVersion->content;
 
                 return [
-                    ...$questionSchema,
                     Section::make('Payment Plan Terms & Conditions')
                         ->description('Review and accept the payment plan terms before continuing.')
                         ->columns(1)
@@ -538,7 +593,7 @@ final class Cart extends Page implements HasTable
                         ]),
                 ];
             })
-            ->action(function (array $data): void {
+            ->action(function (): void {
                 try {
                     $createOrder = app(CreateOrder::class);
 
@@ -557,7 +612,6 @@ final class Cart extends Page implements HasTable
                         $discountCode,
                         $creditToApply,
                         $paymentPlanTemplate,
-                        $data['question_answers'] ?? [],
                     );
 
                     if ($order->status === OrderStatus::Completed) {
@@ -638,11 +692,23 @@ final class Cart extends Page implements HasTable
             ->query(
                 CartItem::query()
                     ->where('user_id', auth()->id())
-                    ->with('product.productable')
+                    ->with(['product.productable', 'product.questions'])
             )
             ->columns([
                 TextColumn::make('product.name')
                     ->label('Name')
+                    ->description(function (CartItem $record): ?ViewContract {
+                        $units = app(ProductQuestionAnswerService::class)->cartDisplayUnits($record);
+
+                        if ($units === []) {
+                            return null;
+                        }
+
+                        return view('filament.shared.product-question-details', [
+                            'units' => $units,
+                        ]);
+                    })
+                    ->wrap()
                     ->toggleable(false)
                     ->searchable(false)
                     ->sortable(false),
@@ -671,8 +737,20 @@ final class Cart extends Page implements HasTable
                     ->icon(Heroicon::OutlinedPlusCircle)
                     ->color('primary')
                     ->iconButton()
-                    ->action(function (CartItem $record): void {
-                        $this->incrementQuantity($record->id);
+                    ->modalHidden(fn (CartItem $record): bool => ! $record->product->hasPurchaserQuestions())
+                    ->modalHeading(fn (CartItem $record): string => "Add Another {$record->product->name}")
+                    ->modalSubmitActionLabel('Add to Cart')
+                    ->fillForm(fn (): array => [
+                        'question_answers' => [1 => []],
+                    ])
+                    ->schema(fn (CartItem $record): array => ProductQuestionSchema::make($record->product, 1))
+                    ->action(function (CartItem $record, array $data): void {
+                        $this->incrementQuantity(
+                            $record->id,
+                            is_array($data['question_answers'] ?? null)
+                                ? $data['question_answers']
+                                : [],
+                        );
                     }),
                 Action::make('decrement')
                     ->label('Remove one')
@@ -692,6 +770,31 @@ final class Cart extends Page implements HasTable
                     ->action(function (CartItem $record): void {
                         $this->removeItem($record->id);
                     }),
+                Action::make('editQuestionAnswers')
+                    ->label('Edit Details')
+                    ->icon(Heroicon::OutlinedDocumentText)
+                    ->color(fn (CartItem $record): string => $this->cartItemQuestionAnswersAreComplete($record)
+                        ? 'primary'
+                        : 'warning')
+                    ->link()
+                    ->visible(fn (CartItem $record): bool => $record->product->hasPurchaserQuestions())
+                    ->modalHeading(fn (CartItem $record): string => "Purchaser Questions — {$record->product->name}")
+                    ->modalSubmitActionLabel('Save Answers')
+                    ->fillForm(fn (CartItem $record): array => [
+                        'question_answers' => $record->storedQuestionAnswers(),
+                    ])
+                    ->schema(fn (CartItem $record): array => ProductQuestionSchema::make(
+                        $record->product,
+                        $record->quantity,
+                    ))
+                    ->action(function (CartItem $record, array $data): void {
+                        $this->saveQuestionAnswers(
+                            $record->id,
+                            is_array($data['question_answers'] ?? null)
+                                ? $data['question_answers']
+                                : [],
+                        );
+                    }),
             ])
             ->deferLoading(false)
             ->reorderableColumns(false)
@@ -707,10 +810,19 @@ final class Cart extends Page implements HasTable
             ]);
     }
 
-    private function hasProductQuestions(): bool
+    private function firstCartItemWithIncompleteQuestionAnswers(): ?CartItem
     {
-        return $this->cartItems->contains(
-            fn (CartItem $cartItem): bool => $cartItem->product->questions->isNotEmpty(),
+        return $this->cartItems->first(
+            fn (CartItem $cartItem): bool => $cartItem->product->hasPurchaserQuestions()
+                && ! $this->cartItemQuestionAnswersAreComplete($cartItem),
+        );
+    }
+
+    private function cartItemQuestionAnswersAreComplete(CartItem $cartItem): bool
+    {
+        return app(ProductQuestionAnswerService::class)->isComplete(
+            $cartItem,
+            $cartItem->storedQuestionAnswers(),
         );
     }
 

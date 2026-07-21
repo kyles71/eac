@@ -1,16 +1,38 @@
 @php
+    use App\Enums\ManagedBannerRenderLocation;
+
     $banners = $this->banners();
+    $isAboveTopbar = $this->renderLocation === ManagedBannerRenderLocation::TopbarBefore->value;
 @endphp
 
 <div
+    @if ($isAboveTopbar)
+        x-data="{
+            resizeObserver: null,
+            updateManagedBannerHeight() {
+                document.documentElement.style.setProperty('--eac-managed-banner-height', this.$el.offsetHeight + 'px')
+            },
+            init() {
+                this.resizeObserver = new ResizeObserver(() => this.updateManagedBannerHeight())
+                this.resizeObserver.observe(this.$el)
+                this.updateManagedBannerHeight()
+            },
+            destroy() {
+                this.resizeObserver?.disconnect()
+                document.documentElement.style.removeProperty('--eac-managed-banner-height')
+            },
+        }"
+    @endif
     @class([
         'hidden' => $banners->isEmpty(),
-        'mt-2' => $banners->isNotEmpty(),
+        'pb-2' => $banners->isNotEmpty() && $isAboveTopbar,
+        'mt-2' => $banners->isNotEmpty() && ! $isAboveTopbar,
     ])
     @if ($banners->isEmpty())
         aria-hidden="true"
     @endif
     data-managed-banners-empty="{{ $banners->isEmpty() ? 'true' : 'false' }}"
+    data-managed-banners-location="{{ $this->renderLocation }}"
 >
     @if ($banners->isNotEmpty())
         <div class="space-y-2">

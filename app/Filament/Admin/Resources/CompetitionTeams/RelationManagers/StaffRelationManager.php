@@ -48,6 +48,8 @@ final class StaffRelationManager extends RelationManager
                 AttachAction::make()
                     ->multiple()
                     ->preloadRecordSelect()
+                    ->stickyModalHeader(false)
+                    ->stickyModalFooter(false)
                     ->recordSelectSearchColumns(['first_name', 'last_name', 'email'])
                     ->recordSelectOptionsQuery(fn (Builder $query): Builder => app(CompetitionRosterService::class)->applyRoleBearingScope($query)),
             ])

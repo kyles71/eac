@@ -9,7 +9,7 @@ use FinityLabs\FinMail\Enums\EmailStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Kyle\FilamentMailManager\Models\ManagedSentEmail;
 
-final readonly class UserVisibleSentEmails
+final readonly class UserVisibleSentEmailsService
 {
     /**
      * @return Builder<ManagedSentEmail>

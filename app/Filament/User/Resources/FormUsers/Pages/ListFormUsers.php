@@ -48,15 +48,49 @@ final class ListFormUsers extends ListRecords
     public function getDefaultActiveTab(): string
     {
         $query = $this->baseBadgeQuery();
-        FormAssignment::applyPendingConstraint($query);
-        FormAssignment::applyActiveConstraint($query);
 
-        return $query->exists() ? 'pending' : 'all';
+        $pendingForms = clone $query;
+        FormAssignment::applyActiveConstraint($pendingForms);
+        FormAssignment::applyPendingConstraint($pendingForms);
+        $hasPendingForms = $pendingForms->exists();
+
+        if ($hasPendingForms) {
+            return 'pending';
+        }
+
+        $completedForms = clone $query;
+        FormAssignment::applyActiveConstraint($completedForms);
+        FormAssignment::applyCompletedConstraint($completedForms);
+        $hasCompletedForms = $completedForms->exists();
+
+        if ($hasCompletedForms) {
+            return 'completed';
+        }
+
+        $expiredForms = clone $query;
+        FormAssignment::applyExpiredConstraint($expiredForms);
+        $hasExpiredForms = $expiredForms->exists();
+
+        if ($hasExpiredForms) {
+            return 'expired';
+        }
+
+        return 'pending';
     }
 
     protected function makeTable(): Table
     {
         return parent::makeTable()
+            ->emptyStateHeading(fn (): string => match ($this->activeTab) {
+                'completed' => 'No completed forms',
+                'expired' => 'No expired forms',
+                default => 'No forms to complete',
+            })
+            ->emptyStateDescription(fn (): string => match ($this->activeTab) {
+                'completed' => 'Completed forms will appear here.',
+                'expired' => 'Expired forms will appear here.',
+                default => 'Forms that need your attention will appear here.',
+            })
             ->recordUrl(function (FormAssignment $record) {
                 $action = 'edit';
 

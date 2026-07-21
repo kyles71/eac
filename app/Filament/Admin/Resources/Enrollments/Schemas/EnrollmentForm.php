@@ -49,7 +49,6 @@ final class EnrollmentForm
                             ->label('Student')
                             ->helperText('Only students belonging to the selected parent / user are shown.')
                             ->live()
-                            ->required()
                             ->studentRelationship(
                                 'student',
                                 fn (Builder $query, Get $get): Builder => $query->when($get('user_id'), fn (Builder $query, mixed $userId): Builder => $query->where('user_id', $userId)),

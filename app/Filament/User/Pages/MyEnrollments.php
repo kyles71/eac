@@ -129,6 +129,8 @@ final class MyEnrollments extends TablePage
                         ->label(fn (Enrollment $record): string => $record->student_id === null ? 'Assign Student' : 'Change Student')
                         ->icon(Heroicon::OutlinedUser)
                         ->visible(fn (Enrollment $record): bool => ! $this->courseHasConcluded($record) && ($record->student_id === null || $this->canChangeAssignedStudent($record)))
+                        ->stickyModalHeader(false)
+                        ->stickyModalFooter(false)
                         ->schema([
                             Select::make('student_id')
                                 ->label('Student')

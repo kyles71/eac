@@ -11,17 +11,24 @@ use App\Models\Event;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\ProductQuestion;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Vite;
 
 use function Pest\Livewire\livewire;
 
 beforeEach(function () {
     config(['app.display_timezone' => 'America/Los_Angeles']);
+
+    Vite::partialMock()
+        ->shouldReceive('asset')
+        ->with('resources/js/filament/user/product-gallery.js')
+        ->andReturn('/build/assets/product-gallery.js');
 
     Filament::setCurrentPanel('user');
     Storage::fake('public');
@@ -93,9 +100,37 @@ it('renders product and linked item gallery images', function () {
 
     $this->product->update(['include_productable_images' => true]);
 
-    livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+    $component = livewire(ProductDetails::class, ['product' => $this->product->refresh()])
         ->assertSee('product-gallery.jpg')
-        ->assertSee('course-gallery.jpg');
+        ->assertSee('course-gallery.jpg')
+        ->assertSeeInOrder([
+            'product-gallery.jpg',
+            'course-gallery.jpg',
+        ])
+        ->assertSeeHtml('<eac-product-gallery')
+        ->assertSeeHtml('data-js-as-module="true"')
+        ->assertSeeHtml("x-load-js=\"['\\/build\\/assets\\/product-gallery.js']\"")
+        ->assertSeeHtml('data-product-gallery-item')
+        ->assertSee('Open product-gallery in the image viewer')
+        ->assertSee('Open course-gallery in the image viewer');
+
+    expect(mb_substr_count($component->html(), 'data-product-gallery-item'))->toBe(2);
+});
+
+it('renders the lightbox hook for a single gallery image', function () {
+    $this->product->addMedia(UploadedFile::fake()->image('only-gallery-image.jpg'))
+        ->toMediaCollection('images');
+
+    livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+        ->assertSeeHtml('<eac-product-gallery')
+        ->assertSee('only-gallery-image.jpg')
+        ->assertDontSee('No product images are available.');
+});
+
+it('keeps the existing empty gallery state without loading the viewer', function () {
+    livewire(ProductDetails::class, ['product' => $this->product])
+        ->assertSee('No product images are available.')
+        ->assertDontSeeHtml('<eac-product-gallery');
 });
 
 it('can add one item to the cart', function () {
@@ -153,6 +188,39 @@ it('opens the add to cart modal when extra information is needed', function () {
         ->mountAction('addToCart')
         ->assertActionMounted('addToCart')
         ->assertSchemaComponentExists('custom_gift_card_amount', 'mountedActionSchema0');
+});
+
+it('asks purchaser questions when adding from product details and stores the answer', function (): void {
+    $question = ProductQuestion::factory()->for($this->product)->required()->create([
+        'question' => 'Dancer name',
+    ]);
+
+    $component = livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+        ->mountAction('addToCart')
+        ->assertActionMounted('addToCart');
+    $schemaName = $component->instance()->getMountedActionSchemaName();
+    $fields = collect($component->instance()->{$schemaName}->getFlatFields(withHidden: true, withAbsoluteKeys: true));
+
+    expect($fields->contains(fn ($field): bool => $field->getName() === "question_{$question->id}"))->toBeTrue();
+
+    $component
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => 'Avery'],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->firstOrFail();
+
+    expect($cartItem->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => 'Avery'],
+    ]);
 });
 
 it('disables adding to cart when capacity is sold out', function () {

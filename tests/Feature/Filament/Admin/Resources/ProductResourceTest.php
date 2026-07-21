@@ -55,6 +55,7 @@ it('has an include linked item images field on the product form', function () {
     livewire(ListProducts::class)
         ->mountAction(CreateAction::class)
         ->assertSchemaComponentExists('include_productable_images')
+        ->assertSchemaComponentDoesNotExist('ask_purchaser_questions_when_adding_to_cart')
         ->assertSchemaComponentStateSet('include_productable_images', false);
 });
 
@@ -188,6 +189,9 @@ it('can configure ordered purchaser questions and purchase notifications', funct
         ->and($questions->last()->max_length)->toBeNull()
         ->and($questions->last()->options)->toBe(['Small', 'Medium', 'Large'])
         ->and($questions->last()->allows_other)->toBeTrue();
+
+    livewire(ViewProduct::class, ['record' => $product->id])
+        ->assertSee('Questions');
 });
 
 it('shows the include linked item images field after selecting a linked item', function () {

@@ -7,6 +7,7 @@ namespace App\Filament\User\Pages;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Enums\StoreView;
+use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Product;
@@ -63,7 +64,7 @@ final class Store extends TablePage
     {
         $query = Product::query()
             ->visibleTo($this->getUser())
-            ->with('productable');
+            ->with(['productable', 'questions']);
 
         if ($this->storeView === StoreView::Cards) {
             $query
@@ -236,8 +237,12 @@ final class Store extends TablePage
             ->modalSubmitActionLabel('Add to Cart')
             ->fillForm(fn (Product $record): array => [
                 'custom_gift_card_amount' => $record->suggestedCustomGiftCardAmount(),
+                'question_answers' => [1 => []],
             ])
-            ->schema(fn (Product $record): array => CustomGiftCardAmountField::schema($record))
+            ->schema(fn (Product $record): array => [
+                ...CustomGiftCardAmountField::schema($record),
+                ...ProductQuestionSchema::make($record, 1),
+            ])
             ->disabled(function (Product $record): bool {
                 return $record->productable instanceof HasCapacity
                     && $record->productable->getAvailableCapacity() <= 0;
@@ -249,6 +254,9 @@ final class Store extends TablePage
                         $this->getUser(),
                         $record,
                         customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($record, $data),
+                        questionAnswers: is_array($data['question_answers'] ?? null)
+                            ? $data['question_answers']
+                            : [],
                     );
 
                     $this->dispatch('refresh-sidebar');

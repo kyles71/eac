@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Shared\Schemas;
 
 use App\Enums\ProductQuestionType;
-use App\Models\CartItem;
+use App\Models\Product;
 use App\Models\ProductQuestion;
+use App\Services\ProductQuestionAnswerService;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Flex;
@@ -15,32 +16,14 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Support\Collection;
 
-final class ProductQuestionCheckoutSchema
+final class ProductQuestionSchema
 {
-    /** @param Collection<int, CartItem> $cartItems */
-    public static function make(Collection $cartItems): array
+    /**
+     * @return array<\Filament\Schemas\Components\Component>
+     */
+    public static function make(Product $product, int $quantity, string $statePath = 'question_answers'): array
     {
-        $sections = [];
-
-        /** @var CartItem $cartItem */
-        foreach ($cartItems as $cartItem) {
-            $questions = $cartItem->product->questions;
-
-            if ($questions->isEmpty()) {
-                continue;
-            }
-
-            for ($unitNumber = 1; $unitNumber <= $cartItem->quantity; $unitNumber++) {
-                $sections[] = Section::make(self::unitLabel($cartItem, $unitNumber))
-                    ->description('Please answer the following questions for this item.')
-                    ->statePath("question_answers.{$cartItem->id}.{$unitNumber}")
-                    ->schema(
-                        $questions
-                            ->flatMap(fn (ProductQuestion $question): array => self::questionFields($question))
-                            ->all(),
-                    );
-            }
-        }
+        $sections = self::sections($product, $quantity, $statePath);
 
         if ($sections === []) {
             return [];
@@ -56,19 +39,46 @@ final class ProductQuestionCheckoutSchema
         ];
     }
 
-    private static function unitLabel(CartItem $cartItem, int $unitNumber): string
+    /**
+     * @return array<Section>
+     */
+    public static function sections(Product $product, int $quantity, string $statePath): array
     {
-        if ($cartItem->quantity === 1) {
-            return $cartItem->product->name;
+        $product->loadMissing('questions');
+
+        if ($product->questions->isEmpty()) {
+            return [];
         }
 
-        return "{$cartItem->product->name} — Item {$unitNumber} of {$cartItem->quantity}";
+        $sections = [];
+
+        for ($unitNumber = 1; $unitNumber <= $quantity; $unitNumber++) {
+            $sections[] = Section::make(self::unitLabel($product, $quantity, $unitNumber))
+                ->description('Please answer the following questions for this item.')
+                ->statePath("{$statePath}.{$unitNumber}")
+                ->schema(
+                    $product->questions
+                        ->flatMap(fn (ProductQuestion $question): array => self::questionFields($question))
+                        ->all(),
+                );
+        }
+
+        return $sections;
+    }
+
+    private static function unitLabel(Product $product, int $quantity, int $unitNumber): string
+    {
+        if ($quantity === 1) {
+            return $product->name;
+        }
+
+        return "{$product->name} — Item {$unitNumber} of {$quantity}";
     }
 
     /** @return array<\Filament\Schemas\Components\Component> */
     private static function questionFields(ProductQuestion $question): array
     {
-        $fieldName = "question_{$question->id}";
+        $fieldName = ProductQuestionAnswerService::fieldName($question);
 
         if ($question->type === ProductQuestionType::Text) {
             return [
@@ -83,6 +93,7 @@ final class ProductQuestionCheckoutSchema
             ->mapWithKeys(fn (string $option): array => [$option => $option])
             ->when($question->allows_other, fn (Collection $options): Collection => $options->put('Other', 'Other'))
             ->all();
+        $otherFieldName = ProductQuestionAnswerService::otherFieldName($question);
 
         return [
             Flex::make([
@@ -94,11 +105,11 @@ final class ProductQuestionCheckoutSchema
                     ->afterStateUpdatedJs(fn (): ?string => $question->allows_other
                         ? <<<JS
                             if (\$state !== 'Other') {
-                                \$set('{$fieldName}_other', null)
+                                \$set('{$otherFieldName}', null)
                             }
                             JS
                         : null),
-                TextInput::make("{$fieldName}_other")
+                TextInput::make($otherFieldName)
                     ->label('Other Answer')
                     ->maxLength(255)
                     ->visibleJs(<<<JS

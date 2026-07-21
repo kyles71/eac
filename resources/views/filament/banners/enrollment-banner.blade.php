@@ -3,7 +3,7 @@
         color="warning"
         icon="heroicon-o-exclamation-triangle"
         heading="Complete Enrollments"
-        :description="'You have ' . $enrollmentCount . ' enrollment(s) that need to be assigned to a student.'"
+        :description="'You have ' . $enrollmentCount . ' ' . \Illuminate\Support\Str::plural('enrollment', $enrollmentCount) . ' that ' . ($enrollmentCount === 1 ? 'needs' : 'need') . ' to be assigned to a student.'"
     >
         <x-slot name="footer">
             <x-filament::button

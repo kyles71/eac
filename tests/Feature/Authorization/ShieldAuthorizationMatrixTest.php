@@ -57,7 +57,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         EventResource::class => ['viewAny', 'view', 'create', 'update', 'deleteAny', 'cancel'],
         FormResource::class => ['viewAny', 'view', 'create', 'update', 'deleteAny'],
         FormUserResource::class => ['viewAny', 'view', 'create', 'update', 'deleteAny'],
-        GiftCardResource::class => ['viewAny', 'create', 'deleteAny'],
+        GiftCardResource::class => ['viewAny', 'create', 'deleteAny', 'redeem'],
         GiftCardTypeResource::class => ['viewAny', 'create', 'delete', 'deleteAny'],
         HolidayResource::class => $fiveAbilities,
         LegalDocumentResource::class => ['viewAny', 'publish'],

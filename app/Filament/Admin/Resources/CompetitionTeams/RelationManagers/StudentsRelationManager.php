@@ -49,6 +49,8 @@ final class StudentsRelationManager extends RelationManager
             ->headerActions([
                 AttachAction::make()
                     ->multiple()
+                    ->stickyModalHeader(false)
+                    ->stickyModalFooter(false)
                     ->recordSelectSearchColumns(['first_name', 'last_name']),
             ])
             ->recordActions([

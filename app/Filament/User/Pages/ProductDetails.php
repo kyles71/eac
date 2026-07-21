@@ -6,6 +6,7 @@ namespace App\Filament\User\Pages;
 
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
+use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\Course;
 use App\Models\Product;
 use App\Support\Filament\CourseStaffPresenter;
@@ -17,13 +18,12 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Image;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use InvalidArgumentException;
 use Spatie\MediaLibrary\HasMedia;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 final class ProductDetails extends Page
 {
@@ -112,10 +112,14 @@ final class ProductDetails extends Page
             ->modalSubmitActionLabel('Add to Cart')
             ->fillForm(fn (): array => [
                 'custom_gift_card_amount' => $this->product?->suggestedCustomGiftCardAmount(),
+                'question_answers' => [1 => []],
             ])
             ->schema(fn (): array => $this->product === null
                 ? []
-                : CustomGiftCardAmountField::schema($this->product))
+                : [
+                    ...CustomGiftCardAmountField::schema($this->product),
+                    ...ProductQuestionSchema::make($this->product, 1),
+                ])
             ->disabled(fn (): bool => $this->product === null || $this->isSoldOut())
             ->action(function (array $data): void {
                 if ($this->product === null) {
@@ -131,6 +135,9 @@ final class ProductDetails extends Page
                         $user,
                         $this->product,
                         customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($this->product, $data),
+                        questionAnswers: is_array($data['question_answers'] ?? null)
+                            ? $data['question_answers']
+                            : [],
                     );
 
                     $this->dispatch('refresh-sidebar');
@@ -177,24 +184,10 @@ final class ProductDetails extends Page
         }
 
         return [
-            Grid::make()
-                ->columns([
-                    'default' => 1,
-                    'sm' => 2,
-                ])
-                ->schema(
-                    $images
-                        ->map(fn (Media $media): Image => Image::make(
-                            $media->getUrl(),
-                            $media->name,
-                        )
-                            ->imageHeight('16rem')
-                            ->imageWidth('100%')
-                            ->extraAttributes([
-                                'class' => 'rounded-lg object-cover ring-1 ring-gray-950/10 dark:ring-white/10',
-                            ]))
-                        ->all()
-                ),
+            View::make('filament.user.pages.product-gallery')
+                ->viewData([
+                    'images' => $images,
+                ]),
         ];
     }
 

@@ -23,7 +23,10 @@ final class EditFormUser extends EditRecord
 
     public function getTitle(): string
     {
-        return $this->assignment()->form->name;
+        $record = $this->assignment()->loadMissing('form');
+        $verb = $record->isCompleted() ? 'Update' : 'Complete';
+
+        return "{$verb} {$record->form->name}";
     }
 
     public function form(Schema $schema): Schema

@@ -26,6 +26,7 @@ final class CartItemFactory extends Factory
             'product_id' => Product::factory(),
             'quantity' => 1,
             'custom_gift_card_amount' => 0,
+            'question_answers' => null,
         ];
     }
 }

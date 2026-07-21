@@ -19,6 +19,7 @@ final class CartItem extends Model
         'product_id' => 'integer',
         'quantity' => 'integer',
         'custom_gift_card_amount' => 'integer',
+        'question_answers' => 'array',
         'reminder_sent_at' => 'datetime',
     ];
 
@@ -37,6 +38,12 @@ final class CartItem extends Model
     public function customGiftCardAmount(): ?int
     {
         return $this->custom_gift_card_amount > 0 ? $this->custom_gift_card_amount : null;
+    }
+
+    /** @return array<int, array<string, string|null>> */
+    public function storedQuestionAnswers(): array
+    {
+        return is_array($this->question_answers) ? $this->question_answers : [];
     }
 
     public function effectiveUnitPrice(): int

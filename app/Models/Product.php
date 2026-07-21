@@ -105,8 +105,16 @@ final class Product extends Model implements HasMedia
     {
         $this->loadMissing('productable');
 
-        return $this->productable instanceof RequiresAddToCartInformation
-            && $this->productable->requiresAddToCartInformation();
+        return $this->hasPurchaserQuestions()
+            || ($this->productable instanceof RequiresAddToCartInformation
+                && $this->productable->requiresAddToCartInformation());
+    }
+
+    public function hasPurchaserQuestions(): bool
+    {
+        $this->loadMissing('questions');
+
+        return $this->questions->isNotEmpty();
     }
 
     public function usesCustomerEnteredPricing(): bool

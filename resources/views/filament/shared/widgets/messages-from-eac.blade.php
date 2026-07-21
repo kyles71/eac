@@ -1,5 +1,5 @@
 <x-filament-widgets::widget>
-    <x-filament::section heading="Messages From EAC" icon="heroicon-o-chat-bubble-left-right">
+    <x-filament::section heading="Messages From EAC" icon="heroicon-o-chat-bubble-left-right" class="h-full">
         <x-slot name="afterHeader">
             {{ $this->viewAllAction() }}
         </x-slot>

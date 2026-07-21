@@ -3,7 +3,7 @@
         color="warning"
         icon="heroicon-o-exclamation-triangle"
         heading="Forms Needed"
-        :description="'You have ' . $formCount . ' form(s) that need to be completed.'"
+        :description="'You have ' . $formCount . ' ' . \Illuminate\Support\Str::plural('form', $formCount) . ' that ' . ($formCount === 1 ? 'needs' : 'need') . ' to be completed.'"
     >
         <x-slot name="footer">
             <x-filament::button
