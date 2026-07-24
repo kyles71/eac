@@ -7,6 +7,7 @@ use App\Forms\Eac\EacFormAssignmentUpgradePolicy;
 use App\Forms\Eac\EacFormContentProvider;
 use App\Forms\Eac\EacFormMappingProvider;
 use App\Forms\Eac\EacFormProjectionHook;
+use App\Forms\Eac\EacFormResponseQueryScope;
 use App\Forms\Eac\EacMedicalWaiverUpdatePolicy;
 use App\Models\Form;
 use App\Models\FormAnswer;
@@ -61,4 +62,6 @@ return [
     'upgrade_policies' => [
         EacFormAssignmentUpgradePolicy::class,
     ],
+
+    'response_query_scope' => EacFormResponseQueryScope::class,
 ];

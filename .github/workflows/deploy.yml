@@ -11,17 +11,148 @@ on:
         type: string
 
 jobs:
+  quality:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Configure Composer GitHub auth
+        env:
+          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+        run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Run Pest unit and feature tests
+        run: vendor/bin/pest --no-progress tests/Unit tests/Feature
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress --error-format=raw --memory-limit=2G
+
+      - name: Check PHP formatting
+        run: vendor/bin/pint --test --format agent
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+  mysql-cutover:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: eac_test
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: eac_test
+      DB_USERNAME: root
+      DB_PASSWORD: password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+          extensions: pdo_mysql
+
+      - name: Configure Composer GitHub auth
+        env:
+          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+        run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Test MySQL cutover and assignment constraints
+        run: vendor/bin/pest --no-progress tests/Feature/LegacyFormBuilderMigrationTest.php tests/Feature/RequiredCourseFormsTest.php
+
+  browser:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Configure Composer GitHub auth
+        env:
+          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+        run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend and browser dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+
+      - name: Run browser tests
+        run: vendor/bin/pest --no-progress tests/Browser
+
   deploy:
+    needs:
+      - quality
+      - mysql-cutover
+      - browser
     concurrency:
       group: ${{ inputs.concurrency_group }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       contents: read
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -34,7 +165,7 @@ jobs:
         run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
 
       - name: Install dependencies
-        run: composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Deploy
         uses: deployphp/action@v1

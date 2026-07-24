@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\FormUsers\Pages;
 
+use App\Actions\Forms\AssignFormManually;
 use App\Filament\Admin\Resources\FormUsers\FormUserResource;
 use App\Models\Form;
 use App\Models\FormAssignment;
+use App\Models\FormVersion;
 use App\Models\Student;
 use App\Models\User;
 use Filament\Actions\CreateAction;
@@ -14,8 +16,6 @@ use Filament\Forms\Components\Select;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Database\Eloquent\Builder;
-use Kyle\FilamentFormBuilder\Actions\UpgradeFormAssignmentToVersion;
-use LogicException;
 
 final class ListFormUsers extends ListRecords
 {
@@ -31,7 +31,9 @@ final class ListFormUsers extends ListRecords
                         ->label('Active Form')
                         ->options(fn (): array => Form::query()
                             ->isActive()
-                            ->whereHas('currentVersion', fn (Builder $query): Builder => $query->active())
+                            ->whereHas('currentVersion', function (Builder $query): void {
+                                FormVersion::applyActiveConstraint($query);
+                            })
                             ->orderBy('name')
                             ->pluck('name', 'id')
                             ->all())
@@ -46,7 +48,8 @@ final class ListFormUsers extends ListRecords
                             ->get()
                             ->mapWithKeys(fn (User $user): array => [$user->id => $user->fullName])
                             ->all())
-                        ->required()
+                        ->required(fn (Get $get): bool => ! self::isStudentForm($get('form_id')) && blank($get('student_id')))
+                        ->visible(fn (Get $get): bool => ! self::isStudentForm($get('form_id')) && blank($get('student_id')))
                         ->searchable(),
                     Select::make('student_id')
                         ->label('Student')
@@ -56,57 +59,34 @@ final class ListFormUsers extends ListRecords
                             ->get()
                             ->mapWithKeys(fn (Student $student): array => [$student->id => $student->fullName])
                             ->all())
-                        ->required(fn (Get $get): bool => Form::query()
-                            ->whereKey($get('form_id'))
-                            ->whereIn('key', ['student-waiver', 'showcase-participation'])
-                            ->exists())
+                        ->required(fn (Get $get): bool => self::isStudentForm($get('form_id')))
+                        ->live()
                         ->searchable(),
                 ])
                 ->using(function (array $data): FormAssignment {
-                    $form = Form::query()->with('currentVersion')->findOrFail($data['form_id']);
-                    $version = $form->currentVersion;
-
-                    if ($version === null || ! $version->isActive()) {
-                        throw new LogicException('Only a currently active form can be assigned manually.');
-                    }
-
-                    $respondent = User::query()->findOrFail($data['respondent_id']);
+                    $form = Form::query()->findOrFail($data['form_id']);
                     $student = filled($data['student_id'] ?? null)
                         ? Student::query()->findOrFail($data['student_id'])
                         : null;
-                    $assignment = FormAssignment::query()
-                        ->where('form_id', $form->id)
-                        ->when(
-                            $student instanceof Student,
-                            fn (Builder $query): Builder => $query->forSubject($student),
-                            fn (Builder $query): Builder => $query
-                                ->whereNull('subject_type')
-                                ->whereNull('subject_id')
-                                ->forRespondent($respondent),
-                        )
-                        ->first();
+                    $respondent = filled($data['respondent_id'] ?? null)
+                        ? User::query()->findOrFail($data['respondent_id'])
+                        : null;
+                    $actor = auth()->user();
 
-                    if ($assignment === null) {
-                        $assignment = new FormAssignment([
-                            'form_id' => $form->id,
-                            'form_version_id' => $version->id,
-                        ]);
-                        $assignment->respondent()->associate($respondent);
-                        $assignment->subject()->associate($student);
-                        $assignment->save();
-
-                        return $assignment;
+                    if (! $actor instanceof User) {
+                        abort(403);
                     }
 
-                    $assignment->respondent()->associate($respondent);
-                    $assignment->save();
-
-                    if ($assignment->form_version_id !== $version->id) {
-                        app(UpgradeFormAssignmentToVersion::class)->handle($assignment, $version);
-                    }
-
-                    return $assignment->refresh();
+                    return app(AssignFormManually::class)->handle($form, $student, $respondent, $actor);
                 }),
         ];
+    }
+
+    private static function isStudentForm(mixed $formId): bool
+    {
+        return is_numeric($formId) && Form::query()
+            ->whereKey((int) $formId)
+            ->whereIn('key', ['student-waiver', 'showcase-participation'])
+            ->exists();
     }
 }

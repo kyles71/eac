@@ -318,6 +318,23 @@ final class DatabaseSeeder extends Seeder
         // Attach forms to courses
         $waiverCourses = $courses->take(5);
         $showcaseCourses = $courses->skip(5)->take(5);
+        $seededWaiverCourse = $waiverCourses->firstOrFail();
+
+        $students->take(2)->each(function (Student $student) use ($seededWaiverCourse): void {
+            Enrollment::query()->firstOrCreate(
+                [
+                    'course_id' => $seededWaiverCourse->id,
+                    'student_id' => $student->id,
+                ],
+                ['user_id' => $student->user_id],
+            );
+        });
+
+        $seededWaiverCourse->events()->firstOrFail()->update([
+            'start_time' => now()->addWeek(),
+            'end_time' => now()->addWeek()->addHour(),
+        ]);
+
         $waiverCourses->each(fn (Course $course) => $course->forms()->attach($waiverForm->id));
         $showcaseCourses->each(fn (Course $course) => $course->forms()->attach($showcaseForm->id));
         $this->seedSubmittedFormResponses($waiverForm, $showcaseForm);

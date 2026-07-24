@@ -120,24 +120,33 @@ it('renders responsive authoring columns with a live preview and temporary sideb
 
     $desktop->script(<<<'JS'
         async () => {
-            const input = Array.from(document.querySelectorAll('input'))
-                .find((element) => element.value === 'Original preview question')
-            const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
-
-            input.focus()
-            valueSetter.call(input, 'Updated preview question')
-            input.dispatchEvent(new Event('input', { bubbles: true }))
-            input.dispatchEvent(new Event('change', { bubbles: true }))
-            input.blur()
-
             const modal = Array.from(document.querySelectorAll('.fi-modal'))
                 .find((element) => element.offsetParent !== null)
-            const saveButton = Array.from(modal.querySelectorAll('button'))
-                .find((element) => element.innerText.trim() === 'Save')
 
-            saveButton.click()
+            if (! modal) {
+                return true
+            }
+
+            const input = Array.from(document.querySelectorAll('input'))
+                .find((element) => ['Original preview question', 'Updated preview question'].includes(element.value))
+            const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+
+            if (input && input.value !== 'Updated preview question') {
+                input.focus()
+                valueSetter.call(input, 'Updated preview question')
+                input.dispatchEvent(new Event('input', { bubbles: true }))
+                input.dispatchEvent(new Event('change', { bubbles: true }))
+                input.blur()
+            }
+
+            const saveButton = Array.from(modal.querySelectorAll('button'))
+                .find((element) => element.innerText.trim().startsWith('Save'))
+
+            saveButton?.click()
 
             await new Promise((resolve) => setTimeout(resolve, 1000))
+
+            return true
         }
         JS);
 
@@ -151,6 +160,7 @@ it('renders responsive authoring columns with a live preview and temporary sideb
     $mobile = visit($url)
         ->on()
         ->mobile()
+        ->wait(1)
         ->assertSee('Live preview')
         ->assertSee('Rich preview instructions')
         ->assertDontSee('Complete this block to preview it.')

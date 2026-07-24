@@ -54,7 +54,7 @@ final class NeedsAttention extends Widget
 
         $forms = FormAssignment::query()
             ->with(['form', 'subject'])
-            ->forRespondent($user)
+            ->accessibleBy($user)
             ->pending()
             ->formIsActive()
             ->latest()

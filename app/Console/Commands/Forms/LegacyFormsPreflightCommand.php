@@ -17,11 +17,19 @@ final class LegacyFormsPreflightCommand extends Command
     {
         $report = $migration->preflight();
 
+        if (! $report['required']) {
+            $this->components->info('The one-time legacy form cutover has already completed; preflight was skipped.');
+
+            return self::SUCCESS;
+        }
+
         if (! $report['source_present']) {
             $this->components->info('No legacy forms table is present; there is nothing to convert.');
 
             return self::SUCCESS;
         }
+
+        $this->line('Source fingerprint: '.$report['source_fingerprint']);
 
         $this->table(
             ['Source table', 'Rows'],

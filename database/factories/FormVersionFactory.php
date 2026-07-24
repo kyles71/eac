@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Models\Form;
 use App\Models\FormVersion;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
 
 /**
@@ -41,14 +42,24 @@ final class FormVersionFactory extends Factory
     public function published(): static
     {
         return $this
-            ->state(fn (array $attributes): array => [
-                'status' => FormVersionStatus::Published,
-                'activation_starts_at' => now(),
-                'activated_at' => now(),
-                'published_at' => now(),
+            ->state(fn (): array => [
+                'status' => FormVersionStatus::Draft,
+                'activation_starts_at' => null,
+                'activated_at' => null,
+                'published_at' => null,
             ])
             ->afterCreating(function (FormVersion $version): void {
+                DB::table($version->getTable())
+                    ->where('id', $version->id)
+                    ->update([
+                        'status' => FormVersionStatus::Published->value,
+                        'draft_marker' => null,
+                        'activation_starts_at' => now(),
+                        'activated_at' => now(),
+                        'published_at' => now(),
+                    ]);
                 $version->form()->update(['active_version_id' => $version->id]);
+                $version->refresh();
             });
     }
 }

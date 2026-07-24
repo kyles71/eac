@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Kyle\FilamentFormBuilder\Actions\PublishFormVersion;
 use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Contracts\FormResponseQueryScope;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
 use Kyle\FilamentFormBuilder\Filament\Resources\Forms\RelationManagers\AssignmentsRelationManager;
 use Kyle\FilamentFormBuilder\Filament\Resources\Forms\RelationManagers\ResponsesRelationManager;
@@ -111,15 +112,29 @@ it('saves and submits a dynamically compiled user form', function (): void {
         'subject_id' => $student->id,
     ]);
 
-    livewire(EditFormUser::class, ['record' => $assignment->id])
+    $draftPage = livewire(EditFormUser::class, ['record' => $assignment->id])
         ->assertOk()
+        ->assertActionHasLabel('saveDraft', 'Save Draft')
         ->fillForm([
             'answers' => [$fieldKey => 'Blue'],
-        ])
+        ]);
+
+    $savedDataHashBeforeDraft = $draftPage->instance()->savedDataHash;
+
+    $draftPage
         ->callAction('saveDraft')
         ->assertNotified();
 
-    expect($assignment->draftResponse()->exists())->toBeTrue();
+    $formActions = $draftPage->instance()->getSchema('content')->getComponent('form-actions');
+    $submitAction = $formActions?->getChildSchema()->getAction('save');
+
+    expect($assignment->draftResponse()->exists())->toBeTrue()
+        ->and($draftPage->instance()->savedDataHash)->not->toBe($savedDataHashBeforeDraft)
+        ->and($submitAction)->not->toBeNull()
+        ->and($submitAction?->getLabel())->toBe('Submit Form')
+        ->and($submitAction?->getKeyBindings())->toBeNull()
+        ->and($submitAction?->isConfirmationRequired())->toBeTrue()
+        ->and($draftPage->instance()->getAction('saveDraft')?->getKeyBindings())->toBe(['mod+s']);
 
     livewire(EditFormUser::class, ['record' => $assignment->id])
         ->assertOk()
@@ -402,4 +417,24 @@ it('renders the stored emergency contact relationship on an admin response', fun
             ->contains(fn (Component $component): bool => $component instanceof TextInput
                 && $component->getName() === 'relationship'))
         ->toBeTrue();
+});
+
+it('limits response queries to actors with the EAC form-view permission', function (): void {
+    $form = Form::factory()->create();
+    $version = App\Models\FormVersion::factory()->for($form)->published()->create();
+    $assignment = FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $version->id,
+    ]);
+    $response = app(SubmitFormResponse::class)->handle($assignment, ['answers' => []]);
+    $actor = User::factory()->create();
+    $scope = app(FormResponseQueryScope::class);
+
+    expect($scope)->toBeInstanceOf(App\Forms\Eac\EacFormResponseQueryScope::class)
+        ->and($scope->apply(App\Models\FormResponse::query(), $form, $actor)->count())->toBe(0);
+
+    $actor->givePermissionTo('View:Form');
+
+    expect($scope->apply(App\Models\FormResponse::query(), $form, $actor)->pluck('id')->all())
+        ->toBe([$response->id]);
 });

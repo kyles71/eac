@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9e2d7d10b0c47a67e48cac9c99ae2186",
+    "content-hash": "4d9ebecb71d5c07e63ace2586309fdb1",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -3103,16 +3103,16 @@
         },
         {
             "name": "kyle/filament-form-builder",
-            "version": "v0.1.1",
+            "version": "v0.1.4",
             "source": {
                 "type": "git",
                 "url": "git@github.com:kyles71/filament-form-builder.git",
-                "reference": "269d810a913e6a582c5e4fe12386ad95e9088dab"
+                "reference": "429f613e3a740c7a645f9f4ceab301a389dface9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kyles71/filament-form-builder/zipball/269d810a913e6a582c5e4fe12386ad95e9088dab",
-                "reference": "269d810a913e6a582c5e4fe12386ad95e9088dab",
+                "url": "https://api.github.com/repos/kyles71/filament-form-builder/zipball/429f613e3a740c7a645f9f4ceab301a389dface9",
+                "reference": "429f613e3a740c7a645f9f4ceab301a389dface9",
                 "shasum": ""
             },
             "require": {
@@ -3164,10 +3164,10 @@
             ],
             "description": "A versioned, assignment-aware form builder and typed response engine for Filament.",
             "support": {
-                "source": "https://github.com/kyles71/filament-form-builder/tree/v0.1.1",
+                "source": "https://github.com/kyles71/filament-form-builder/tree/v0.1.4",
                 "issues": "https://github.com/kyles71/filament-form-builder/issues"
             },
-            "time": "2026-07-18T01:02:17+00:00"
+            "time": "2026-07-24T02:46:47+00:00"
         },
         {
             "name": "kyle/filament-mail-manager",

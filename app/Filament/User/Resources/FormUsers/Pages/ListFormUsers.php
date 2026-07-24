@@ -136,9 +136,7 @@ final class ListFormUsers extends ListRecords
         $user = auth()->user();
 
         return $user instanceof User
-            ? $query
-                ->where('respondent_type', $user->getMorphClass())
-                ->where('respondent_id', $user->getKey())
+            ? $query->accessibleBy($user)
             : $query->whereRaw('1 = 0');
     }
 }

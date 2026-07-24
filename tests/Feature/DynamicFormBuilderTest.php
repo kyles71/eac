@@ -291,7 +291,7 @@ it('does not require fields while their visibility condition is not met', functi
     ]))->toThrow(ValidationException::class);
 });
 
-it('uses browser side visibility for dynamic conditional fields', function (): void {
+it('uses reactive server-side visibility for dynamic conditional fields', function (): void {
     $toggleKey = (string) Str::uuid();
     $detailsKey = (string) Str::uuid();
     $version = FormVersion::factory()->create([
@@ -321,9 +321,8 @@ it('uses browser side visibility for dynamic conditional fields', function (): v
 
     expect($toggle)->toBeInstanceOf(Toggle::class)
         ->and($details)->toBeInstanceOf(TextInput::class)
-        ->and($toggle->isLive())->toBeFalse()
-        ->and($details->getVisibleJs())
-        ->toBe("String(\$get('answers.{$toggleKey}')) === \"true\"");
+        ->and($toggle->isLive())->toBeTrue()
+        ->and($details->getVisibleJs())->toBeNull();
 });
 
 it('does not submit expired assignments', function (): void {

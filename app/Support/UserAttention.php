@@ -25,7 +25,7 @@ final readonly class UserAttention
     {
         return FormAssignment::query()
             ->with(['form', 'subject'])
-            ->forRespondent($user)
+            ->accessibleBy($user)
             ->pending()
             ->formIsActive()
             ->get();

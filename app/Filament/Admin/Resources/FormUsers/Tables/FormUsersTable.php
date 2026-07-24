@@ -25,7 +25,7 @@ final class FormUsersTable
 
                     $query->when(
                         $user instanceof User,
-                        fn ($query) => $query->forRespondent($user),
+                        fn ($query) => $query->accessibleBy($user),
                         fn ($query) => $query->whereRaw('1 = 0'),
                     );
                 })

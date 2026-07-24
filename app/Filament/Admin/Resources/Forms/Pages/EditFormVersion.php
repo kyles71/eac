@@ -48,8 +48,7 @@ final class EditFormVersion extends \Kyle\FilamentFormBuilder\Filament\Resources
                             'version' => $this->previewVersion(),
                             'authoringState' => is_array($this->data) ? $this->data : [],
                         ])
-                            ->key('form-version-preview')
-                            ->lazy(),
+                            ->key('form-version-preview'),
                     ]),
             ]);
     }

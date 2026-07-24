@@ -192,7 +192,7 @@ it('shows the configured number of blank emergency contacts on initial page load
         ->and($contacts)->toHaveCount(2);
 });
 
-it('uses the form name as the signing page title without an outer form section', function (): void {
+it('uses a contextual signing page title without an outer form section', function (): void {
     $user = User::factory()->create();
     actingAs($user);
     $student = Student::factory()->create(['user_id' => $user->id]);
@@ -202,7 +202,7 @@ it('uses the form name as the signing page title without an outer form section',
     $sections = collect($page->instance()->form->getComponents(withHidden: true))
         ->filter(fn (Component $component): bool => $component instanceof Section);
 
-    expect($page->instance()->getTitle())->toBe('Student Waiver')
+    expect($page->instance()->getTitle())->toBe('Complete Student Waiver')
         ->and($sections->map(fn (Section $section): ?string => $section->getHeading())->values()->all())
         ->toBe(['Signature']);
 });

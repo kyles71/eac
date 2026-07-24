@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Form;
 use App\Models\FormAssignment;
 use App\Models\FormVersion;
 use App\Models\Student;
@@ -24,12 +23,19 @@ final class FormAssignmentFactory extends Factory
     public function definition(): array
     {
         return [
-            'form_id' => Form::factory(),
             'form_version_id' => FormVersion::factory(),
+            'form_id' => fn (array $attributes): int => FormVersion::query()
+                ->findOrFail($attributes['form_version_id'])
+                ->form_id,
             'respondent_type' => User::class,
-            'respondent_id' => User::factory(),
             'subject_type' => Student::class,
             'subject_id' => Student::factory(),
+            'respondent_id' => fn (array $attributes): int => Student::query()
+                ->findOrFail($attributes['subject_id'])
+                ->user_id,
+            'is_manually_assigned' => false,
+            'manually_assigned_by_id' => null,
+            'manually_assigned_at' => null,
         ];
     }
 }

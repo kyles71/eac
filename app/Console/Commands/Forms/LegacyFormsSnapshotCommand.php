@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands\Forms;
 
+use App\Forms\Migration\LegacyCutoverSnapshot;
+use App\Forms\Migration\LegacyFormMigration;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -15,8 +17,22 @@ use Symfony\Component\Process\Process;
 #[Description('Create the mandatory database snapshot before the forward-only legacy form conversion')]
 final class LegacyFormsSnapshotCommand extends Command
 {
-    public function handle(): int
+    public function handle(LegacyFormMigration $migration, LegacyCutoverSnapshot $snapshot): int
     {
+        $report = $migration->preflight();
+
+        if (! $report['required']) {
+            $this->components->info('The one-time legacy form cutover has already completed; snapshotting was skipped.');
+
+            return self::SUCCESS;
+        }
+
+        if (! $report['source_present']) {
+            $this->components->info('No legacy forms table is present; snapshotting was skipped.');
+
+            return self::SUCCESS;
+        }
+
         $connectionName = (string) config('database.default');
         $connection = config("database.connections.{$connectionName}");
 
@@ -38,7 +54,8 @@ final class LegacyFormsSnapshotCommand extends Command
                     [
                         'mysqldump',
                         '--single-transaction',
-                        '--skip-lock-tables',
+                        '--quick',
+                        '--no-tablespaces',
                         '--host='.(string) ($connection['host'] ?? '127.0.0.1'),
                         '--port='.(string) ($connection['port'] ?? 3306),
                         '--user='.(string) ($connection['username'] ?? ''),
@@ -68,7 +85,11 @@ final class LegacyFormsSnapshotCommand extends Command
             return self::FAILURE;
         }
 
+        $snapshot->record($path, $report['source_fingerprint'], $report['source_manifest']);
+
         $this->components->info("Database snapshot created at [{$path}].");
+        $this->line('SHA-256: '.hash_file('sha256', $path));
+        $this->line('Source fingerprint: '.$report['source_fingerprint']);
 
         return self::SUCCESS;
     }
@@ -115,6 +136,11 @@ final class LegacyFormsSnapshotCommand extends Command
         if (! $process->isSuccessful()) {
             File::delete($path);
             throw new RuntimeException('The database snapshot command failed: '.mb_trim($process->getErrorOutput()));
+        }
+
+        if (! File::isFile($path) || File::size($path) === 0) {
+            File::delete($path);
+            throw new RuntimeException('The database snapshot command produced an empty dump.');
         }
 
         return $path;

@@ -96,11 +96,23 @@ final class EditFormUser extends EditRecord
         return [
             Action::make('saveDraft')
                 ->label('Save Draft')
+                ->keyBindings(['mod+s'])
                 ->action(function (): void {
                     app(SaveFormResponseDraft::class)->handle($this->assignment(), $this->form->getRawState());
+                    $this->rememberData();
                     Notification::make()->title('Draft saved')->success()->send();
                 }),
         ];
+    }
+
+    protected function getSaveFormAction(): Action
+    {
+        return parent::getSaveFormAction()
+            ->label('Submit Form')
+            ->keyBindings(null)
+            ->requiresConfirmation()
+            ->modalHeading('Submit this form?')
+            ->modalDescription('Please confirm that your answers are complete and ready to submit.');
     }
 
     protected function getRedirectUrl(): string

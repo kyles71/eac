@@ -68,7 +68,7 @@ final readonly class EacFormContentProvider implements DynamicFormContentProvide
         string $reference,
         FormVersion $version,
         ?FormAssignment $assignment = null,
-    ): string|Htmlable|null {
+    ): ?Htmlable {
         if (! $this->supportsReference($reference)) {
             return null;
         }
@@ -124,7 +124,7 @@ final readonly class EacFormContentProvider implements DynamicFormContentProvide
 
         return $link === null
             ? $helperText
-            : new HtmlString(e($helperText).' '.$link);
+            : new HtmlString(e($helperText).' '.$link->toHtml());
     }
 
     private function legalDocumentLink(?LegalDocumentVersion $version, string $label): ?HtmlString
@@ -151,10 +151,6 @@ final readonly class EacFormContentProvider implements DynamicFormContentProvide
 
         if (! $version instanceof LegalDocumentVersion) {
             throw new InvalidArgumentException("The selected Health & Safety Policy version [{$id}] no longer exists.");
-        }
-
-        if ($version->published_at === null) {
-            throw new InvalidArgumentException("The selected Health & Safety Policy version [{$id}] is not published.");
         }
 
         if ($version->document->key !== $documentKey) {

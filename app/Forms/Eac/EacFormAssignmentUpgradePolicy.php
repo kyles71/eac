@@ -27,14 +27,16 @@ final readonly class EacFormAssignmentUpgradePolicy implements FormAssignmentUpg
             ->where('student_id', $assignment->subject->getKey())
             ->whereHas('course.forms', fn (Builder $query): Builder => $query->whereKey($version->form_id))
             ->whereHas('course', fn (Builder $query): Builder => $query
-                ->whereDoesntHave('events')
-                ->orWhereHas('events', fn (Builder $query): Builder => $query->where(function (Builder $query) use ($now): void {
-                    $query
-                        ->where('end_time', '>=', $now)
-                        ->orWhere(function (Builder $query) use ($now): void {
-                            $query->whereNull('end_time')->where('start_time', '>=', $now);
-                        });
-                })))
+                ->whereDoesntHave('events', fn (Builder $query): Builder => $query->whereNull('cancelled_at'))
+                ->orWhereHas('events', fn (Builder $query): Builder => $query
+                    ->whereNull('cancelled_at')
+                    ->where(function (Builder $query) use ($now): void {
+                        $query
+                            ->where('end_time', '>=', $now)
+                            ->orWhere(function (Builder $query) use ($now): void {
+                                $query->whereNull('end_time')->where('start_time', '>=', $now);
+                            });
+                    })))
             ->exists();
     }
 }

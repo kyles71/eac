@@ -336,7 +336,7 @@ it('compares seeded waiver versions containing repeatable blocks', function (): 
     expect($formBuilder)->toBeInstanceOf(PreviewBuilder::class)
         ->and($formBuilder->hasBlockPreviews())->toBeTrue()
         ->and($preview)->toBeInstanceOf(LivewireSchemaComponent::class)
-        ->and($preview->isLazy())->toBeTrue()
+        ->and($preview->isLazy())->toBeFalse()
         ->and($preview->getComponent())->toBe(FormVersionPreview::class);
 
     $comparison = app(FormVersionComparator::class)->compare($current, $draft->refresh());

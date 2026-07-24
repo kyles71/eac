@@ -87,7 +87,6 @@ final class FormAssignmentPolicy
 
     private function isRespondent(User $user, FormAssignment $formAssignment): bool
     {
-        return $formAssignment->respondent_type === $user->getMorphClass()
-            && (string) $formAssignment->respondent_id === (string) $user->getKey();
+        return $formAssignment->isAccessibleBy($user);
     }
 }

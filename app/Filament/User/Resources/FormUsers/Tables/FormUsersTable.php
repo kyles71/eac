@@ -24,7 +24,7 @@ final class FormUsersTable
                     ->with(['form', 'subject', 'version', 'latestSubmittedResponse'])
                     ->when(
                         $user instanceof User,
-                        fn ($query) => $query->forRespondent($user),
+                        fn ($query) => $query->accessibleBy($user),
                         fn ($query) => $query->whereRaw('1 = 0'),
                     );
             })

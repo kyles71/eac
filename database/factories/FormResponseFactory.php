@@ -6,7 +6,6 @@ namespace Database\Factories;
 
 use App\Models\FormAssignment;
 use App\Models\FormResponse;
-use App\Models\FormVersion;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 
@@ -24,7 +23,9 @@ final class FormResponseFactory extends Factory
     {
         return [
             'form_assignment_id' => FormAssignment::factory(),
-            'form_version_id' => FormVersion::factory(),
+            'form_version_id' => fn (array $attributes): int => FormAssignment::query()
+                ->findOrFail($attributes['form_assignment_id'])
+                ->form_version_id,
             'revision_of_id' => null,
             'status' => FormResponseStatus::Draft,
             'signature' => null,

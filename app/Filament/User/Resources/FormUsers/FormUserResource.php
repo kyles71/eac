@@ -40,9 +40,9 @@ final class FormUserResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query
-            ->where('respondent_type', $user->getMorphClass())
-            ->where('respondent_id', $user->getKey());
+        FormAssignment::applyAccessibleConstraint($query, $user);
+
+        return $query;
     }
 
     public static function canViewAny(): bool
@@ -84,7 +84,7 @@ final class FormUserResource extends Resource
         }
 
         $count = FormAssignment::query()
-            ->forRespondent($user)
+            ->accessibleBy($user)
             ->pending()
             ->formIsActive()
             ->count();
