@@ -6,6 +6,7 @@ namespace App\Filament\Shared\Pages\Profile;
 
 use App\Models\User;
 use App\Support\MediaDisks;
+use App\Support\PasswordRequirements;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Actions\Action;
 use Filament\Auth\Pages\EditProfile;
@@ -105,15 +106,17 @@ final class Profile extends EditProfile
                     ->currentPassword(guard: Filament::getAuthGuard())
                     ->autocomplete('current-password')
                     ->required(),
-                TextInput::make('password')
-                    ->label('New password')
-                    ->password()
-                    ->revealable(Filament::arePasswordsRevealable())
-                    ->rule(Password::default())
-                    ->showAllValidationMessages()
-                    ->autocomplete('new-password')
-                    ->same('password_confirmation')
-                    ->required(),
+                PasswordRequirements::withFeedback(
+                    TextInput::make('password')
+                        ->label('New password')
+                        ->password()
+                        ->revealable(Filament::arePasswordsRevealable())
+                        ->rule(Password::default())
+                        ->showAllValidationMessages()
+                        ->autocomplete('new-password')
+                        ->same('password_confirmation')
+                        ->required(),
+                ),
                 TextInput::make('password_confirmation')
                     ->label('Confirm new password')
                     ->password()

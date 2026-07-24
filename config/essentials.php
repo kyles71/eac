@@ -123,7 +123,7 @@ return [
     |
     */
 
-    NunoMaduro\Essentials\Configurables\SetDefaultPassword::class => true,
+    NunoMaduro\Essentials\Configurables\SetDefaultPassword::class => false,
 
     /*
     |--------------------------------------------------------------------------

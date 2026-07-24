@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Shared\Pages\Auth\Login;
+use App\Filament\Shared\Pages\Auth\ResetPassword;
 use App\Filament\Shared\Pages\Profile\Profile;
 use App\Http\Middleware\ManagedBanners;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
@@ -29,7 +30,7 @@ abstract class BasePanelProvider extends PanelProvider
     {
         return $panel
             ->login(Login::class)
-            ->passwordReset()
+            ->passwordReset(resetAction: ResetPassword::class)
             ->profile(Profile::class, isSimple: false)
             ->multiFactorAuthentication([
                 AppAuthentication::make()

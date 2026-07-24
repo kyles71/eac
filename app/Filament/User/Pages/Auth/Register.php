@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\User\Pages\Auth;
 
 use App\Support\LegalDocuments\PortalTerms;
+use App\Support\PasswordRequirements;
 use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
@@ -34,6 +35,17 @@ final class Register extends BaseRegister
                 $this->getPasswordConfirmationFormComponent(),
                 $this->getTermsFormComponent(),
             ]);
+    }
+
+    protected function getPasswordFormComponent(): Component
+    {
+        $component = parent::getPasswordFormComponent();
+
+        if (! $component instanceof TextInput) {
+            return $component;
+        }
+
+        return PasswordRequirements::withFeedback($component);
     }
 
     protected function getTermsFormComponent(): Component
