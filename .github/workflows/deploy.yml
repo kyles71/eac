@@ -34,7 +34,7 @@ jobs:
 
       - name: Configure Composer GitHub auth
         env:
-          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
         run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
 
       - name: Install dependencies

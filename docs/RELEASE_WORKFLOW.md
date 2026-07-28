@@ -108,9 +108,9 @@ In **Settings → General**:
 
 - [X] Set `master` as the default branch.
 - [X] Allow **Merge commits** for feature integration and release pull requests.
-- [ ] Disable **Squash merging** for releasable feature and fix branches.
-- [ ] Disable **Rebase merging** for releasable feature and fix branches.
-- [ ] Disable **Automatically delete head branches**; delete feature branches manually after they reach production or are abandoned.
+- [X] Disable **Squash merging** for releasable feature and fix branches.
+- [X] Disable **Rebase merging** for releasable feature and fix branches.
+- [X] Disable **Automatically delete head branches**; delete feature branches manually after they reach production or are abandoned.
 
 The same feature commits must be able to reach both `dev` and `master`. Merge commits preserve that ancestry. Squash or rebase merging into `dev` rewrites commit identity and forces later selective releases to use duplicate cherry-picked commits.
 
@@ -137,7 +137,7 @@ Create an active branch ruleset targeting `dev`:
 - [X] Require a pull request before merging.
 - [X] Set required approvals to `0`.
 - [ ] Require all configured status checks to pass.
-- [ ] Do not require linear history; integration pull requests intentionally use merge commits.
+- [X] Do not require linear history; integration pull requests intentionally use merge commits.
 - [X] Block force pushes.
 - [X] Restrict branch deletion.
 
@@ -189,14 +189,14 @@ In **Settings → Environments**:
 
 For `dev`:
 
-- [ ] Restrict deployment branches to `dev` and the branch pattern `release/*`.
-- [ ] Store only staging deployment secrets in this environment.
+- [X] Restrict deployment branches to `dev` and the branch pattern `release/*`.
+- [X] Store only staging deployment secrets in this environment.
 - [ ] Confirm the environment identifies the staging URL.
 
 For `production`:
 
-- [ ] Restrict deployment branches to `master`.
-- [ ] Store only production deployment secrets in this environment.
+- [X] Restrict deployment branches to `master`.
+- [X] Store only production deployment secrets in this environment.
 - [ ] Confirm the environment identifies the production URL.
 - [ ] Consider a manual deployment approval as an intentional final pause, if the repository plan supports it.
 - [ ] If self-approval is needed, do not enable **Prevent self-review**.
@@ -208,13 +208,13 @@ Confirm these existing environment secrets are present, scoped correctly, and pe
 - [ ] `DEPLOY_HOST`
 - [ ] `DEPLOY_USER`
 - [ ] `PRIVATE_KEY`
-- [ ] `THEMES_TOKEN`
+- [ ] `MY_PRIVATE_GH_TOKEN`
 - [ ] `DEPLOY_PASSWORD`, only if it is still genuinely required
 
 ### GitHub Actions safety
 
 - [ ] Give each workflow and job only the permissions it needs.
-- [ ] Keep production and staging secrets in their respective environments.
+- [X] Keep production and staging secrets in their respective environments.
 - [ ] Prevent overlapping deployments to the same environment.
 - [ ] Configure production so a newer run does not cancel an in-progress production migration or deployment.
 - [ ] Update aging actions in a dedicated reviewed change.

@@ -242,7 +242,7 @@ The production workflow runs on pushes to `master` and selects the `production` 
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `PRIVATE_KEY`
-- `THEMES_TOKEN`, a scoped GitHub token that can read both private `kyle/*` Composer repositories
+- `MY_PRIVATE_GH_TOKEN`, a scoped GitHub token that can read both private `kyle/*` Composer repositories
 
 `DEPLOY_PASSWORD` is passed through the current workflow but the deployment action is configured with an SSH private key. Do not depend on password authentication unless the workflow is deliberately changed.
 
