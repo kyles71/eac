@@ -6,7 +6,7 @@ Host stack: Ubuntu, Apache, PHP 8.4, local MySQL, Supervisor, cron, and Deployer
 
 ## Purpose
 
-This runbook is the day-to-day companion to `PRODUCTION_ACTIVATION_RUNBOOK.md`. It covers routine checks, incident triage, safe recovery, and debugging for both deployed environments.
+This runbook is the day-to-day companion to `PRODUCTION_ACTIVATION_RUNBOOK.md`. It covers routine checks, incident triage, safe recovery, and debugging for both deployed environments. The standard development, staging, production, tagging, and release-note process is documented in `RELEASE_WORKFLOW.md`.
 
 Use this guide to gather evidence before changing state. Preserve timestamps, error messages, request or payment identifiers, the active release number, and relevant log excerpts in incident notes.
 
@@ -547,9 +547,15 @@ Normal deployments run through GitHub Actions and Deployer:
 
 - `master` deploys production.
 - `dev` deploys staging.
+- A single-segment `release/*` branch assembled from selected master-based feature branches is the standard production candidate and temporarily deploys to staging.
+- A direct `dev` to `master` batch release is an exception requiring approval of every included change.
+- The manually triggered **Deploy dev branch** workflow restores `dev` to staging after release-candidate testing.
+- Successful production releases use `v<generation>.<YYMMDD>.<daily-sequence>` tags; the initial release is `v1.260720.1`.
 - `current` is an atomic symlink to a numbered release.
 - `.env` and `storage` are shared between releases.
 - Deployer retains five releases.
+
+Because `dev` and release candidates share the staging deployment path, the most recent staging deployment replaces the prior one. Confirm the expected branch and commit before interpreting staging results.
 
 ### Failed deployment
 
@@ -795,6 +801,7 @@ This portal contains information about minors, medical waivers, payments, and pr
 ## References
 
 - Production activation: `PRODUCTION_ACTIVATION_RUNBOOK.md`
+- Release workflow and release notes: `RELEASE_WORKFLOW.md`
 - Laravel 13 deployment: <https://laravel.com/docs/13.x/deployment>
 - Laravel 13 queues: <https://laravel.com/docs/13.x/queues>
 - Laravel 13 scheduler: <https://laravel.com/docs/13.x/scheduling>

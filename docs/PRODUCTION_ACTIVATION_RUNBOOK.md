@@ -8,7 +8,7 @@ Production deployment target: `/var/www/html/eac` from the `master` branch
 
 This runbook describes the infrastructure, credentials, operating processes, and activation sequence required to turn up a production EAC instance. It is based on the application's current code, `.env.example`, GitHub Actions workflows, and `deploy.php`.
 
-For routine maintenance, incident triage, debugging, and recovery after activation, use `APPLICATION_MAINTENANCE_RUNBOOK.md`.
+For routine maintenance, incident triage, debugging, and recovery after activation, use `APPLICATION_MAINTENANCE_RUNBOOK.md`. For the standard development, staging, production, tagging, and release-note process, use `RELEASE_WORKFLOW.md`.
 
 Do not copy credentials from the test environment. Production must have its own application key, database, Stripe live-mode resources, storage credentials, monitoring environment, and verified mail configuration.
 
@@ -242,7 +242,7 @@ The production workflow runs on pushes to `master` and selects the `production` 
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `PRIVATE_KEY`
-- `THEMES_TOKEN`, a scoped GitHub token that can read both private `kyle/*` Composer repositories
+- `MY_PRIVATE_GH_TOKEN`, a scoped GitHub token that can read both private `kyle/*` Composer repositories
 
 `DEPLOY_PASSWORD` is passed through the current workflow but the deployment action is configured with an SSH private key. Do not depend on password authentication unless the workflow is deliberately changed.
 
@@ -383,9 +383,10 @@ Validate from outside the host:
 For each release:
 
 1. Review migrations for backward compatibility and take a pre-deploy database backup when appropriate.
-2. Merge the approved release into `master`.
+2. Merge the approved `release/*` candidate into `master`. A direct `dev` batch is an exception requiring explicit approval of every included change.
 3. Monitor the GitHub production deployment through migration, publication, and queue restart.
 4. Check `/up`, Sentry, web server/PHP logs, queue failures, scheduler output, and critical user flows.
+5. Tag the successfully deployed commit using `v<generation>.<YYMMDD>.<daily-sequence>` and publish its GitHub Release. The initial production release is `v1.260720.1`.
 
 If code rollback is required, use the Deployer rollback procedure to move the `current` symlink to a retained release. Assess database compatibility first: code rollback does not roll back migrations. Never run `migrate:rollback` automatically during an incident without reviewing the exact migration and data impact.
 
@@ -404,6 +405,7 @@ These findings do not all block a single-server launch, but they should be track
 ## References
 
 - EAC application maintenance and debugging: `APPLICATION_MAINTENANCE_RUNBOOK.md`
+- Release workflow and release notes: `RELEASE_WORKFLOW.md`
 - Laravel 13 deployment: <https://laravel.com/docs/13.x/deployment>
 - Laravel 13 queues and process monitoring: <https://laravel.com/docs/13.x/queues>
 - Laravel 13 filesystem: <https://laravel.com/docs/13.x/filesystem>
