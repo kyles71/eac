@@ -7,6 +7,7 @@ namespace Tests;
 use App\Models\LegalDocument;
 use App\Models\User;
 use Database\Seeders\ShieldSeeder;
+use Illuminate\Contracts\Validation\UncompromisedVerifier;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -14,6 +15,14 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->app->instance(UncompromisedVerifier::class, new class implements UncompromisedVerifier
+        {
+            public function verify($data): bool
+            {
+                return true;
+            }
+        });
 
         $this->seed(ShieldSeeder::class);
 
