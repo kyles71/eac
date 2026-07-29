@@ -18,7 +18,7 @@ jobs:
   deploy:
     concurrency:
       group: ${{ inputs.concurrency_group }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -44,7 +44,6 @@ jobs:
         uses: deployphp/action@v1
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           STAGING_BRANCH: ${{ inputs.staging_branch }}
         with:
