@@ -63,7 +63,7 @@ Schedule::command('backup:database')
     ->name('backup-database')
     ->description('Create an encrypted database backup on private IONOS object storage');
 
-Schedule::command('backup:monitor', ['--disable-notifications' => true])
+Schedule::command('backup:monitor')
     ->dailyAt('06:10')
     ->timezone('America/New_York')
     ->environments('production')
