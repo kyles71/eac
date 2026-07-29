@@ -387,6 +387,7 @@ livewire(ListUsers::class)
 
 ### Common Mistakes
 
+- **Keep strict authorization and global search aligned.** The admin panel enables `strictAuthorization()`, and setting `$recordTitleAttribute` automatically opts a resource into global search. Filament checks the policy's `view()` method while resolving every matching global-search result, even when the resource only has an Edit page. A globally searchable resource must have a usable View or Edit page and all policy methods Filament checks for that destination. For list-only or modal-only resources, or resources intentionally lacking record-level view ability, declare `protected static bool $isGloballySearchable = false;`. Whenever a resource's title attribute, pages, or policy abilities change, update `tests/Feature/Filament/Components/GlobalSearchTest.php` with a matching record and verify that global search renders without an authorization exception.
 - **Never assume public file visibility.** File visibility is `private` by default. Always use `->visibility('public')` when public access is needed.
 - **Never assume full-width layout.** `Grid`, `Section`, `Fieldset`, and `Repeater` do not span all columns by default.
 - **Use `Select::make('author_id')->relationship('author', 'name')` for BelongsTo fields.** `BelongsToSelect` does not exist in v4.
