@@ -1,9 +1,9 @@
-name: Deploy dev branch
+name: Deploy release candidate
 
 on:
   push:
-    branches: [ dev ]
-  workflow_dispatch:
+    branches:
+      - "release/*"
 
 jobs:
   deploy:
@@ -12,4 +12,4 @@ jobs:
     with:
       environment: dev
       concurrency_group: dev
-      staging_branch: dev
+      staging_branch: ${{ github.ref_name }}
