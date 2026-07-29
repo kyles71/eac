@@ -20,6 +20,8 @@ final class DiscountCodeResource extends Resource
 {
     protected static ?string $model = DiscountCode::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
 
     protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;

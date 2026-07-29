@@ -1,12 +1,12 @@
 # EAC Application Maintenance and Debugging Runbook
 
-Last reviewed: 2026-07-20
+Last reviewed: 2026-07-29
 Application: Laravel 13 / Filament 5
 Host stack: Ubuntu, Apache, PHP 8.4, local MySQL, Supervisor, cron, and Deployer
 
 ## Purpose
 
-This runbook is the day-to-day companion to `PRODUCTION_ACTIVATION_RUNBOOK.md`. It covers routine checks, incident triage, safe recovery, and debugging for both deployed environments. The standard development, staging, production, tagging, and release-note process is documented in `RELEASE_WORKFLOW.md`.
+Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. This runbook is the day-to-day companion to `PRODUCTION_ACTIVATION_RUNBOOK.md`. It covers routine checks, incident triage, safe recovery, and debugging for both deployed environments. The standard development, staging, production, tagging, and release-note process is documented in `RELEASE_WORKFLOW.md`.
 
 Use this guide to gather evidence before changing state. Preserve timestamps, error messages, request or payment identifiers, the active release number, and relevant log excerpts in incident notes.
 
@@ -550,7 +550,8 @@ Normal deployments run through GitHub Actions and Deployer:
 - A single-segment `release/*` branch assembled from selected master-based feature branches is the standard production candidate and temporarily deploys to staging.
 - A direct `dev` to `master` batch release is an exception requiring approval of every included change.
 - The manually triggered **Deploy dev branch** workflow restores `dev` to staging after release-candidate testing.
-- Successful production releases use `v<generation>.<YYMMDD>.<daily-sequence>` tags; the initial release is `v1.260720.1`.
+- Active deployments are never automatically canceled; a newer run waits, and GitHub may replace an older pending run with the newest pending deployment.
+- After a successful production deployment, GitHub Actions creates the next `v<generation>.<YYMMDD>.<daily-sequence>` tag and a draft GitHub Release; the initial release is `v1.260720.1`.
 - `current` is an atomic symlink to a numbered release.
 - `.env` and `storage` are shared between releases.
 - Deployer retains five releases.
@@ -800,6 +801,7 @@ This portal contains information about minors, medical waivers, payments, and pr
 
 ## References
 
+- Common commands and credential rotation: `OPERATIONS_CHEAT_SHEET.md`
 - Production activation: `PRODUCTION_ACTIVATION_RUNBOOK.md`
 - Release workflow and release notes: `RELEASE_WORKFLOW.md`
 - Laravel 13 deployment: <https://laravel.com/docs/13.x/deployment>

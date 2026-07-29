@@ -20,6 +20,8 @@ final class GiftCardTypeResource extends Resource
 {
     protected static ?string $model = GiftCardType::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGift;
 
     protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;

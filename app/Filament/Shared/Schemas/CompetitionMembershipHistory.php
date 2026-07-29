@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Shared\Schemas;
 
 use App\Models\CompetitionTeam;
+use App\Models\Student;
+use App\Models\User;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -17,6 +19,7 @@ final class CompetitionMembershipHistory
         return Section::make('Competition Membership')
             ->columnSpanFull()
             ->collapsed()
+            ->visible(fn (Student|User|null $record): bool => $record?->competitionTeams()->exists() ?? false)
             ->schema([
                 RepeatableEntry::make('competitionTeams')
                     ->label('')

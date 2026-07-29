@@ -7,6 +7,12 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schedule;
+use Spatie\Backup\Notifications\Notifications\BackupHasFailedNotification;
+use Spatie\Backup\Notifications\Notifications\BackupWasSuccessfulNotification;
+use Spatie\Backup\Notifications\Notifications\CleanupHasFailedNotification;
+use Spatie\Backup\Notifications\Notifications\CleanupWasSuccessfulNotification;
+use Spatie\Backup\Notifications\Notifications\HealthyBackupWasFoundNotification;
+use Spatie\Backup\Notifications\Notifications\UnhealthyBackupWasFoundNotification;
 use Spatie\Backup\Tasks\Cleanup\Strategies\DefaultStrategy;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
@@ -20,7 +26,14 @@ it('configures encrypted database-only backups on private ionos storage', functi
         ->and(config('backup.backup.verify_backup'))->toBeTrue()
         ->and(config('backup.backup.tries'))->toBe(3)
         ->and(config('backup.backup.retry_delay'))->toBe(60)
-        ->and(config('backup.notifications.notifications'))->toBe([])
+        ->and(config('backup.notifications.notifications'))->toBe([
+            BackupHasFailedNotification::class => [],
+            UnhealthyBackupWasFoundNotification::class => [],
+            CleanupHasFailedNotification::class => [],
+            BackupWasSuccessfulNotification::class => [],
+            HealthyBackupWasFoundNotification::class => [],
+            CleanupWasSuccessfulNotification::class => [],
+        ])
         ->and(config('database.connections.mysql.dump'))->toMatchArray([
             'use_single_transaction' => true,
             'use_quick' => true,
@@ -63,7 +76,9 @@ it('schedules production backup operations without overlap', function (): void {
     assertScheduledBackupEvent($events, 'backup:database', '40 3 * * *');
     assertScheduledBackupEvent($events, 'backup:monitor', '10 6 * * *');
 
-    expect(scheduledBackupEvent('backup:monitor', $events)->command)
+    expect(scheduledBackupEvent('backup:clean', $events)->command)
+        ->not->toContain('--disable-notifications=')
+        ->and(scheduledBackupEvent('backup:monitor', $events)->command)
         ->not->toContain('--disable-notifications');
 });
 

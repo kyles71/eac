@@ -34,6 +34,8 @@ final class HolidayResource extends Resource
 {
     protected static ?string $model = Holiday::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
     protected static ?string $cluster = SettingsCluster::class;

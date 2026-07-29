@@ -44,7 +44,7 @@ Schedule::command('cart:send-abandoned-reminders')
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
 
-Schedule::command('backup:clean', ['--disable-notifications' => true])
+Schedule::command('backup:clean', ['--disable-notifications'])
     ->dailyAt('03:10')
     ->timezone('America/New_York')
     ->environments('production')
