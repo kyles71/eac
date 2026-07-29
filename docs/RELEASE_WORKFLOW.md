@@ -1,6 +1,6 @@
 # EAC Release Workflow
 
-Last reviewed: 2026-07-24
+Last reviewed: 2026-07-29
 
 Application: EAC Plié Portal
 
@@ -14,7 +14,7 @@ This document defines the standard process for developing, testing, deploying, t
 
 The process is designed for one developer and zero to two acceptance testers. Pull requests provide an intentional checkpoint and an audit trail; they do not require another developer's approval.
 
-For production infrastructure and initial activation, see `PRODUCTION_ACTIVATION_RUNBOOK.md`. For routine operations, incidents, and rollback mechanics, see `APPLICATION_MAINTENANCE_RUNBOOK.md`.
+Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. For production infrastructure and initial activation, see `PRODUCTION_ACTIVATION_RUNBOOK.md`. For routine operations, incidents, and rollback mechanics, see `APPLICATION_MAINTENANCE_RUNBOOK.md`.
 
 ## Release model
 
@@ -209,21 +209,22 @@ Confirm these existing environment secrets are present, scoped correctly, and pe
 - [ ] `DEPLOY_USER`
 - [ ] `PRIVATE_KEY`
 - [ ] `MY_PRIVATE_GH_TOKEN`
-- [ ] `DEPLOY_PASSWORD`, only if it is still genuinely required
 
 ### GitHub Actions safety
 
 - [ ] Give each workflow and job only the permissions it needs.
 - [X] Keep production and staging secrets in their respective environments.
-- [ ] Prevent overlapping deployments to the same environment.
-- [ ] Configure production so a newer run does not cancel an in-progress production migration or deployment.
+- [X] Prevent overlapping deployments to the same environment.
+- [X] Configure deployments so a newer run does not cancel an active migration or deployment.
+- [ ] Confirm the repository permits the production workflow's `GITHUB_TOKEN` to create tags and Releases with `contents: write`.
+- [ ] Confirm the `v*` tag ruleset permits `github-actions[bot]` to create new tags while still blocking updates and deletions.
 - [ ] Update aging actions in a dedicated reviewed change.
 - [ ] Pin third-party actions to reviewed full commit SHAs where practical.
 - [ ] Enable Dependabot alerts and dependency review appropriate to the repository plan.
 - [ ] Require two-factor authentication or a passkey on the repository owner's GitHub account.
 - [ ] Store GitHub recovery codes and deployment-key recovery instructions securely outside the repository.
 
-The current reusable workflow uses `cancel-in-progress: true` for both environments. Before relying on serialized production releases, change production behavior so a second run waits instead of interrupting an active production deployment.
+The reusable deployment job uses `cancel-in-progress: false`. One deployment runs per environment concurrency group, and a newer run waits instead of interrupting the active deployment. GitHub's default single-pending behavior may replace an older pending run with a newer one, so the active deployment finishes and the newest queued state deploys next. The production caller additionally serializes the entire deployment-and-release workflow so tagging cannot overlap a subsequent production deployment.
 
 ### Pull request and release-note conventions
 
@@ -655,31 +656,28 @@ After merging:
 - [ ] Monitor **Deploy to production** until every deployment task succeeds.
 - [ ] Record the workflow run and deployed commit SHA.
 - [ ] Confirm the active Deployer release changed.
+- [ ] Confirm the workflow created exactly one version tag and one draft GitHub Release for the deployed commit.
 - [ ] Run the post-deployment smoke tests from the release pull request.
 - [ ] Check Sentry, Laravel logs, failed queue jobs, and the scheduler.
 - [ ] Confirm critical external integrations relevant to the release.
 
 If deployment fails, do not create a release tag. Correct the problem through the normal branch process or follow the maintenance runbook when recovery is required.
 
-### 4. Tag the successful production commit
+### 4. Verify the automated tag
 
-From an updated local repository:
+After a successful deployment, the production workflow:
 
-```bash
-git fetch origin master --tags
-git switch master
-git pull --ff-only origin master
-git tag -a v1.YYMMDD.N <deployed-commit-sha> \
-    -m 'Production release v1.YYMMDD.N'
-git show --no-patch --pretty=fuller v1.YYMMDD.N
-git push origin refs/tags/v1.YYMMDD.N
-```
+- Calculates the date in `America/New_York`.
+- Selects the next `v1.<YYMMDD>.<daily-sequence>` version.
+- Creates an annotated tag on the exact deployed commit.
+- Creates a draft GitHub Release with generated notes and deployment metadata.
+- Reuses an existing production tag or Release when the job is rerun for the same commit.
 
-Do not assume local `master` is the deployed commit. Compare the full SHA with the successful production workflow run before tagging.
+Confirm the tag's full commit SHA matches the successful deployment. If deployment succeeds but tag or draft creation fails, rerun the failed release job after correcting its permissions. Do not create a second version for the same deployed commit.
 
-### 5. Publish the GitHub Release
+### 5. Review and publish the GitHub Release
 
-Create a draft GitHub Release from the existing tag, choose the previous production tag, and generate the initial notes.
+Open the automatically created draft. GitHub supplies the merged pull requests, contributors, and full changelog; the workflow prepends the deployment time and commit. Review that generated material, then add the relevant user-facing sections:
 
 Use this final format:
 
@@ -758,6 +756,7 @@ Quarterly, or after a release incident:
 
 ## References
 
+- Common commands and credential rotation: `OPERATIONS_CHEAT_SHEET.md`
 - Git tag documentation: <https://git-scm.com/docs/git-tag>
 - GitHub releases: <https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository>
 - GitHub generated release notes: <https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes>
