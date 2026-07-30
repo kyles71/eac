@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Students\Tables;
 
 use App\Filament\Actions\SendEmailAction;
 use App\Models\Student;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieTagsColumn;
@@ -60,8 +61,10 @@ final class StudentsTable
             ])
             ->defaultSort('last_name')
             ->recordActions([
-                SendEmailAction::make()
-                    ->to(fn (Student $record): array => [$record]),
+                ActionGroup::make([
+                    SendEmailAction::make()
+                        ->to(fn (Student $record): array => [$record]),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

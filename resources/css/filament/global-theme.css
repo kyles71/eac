@@ -6,6 +6,102 @@
 @source '../../../vendor/bezhansalleh/filament-panel-switch/resources/views/**/*.blade.php';
 @source '../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
+.eac-table-scrollbar {
+    background: rgb(243 244 246);
+    border: 1px solid rgb(209 213 219);
+    border-radius: 9999px;
+    bottom: 0;
+    cursor: pointer;
+    height: 1rem;
+    position: fixed;
+    touch-action: none;
+    z-index: 30;
+}
+
+.eac-table-scrollbar[hidden] {
+    display: none;
+}
+
+.eac-table-scrollbar-thumb {
+    background: rgb(107 114 128);
+    border: 2px solid rgb(243 244 246);
+    border-radius: 9999px;
+    bottom: 0;
+    cursor: grab;
+    left: 0;
+    position: absolute;
+    top: 0;
+    will-change: transform;
+}
+
+.eac-table-scrollbar-dragging,
+.eac-table-scrollbar-dragging .eac-table-scrollbar-thumb {
+    cursor: grabbing;
+}
+
+.dark .eac-table-scrollbar {
+    background: rgb(39 39 42);
+    border-color: rgb(82 82 91);
+}
+
+.dark .eac-table-scrollbar-thumb {
+    background: rgb(161 161 170);
+    border-color: rgb(39 39 42);
+}
+
+.fi-panel-admin .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
+    background-color: rgb(249 250 251);
+    box-shadow: 1px 0 0 rgb(229 231 235);
+    inset-inline-start: 0;
+    position: sticky;
+    z-index: 20;
+}
+
+.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(255 255 255);
+    box-shadow: 1px 0 0 rgb(229 231 235);
+    inset-inline-start: 0;
+    position: sticky;
+    z-index: 10;
+}
+
+.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:hover,
+.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:focus-within {
+    z-index: 40;
+}
+
+.fi-panel-admin .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
+.fi-panel-admin .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(249 250 251);
+}
+
+@media (hover: hover) {
+    .fi-panel-admin .fi-ta-table>tbody>tr.fi-clickable:hover>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+        background-color: rgb(249 250 251);
+    }
+}
+
+.dark .fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(17 24 39);
+    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
+}
+
+.dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
+.dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(255 255 255 / 0.05);
+}
+
+.dark .fi-panel-admin .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
+    background-color: rgb(255 255 255 / 0.05);
+    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
+}
+
+@media (hover: hover) {
+    .dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-clickable:hover>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+        background-color: rgb(255 255 255 / 0.05);
+    }
+}
+
 .fi-body-has-topbar [data-managed-banners-location='panels::topbar.before'] {
     position: sticky;
     inset-block-start: 0;

@@ -8,6 +8,7 @@ use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\User;
 use App\Support\MediaDisks;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
@@ -80,10 +81,11 @@ final class UsersTable
                     ->preload(),
             ])
             ->recordActions([
-                ManageUserAccessAction::make(),
-                SendEmailAction::make()
-                    ->to(fn ($record) => [$record->email]),
-
+                ActionGroup::make([
+                    ManageUserAccessAction::make(),
+                    SendEmailAction::make()
+                        ->to(fn ($record) => [$record->email]),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
