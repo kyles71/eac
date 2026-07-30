@@ -21,6 +21,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use LogicException;
 
 final class ViewEvent extends ViewRecord implements HasTable
@@ -49,11 +50,13 @@ final class ViewEvent extends ViewRecord implements HasTable
                     ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
                 ToggleColumn::make('attended')
                     ->label('Attended')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
                     ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): bool => $this->attendance()
                         ->setRecordStudentAttendance($this->event(), $record, $state)),
                 TextInputColumn::make('notes')
                     ->label('Notes')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
                     ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
                         ->setRecordStudentNotes($this->event(), $record, $state)),

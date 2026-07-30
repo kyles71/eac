@@ -10,6 +10,7 @@ use App\Models\EventAttendee;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 
 final class EventAttendanceService
 {
@@ -164,6 +165,8 @@ final class EventAttendanceService
      */
     private function attendanceFor(Event $event, Student $student, array $values): EventAttendee
     {
+        Gate::authorize('updateAttendance', $event);
+
         return EventAttendee::query()->updateOrCreate([
             'event_id' => $event->id,
             'attendee_type' => $student->getMorphClass(),

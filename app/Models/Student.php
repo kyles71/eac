@@ -37,6 +37,18 @@ final class Student extends Model
         'birthdate' => 'date',
     ];
 
+    public static function applyAdminAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->whereHas(
+            'courses',
+            fn (Builder $query): Builder => Course::applyActiveTeachingAccessConstraint($query, $user),
+        );
+    }
+
     public function fullName(): Attribute
     {
         return Attribute::make(
@@ -101,6 +113,15 @@ final class Student extends Model
     public function additionalEmails(): HasMany
     {
         return $this->hasMany(StudentEmail::class);
+    }
+
+    public function isAccessibleToAdminUser(User $user): bool
+    {
+        return self::applyAdminAccessConstraint(
+            self::query()->whereKey($this->getKey()),
+            $user,
+        )
+            ->exists();
     }
 
     public function medicalWaiverStatus(): MedicalWaiverStatus

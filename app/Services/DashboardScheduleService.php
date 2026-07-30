@@ -39,7 +39,7 @@ final class DashboardScheduleService
             ->visibleOnCalendar($calendar, $user)
             ->orderBy('events.start_time')
             ->get()
-            ->map(function (Event $event) use ($accessibleCalendars, $calendar): array {
+            ->map(function (Event $event) use ($accessibleCalendars, $calendar, $user): array {
                 $displayCalendar = $this->displayCalendarForEvent($event, $calendar, $accessibleCalendars);
 
                 return [
@@ -51,6 +51,7 @@ final class DashboardScheduleService
                     'color' => $event->isCancelled() ? '#6b7280' : $displayCalendar?->background_color,
                     'is_holiday' => false,
                     'is_cancelled' => $event->isCancelled(),
+                    'is_editable' => $user->can('update', $event),
                 ];
             });
 
@@ -78,9 +79,9 @@ final class DashboardScheduleService
                 'allDay' => $item['is_holiday'],
                 'backgroundColor' => $item['color'],
                 'borderColor' => $item['color'],
-                'editable' => ! $item['is_holiday'] && ! $item['is_cancelled'],
-                'startEditable' => ! $item['is_holiday'] && ! $item['is_cancelled'],
-                'durationEditable' => ! $item['is_holiday'] && ! $item['is_cancelled'],
+                'editable' => ! $item['is_holiday'] && ! $item['is_cancelled'] && $item['is_editable'],
+                'startEditable' => ! $item['is_holiday'] && ! $item['is_cancelled'] && $item['is_editable'],
+                'durationEditable' => ! $item['is_holiday'] && ! $item['is_cancelled'] && $item['is_editable'],
                 'extendedProps' => [
                     'isHoliday' => $item['is_holiday'],
                     'isCancelled' => $item['is_cancelled'],
@@ -149,6 +150,7 @@ final class DashboardScheduleService
             'color' => '#dc2626',
             'is_holiday' => true,
             'is_cancelled' => false,
+            'is_editable' => false,
         ];
     }
 

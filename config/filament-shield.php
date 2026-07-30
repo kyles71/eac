@@ -332,6 +332,7 @@ return [
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
+        'Send:Email' => 'Send Email',
     ],
 
     /*

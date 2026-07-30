@@ -15,17 +15,30 @@ final class ShieldSeeder extends Seeder
     public function run(PermissionCatalogSynchronizerService $synchronizer): void
     {
         $superAdmin = $this->role(Role::SUPER_ADMIN, Role::SUPER_ADMIN_WEIGHT);
-        $owner = $this->role('owner', Role::OWNER_WEIGHT);
-        $this->role('teacher', Role::TEACHER_WEIGHT);
+        $owner = $this->role(Role::OWNER, Role::OWNER_WEIGHT);
+        $teacher = $this->role(Role::TEACHER, Role::TEACHER_WEIGHT);
 
         $synchronizer->sync();
 
         $superAdmin->refresh();
-        $owner->syncPermissions([
+        $owner->givePermissionTo([
             Permission::findByName('Manage:DashboardAppearance', 'web'),
+            Permission::findByName('Send:Email', 'web'),
+            Permission::findByName('Update:Event', 'web'),
+            Permission::findByName('View:Event', 'web'),
+            Permission::findByName('View:Student', 'web'),
+            Permission::findByName('ViewAny:Event', 'web'),
+            Permission::findByName('ViewAny:Student', 'web'),
+        ]);
+        $teacher->givePermissionTo([
+            Permission::findByName('Update:Event', 'web'),
+            Permission::findByName('View:Event', 'web'),
+            Permission::findByName('View:Student', 'web'),
+            Permission::findByName('ViewAny:Event', 'web'),
+            Permission::findByName('ViewAny:Student', 'web'),
         ]);
 
-        $this->command?->info('Shield seeding completed.');
+        $this->command->info('Shield seeding completed.');
     }
 
     private function role(string $name, int $weight): Role

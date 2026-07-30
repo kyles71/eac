@@ -32,6 +32,18 @@ final class Event extends Model implements HasMedia
         'reminder_processed_at' => 'datetime',
     ];
 
+    public static function applyAdminAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->whereHas(
+            'course.teachers',
+            fn (Builder $query): Builder => $query->whereKey($user->id),
+        );
+    }
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
@@ -200,10 +212,24 @@ final class Event extends Model implements HasMedia
         });
     }
 
+    public function isAccessibleToAdminUser(User $user): bool
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return true;
+        }
+
+        return $this->course()
+            ->whereHas(
+                'teachers',
+                fn (Builder $query): Builder => $query->whereKey($user->id),
+            )
+            ->exists();
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('images')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
 
         $this->addMediaCollection('documents')
             ->useDisk(MediaDisks::private());

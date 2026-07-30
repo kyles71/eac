@@ -48,6 +48,7 @@ final class SendEmailAction extends Action
         $this
             ->label('Send Email')
             ->icon(Heroicon::OutlinedEnvelope)
+            ->authorize('Send:Email')
             ->slideOver(false)
             ->schema(fn (): array => [
                 Select::make('to')

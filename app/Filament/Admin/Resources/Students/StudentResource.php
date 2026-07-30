@@ -10,12 +10,14 @@ use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Filament\Admin\Resources\Students\Schemas\StudentInfolist;
 use App\Filament\Admin\Resources\Students\Tables\StudentsTable;
 use App\Models\Student;
+use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class StudentResource extends Resource
@@ -36,6 +38,16 @@ final class StudentResource extends Resource
             'first_name',
             'last_name',
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        return $user instanceof User
+            ? Student::applyAdminAccessConstraint($query, $user)
+            : $query->whereRaw('0 = 1');
     }
 
     public static function form(Schema $schema): Schema
