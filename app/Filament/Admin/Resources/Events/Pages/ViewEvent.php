@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Actions\CancelEventAction;
 use App\Filament\Admin\Resources\Events\EventResource;
+use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Event;
 use App\Services\EventAttendanceService;
 use Filament\Actions\EditAction;
@@ -15,12 +16,12 @@ use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use LogicException;
 
@@ -43,17 +44,18 @@ final class ViewEvent extends ViewRecord implements HasTable
     {
         return $table
             ->query($this->attendanceQuery())
-            ->heading('Attendance')
+            ->heading($this->attendanceHeading())
             ->columns([
                 TextColumn::make('attendance_student_name')
                     ->label('Student')
                     ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
-                ToggleColumn::make('attended')
-                    ->label('Attended')
+                AttendanceRadioColumn::make('attendance_status')
+                    ->label('Attendance')
                     ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
-                    ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->event(), $record))
-                    ->updateStateUsing(fn (Model $record, mixed $state): bool => $this->attendance()
-                        ->setRecordStudentAttendance($this->event(), $record, $state)),
+                    ->state(fn (Model $record): ?string => $this->attendance()
+                        ->recordStudentAttendanceStatus($this->event(), $record))
+                    ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
+                        ->setRecordStudentAttendanceStatus($this->event(), $record, $state)),
                 TextInputColumn::make('notes')
                     ->label('Notes')
                     ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
@@ -84,6 +86,24 @@ final class ViewEvent extends ViewRecord implements HasTable
     private function attendance(): EventAttendanceService
     {
         return app(EventAttendanceService::class);
+    }
+
+    private function attendanceHeading(): string
+    {
+        $startTime = $this->event()->start_time;
+
+        if ($startTime === null) {
+            return 'Attendance — Date not set';
+        }
+
+        return 'Attendance — '.Carbon::parse($startTime)
+            ->timezone($this->displayTimezone())
+            ->format('l, F j, Y');
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private function event(): Event

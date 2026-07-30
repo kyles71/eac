@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Pages;
 
+use App\Enums\AttendanceStatus;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -17,8 +18,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
@@ -26,6 +27,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rules\Enum;
 use LogicException;
 
 final class CourseAttendance extends ViewRecord implements HasTable
@@ -95,13 +97,18 @@ final class CourseAttendance extends ViewRecord implements HasTable
     {
         return $this->courseEvents()
             ->map(fn (Event $event): ColumnGroup => ColumnGroup::make($this->eventColumnLabel($event), [
-                ToggleColumn::make("attendance_{$event->id}")
-                    ->label('Present')
+                SelectColumn::make("attendance_{$event->id}")
+                    ->label('Status')
                     ->disabled(fn (): bool => Gate::denies('updateAttendance', $event))
+                    ->options(AttendanceStatus::class)
+                    ->placeholder('Not recorded')
+                    ->selectablePlaceholder()
+                    ->rules(fn (): array => [new Enum(AttendanceStatus::class)])
                     ->toggleable(false)
-                    ->state(fn (Enrollment $record): bool => $this->attendance()->recordStudentAttended($event, $record))
-                    ->updateStateUsing(fn (Enrollment $record, mixed $state): bool => $this->attendance()
-                        ->setRecordStudentAttendance($event, $record, $state)),
+                    ->state(fn (Enrollment $record): ?string => $this->attendance()
+                        ->recordStudentAttendanceStatus($event, $record))
+                    ->updateStateUsing(fn (Enrollment $record, mixed $state): ?string => $this->attendance()
+                        ->setRecordStudentAttendanceStatus($event, $record, $state)),
                 IconColumn::make("attendance_notes_{$event->id}")
                     ->label('Notes')
                     ->toggleable(false)

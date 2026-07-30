@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Enums\AttendanceStatus;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\Courses\Pages\CourseAttendance;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Pages\ViewEvent;
+use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
@@ -17,6 +19,7 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Textarea;
 use Filament\Tables\Columns\Column;
+use Filament\Tables\Columns\SelectColumn;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -51,7 +54,7 @@ it('shows assigned students as course attendance rows and omits open enrollments
         ->assertCanNotSeeTableRecords([$openEnrollment]);
 });
 
-it('toggles attendance from the course attendance matrix', function (): void {
+it('records each attendance status from the course attendance matrix', function (): void {
     $course = Course::factory()->create();
     $student = Student::factory()->create();
     $enrollment = Enrollment::factory()->withStudent($student)->create([
@@ -64,17 +67,36 @@ it('toggles attendance from the course attendance matrix', function (): void {
         'end_time' => Carbon::parse('2027-01-15 19:00:00'),
     ]);
 
-    livewire(CourseAttendance::class, ['record' => $course->id])
+    $component = livewire(CourseAttendance::class, ['record' => $course->id])
         ->loadTable()
-        ->call('updateTableColumnState', "attendance_{$event->id}", (string) $enrollment->id, true)
-        ->assertHasNoErrors();
+        ->assertTableColumnExists(
+            "attendance_{$event->id}",
+            fn (SelectColumn $column): bool => $column->getPlaceholder() === 'Not recorded',
+        )
+        ->assertTableSelectColumnHasOptions(
+            "attendance_{$event->id}",
+            collect(AttendanceStatus::cases())
+                ->mapWithKeys(fn (AttendanceStatus $status): array => [$status->value => $status->getLabel()])
+                ->all(),
+            $enrollment,
+        );
 
-    expect(EventAttendee::query()
-        ->where('event_id', $event->id)
-        ->where('attendee_type', $student->getMorphClass())
-        ->where('attendee_id', $student->id)
-        ->where('attended', true)
-        ->exists())->toBeTrue();
+    foreach (AttendanceStatus::cases() as $status) {
+        $component
+            ->call(
+                'updateTableColumnState',
+                "attendance_{$event->id}",
+                (string) $enrollment->id,
+                $status->value,
+            )
+            ->assertHasNoErrors();
+
+        expect(EventAttendee::query()
+            ->where('event_id', $event->id)
+            ->where('attendee_type', $student->getMorphClass())
+            ->where('attendee_id', $student->id)
+            ->value('status'))->toBe($status);
+    }
 });
 
 it('sorts course attendance event columns by date and labels them with date and title', function (): void {
@@ -136,7 +158,7 @@ it('edits course attendance notes from a notes icon action', function (): void {
         ->value('notes'))->toBe('Needs makeup work');
 });
 
-it('manages attendance on a single course event', function (): void {
+it('uses radio buttons to manage attendance on a single course event', function (): void {
     $course = Course::factory()->create();
     $student = Student::factory()->create();
     $enrollment = Enrollment::factory()->withStudent($student)->create([
@@ -151,7 +173,22 @@ it('manages attendance on a single course event', function (): void {
 
     livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
-        ->call('updateTableColumnState', 'attended', (string) $enrollment->id, true)
+        ->assertTableColumnExists(
+            'attendance_status',
+            fn (AttendanceRadioColumn $column): bool => ! $column->isDisabled(),
+        )
+        ->assertSeeHtml('type="radio"')
+        ->assertSee('Not recorded')
+        ->assertSee('Present')
+        ->assertSee('Late')
+        ->assertSee('Excused absence')
+        ->assertSee('Unexcused absence')
+        ->call(
+            'updateTableColumnState',
+            'attendance_status',
+            (string) $enrollment->id,
+            AttendanceStatus::Late->value,
+        )
         ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Arrived late')
         ->assertHasNoErrors();
 
@@ -161,8 +198,97 @@ it('manages attendance on a single course event', function (): void {
         ->where('attendee_id', $student->id)
         ->firstOrFail();
 
-    expect($attendance->attended)->toBeTrue()
+    expect($attendance->status)->toBe(AttendanceStatus::Late)
         ->and($attendance->notes)->toBe('Arrived late');
+});
+
+it('adds the event date to the attendance heading in the display timezone', function (): void {
+    config()->set('app.display_timezone', 'America/New_York');
+
+    $event = Event::factory()->create([
+        'start_time' => Carbon::parse('2027-01-16 01:00:00', 'UTC'),
+        'end_time' => Carbon::parse('2027-01-16 02:00:00', 'UTC'),
+    ]);
+
+    $component = livewire(ViewEvent::class, ['record' => $event->id])
+        ->loadTable();
+
+    expect($component->instance()->getTable()->getHeading())
+        ->toBe('Attendance — Friday, January 15, 2027');
+});
+
+it('resets attendance status while preserving its notes', function (): void {
+    $course = Course::factory()->create();
+    $student = Student::factory()->create();
+    $enrollment = Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $student->user_id,
+    ]);
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $attendance = app(EventAttendanceService::class);
+
+    $attendance->setStudentAttendanceStatus($event, $student, AttendanceStatus::Late);
+    $attendance->setStudentAttendanceNotes($event, $student, 'Arrived after warmup');
+
+    livewire(CourseAttendance::class, ['record' => $course->id])
+        ->loadTable()
+        ->call(
+            'updateTableColumnState',
+            "attendance_{$event->id}",
+            (string) $enrollment->id,
+            null,
+        )
+        ->assertHasNoErrors();
+
+    $savedAttendance = EventAttendee::query()
+        ->where('event_id', $event->id)
+        ->where('attendee_type', $student->getMorphClass())
+        ->where('attendee_id', $student->id)
+        ->firstOrFail();
+
+    expect($savedAttendance->status)->toBeNull()
+        ->and($savedAttendance->notes)->toBe('Arrived after warmup');
+});
+
+it('removes an empty attendance-only row after its status is reset', function (): void {
+    $course = Course::factory()->create();
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $student = Student::factory()->create();
+    $attendance = app(EventAttendanceService::class);
+
+    $attendance->setStudentAttendanceStatus($event, $student, AttendanceStatus::Present);
+    $attendance->setStudentAttendanceStatus($event, $student, null);
+
+    expect(EventAttendee::query()
+        ->where('event_id', $event->id)
+        ->where('attendee_type', $student->getMorphClass())
+        ->where('attendee_id', $student->id)
+        ->exists())->toBeFalse();
+});
+
+it('preserves a standalone event attendee when attendance and notes are cleared', function (): void {
+    $event = Event::factory()->create(['course_id' => null]);
+    $student = Student::factory()->create();
+    $eventAttendee = EventAttendee::factory()->forStudent($student)->create([
+        'event_id' => $event->id,
+        'status' => AttendanceStatus::Late,
+        'notes' => 'Arrived late',
+    ]);
+    $attendance = app(EventAttendanceService::class);
+
+    $attendance->setStudentAttendanceStatus($event, $student, null);
+    $attendance->setStudentAttendanceNotes($event, $student, null);
+
+    expect($eventAttendee->refresh()->status)->toBeNull()
+        ->and($eventAttendee->notes)->toBeNull();
 });
 
 it('updates existing student attendance rows instead of duplicating them', function (): void {
@@ -170,7 +296,7 @@ it('updates existing student attendance rows instead of duplicating them', funct
     $event = Event::factory()->create(['course_id' => null]);
     $attendance = app(EventAttendanceService::class);
 
-    $attendance->setStudentAttendance($event, $student, true);
+    $attendance->setStudentAttendanceStatus($event, $student, AttendanceStatus::Present);
     $attendance->setStudentAttendanceNotes($event, $student, 'Present');
 
     expect(EventAttendee::query()
@@ -205,8 +331,11 @@ it('reuses event update authorization when attendance is changed', function (): 
 
     $this->actingAs($teacher);
 
-    expect($attendance->setStudentAttendance($assignedEvent, $student, true)->attended)->toBeTrue()
-        ->and(fn (): EventAttendee => $attendance->setStudentAttendance($otherEvent, $student, true))
+    expect($attendance
+        ->setStudentAttendanceStatus($assignedEvent, $student, AttendanceStatus::Present)
+        ->status)->toBe(AttendanceStatus::Present)
+        ->and(fn (): EventAttendee => $attendance
+            ->setStudentAttendanceStatus($otherEvent, $student, AttendanceStatus::Present))
         ->toThrow(AuthorizationException::class);
 });
 
@@ -284,7 +413,7 @@ it('keeps concluded course attendance viewable and read only for teachers', func
     ]);
     $attendance = EventAttendee::factory()->forStudent($student)->create([
         'event_id' => $event->id,
-        'attended' => false,
+        'status' => null,
         'notes' => 'Historical note',
     ]);
 
@@ -308,7 +437,12 @@ it('keeps concluded course attendance viewable and read only for teachers', func
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
-        ->call('updateTableColumnState', "attendance_{$event->id}", (string) $enrollment->id, true)
+        ->call(
+            'updateTableColumnState',
+            "attendance_{$event->id}",
+            (string) $enrollment->id,
+            AttendanceStatus::Present->value,
+        )
         ->assertActionVisible($notesAction)
         ->mountAction($notesAction)
         ->assertActionMounted($notesAction)
@@ -325,7 +459,7 @@ it('keeps concluded course attendance viewable and read only for teachers', func
         ->loadTable()
         ->assertCanSeeTableRecords([$enrollment])
         ->assertTableColumnExists(
-            'attended',
+            'attendance_status',
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
@@ -334,13 +468,18 @@ it('keeps concluded course attendance viewable and read only for teachers', func
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
-        ->call('updateTableColumnState', 'attended', (string) $enrollment->id, true)
+        ->call(
+            'updateTableColumnState',
+            'attendance_status',
+            (string) $enrollment->id,
+            AttendanceStatus::Present->value,
+        )
         ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Changed note');
 
-    expect($attendance->refresh()->attended)->toBeFalse()
+    expect($attendance->refresh()->status)->toBeNull()
         ->and($attendance->notes)->toBe('Historical note')
         ->and(fn (): EventAttendee => app(EventAttendanceService::class)
-            ->setStudentAttendance($event, $student, true))
+            ->setStudentAttendanceStatus($event, $student, AttendanceStatus::Present))
         ->toThrow(AuthorizationException::class);
 });
 
@@ -394,7 +533,7 @@ it('keeps concluded course attendance read only for owners', function (): void {
     expect($courseAttendance->instance()->getMountedAction()?->getModalSubmitAction())->toBeNull();
 
     expect(fn (): EventAttendee => app(EventAttendanceService::class)
-        ->setStudentAttendance($event, $student, true))
+        ->setStudentAttendanceStatus($event, $student, AttendanceStatus::Present))
         ->toThrow(AuthorizationException::class);
 });
 
@@ -420,7 +559,7 @@ it('renders attendance and notes as read only without event update permission', 
     ]);
     $attendance = EventAttendee::factory()->forStudent($student)->create([
         'event_id' => $event->id,
-        'attended' => false,
+        'status' => null,
         'notes' => 'Read-only note',
     ]);
 
@@ -434,7 +573,12 @@ it('renders attendance and notes as read only without event update permission', 
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
-        ->call('updateTableColumnState', "attendance_{$event->id}", (string) $enrollment->id, true)
+        ->call(
+            'updateTableColumnState',
+            "attendance_{$event->id}",
+            (string) $enrollment->id,
+            AttendanceStatus::Present->value,
+        )
         ->assertActionVisible($notesAction)
         ->mountAction($notesAction)
         ->assertActionMounted($notesAction)
@@ -450,7 +594,7 @@ it('renders attendance and notes as read only without event update permission', 
     livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
         ->assertTableColumnExists(
-            'attended',
+            'attendance_status',
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
@@ -459,9 +603,14 @@ it('renders attendance and notes as read only without event update permission', 
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
-        ->call('updateTableColumnState', 'attended', (string) $enrollment->id, true)
+        ->call(
+            'updateTableColumnState',
+            'attendance_status',
+            (string) $enrollment->id,
+            AttendanceStatus::Present->value,
+        )
         ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Should not save');
 
-    expect($attendance->refresh()->attended)->toBeFalse()
+    expect($attendance->refresh()->status)->toBeNull()
         ->and($attendance->notes)->toBe('Read-only note');
 });
