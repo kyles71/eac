@@ -1,12 +1,13 @@
 # EAC Operations Cheat Sheet
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-31
 
 Start here for common commands and credential rotation. Use the linked runbook section for unusual, destructive, or incompletely understood situations.
 
 - [Deployment secrets](#deployment-secrets)
 - [Rotate an SSH deployment key](#rotate-an-ssh-deployment-key)
 - [Rotate the private-repository token](#rotate-the-private-repository-token)
+- [Rotate the Updates feed token](#rotate-the-updates-feed-token)
 - [Deploy and verify](#deploy-and-verify)
 - [Common server commands](#common-server-commands)
 - [Deployment recovery](#deployment-recovery)
@@ -15,9 +16,9 @@ Replace `<PLACEHOLDERS>`. Never paste a private key, token, `.env`, or password 
 
 ## Environment map
 
-| Concern | Production | Staging |
+| Concern | Production | Dev |
 | --- | --- | --- |
-| Branch | `master` | `dev` or active `release/*` |
+| Branch | `master` | `dev` |
 | GitHub Environment | `production` | `dev` |
 | Root | `/var/www/html/eac` | `/var/www/html/eac-test` |
 | Active release | `/var/www/html/eac/current` | `/var/www/html/eac-test/current` |
@@ -197,14 +198,25 @@ Do not commit `auth.json`.
 
 More detail: [Production activation — Deployment access](PRODUCTION_ACTIVATION_RUNBOOK.md#4-deployment-access-and-cicd).
 
+## Rotate the Updates feed token
+
+This token is separate from `MY_PRIVATE_GH_TOKEN`. Restrict it to `kyles71/eac` with read-only access to Contents, Pull Requests, and Deployments.
+
+1. Create the replacement fine-grained token with a recorded expiration.
+2. Update `GITHUB_UPDATES_TOKEN` in `/var/www/html/eac-test/shared/.env` and `/var/www/html/eac/shared/.env` through the approved secret-management process.
+3. Run `sudo -u www-data php artisan config:clear` from each active release.
+4. Open **Updates** in each admin panel, use **Refresh**, and confirm dev and production entries load.
+5. Revoke the old token only after both environments work.
+
+Never reuse the deployment/Composer token for the application feed; the feed token needs no write access and no access to the private package repositories.
+
 ## Deploy and verify
 
 | Goal | Action |
 | --- | --- |
-| Deploy normal staging | Push or merge to `dev` |
-| Deploy an exact candidate | Push a single-segment `release/*` branch |
-| Restore `dev` to staging | Run **Actions → Deploy dev branch → Run workflow** |
-| Deploy production | Merge the tested `release/*` PR into `master` |
+| Deploy normal dev | Push or merge to `dev` |
+| Redeploy current dev | Run **Actions → Deploy dev branch → Run workflow** |
+| Deploy one feature to production | Merge that tested feature branch's PR into `master` |
 | Publish the release | Review smoke tests and the automated draft GitHub Release |
 
 Inspect active releases on the server:
@@ -233,13 +245,13 @@ More detail:
 
 ## Common server commands
 
-Set production or staging once:
+Set production or dev once:
 
 ```bash
 EAC_ROOT="/var/www/html/eac"
 ```
 
-Use `/var/www/html/eac-test` for staging.
+Use `/var/www/html/eac-test` for dev.
 
 ### Application health — read-only
 

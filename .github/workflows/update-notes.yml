@@ -1,0 +1,48 @@
+name: Update notes
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+  issues: write
+  models: read
+  pull-requests: write
+
+jobs:
+  prepare-note:
+    name: Prepare update note
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Generate or invalidate the update note
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          UPDATES_AI_MODEL: ${{ vars.UPDATES_AI_MODEL || 'openai/gpt-4.1' }}
+        run: node .github/scripts/update-notes.mjs prepare-pr
+
+  updates-note:
+    name: updates-note
+    needs: prepare-note
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate approval and note format
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: node .github/scripts/update-notes.mjs validate-pr
