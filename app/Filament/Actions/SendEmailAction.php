@@ -60,10 +60,16 @@ final class SendEmailAction extends Action
                     ->searchingMessage('Searching recipients...')
                     ->noSearchResultsMessage('No matching students, teachers, or email address.')
                     ->getSearchResultsUsing(
-                        fn (string $search): array => app(HandcraftedEmailRecipients::class)->search($search)
+                        fn (string $search): array => app(HandcraftedEmailRecipients::class)->search(
+                            $search,
+                            $this->authenticatedUser(),
+                        )
                     )
                     ->getOptionLabelsUsing(
-                        fn (array $values): array => app(HandcraftedEmailRecipients::class)->labels($values)
+                        fn (array $values): array => app(HandcraftedEmailRecipients::class)->labels(
+                            $values,
+                            $this->authenticatedUser(),
+                        )
                     )
                     ->default(app(HandcraftedEmailRecipients::class)->defaultValues($this->getDefaultTo()))
                     ->placeholder('Add recipients')
@@ -139,7 +145,10 @@ final class SendEmailAction extends Action
     private function queueEmails(array $data): bool
     {
         return app(QueueHandcraftedEmail::class)->handle(
-            recipients: app(HandcraftedEmailRecipients::class)->resolve($data['to'] ?? []),
+            recipients: app(HandcraftedEmailRecipients::class)->resolve(
+                $data['to'] ?? [],
+                $this->authenticatedUser(),
+            ),
             subject: (string) ($data['subject'] ?? ''),
             body: (string) ($data['body'] ?? ''),
             deliveryMode: QueueHandcraftedEmail::DELIVERY_MODE_INDIVIDUAL,
@@ -162,5 +171,12 @@ final class SendEmailAction extends Action
         }
 
         return config('mail.mailers.handcrafted.archive_to', []);
+    }
+
+    private function authenticatedUser(): ?User
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user : null;
     }
 }

@@ -38,6 +38,7 @@ final class ShieldSeeder extends Seeder
         $teacher->givePermissionTo([
             Permission::findByName('Create:StaffNote', 'web'),
             Permission::findByName('Delete:StaffNote', 'web'),
+            Permission::findByName('Send:Email', 'web'),
             Permission::findByName('Update:Event', 'web'),
             Permission::findByName('Update:StaffNote', 'web'),
             Permission::findByName('View:Event', 'web'),

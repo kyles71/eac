@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\SendEmailAction;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Event;
+use App\Models\Student;
 use App\Services\EventAttendanceService;
+use App\Services\EventEmailRecipientsService;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\EmbeddedSchema;
@@ -63,12 +66,21 @@ final class ViewEvent extends ViewRecord implements HasTable
                     ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
                         ->setRecordStudentNotes($this->event(), $record, $state)),
             ])
+            ->recordActions([
+                SendEmailAction::make()
+                    ->label('Email Student')
+                    ->to(fn (Model $record): array => $this->emailRecipientForAttendanceRecord($record))
+                    ->visible(fn (Model $record): bool => $this->canEmailAttendanceRecord($record)),
+            ])
             ->paginated(false);
     }
 
     protected function getHeaderActions(): array
     {
         return [
+            SendEmailAction::make()
+                ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')
+                ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event())),
             CancelEventAction::make(),
             EditAction::make()
                 ->visible(fn (): bool => ! $this->event()->isCancelled()),
@@ -86,6 +98,23 @@ final class ViewEvent extends ViewRecord implements HasTable
     private function attendance(): EventAttendanceService
     {
         return app(EventAttendanceService::class);
+    }
+
+    /**
+     * @return array<int, Student>
+     */
+    private function emailRecipientForAttendanceRecord(Model $record): array
+    {
+        $student = $this->attendance()->studentForAttendanceRecord($record);
+
+        return $student instanceof Student ? [$student] : [];
+    }
+
+    private function canEmailAttendanceRecord(Model $record): bool
+    {
+        $student = $this->attendance()->studentForAttendanceRecord($record);
+
+        return $student instanceof Student && Gate::allows('view', $student);
     }
 
     private function attendanceHeading(): string

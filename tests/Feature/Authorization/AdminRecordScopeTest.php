@@ -25,8 +25,7 @@ beforeEach(function (): void {
     Filament::setCurrentPanel('admin');
 });
 
-it('grants owners and super admins email access without changing teacher email access', function (): void {
-    $teacher = Role::findByName(Role::TEACHER);
+it('grants owners and super admins email access through the Sprint 3 migration', function (): void {
     $owner = Role::findByName(Role::OWNER);
     $superAdmin = Role::findByName(Role::SUPER_ADMIN);
 
@@ -36,9 +35,19 @@ it('grants owners and super admins email access without changing teacher email a
     $migration = require database_path('migrations/2026_07_30_204312_grant_send_email_permission_to_owners.php');
     $migration->up();
 
-    expect($teacher->hasPermissionTo('Send:Email'))->toBeFalse()
-        ->and($owner->hasPermissionTo('Send:Email'))->toBeTrue()
+    expect($owner->hasPermissionTo('Send:Email'))->toBeTrue()
         ->and($superAdmin->hasPermissionTo('Send:Email'))->toBeTrue();
+});
+
+it('grants teachers email access through the Sprint 6 migration', function (): void {
+    $teacher = Role::findByName(Role::TEACHER);
+
+    $teacher->revokePermissionTo('Send:Email');
+
+    $migration = require database_path('migrations/2026_07_31_004235_grant_send_email_permission_to_teachers.php');
+    $migration->up();
+
+    expect($teacher->hasPermissionTo('Send:Email'))->toBeTrue();
 });
 
 it('limits teachers to assigned course events even after a course is completed', function (): void {
@@ -186,7 +195,7 @@ it('limits teachers to students from actively taught courses', function (): void
         ->loadTable()
         ->assertCanSeeTableRecords([$activeStudent])
         ->assertCanNotSeeTableRecords([$concludedStudent, $otherStudent])
-        ->assertActionHidden(TestAction::make('sendEmail')->table($activeStudent));
+        ->assertActionVisible(TestAction::make('sendEmail')->table($activeStudent));
 
     expect(StudentResource::getGlobalSearchResults('Scoped Student'))->toHaveCount(1);
 
