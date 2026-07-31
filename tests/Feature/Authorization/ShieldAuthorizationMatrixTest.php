@@ -24,6 +24,7 @@ use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
+use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
@@ -67,6 +68,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
         RoleResource::class => $sixAbilities,
+        StaffNoteResource::class => ['viewAny', 'view', 'create', 'update', 'delete'],
         StudentResource::class => ['viewAny', 'view', 'create', 'update', 'deleteAny'],
         UserResource::class => $sixAbilities,
     ];
@@ -116,6 +118,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:UserAccess',
             'Publish:LegalDocument',
             'Send:Email',
+            'View:StaffNote',
         );
 
     foreach ($desired as $permission) {

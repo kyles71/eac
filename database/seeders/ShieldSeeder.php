@@ -22,19 +22,29 @@ final class ShieldSeeder extends Seeder
 
         $superAdmin->refresh();
         $owner->givePermissionTo([
+            Permission::findByName('Create:StaffNote', 'web'),
+            Permission::findByName('Delete:StaffNote', 'web'),
             Permission::findByName('Manage:DashboardAppearance', 'web'),
             Permission::findByName('Send:Email', 'web'),
             Permission::findByName('Update:Event', 'web'),
+            Permission::findByName('Update:StaffNote', 'web'),
             Permission::findByName('View:Event', 'web'),
+            Permission::findByName('View:StaffNote', 'web'),
             Permission::findByName('View:Student', 'web'),
             Permission::findByName('ViewAny:Event', 'web'),
+            Permission::findByName('ViewAny:StaffNote', 'web'),
             Permission::findByName('ViewAny:Student', 'web'),
         ]);
         $teacher->givePermissionTo([
+            Permission::findByName('Create:StaffNote', 'web'),
+            Permission::findByName('Delete:StaffNote', 'web'),
             Permission::findByName('Update:Event', 'web'),
+            Permission::findByName('Update:StaffNote', 'web'),
             Permission::findByName('View:Event', 'web'),
+            Permission::findByName('View:StaffNote', 'web'),
             Permission::findByName('View:Student', 'web'),
             Permission::findByName('ViewAny:Event', 'web'),
+            Permission::findByName('ViewAny:StaffNote', 'web'),
             Permission::findByName('ViewAny:Student', 'web'),
         ]);
 

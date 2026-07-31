@@ -26,6 +26,7 @@ use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResourc
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
 use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
+use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
@@ -260,6 +261,9 @@ return [
             ],
             RoleResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            StaffNoteResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete',
             ],
             StudentResource::class => [
                 'viewAny', 'view', 'create', 'update', 'deleteAny',

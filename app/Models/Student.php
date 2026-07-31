@@ -115,6 +115,12 @@ final class Student extends Model
         return $this->hasMany(StudentEmail::class);
     }
 
+    /** @return HasMany<StaffNote, $this> */
+    public function staffNotes(): HasMany
+    {
+        return $this->hasMany(StaffNote::class);
+    }
+
     public function isAccessibleToAdminUser(User $user): bool
     {
         return self::applyAdminAccessConstraint(
