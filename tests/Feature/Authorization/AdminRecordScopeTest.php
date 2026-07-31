@@ -136,7 +136,7 @@ it('prevents teachers from assigning an event to a course they do not teach', fu
     expect($event->refresh()->course_id)->toBe($assignedCourse->id);
 });
 
-it('limits teachers to students from actively taught courses', function (): void {
+it('limits teacher access to student details to students from active courses they teach', function (): void {
     $teacher = User::factory()->isTeacher()->create();
     $activeCourse = Course::factory()->create();
     $activeCourse->teachers()->sync([$teacher->id]);
@@ -156,7 +156,7 @@ it('limits teachers to students from actively taught courses', function (): void
 
     $concludedCourse = Course::factory()->create();
     $concludedCourse->teachers()->sync([$teacher->id]);
-    Event::factory()->create([
+    $concludedEvent = Event::factory()->create([
         'course_id' => $concludedCourse->id,
         'start_time' => now()->subYear(),
         'end_time' => now()->subYear()->addHour(),
@@ -165,7 +165,7 @@ it('limits teachers to students from actively taught courses', function (): void
         'first_name' => 'Scoped',
         'last_name' => 'Student',
     ]);
-    Enrollment::factory()->withStudent($concludedStudent)->create([
+    $concludedEnrollment = Enrollment::factory()->withStudent($concludedStudent)->create([
         'course_id' => $concludedCourse->id,
         'user_id' => $concludedStudent->user_id,
     ]);
@@ -198,6 +198,11 @@ it('limits teachers to students from actively taught courses', function (): void
         ->assertActionVisible(TestAction::make('sendEmail')->table($activeStudent));
 
     expect(StudentResource::getGlobalSearchResults('Scoped Student'))->toHaveCount(1);
+
+    livewire(ViewEvent::class, ['record' => $concludedEvent->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$concludedEnrollment])
+        ->assertActionHidden(TestAction::make('sendEmail')->table($concludedEnrollment));
 
     $this->get(StudentResource::getUrl('view', ['record' => $concludedStudent]))
         ->assertNotFound();

@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Actions\CancelEventAction;
 use App\Filament\Actions\SendEmailAction;
+use App\Filament\Actions\StudentContactActionGroup;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Event;
@@ -21,6 +22,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -67,11 +69,12 @@ final class ViewEvent extends ViewRecord implements HasTable
                         ->setRecordStudentNotes($this->event(), $record, $state)),
             ])
             ->recordActions([
-                SendEmailAction::make()
-                    ->label('Email Student')
-                    ->to(fn (Model $record): array => $this->emailRecipientForAttendanceRecord($record))
+                StudentContactActionGroup::make(
+                    student: fn (Model $record): Student => $this->attendanceStudent($record),
+                    event: fn (): Event => $this->event(),
+                )
                     ->visible(fn (Model $record): bool => $this->canEmailAttendanceRecord($record)),
-            ])
+            ], RecordActionsPosition::BeforeCells)
             ->paginated(false);
     }
 
@@ -100,14 +103,15 @@ final class ViewEvent extends ViewRecord implements HasTable
         return app(EventAttendanceService::class);
     }
 
-    /**
-     * @return array<int, Student>
-     */
-    private function emailRecipientForAttendanceRecord(Model $record): array
+    private function attendanceStudent(Model $record): Student
     {
         $student = $this->attendance()->studentForAttendanceRecord($record);
 
-        return $student instanceof Student ? [$student] : [];
+        if (! $student instanceof Student) {
+            throw new LogicException('The attendance student is unavailable.');
+        }
+
+        return $student;
     }
 
     private function canEmailAttendanceRecord(Model $record): bool

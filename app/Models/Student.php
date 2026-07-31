@@ -19,6 +19,7 @@ use Spatie\Tags\HasTags;
 
 /**
  * @property-read string $fullName
+ * @property-read int $age
  */
 final class Student extends Model
 {
@@ -119,6 +120,12 @@ final class Student extends Model
     public function staffNotes(): HasMany
     {
         return $this->hasMany(StaffNote::class);
+    }
+
+    /** @return HasMany<StudentCommunication, $this> */
+    public function studentCommunications(): HasMany
+    {
+        return $this->hasMany(StudentCommunication::class);
     }
 
     public function isAccessibleToAdminUser(User $user): bool

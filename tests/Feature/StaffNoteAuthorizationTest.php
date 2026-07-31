@@ -3,16 +3,15 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Students\Pages\ViewStudent;
-use App\Filament\Admin\Resources\Students\RelationManagers\StaffNotesRelationManager;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\StaffNote;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\StudentNotesService;
 use App\Support\MediaDisks;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -21,6 +20,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\assertDatabaseHas;
+use function Pest\Laravel\assertDatabaseMissing;
 use function Pest\Livewire\livewire;
 
 beforeEach(function (): void {
@@ -33,10 +33,8 @@ it('groups staff note row actions at the start of the table', function (): void 
 
     $this->actingAs($owner);
 
-    $component = livewire(StaffNotesRelationManager::class, [
-        'ownerRecord' => $student,
-        'pageClass' => ViewStudent::class,
-    ])->loadTable();
+    $component = livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable();
 
     $table = $component->instance()->getTable();
 
@@ -47,7 +45,7 @@ it('groups staff note row actions at the start of the table', function (): void 
         ->and($table->getRecordActions()[0])
         ->toBeInstanceOf(ActionGroup::class)
         ->and($table->getFlatRecordActions())
-        ->toHaveKeys(['view', 'edit', 'delete']);
+        ->toHaveKeys(['viewNote', 'editStaffNote', 'deleteStaffNote']);
 });
 
 it('allows permitted staff to view all notes for an accessible student but manage only their own', function (): void {
@@ -112,11 +110,8 @@ it('creates a staff note for the viewed student with the authenticated author', 
 
     $this->actingAs($teacher);
 
-    livewire(StaffNotesRelationManager::class, [
-        'ownerRecord' => $student,
-        'pageClass' => ViewStudent::class,
-    ])
-        ->callAction(TestAction::make(CreateAction::class)->table(), data: [
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->callAction(TestAction::make('createStaffNote')->table(), data: [
             'note' => 'Student needs additional warmup time.',
             'documents' => [
                 UploadedFile::fake()->create('care-plan.pdf', 20, 'application/pdf'),
@@ -144,12 +139,54 @@ it('creates a staff note for the viewed student with the authenticated author', 
         ->and($documents->pluck('file_name')->all())
         ->toBe(['care-plan.pdf', 'diagram.png']);
 
-    livewire(StaffNotesRelationManager::class, [
-        'ownerRecord' => $student,
-        'pageClass' => ViewStudent::class,
-    ])
+    $record = app(StudentNotesService::class)
+        ->records($student, $teacher)
+        ->get("staff_note:{$note->id}");
+
+    livewire(ViewStudent::class, ['record' => $student->id])
         ->loadTable()
-        ->mountAction(TestAction::make('view')->table($note))
-        ->assertActionMounted(TestAction::make('view')->table($note))
+        ->mountAction(TestAction::make('viewNote')->table($record))
+        ->assertActionMounted(TestAction::make('viewNote')->table($record))
         ->assertSchemaComponentExists('documents', 'mountedActionSchema0');
+});
+
+it('edits and deletes staff notes from the aggregate table', function (): void {
+    Storage::fake(MediaDisks::private());
+
+    $owner = User::factory()->isOwner()->create();
+    $student = Student::factory()->create();
+    $note = StaffNote::factory()->create([
+        'student_id' => $student->id,
+        'author_id' => $owner->id,
+        'note' => 'Original note',
+    ]);
+
+    $this->actingAs($owner);
+
+    $record = app(StudentNotesService::class)
+        ->records($student, $owner)
+        ->get("staff_note:{$note->id}");
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->callAction(TestAction::make('editStaffNote')->table($record), data: [
+            'note' => 'Updated note',
+            'documents' => [],
+        ])
+        ->assertHasNoActionErrors();
+
+    assertDatabaseHas(StaffNote::class, [
+        'id' => $note->id,
+        'note' => 'Updated note',
+    ]);
+
+    $record = app(StudentNotesService::class)
+        ->records($student, $owner)
+        ->get("staff_note:{$note->id}");
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->callAction(TestAction::make('deleteStaffNote')->table($record));
+
+    assertDatabaseMissing(StaffNote::class, ['id' => $note->id]);
 });

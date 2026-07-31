@@ -23,6 +23,7 @@ final class EventAttendee extends Model
         'status' => AttendanceStatus::class,
     ];
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);

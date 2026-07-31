@@ -88,6 +88,12 @@ final class Event extends Model implements HasMedia
         return $this->hasMany(EventAttendee::class);
     }
 
+    /** @return HasMany<StudentCommunication, $this> */
+    public function studentCommunications(): HasMany
+    {
+        return $this->hasMany(StudentCommunication::class);
+    }
+
     public function excludedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'event_exclusions')

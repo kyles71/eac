@@ -6,11 +6,8 @@ namespace App\Services;
 
 use App\Enums\AttendanceStatus;
 use App\Models\Course;
-use App\Models\Event;
-use App\Models\EventAttendee;
 use App\Models\Student;
 use App\Models\StudentWaiver;
-use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 
 final class StudentProfileService
@@ -83,41 +80,6 @@ final class StudentProfileService
                     'unexcused_absence' => $unexcusedAbsence,
                     'not_recorded' => max(0, $totalEvents - $recordedEvents),
                     'total_events' => $totalEvents,
-                ];
-            })
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @return list<array{event: string, starts_at: CarbonInterface|null, note: string}>
-     */
-    public function attendanceNotes(Student $student): array
-    {
-        return EventAttendee::query()
-            ->with('event')
-            ->where('attendee_type', $student->getMorphClass())
-            ->where('attendee_id', $student->id)
-            ->whereNotNull('notes')
-            ->where('notes', '!=', '')
-            ->whereHas('event')
-            ->orderByDesc(
-                Event::query()
-                    ->select('start_time')
-                    ->whereColumn('events.id', 'event_attendees.event_id')
-                    ->limit(1),
-            )
-            ->orderByDesc('id')
-            ->get()
-            ->map(function (EventAttendee $attendance): array {
-                $event = $attendance->event;
-
-                return [
-                    'event' => $event instanceof Event && filled($event->name)
-                        ? $event->name
-                        : "Event #{$attendance->event_id}",
-                    'starts_at' => $event instanceof Event ? $event->start_time : null,
-                    'note' => (string) $attendance->notes,
                 ];
             })
             ->values()

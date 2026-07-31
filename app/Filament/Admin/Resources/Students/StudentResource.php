@@ -6,7 +6,6 @@ namespace App\Filament\Admin\Resources\Students;
 
 use App\Filament\Admin\Resources\Students\Pages\ListStudents;
 use App\Filament\Admin\Resources\Students\Pages\ViewStudent;
-use App\Filament\Admin\Resources\Students\RelationManagers\StaffNotesRelationManager;
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Filament\Admin\Resources\Students\Schemas\StudentInfolist;
 use App\Filament\Admin\Resources\Students\Tables\StudentsTable;
@@ -68,9 +67,7 @@ final class StudentResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            StaffNotesRelationManager::class,
-        ];
+        return [];
     }
 
     public static function getPages(): array
