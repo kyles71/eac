@@ -553,6 +553,7 @@ Normal deployments run through GitHub Actions and Deployer:
 - When an existing feature-to-dev PR conflicts, the repository owner resolves a local `--no-ff` merge directly on `dev`; the clean feature branch is not updated with unrelated dev history.
 - A direct `dev` to `master` batch release is an exception requiring approval of every included change.
 - The manually triggered **Deploy dev branch** workflow redeploys the current `dev` branch.
+- A PR labeled `skip-deployment` skips the automatic server deployment; on `master` it also skips the production tag and draft Release. Use it only for GitHub-only automation or documentation with no runtime effect. Manual dev deployments always run.
 - Active deployments are never automatically canceled; a newer run waits, and GitHub may replace an older pending run with the newest pending deployment.
 - After a successful production deployment, GitHub Actions creates the next `v<generation>.<YYMMDD>.<daily-sequence>` tag and a draft GitHub Release; the initial release is `v1.260720.1`.
 - `current` is an atomic symlink to a numbered release.

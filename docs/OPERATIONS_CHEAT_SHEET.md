@@ -217,9 +217,12 @@ Never reuse the deployment/Composer token for the application feed; the feed tok
 | --- | --- |
 | Deploy normal dev | Merge the feature PR into `dev` |
 | Resolve a conflicting dev PR | Locally merge the feature into `dev` with `--no-ff`, resolve, and push `dev` |
+| Merge GitHub-only automation/docs | Apply `skip-deployment` before merging; also apply the appropriate update-note label |
 | Redeploy current dev | Run **Actions → Deploy dev branch → Run workflow** |
 | Deploy one feature to production | Merge that tested feature branch's PR into `master` |
 | Publish the release | Review smoke tests and the automated draft GitHub Release |
+
+Use `skip-deployment` only when the PR changes GitHub-only automation or documentation and the servers do not need the commit. Never use it for application code, dependencies, built assets, migrations, seeders, configuration, queues, schedules, or worker behavior. A production skip also skips tagging and draft Release creation. Manual dev redeployments ignore the label and always run.
 
 Inspect active releases on the server:
 

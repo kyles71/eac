@@ -15,12 +15,14 @@ import {
     featureHeadFromDevMergeCommit,
     findContaminatingMerge,
     findDevPullRequestForFeatureHead,
+    findMergedPullRequest,
     findMergedDevPullRequest,
     handlePullRequestEvent,
     isValidOperationalBlock,
     isValidUserBlock,
     releaseBranchFor,
     replaceDeploymentBlock,
+    shouldDeployForPullRequest,
     validatePullRequestData,
 } from './update-notes.mjs';
 
@@ -47,6 +49,16 @@ test('grants write access needed to update pull request labels', () => {
     const workflow = readFileSync(new URL('../workflows/update-notes.yml', import.meta.url), 'utf8');
 
     assert.match(workflow, /^\s{2}pull-requests: write$/m);
+});
+
+test('gates dev and production deployments through the PR label decision', () => {
+    for (const workflowName of ['deploy-dev.yml', 'deploy-production.yml']) {
+        const workflow = readFileSync(new URL(`../workflows/${workflowName}`, import.meta.url), 'utf8');
+
+        assert.match(workflow, /node \.github\/scripts\/update-notes\.mjs deployment-decision/);
+        assert.match(workflow, /should_deploy: \$\{\{ steps\.decision\.outputs\.should_deploy \}\}/);
+        assert.match(workflow, /if: \$\{\{ needs\.decision\.outputs\.should_deploy == 'true' \}\}/);
+    }
 });
 
 test('accepts the required manual note format and rejects malformed notes', () => {
@@ -113,6 +125,16 @@ test('validates approved and explicitly skipped pull requests', () => {
     );
 });
 
+test('skips automatic deployment only for a labeled source pull request', () => {
+    const skippedPullRequest = { labels: [{ name: 'skip-deployment' }] };
+    const ordinaryPullRequest = { labels: [{ name: 'updates-approved' }] };
+
+    assert.equal(shouldDeployForPullRequest('push', skippedPullRequest), false);
+    assert.equal(shouldDeployForPullRequest('push', ordinaryPullRequest), true);
+    assert.equal(shouldDeployForPullRequest('push', null), true);
+    assert.equal(shouldDeployForPullRequest('workflow_dispatch', skippedPullRequest), true);
+});
+
 test('finds only the dev pull request that produced the deployed merge commit', () => {
     const pullRequests = [
         { number: 10, base: { ref: 'master' }, merge_commit_sha: 'deployed', merged_at: '2026-07-31T12:00:00Z' },
@@ -122,6 +144,9 @@ test('finds only the dev pull request that produced the deployed merge commit', 
 
     assert.equal(findMergedDevPullRequest(pullRequests, 'deployed')?.number, 12);
     assert.equal(findMergedDevPullRequest(pullRequests, 'missing'), null);
+    assert.equal(findMergedPullRequest([
+        { number: 13, base: { ref: 'master' }, merge_commit_sha: 'production', merged_at: '2026-07-31T12:02:00Z' },
+    ], 'production', 'master')?.number, 13);
 });
 
 test('finds the original dev pull request for a locally merged feature head', () => {
@@ -250,6 +275,7 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
     };
     const requests = [];
     let createdPullRequest = null;
+    let devLabels = [];
 
     process.env.DEPLOYED_AT = '2026-07-31T15:00:00Z';
     process.env.DEPLOYED_SHA = 'deployed-sha';
@@ -276,6 +302,7 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
                 base: { ref: 'dev' },
                 body: '',
                 head: { ref: 'feature/accounts', repo: { full_name: 'example/eac' }, sha: 'release-sha' },
+                labels: devLabels,
                 merge_commit_sha: null,
                 merged_at: null,
                 number: 30,
@@ -344,7 +371,12 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
 
         await createMasterPullRequest();
 
+        devLabels = [{ name: 'skip-deployment' }];
+        await createMasterPullRequest();
+
         assert.equal(requests.filter((request) => request.path === '/pulls' && request.method === 'POST').length, 1);
+        assert.equal(requests.filter((request) => request.path === '/pulls/41' && request.method === 'PATCH').length, 1);
+        assert.equal(requests.filter((request) => request.path === '/branches/feature%2Faccounts').length, 2);
         assert.match(createdPullRequest.body, /Dev PR: #30/);
         assert.match(createdPullRequest.body, /Clearer account security/);
         assert.equal(

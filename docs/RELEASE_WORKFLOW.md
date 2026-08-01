@@ -50,6 +50,7 @@ Repository behavior:
 
 - A push to `dev` deploys the current `dev` branch to the dev server.
 - A push to `master` deploys the current `master` branch to production.
+- A merge from a PR labeled `skip-deployment` records the Git change but skips the server deployment. On `master`, production tagging and draft Release creation are skipped as well.
 - Tags and GitHub Releases never deploy the application.
 - Production tags are created only after a successful production deployment.
 - GitHub Releases remain drafts until production smoke tests and notes are reviewed.
@@ -139,6 +140,10 @@ Apply exactly one label before production merge:
 - `updates-approved` after the note has been reviewed.
 - `skip-updates` for changes that should not appear on the Updates page.
 
+`skip-deployment` is a separate, optional operational label. Apply it before merging only when the PR changes GitHub-only automation or documentation and has no application runtime effect. It may be combined with either `updates-approved` or `skip-updates`.
+
+Do not use `skip-deployment` for application code, Composer or npm dependencies, built assets, migrations, seeders, environment or configuration expectations, queues, schedules, worker behavior, or anything else the servers must receive. A manual **Deploy dev branch** run always deploys regardless of labels. When a dev deployment is skipped, the master-draft automation does not claim that commit was tested or update its deployment metadata.
+
 A successful follow-up dev deployment removes `updates-approved`, updates the deployment metadata, and preserves the manually written note. Edit the note if the tested behavior changed, then review and reapply `updates-approved`.
 
 ### 4. QA on dev
@@ -184,12 +189,14 @@ Convert the draft master PR to ready and merge it with a merge commit. Unrelated
 
 ### 7. Production deployment and Release
 
-A push to `master` starts the production workflow. The workflow:
+A push to `master` starts the production workflow. Unless the merged source PR has `skip-deployment`, the workflow:
 
 1. Deploys `master` to production.
 2. Creates an annotated version tag for the deployed commit.
 3. Collects approved update-note blocks from master PRs included since the prior production tag.
 4. Creates a draft GitHub Release with user-facing notes, operational notes, and the generated technical changelog.
+
+For a `skip-deployment` PR, the production deployment, tag, and draft Release are all skipped because no server state changed.
 
 If an approved note cannot be found, tagging still records the successful deployment and the draft Release contains a warning. Correct the draft before publishing it.
 
@@ -285,6 +292,7 @@ Create these labels exactly:
 
 - `updates-approved`
 - `skip-updates`
+- `skip-deployment`
 
 In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The automation creates draft PRs but never approves its own update notes.
 

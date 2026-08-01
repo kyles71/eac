@@ -1,3 +1,5 @@
+<!-- Apply skip-deployment only for GitHub-only automation or documentation with no server runtime effect. -->
+
 ## User-facing update
 
 <!-- eac-update-note:start -->
