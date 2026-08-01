@@ -1,13 +1,15 @@
 # EAC Operations Cheat Sheet
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-08-01
 
 Start here for common commands and credential rotation. Use the linked runbook section for unusual, destructive, or incompletely understood situations.
 
 - [Deployment secrets](#deployment-secrets)
 - [Rotate an SSH deployment key](#rotate-an-ssh-deployment-key)
 - [Rotate the private-repository token](#rotate-the-private-repository-token)
+- [Rotate the Updates feed token](#rotate-the-updates-feed-token)
 - [Deploy and verify](#deploy-and-verify)
+- [Resolve a feature-to-dev conflict](#resolve-a-feature-to-dev-conflict)
 - [Common server commands](#common-server-commands)
 - [Deployment recovery](#deployment-recovery)
 
@@ -15,9 +17,9 @@ Replace `<PLACEHOLDERS>`. Never paste a private key, token, `.env`, or password 
 
 ## Environment map
 
-| Concern | Production | Staging |
+| Concern | Production | Dev |
 | --- | --- | --- |
-| Branch | `master` | `dev` or active `release/*` |
+| Branch | `master` | `dev` |
 | GitHub Environment | `production` | `dev` |
 | Root | `/var/www/html/eac` | `/var/www/html/eac-test` |
 | Active release | `/var/www/html/eac/current` | `/var/www/html/eac-test/current` |
@@ -197,14 +199,25 @@ Do not commit `auth.json`.
 
 More detail: [Production activation — Deployment access](PRODUCTION_ACTIVATION_RUNBOOK.md#4-deployment-access-and-cicd).
 
+## Rotate the Updates feed token
+
+This token is separate from `MY_PRIVATE_GH_TOKEN`. Restrict it to `kyles71/eac` with read-only access to Contents, Pull Requests, and Deployments.
+
+1. Create the replacement fine-grained token with a recorded expiration.
+2. Update `GITHUB_UPDATES_TOKEN` in `/var/www/html/eac-test/shared/.env` and `/var/www/html/eac/shared/.env` through the approved secret-management process.
+3. Run `sudo -u www-data php artisan config:clear` from each active release.
+4. Open **Updates** in each admin panel, use **Refresh**, and confirm dev and production entries load.
+5. Revoke the old token only after both environments work.
+
+Never reuse the deployment/Composer token for the application feed; the feed token needs no write access and no access to the private package repositories.
+
 ## Deploy and verify
 
 | Goal | Action |
 | --- | --- |
-| Deploy normal staging | Push or merge to `dev` |
-| Deploy an exact candidate | Push a single-segment `release/*` branch |
-| Restore `dev` to staging | Run **Actions → Deploy dev branch → Run workflow** |
-| Deploy production | Merge the tested `release/*` PR into `master` |
+| Deploy normal dev | Push or merge to `dev` |
+| Redeploy current dev | Run **Actions → Deploy dev branch → Run workflow** |
+| Deploy one feature to production | Merge that tested feature branch's PR into `master` |
 | Publish the release | Review smoke tests and the automated draft GitHub Release |
 
 Inspect active releases on the server:
@@ -228,18 +241,49 @@ git rev-parse origin/master
 
 More detail:
 
-- [Release workflow — Selective release](RELEASE_WORKFLOW.md#standard-selective-production-release-workflow)
-- [Release workflow — Production publication](RELEASE_WORKFLOW.md#production-deployment-and-publication)
+- [Release workflow — Feature lifecycle](RELEASE_WORKFLOW.md#standard-feature-lifecycle)
+- [Release workflow — Production deployment](RELEASE_WORKFLOW.md#7-production-deployment-and-release)
+
+## Resolve a feature-to-dev conflict
+
+Use this when Feature A is already on `dev`, Feature B is still based on `master`, and Feature B's dev PR conflicts. Do not merge `dev` into Feature B and do not use GitHub's **Update branch** action. Keep Feature B clean for its independent master PR.
+
+Create a temporary branch from dev and merge Feature B into it:
+
+```bash
+git fetch origin
+git switch --create integration/feature-b-on-dev origin/dev
+git merge --no-ff --no-commit origin/feature/feature-b
+```
+
+Resolve the combined dev behavior, then:
+
+```bash
+git status
+git add path/to/resolved-file
+git commit -m "Integrate Feature B with current dev for QA"
+git push -u origin integration/feature-b-on-dev
+```
+
+Open `integration/feature-b-on-dev` into `dev` and add this to the PR body:
+
+```markdown
+<!-- eac-release-branch: feature/feature-b -->
+```
+
+Merge the integration PR with **Create a merge commit**. After deployment, the automation creates the master draft from the original `feature/feature-b` branch. Conflict-only integration changes do not belong in that master PR. If Feature B actually depends on Feature A, release A first, make B independent, or plan them as a batch.
+
+Use `git merge --abort` before committing if the resolution is wrong. For subsequent Feature B fixes, start a new integration branch from the latest `origin/dev` and repeat. See [Release workflow — Feature B conflicts with Feature A already on dev](RELEASE_WORKFLOW.md#feature-b-conflicts-with-feature-a-already-on-dev) for rationale and edge cases.
 
 ## Common server commands
 
-Set production or staging once:
+Set production or dev once:
 
 ```bash
 EAC_ROOT="/var/www/html/eac"
 ```
 
-Use `/var/www/html/eac-test` for staging.
+Use `/var/www/html/eac-test` for dev.
 
 ### Application health — read-only
 

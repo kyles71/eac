@@ -12,4 +12,3 @@ jobs:
     with:
       environment: dev
       concurrency_group: dev
-      staging_branch: dev
