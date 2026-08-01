@@ -334,7 +334,7 @@ return [
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
-        'View:Updates' => 'View Updates',
+        'View:AppUpdatesPage' => 'View App Updates Page',
     ],
 
     /*

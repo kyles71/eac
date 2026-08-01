@@ -29,7 +29,7 @@ final class Updates extends Page
     {
         $user = auth()->user();
 
-        return $user instanceof User && $user->can('View:Updates');
+        return $user instanceof User && $user->can('View:AppUpdatesPage');
     }
 
     public function mount(UpdatesFeedService $service): void

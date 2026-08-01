@@ -23,7 +23,7 @@ final class ShieldSeeder extends Seeder
         $superAdmin->refresh();
         $owner->syncPermissions([
             Permission::findByName('Manage:DashboardAppearance', 'web'),
-            Permission::findByName('View:Updates', 'web'),
+            Permission::findByName('View:AppUpdatesPage', 'web'),
         ]);
 
         $this->command?->info('Shield seeding completed.');

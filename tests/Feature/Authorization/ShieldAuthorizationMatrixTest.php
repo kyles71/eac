@@ -115,7 +115,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:ThemeBuilder',
             'Manage:UserAccess',
             'Publish:LegalDocument',
-            'View:Updates',
+            'View:AppUpdatesPage',
         );
 
     foreach ($desired as $permission) {
