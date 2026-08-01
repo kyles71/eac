@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Events\Tables;
 
 use App\Filament\Actions\CancelEventAction;
 use App\Models\Event;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -52,7 +53,9 @@ final class EventsTable
                 //
             ])
             ->recordActions([
-                CancelEventAction::make(),
+                ActionGroup::make([
+                    CancelEventAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

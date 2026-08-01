@@ -280,6 +280,7 @@ it('defaults course recipients to assigned students and unassigned purchasers', 
 
     livewire(ListCourses::class)
         ->loadTable()
+        ->set('activeTab', 'all')
         ->mountAction(TestAction::make('sendEmail')->table($course))
         ->assertActionDataSet([
             'to' => [

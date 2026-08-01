@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -17,12 +19,14 @@ return [
     | Builder Sidebar
     |--------------------------------------------------------------------------
     |
-    | The builder needs a wide canvas. By default, the package adds a body class
-    | that hides the Filament sidebar while the builder page is active.
+    | The builder needs a wide canvas. Temporarily collapse the Filament sidebar
+    | while the builder is active, then restore the user's previous state.
     |
     */
 
-    'hide_sidebar_by_default' => true,
+    'hide_sidebar_by_default' => false,
+
+    'collapse_sidebar_by_default' => true,
 
     /*
     |--------------------------------------------------------------------------

@@ -79,8 +79,14 @@ it('warns that deleting a linked item also deletes its product', function (strin
         'productable_id' => $productable->id,
     ]);
 
-    livewire($listPage)
-        ->loadTable()
+    $component = livewire($listPage)
+        ->loadTable();
+
+    if ($listPage === ListCourses::class) {
+        $component->set('activeTab', 'all');
+    }
+
+    $component
         ->mountAction(TestAction::make('delete')->table($productable))
         ->assertMountedActionModalSee(
             'This item has a linked product. Deleting it will also permanently delete the linked product.',
@@ -113,8 +119,14 @@ it('only bulk deletes items whose linked products can be deleted', function (str
         'productable_id' => $blockedProductable->id,
     ]);
 
-    livewire($listPage)
-        ->loadTable()
+    $component = livewire($listPage)
+        ->loadTable();
+
+    if ($listPage === ListCourses::class) {
+        $component->set('activeTab', 'all');
+    }
+
+    $component
         ->selectTableRecords([$deletableProductable, $blockedProductable])
         ->callAction(TestAction::make('delete')->table()->bulk())
         ->assertNotified();

@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\DashboardMessages\Tables;
 
 use App\Enums\DashboardAudience;
 use App\Models\DashboardMessage;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -70,7 +71,9 @@ final class DashboardMessagesTable
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

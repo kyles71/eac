@@ -11,6 +11,7 @@ use App\Models\Holiday;
 use App\Services\HolidayConflictService;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -119,9 +120,11 @@ final class HolidayResource extends Resource
                 //
             ])
             ->recordActions([
-                EditAction::make()
-                    ->successNotification(fn (Holiday $record): Notification => self::saveNotification($record, 'updated')),
-                DeleteAction::make(),
+                ActionGroup::make([
+                    EditAction::make()
+                        ->successNotification(fn (Holiday $record): Notification => self::saveNotification($record, 'updated')),
+                    DeleteAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

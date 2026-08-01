@@ -3102,16 +3102,16 @@
         },
         {
             "name": "kyle/filament-theme-builder",
-            "version": "v0.1.1",
+            "version": "v0.2.1",
             "source": {
                 "type": "git",
                 "url": "git@github.com:kyles71/filament-themes.git",
-                "reference": "f9523a436507597ea458021ac17523c14d7c5745"
+                "reference": "871347a530029af5940a075a43840540ea666ef6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kyles71/filament-themes/zipball/f9523a436507597ea458021ac17523c14d7c5745",
-                "reference": "f9523a436507597ea458021ac17523c14d7c5745",
+                "url": "https://api.github.com/repos/kyles71/filament-themes/zipball/871347a530029af5940a075a43840540ea666ef6",
+                "reference": "871347a530029af5940a075a43840540ea666ef6",
                 "shasum": ""
             },
             "require": {
@@ -3165,10 +3165,10 @@
                 "themes"
             ],
             "support": {
-                "source": "https://github.com/kyles71/filament-themes/tree/v0.1.1",
+                "source": "https://github.com/kyles71/filament-themes/tree/v0.2.1",
                 "issues": "https://github.com/kyles71/filament-themes/issues"
             },
-            "time": "2026-06-18T03:12:45+00:00"
+            "time": "2026-08-01T00:51:06+00:00"
         },
         {
             "name": "laravel/framework",

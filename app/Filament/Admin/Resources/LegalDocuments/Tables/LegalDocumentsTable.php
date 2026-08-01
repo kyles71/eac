@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\LegalDocuments\Tables;
 
 use App\Models\LegalDocument;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -31,28 +32,30 @@ final class LegalDocumentsTable
                     ->placeholder('Not published'),
             ])
             ->recordActions([
-                Action::make('publishVersion')
-                    ->label('Publish Version')
-                    ->icon(Heroicon::OutlinedArrowUpTray)
-                    ->authorize('publish')
-                    ->schema(fn (LegalDocument $record): array => [
-                        TextInput::make('title')
-                            ->required()
-                            ->maxLength(255)
-                            ->default($record->name),
-                        RichEditor::make('content')
-                            ->required()
-                            ->columnSpanFull(),
-                    ])
-                    ->modalSubmitActionLabel('Publish Version')
-                    ->action(function (LegalDocument $record, array $data): void {
-                        $record->publishVersion($data['title'], $data['content']);
+                ActionGroup::make([
+                    Action::make('publishVersion')
+                        ->label('Publish Version')
+                        ->icon(Heroicon::OutlinedArrowUpTray)
+                        ->authorize('publish')
+                        ->schema(fn (LegalDocument $record): array => [
+                            TextInput::make('title')
+                                ->required()
+                                ->maxLength(255)
+                                ->default($record->name),
+                            RichEditor::make('content')
+                                ->required()
+                                ->columnSpanFull(),
+                        ])
+                        ->modalSubmitActionLabel('Publish Version')
+                        ->action(function (LegalDocument $record, array $data): void {
+                            $record->publishVersion($data['title'], $data['content']);
 
-                        Notification::make()
-                            ->title('Document version published')
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title('Document version published')
+                                ->success()
+                                ->send();
+                        }),
+                ]),
             ]);
     }
 }
