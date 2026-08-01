@@ -271,7 +271,7 @@ git commit -m "Merge feature/feature-b into dev for QA"
 git push origin dev
 ```
 
-The push automatically deploys `dev`. The automation traces the merge commit's second parent to the original dev PR, then creates or updates the master draft from the clean Feature B branch. GitHub will normally recognize the original dev PR as merged; do not create a replacement dev PR.
+The push automatically deploys `dev`. The automation traces the merge commit's second parent to the original dev PR, copies its marked user-facing and operational note blocks, then creates or updates the master draft from the clean Feature B branch. Existing valid notes on the master draft are preserved. GitHub will normally recognize the original dev PR as merged; do not create a replacement dev PR.
 
 Conflict-only changes remain in the merge commit on `dev`; production-required changes must also be committed to Feature B and redeployed. Use `git merge --abort` before committing if the resolution is wrong. For subsequent Feature B fixes, open another dev PR and repeat the direct merge only if it conflicts. See [Release workflow — Feature B conflicts with Feature A already on dev](RELEASE_WORKFLOW.md#feature-b-conflicts-with-feature-a-already-on-dev) for rationale and edge cases.
 
