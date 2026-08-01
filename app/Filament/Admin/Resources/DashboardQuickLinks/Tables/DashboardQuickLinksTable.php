@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\DashboardQuickLinks\Tables;
 
 use App\Enums\DashboardAudience;
 use App\Services\DashboardQuickLinkDestinationService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -45,7 +46,9 @@ final class DashboardQuickLinksTable
             ->reorderable('sort_order')
             ->defaultSort('sort_order')
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

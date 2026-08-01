@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\CompetitionSeasons\RelationManagers;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
 use App\Filament\Admin\Resources\CompetitionTeams\Schemas\CompetitionTeamForm;
 use App\Models\CompetitionSeason;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -39,12 +40,14 @@ final class TeamsRelationManager extends RelationManager
                     ->slideOver(),
             ])
             ->recordActions([
-                EditAction::make()
-                    ->schema([
-                        CompetitionTeamForm::nameField($seasonId),
-                    ])
-                    ->modal()
-                    ->slideOver(),
+                ActionGroup::make([
+                    EditAction::make()
+                        ->schema([
+                            CompetitionTeamForm::nameField($seasonId),
+                        ])
+                        ->modal()
+                        ->slideOver(),
+                ]),
             ]);
     }
 }

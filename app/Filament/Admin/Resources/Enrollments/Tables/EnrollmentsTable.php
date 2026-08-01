@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Enrollment;
 use App\Models\Student;
 use Carbon\CarbonInterface;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Schema;
@@ -90,24 +91,26 @@ final class EnrollmentsTable
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                EditAction::make()
-                    ->label('Assign Student')
-                    ->hidden(fn ($record) => $record->student_id)
-                    ->schema([
-                        Select::make('student_id')
-                            ->required()
-                            ->searchableRelationship(
-                                name: 'student',
-                                searchColumns: ['first_name', 'last_name'],
-                                labelFromRecord: fn (Student $student): string => $student->fullName,
-                                modifyQueryUsing: fn (Builder $query, Enrollment $record): Builder => $query->where('user_id', $record->user_id),
-                                orderBy: ['first_name', 'last_name'],
-                            )
-                            ->createOptionForm(fn (Schema $schema, Enrollment $record): Schema => StudentForm::configure($schema, $record->user_id))
-                            ->createOptionUsing(function (array $data, Enrollment $record): int {
-                                return $record->user->students()->create($data)->getKey();
-                            }),
-                    ]),
+                ActionGroup::make([
+                    EditAction::make()
+                        ->label('Assign Student')
+                        ->hidden(fn ($record) => $record->student_id)
+                        ->schema([
+                            Select::make('student_id')
+                                ->required()
+                                ->searchableRelationship(
+                                    name: 'student',
+                                    searchColumns: ['first_name', 'last_name'],
+                                    labelFromRecord: fn (Student $student): string => $student->fullName,
+                                    modifyQueryUsing: fn (Builder $query, Enrollment $record): Builder => $query->where('user_id', $record->user_id),
+                                    orderBy: ['first_name', 'last_name'],
+                                )
+                                ->createOptionForm(fn (Schema $schema, Enrollment $record): Schema => StudentForm::configure($schema, $record->user_id))
+                                ->createOptionUsing(function (array $data, Enrollment $record): int {
+                                    return $record->user->students()->create($data)->getKey();
+                                }),
+                        ]),
+                ]),
             ]);
     }
 }

@@ -4,13 +4,18 @@ export default function filamentThemeBuilder(state = {}) {
         scheme: state.scheme || 'light',
         mode: state.mode || 'desktop',
         previewUrl: state.previewUrl || '',
+        shouldCollapseSidebar: state.collapseSidebar === true,
         zoom: 1,
         resizeObserver: null,
         resizePreviewListener: null,
         resizeTopbarListener: null,
         topbarResizeObserver: null,
+        previousSidebarState: null,
+        restoreSidebarOnNavigate: null,
+        restoreSidebarOnUnload: null,
 
         init() {
+            this.collapseSidebarForBuilder()
             this.updateTopbarHeight()
             this.$nextTick(() => this.updatePreviewZoom(this.mode))
 
@@ -46,6 +51,45 @@ export default function filamentThemeBuilder(state = {}) {
 
             if (this.resizeTopbarListener) {
                 window.removeEventListener('resize', this.resizeTopbarListener)
+            }
+        },
+
+        collapseSidebarForBuilder() {
+            const sidebar = window.Alpine?.store('sidebar')
+
+            if (!this.shouldCollapseSidebar || !sidebar) {
+                return
+            }
+
+            this.previousSidebarState = {
+                isOpen: sidebar.isOpen,
+                isOpenDesktop: sidebar.isOpenDesktop,
+            }
+            this.restoreSidebarOnNavigate = () => this.restoreSidebar()
+            this.restoreSidebarOnUnload = () => this.restoreSidebar()
+
+            document.addEventListener('livewire:navigating', this.restoreSidebarOnNavigate, { once: true })
+            window.addEventListener('beforeunload', this.restoreSidebarOnUnload, { once: true })
+            sidebar.close()
+        },
+
+        restoreSidebar() {
+            const sidebar = window.Alpine?.store('sidebar')
+
+            if (!sidebar || !this.previousSidebarState) {
+                return
+            }
+
+            sidebar.isOpen = this.previousSidebarState.isOpen
+            sidebar.isOpenDesktop = this.previousSidebarState.isOpenDesktop
+            this.previousSidebarState = null
+
+            if (this.restoreSidebarOnNavigate) {
+                document.removeEventListener('livewire:navigating', this.restoreSidebarOnNavigate)
+            }
+
+            if (this.restoreSidebarOnUnload) {
+                window.removeEventListener('beforeunload', this.restoreSidebarOnUnload)
             }
         },
 
