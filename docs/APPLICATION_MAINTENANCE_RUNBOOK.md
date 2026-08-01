@@ -550,6 +550,7 @@ Normal deployments run through GitHub Actions and Deployer:
 - `dev` deploys dev.
 - Feature branches are created from `master`, merge into `dev` for QA, and reach production through their own pull requests into `master`.
 - Several feature branches may be present on dev while remaining independently releasable.
+- When an existing feature-to-dev PR conflicts, the repository owner resolves a local `--no-ff` merge directly on `dev`; the clean feature branch is not updated with unrelated dev history.
 - A direct `dev` to `master` batch release is an exception requiring approval of every included change.
 - The manually triggered **Deploy dev branch** workflow redeploys the current `dev` branch.
 - Active deployments are never automatically canceled; a newer run waits, and GitHub may replace an older pending run with the newest pending deployment.

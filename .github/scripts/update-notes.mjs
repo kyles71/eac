@@ -138,9 +138,21 @@ export function findMergedDevPullRequest(pullRequests, deployedSha) {
         && pullRequest.merge_commit_sha === deployedSha) ?? null;
 }
 
+export function findDevPullRequestForFeatureHead(pullRequests, featureHeadSha) {
+    return pullRequests.find((pullRequest) => pullRequest.base?.ref === 'dev'
+        && pullRequest.head?.sha === featureHeadSha) ?? null;
+}
+
+export function featureHeadFromDevMergeCommit(commit) {
+    if (!Array.isArray(commit.parents) || commit.parents.length !== 2) {
+        return null;
+    }
+
+    return commit.parents[1]?.sha ?? null;
+}
+
 export function releaseBranchFor(pullRequest) {
-    const configured = pullRequest.body?.match(/<!--\s*eac-release-branch:\s*([^\s>]+)\s*-->/i)?.[1];
-    const branch = configured || pullRequest.head?.ref || '';
+    const branch = pullRequest.head?.ref || '';
 
     if (!isSafeReleaseBranchName(branch)) {
         throw new Error(`The release branch "${branch || '(missing)'}" is invalid.`);
@@ -182,11 +194,10 @@ export function replaceDeploymentBlock(markdown, values) {
 export async function createMasterPullRequest() {
     const deployedSha = requiredEnvironment('DEPLOYED_SHA');
     const repository = requiredEnvironment('GITHUB_REPOSITORY');
-    const associated = await githubRequest(`/commits/${deployedSha}/pulls`);
-    const devPullRequest = findMergedDevPullRequest(associated, deployedSha);
+    const devPullRequest = await devPullRequestForDeployment(deployedSha);
 
     if (!devPullRequest) {
-        await summary('No draft master PR was created because the deployed dev commit was not the merge commit of a dev PR.');
+        await summary('No draft master PR was created because the deployed dev commit could not be tied to an original feature PR into dev.');
         return;
     }
 
@@ -237,6 +248,26 @@ export async function createMasterPullRequest() {
 
     await removeLabel(masterPullRequest.number, 'updates-approved');
     await publishValidationStatus(masterPullRequest, false);
+}
+
+async function devPullRequestForDeployment(deployedSha) {
+    const associated = await githubRequest(`/commits/${deployedSha}/pulls`);
+    const mergedPullRequest = findMergedDevPullRequest(associated, deployedSha);
+
+    if (mergedPullRequest) {
+        return mergedPullRequest;
+    }
+
+    const deployedCommit = await githubRequest(`/commits/${deployedSha}`);
+    const featureHeadSha = featureHeadFromDevMergeCommit(deployedCommit);
+
+    if (!featureHeadSha) {
+        return null;
+    }
+
+    const featurePullRequests = await githubRequest(`/commits/${featureHeadSha}/pulls`);
+
+    return findDevPullRequestForFeatureHead(featurePullRequests, featureHeadSha);
 }
 
 export async function handlePullRequestEvent() {

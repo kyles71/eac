@@ -1,6 +1,3 @@
-<!-- For a temporary integration PR only, put the clean master-based branch after the colon below. Leave it empty for an ordinary feature-to-dev PR. -->
-<!-- eac-release-branch: -->
-
 ## User-facing update
 
 <!-- eac-update-note:start -->

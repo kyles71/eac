@@ -215,7 +215,8 @@ Never reuse the deployment/Composer token for the application feed; the feed tok
 
 | Goal | Action |
 | --- | --- |
-| Deploy normal dev | Push or merge to `dev` |
+| Deploy normal dev | Merge the feature PR into `dev` |
+| Resolve a conflicting dev PR | Locally merge the feature into `dev` with `--no-ff`, resolve, and push `dev` |
 | Redeploy current dev | Run **Actions → Deploy dev branch → Run workflow** |
 | Deploy one feature to production | Merge that tested feature branch's PR into `master` |
 | Publish the release | Review smoke tests and the automated draft GitHub Release |
@@ -248,11 +249,13 @@ More detail:
 
 Use this when Feature A is already on `dev`, Feature B is still based on `master`, and Feature B's dev PR conflicts. Do not merge `dev` into Feature B and do not use GitHub's **Update branch** action. Keep Feature B clean for its independent master PR.
 
-Create a temporary branch from dev and merge Feature B into it:
+Keep the original dev PR open. Starting with a clean working tree, merge Feature B directly into local `dev`:
 
 ```bash
+git status --short
 git fetch origin
-git switch --create integration/feature-b-on-dev origin/dev
+git switch dev
+git pull --ff-only origin dev
 git merge --no-ff --no-commit origin/feature/feature-b
 ```
 
@@ -261,19 +264,13 @@ Resolve the combined dev behavior, then:
 ```bash
 git status
 git add path/to/resolved-file
-git commit -m "Integrate Feature B with current dev for QA"
-git push -u origin integration/feature-b-on-dev
+git commit -m "Merge feature/feature-b into dev for QA"
+git push origin dev
 ```
 
-Open `integration/feature-b-on-dev` into `dev` and add this to the PR body:
+The push automatically deploys `dev`. The automation traces the merge commit's second parent to the original dev PR, then creates or updates the master draft from the clean Feature B branch. GitHub will normally recognize the original dev PR as merged; do not create a replacement dev PR.
 
-```markdown
-<!-- eac-release-branch: feature/feature-b -->
-```
-
-Merge the integration PR with **Create a merge commit**. After deployment, the automation creates the master draft from the original `feature/feature-b` branch. Conflict-only integration changes do not belong in that master PR. If Feature B actually depends on Feature A, release A first, make B independent, or plan them as a batch.
-
-Use `git merge --abort` before committing if the resolution is wrong. For subsequent Feature B fixes, start a new integration branch from the latest `origin/dev` and repeat. See [Release workflow — Feature B conflicts with Feature A already on dev](RELEASE_WORKFLOW.md#feature-b-conflicts-with-feature-a-already-on-dev) for rationale and edge cases.
+Conflict-only changes remain in the merge commit on `dev`; production-required changes must also be committed to Feature B and redeployed. Use `git merge --abort` before committing if the resolution is wrong. For subsequent Feature B fixes, open another dev PR and repeat the direct merge only if it conflicts. See [Release workflow — Feature B conflicts with Feature A already on dev](RELEASE_WORKFLOW.md#feature-b-conflicts-with-feature-a-already-on-dev) for rationale and edge cases.
 
 ## Common server commands
 

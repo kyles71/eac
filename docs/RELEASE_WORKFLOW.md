@@ -55,6 +55,7 @@ Repository behavior:
 - GitHub Releases remain drafts until production smoke tests and notes are reviewed.
 - Dev may contain multiple independently releasable feature branches at once.
 - A feature reaches production from its own branch, never by promoting the entire `dev` branch unless an exceptional batch release is explicitly intended.
+- Conflict-free feature changes enter `dev` through pull requests. When a dev PR conflicts, the repository owner resolves a local `--no-ff` merge directly on `dev` instead of creating another branch and PR.
 
 ## Branch and merge rules
 
@@ -65,6 +66,7 @@ Repository behavior:
 - Do not automatically delete a feature branch when its dev PR merges; its master PR and any QA fixes still need that branch.
 - Never force-push `master`, `dev`, a published tag, or a feature branch already under QA.
 - Do not merge `dev` into an individual feature branch. That would import unrelated, unreleased work.
+- A direct push to `dev` is reserved for the repository owner completing a two-parent conflict-resolution merge from an existing feature-to-dev PR. Do not commit unrelated work directly on `dev`.
 
 ### Why merge commits are required
 
@@ -77,13 +79,13 @@ If a feature-to-dev PR is squash-merged or rebase-merged:
 - The Updates page will not list that feature as available for testing.
 - Later PRs from the same long-lived feature branch can repeat commits or conflicts because the original commits never became ancestors of `dev`.
 
-Always choose **Create a merge commit** for PRs into `dev` and `master`. Squash and rebase options are disabled in repository settings to prevent an accidental incompatible merge. It is acceptable to tidy or squash local feature commits before the branch first enters dev QA; once QA begins, preserve its published history and do not force-push it.
+Always choose **Create a merge commit** for PRs into `dev` and `master`. For a conflicting dev PR, use a local `git merge --no-ff` so the resulting dev commit retains the feature head as its second parent. Squash and rebase options are disabled in repository settings to prevent an accidental incompatible merge. It is acceptable to tidy or squash local feature commits before the branch first enters dev QA; once QA begins, preserve its published history and do not force-push it.
 
 When `master` advances while another feature is under QA:
 
 1. Merge current `master` into the waiting feature branch; do not rebase it.
 2. Resolve conflicts on the feature branch.
-3. Open a follow-up PR into `dev` and deploy the updated head.
+3. Open a follow-up PR into `dev`. If it conflicts, complete the merge directly on local `dev` using the conflict procedure below.
 4. Repeat the affected QA checks.
 5. Merge the existing master PR only after its latest head is approved on dev.
 
@@ -112,11 +114,11 @@ Keep each branch focused on one production outcome. Do not branch from `dev` bec
 
 Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Merge the dev PR with a merge commit and wait for the automatic dev deployment.
 
-If GitHub reports conflicts because another feature is already on `dev`, do not update the clean feature branch with `dev`. Follow [Feature B conflicts with Feature A already on dev](#feature-b-conflicts-with-feature-a-already-on-dev) and resolve the conflict on a temporary integration branch.
+If GitHub reports conflicts because another feature is already on `dev`, do not update the clean feature branch with `dev`. Follow [Feature B conflicts with Feature A already on dev](#feature-b-conflicts-with-feature-a-already-on-dev) and resolve a local merge directly on `dev`.
 
 After that deployment succeeds, the trusted **Create master draft after dev deployment** workflow:
 
-1. Finds the dev PR that produced the deployed merge commit.
+1. Finds the dev PR that produced the deployed merge commit. For a direct conflict-resolution merge, it traces the merge commit's second parent back to the original dev PR.
 2. Verifies the latest clean feature head is contained in that deployment.
 3. Rejects a branch that appears to contain a merge from `dev` or another unreleased branch.
 4. Creates a draft PR from the same feature branch into `master`, or updates its deployment metadata when it already exists.
@@ -246,11 +248,15 @@ In **Settings → General**:
 
 ### Branch rulesets
 
+Use separate rulesets for `master` and `dev` so the direct-push bypass described below applies only to `dev`.
+
 For both `master` and `dev`:
 
 - Require pull requests with zero required approvals for the solo-developer workflow.
 - Do not require linear history.
 - Block force pushes and branch deletion.
+
+For `dev`, add **Repository administrators** to the ruleset bypass list with **Always allow** so the owner can push a local conflict-resolution merge. Do not select **For pull requests only** for this bypass. Continue using PRs for every conflict-free dev merge.
 
 For `master` also require:
 
@@ -317,44 +323,40 @@ If an emergency makes dev testing impossible, record the reason and risk in the 
 
 Scenario: `feature/feature-a` has been merge-committed into `dev` but has not reached `master`. `feature/feature-b` was correctly created from `master`. When Feature B's PR targets `dev`, GitHub reports conflicts with Feature A.
 
-Do not use GitHub's web conflict editor or an **Update branch** action when either operation would merge `dev` into `feature/feature-b`. Do not resolve the conflict directly on `feature/feature-b`. Any of those approaches would place Feature A or other unreleased dev history in the branch intended for Feature B's selective master PR.
+Do not use GitHub's web conflict editor or an **Update branch** action when either operation would merge `dev` into `feature/feature-b`. Do not resolve the conflict on `feature/feature-b`. Any of those approaches would place Feature A or other unreleased dev history in the branch intended for Feature B's selective master PR.
 
-Use a dev-only integration branch:
+Keep the original dev PR open. Resolve the merge directly on local `dev`:
 
 ```bash
+git status --short
 git fetch origin
-git switch --create integration/feature-b-on-dev origin/dev
+git switch dev
+git pull --ff-only origin dev
 git merge --no-ff --no-commit origin/feature/feature-b
 ```
 
-Resolve the files so the combined dev environment supports both Feature A and Feature B. Then complete the merge and push the integration branch:
+Start only from a clean working tree. Resolve the files so the combined dev environment supports both Feature A and Feature B. Then complete the merge and push `dev`:
 
 ```bash
 git status
 git add path/to/resolved-file
-git commit -m "Integrate Feature B with current dev for QA"
-git push -u origin integration/feature-b-on-dev
+git commit -m "Merge feature/feature-b into dev for QA"
+git push origin dev
 ```
 
 If the resolution is wrong or unclear, use `git merge --abort` before committing and reassess the dependency.
 
-Open `integration/feature-b-on-dev` into `dev`. Put this exact marker in that dev PR body:
-
-```markdown
-<!-- eac-release-branch: feature/feature-b -->
-```
-
-Merge that integration PR using **Create a merge commit** and wait for the dev deployment. The automation will verify that the clean `feature/feature-b` head is an ancestor of the deployed dev commit, then create or update the master PR from `feature/feature-b`—not from the integration branch.
+The push automatically deploys `dev`. The automation reads the merge commit's second parent, finds the original feature-to-dev PR, verifies that the clean `feature/feature-b` head is contained in the deployment, and creates or updates the master PR from `feature/feature-b`. GitHub will normally recognize the original dev PR as merged once its head is contained in `dev`; do not create a replacement dev PR.
 
 Keep these boundaries clear:
 
-- Conflict-only changes needed to combine A and B on dev stay on the integration branch.
-- Changes that Feature B requires in production must also be implemented on `feature/feature-b`, redeployed to dev through another integration PR, and retested.
+- Conflict-only changes needed to combine A and B stay in the merge commit on `dev`.
+- Changes that Feature B requires in production must also be implemented on `feature/feature-b`, redeployed to dev through another PR or direct conflict merge, and retested.
 - If Feature B cannot operate without Feature A, release Feature A first, redesign B to be independent, or explicitly plan a batch release. Git history alone cannot make a runtime dependency independently releasable.
 - Keep both original feature branches until their production Releases are published.
-- For later Feature B fixes while Feature A remains only on dev, repeat this process from the latest `origin/dev` with a new integration branch.
+- For later Feature B fixes while Feature A remains only on dev, open another feature-to-dev PR. If it conflicts, repeat the direct local merge from the latest `origin/dev`.
 
-This same integration-branch procedure can repair ancestry after an accidental squash merge into `dev`: create the integration branch from current `dev`, merge the clean feature head with `--no-ff`, and merge the integration PR into `dev` with a merge commit before relying on the Updates page or master-draft automation.
+This same direct-merge procedure can repair ancestry after an accidental squash merge into `dev`: merge the clean feature head into current local `dev` with `--no-ff`, push the merge commit, and wait for a successful deployment before relying on the Updates page or master-draft automation.
 
 ## Rollback
 

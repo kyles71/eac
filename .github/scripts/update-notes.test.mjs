@@ -12,7 +12,9 @@ import {
     createMasterPullRequest,
     extractOperationalBlocks,
     extractUserBlocks,
+    featureHeadFromDevMergeCommit,
     findContaminatingMerge,
+    findDevPullRequestForFeatureHead,
     findMergedDevPullRequest,
     handlePullRequestEvent,
     isValidOperationalBlock,
@@ -122,15 +124,22 @@ test('finds only the dev pull request that produced the deployed merge commit', 
     assert.equal(findMergedDevPullRequest(pullRequests, 'missing'), null);
 });
 
-test('uses a clean release branch marker for temporary dev integration pull requests', () => {
+test('finds the original dev pull request for a locally merged feature head', () => {
+    const pullRequests = [
+        { number: 10, base: { ref: 'master' }, head: { sha: 'feature-head' } },
+        { number: 11, base: { ref: 'dev' }, head: { sha: 'older-head' } },
+        { number: 12, base: { ref: 'dev' }, head: { sha: 'feature-head' } },
+    ];
+
+    assert.equal(findDevPullRequestForFeatureHead(pullRequests, 'feature-head')?.number, 12);
+    assert.equal(findDevPullRequestForFeatureHead(pullRequests, 'missing'), null);
+    assert.equal(featureHeadFromDevMergeCommit({ parents: [{ sha: 'dev' }, { sha: 'feature-head' }] }), 'feature-head');
+    assert.equal(featureHeadFromDevMergeCommit({ parents: [{ sha: 'single-parent' }] }), null);
+    assert.equal(featureHeadFromDevMergeCommit({ parents: [{ sha: 'one' }, { sha: 'two' }, { sha: 'three' }] }), null);
+});
+
+test('uses the dev pull request head as the clean release branch', () => {
     assert.equal(releaseBranchFor({ head: { ref: 'feature/accounts' }, body: '' }), 'feature/accounts');
-    assert.equal(
-        releaseBranchFor({
-            head: { ref: 'integration/accounts-on-dev' },
-            body: '<!-- eac-release-branch: feature/accounts -->',
-        }),
-        'feature/accounts',
-    );
     assert.throws(() => releaseBranchFor({ head: { ref: 'dev' }, body: '' }), /cannot be used/);
     assert.throws(() => releaseBranchFor({ head: { ref: 'feature bad' }, body: '' }), /invalid/);
 });
@@ -230,7 +239,7 @@ test('removes approval and publishes a failing status after new commits', async 
     }
 });
 
-test('creates one draft master PR after dev deployment and reuses it on rerun', async () => {
+test('creates one draft master PR after a direct dev conflict merge and reuses it on rerun', async () => {
     const originalFetch = globalThis.fetch;
     const originalEnvironment = {
         DEPLOYED_AT: process.env.DEPLOYED_AT,
@@ -255,12 +264,20 @@ test('creates one draft master PR after dev deployment and reuses it on rerun', 
         requests.push({ body, method, path });
 
         if (path === '/commits/deployed-sha/pulls') {
+            return jsonResponse([]);
+        }
+
+        if (path === '/commits/deployed-sha') {
+            return jsonResponse({ parents: [{ sha: 'dev-parent' }, { sha: 'release-sha' }] });
+        }
+
+        if (path === '/commits/release-sha/pulls') {
             return jsonResponse([{
                 base: { ref: 'dev' },
                 body: '',
-                head: { ref: 'feature/accounts', repo: { full_name: 'example/eac' } },
-                merge_commit_sha: 'deployed-sha',
-                merged_at: '2026-07-31T14:59:00Z',
+                head: { ref: 'feature/accounts', repo: { full_name: 'example/eac' }, sha: 'release-sha' },
+                merge_commit_sha: null,
+                merged_at: null,
                 number: 30,
                 title: 'Improve accounts',
             }]);
