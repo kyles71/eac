@@ -1,15 +1,4 @@
-## Summary
-
-Describe the problem and the outcome of this change.
-
-## Dev QA
-
-- [ ] Merged into `dev` with a merge commit.
-- [ ] Latest feature branch commit is deployed to dev.
-- [ ] Acceptance testing is complete.
-
-<!-- For a temporary integration PR only, put the clean master-based branch after the colon below. Leave it empty for an ordinary feature-to-dev PR. -->
-<!-- eac-release-branch: -->
+<!-- Apply skip-deployment only for GitHub-only automation or documentation with no server runtime effect. -->
 
 ## User-facing update
 
