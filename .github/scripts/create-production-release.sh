@@ -57,10 +57,24 @@ if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; t
 else
     deployed_at="$(TZ="$release_timezone" date '+%Y-%m-%d %H:%M %Z')"
     short_sha="${GITHUB_SHA:0:7}"
+    previous_release_tag="$(
+        git describe \
+            --tags \
+            --abbrev=0 \
+            --match "v${release_generation}.*" \
+            "${GITHUB_SHA}^" \
+            2>/dev/null \
+            || true
+    )"
+    update_notes="$(
+        PREVIOUS_RELEASE_TAG="$previous_release_tag" \
+            node .github/scripts/update-notes.mjs release-preamble
+    )"
     release_preamble="$(
-        printf 'Originally deployed: %s\nProduction commit: `%s`\n\nReview the generated changes, add user-facing highlights and operational notes, complete the production smoke tests, and then publish this draft.' \
+        printf 'Originally deployed: %s\nProduction commit: `%s`\n\n%s\n\nReview the user-facing and operational notes, complete the production smoke tests, and then publish this draft.' \
             "$deployed_at" \
-            "$short_sha"
+            "$short_sha" \
+            "$update_notes"
     )"
 
     gh release create "$release_tag" \

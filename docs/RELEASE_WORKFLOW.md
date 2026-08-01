@@ -1,766 +1,413 @@
 # EAC Release Workflow
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-08-01
 
 Application: EAC Plié Portal
 
-Production branch: `master`
+Production branch and server: `master` / production
 
-Staging branch: `dev`
+Integration branch and server: `dev` / dev
 
 ## Purpose
 
-This document defines the standard process for developing, testing, deploying, tagging, documenting, and, when necessary, rolling back an EAC release.
+This document defines how independently releasable work moves through development, dev QA, production, tagging, and user-facing update notes. EAC has exactly two remote application environments: dev and production. There is no third remote environment or intermediate deployment branch.
 
-The process is designed for one developer and zero to two acceptance testers. Pull requests provide an intentional checkpoint and an audit trail; they do not require another developer's approval.
+The process is designed for one developer and a small group of acceptance testers. Pull requests provide an intentional checkpoint and audit trail; they do not require another developer's approval.
 
-Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. For production infrastructure and initial activation, see `PRODUCTION_ACTIVATION_RUNBOOK.md`. For routine operations, incidents, and rollback mechanics, see `APPLICATION_MAINTENANCE_RUNBOOK.md`.
+Use the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for routine commands, `PRODUCTION_ACTIVATION_RUNBOOK.md` for initial production setup, and `APPLICATION_MAINTENANCE_RUNBOOK.md` for incidents and rollback mechanics.
 
 ## Release model
 
-Selective releases are the standard:
+Each feature or fix remains independently releasable even when dev contains several changes:
 
 ```text
-feature or fix branch created from master
+feature branch created from master
         |
         v
-merge-commit pull request into dev for integration testing
-        |
-        v
-release/<name> branch created from master
-and merged with selected feature branches
-        |
-        v
-automatic release-candidate deployment to staging
-        |
-        v
-release pull request into master
-        |
-        v
-automatic production deployment
-        |
-        v
-annotated Git tag and GitHub Release
+merge-commit PR into dev --> automatic dev deployment
+                                      |
+                                      v
+                         draft PR into master created
+                         + update-note template added
+                                      |
+                         QA fixes stay on feature branch
+                         and are merged into dev again
+                                      |
+                                      v
+                         approve note and merge to master
+                                      |
+                                      v
+                         automatic production deployment
+                                      |
+                                      v
+                         tag and draft GitHub Release
+                                      |
+                                      v
+                         smoke test and publish Release
 ```
 
 Repository behavior:
 
-- A push to `dev` starts the staging deployment workflow.
-- A push to a single-segment `release/*` branch deploys that branch to staging as a release candidate.
-- The **Deploy dev branch** workflow can be run manually to restore `dev` on staging after release-candidate testing.
-- A push to `master` starts the production deployment workflow.
-- Creating or pushing a tag does not deploy the application under the current workflows.
-- Publishing a GitHub Release does not deploy the application under the current workflows.
+- A push to `dev` deploys the current `dev` branch to the dev server.
+- A push to `master` deploys the current `master` branch to production.
+- Tags and GitHub Releases never deploy the application.
+- Production tags are created only after a successful production deployment.
+- GitHub Releases remain drafts until production smoke tests and notes are reviewed.
+- Dev may contain multiple independently releasable feature branches at once.
+- A feature reaches production from its own branch, never by promoting the entire `dev` branch unless an exceptional batch release is explicitly intended.
 
-Staging has one deployment target, so a `dev` deployment and a release-candidate deployment replace one another. Do not merge changes into `dev` during release-candidate acceptance testing. Do not merge another release into `master` while a production deployment is running. A release tag represents a successful production deployment, not merely a merge or an attempted deployment.
+## Branch and merge rules
 
-A direct `dev` to `master` release is an explicit batch exception, not the default. Use it only when every change on `dev` has been reviewed and deliberately selected for the same production release.
+- Create every releasable feature, fix, or hotfix branch from current `master`.
+- Merge feature branches into both `dev` and `master` with **merge commits**.
+- Keep squash and rebase merging disabled for these branches. The Updates page uses commit ancestry to prove that the current feature head is on the latest successful dev deployment.
+- Keep the feature branch until its production Release has been published.
+- Do not automatically delete a feature branch when its dev PR merges; its master PR and any QA fixes still need that branch.
+- Never force-push `master`, `dev`, a published tag, or a feature branch already under QA.
+- Do not merge `dev` into an individual feature branch. That would import unrelated, unreleased work.
+
+### Why merge commits are required
+
+The GitHub **Squash and merge** option copies a pull request's combined changes into a new commit on the base branch. The original feature head is not a parent of that new commit. **Rebase and merge** similarly creates new commit IDs. This workflow deliberately uses ancestry—not merely matching file contents—to prove that the exact feature head is included in the successful dev deployment.
+
+If a feature-to-dev PR is squash-merged or rebase-merged:
+
+- The dev deployment can still succeed.
+- The automatic master-draft workflow cannot verify the feature head and will refuse to create or update the master PR.
+- The Updates page will not list that feature as available for testing.
+- Later PRs from the same long-lived feature branch can repeat commits or conflicts because the original commits never became ancestors of `dev`.
+
+Always choose **Create a merge commit** for PRs into `dev` and `master`. Squash and rebase options are disabled in repository settings to prevent an accidental incompatible merge. It is acceptable to tidy or squash local feature commits before the branch first enters dev QA; once QA begins, preserve its published history and do not force-push it.
+
+When `master` advances while another feature is under QA:
+
+1. Merge current `master` into the waiting feature branch; do not rebase it.
+2. Resolve conflicts on the feature branch.
+3. Open a follow-up PR into `dev` and deploy the updated head.
+4. Repeat the affected QA checks.
+5. Merge the existing master PR only after its latest head is approved on dev.
+
+## Standard feature lifecycle
+
+### 1. Start from production
+
+```bash
+git fetch origin
+git switch master
+git pull --ff-only origin master
+git switch -c feature/<short-name>
+```
+
+Keep each branch focused on one production outcome. Do not branch from `dev` because it may contain unrelated features.
+
+### 2. Complete local verification
+
+- Run the focused Pest tests for the changed behavior.
+- Run `vendor/bin/pint --dirty --format agent` after PHP changes.
+- Run PHPStan for affected PHP code.
+- Run `npm run build` for frontend changes.
+- Review migrations, queues, schedules, external services, and rollback considerations.
+
+### 3. Open the dev pull request
+
+Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Merge the dev PR with a merge commit and wait for the automatic dev deployment.
+
+If GitHub reports conflicts because another feature is already on `dev`, do not update the clean feature branch with `dev`. Follow [Feature B conflicts with Feature A already on dev](#feature-b-conflicts-with-feature-a-already-on-dev) and resolve the conflict on a temporary integration branch.
+
+After that deployment succeeds, the trusted **Create master draft after dev deployment** workflow:
+
+1. Finds the dev PR that produced the deployed merge commit.
+2. Verifies the latest clean feature head is contained in that deployment.
+3. Rejects a branch that appears to contain a merge from `dev` or another unreleased branch.
+4. Creates a draft PR from the same feature branch into `master`, or updates its deployment metadata when it already exists.
+5. Preserves the manually written update note when a later dev deployment refreshes the metadata.
+6. Publishes a failing `updates-note` status until a person completes and approves or explicitly skips the note.
+
+The master PR is the canonical production and update-note record. Write the note manually from the tested behavior and keep it understandable to non-technical staff. Automation validates the format and approval state but does not write or approve the note.
+
+Complete and review these sections in the PR body:
+
+- User-facing title and summary.
+- Observable highlights.
+- Concrete dev testing focus.
+- Operational, migration, configuration, monitoring, and smoke-test notes.
+
+Apply exactly one label before production merge:
+
+- `updates-approved` after the note has been reviewed.
+- `skip-updates` for changes that should not appear on the Updates page.
+
+A successful follow-up dev deployment removes `updates-approved`, updates the deployment metadata, and preserves the manually written note. Edit the note if the tested behavior changed, then review and reapply `updates-approved`.
+
+### 4. QA on dev
+
+The dev workflow deploys the combined `dev` branch, so testers may continue evaluating other features while this one is under review.
+
+Record acceptance results in the master PR or its linked dev PR. Confirm:
+
+- The **Deploy dev branch** workflow succeeded.
+- The Updates page lists the branch under **Available for testing**.
+- The expected behavior works for the intended roles and data.
+- Dev logs, Sentry, queues, scheduler behavior, and migrations are healthy.
+- The testing-focus items in the update note pass.
+
+The Updates page lists a feature only when its approved current head is contained in the latest successful dev deployment. A failed deployment does not replace the previous successful state.
+
+### 5. Handle QA changes
+
+Keep fixes on the original feature branch:
+
+1. Commit and push the fix.
+2. Open another PR from that branch into `dev` for the new commits.
+3. Merge it with a merge commit and wait for the dev deployment.
+4. Repeat the affected QA checks.
+5. Confirm the automation updated the existing master PR deployment record and removed `updates-approved`.
+6. Edit the master PR note if needed and reapply `updates-approved`.
+
+The open master PR updates automatically as the feature branch changes. Do not create a replacement master PR.
+
+### 6. Release only that feature
+
+Before merging the master PR:
+
+- [ ] Its latest head is deployed successfully to dev.
+- [ ] Acceptance testing is complete.
+- [ ] The complete production diff contains only intended work.
+- [ ] The `updates-note` check passes.
+- [ ] Migrations and rollback impact are understood.
+- [ ] Required production configuration is already present.
+- [ ] No production deployment is currently running.
+
+Convert the draft master PR to ready and merge it with a merge commit. Unrelated features already on `dev` are not included because the production PR comes from the individual master-based feature branch.
+
+### 7. Production deployment and Release
+
+A push to `master` starts the production workflow. The workflow:
+
+1. Deploys `master` to production.
+2. Creates an annotated version tag for the deployed commit.
+3. Collects approved update-note blocks from master PRs included since the prior production tag.
+4. Creates a draft GitHub Release with user-facing notes, operational notes, and the generated technical changelog.
+
+If an approved note cannot be found, tagging still records the successful deployment and the draft Release contains a warning. Correct the draft before publishing it.
+
+Complete the production smoke tests:
+
+- [ ] Production `/up` responds successfully.
+- [ ] Login and the admin dashboard load.
+- [ ] The primary changed workflow succeeds for an authorized user.
+- [ ] Permission boundaries still hold for an unauthorized user where applicable.
+- [ ] Queues, scheduler, logs, Sentry, and external integrations are healthy.
+- [ ] The production commit and Release tag match.
+- [ ] User-facing and operational notes are accurate.
+
+Publish the GitHub Release only after these checks pass. The admin Updates page displays published, non-prerelease Releases with valid user-facing note blocks; it never displays drafts.
 
 ## Version names
 
-Use calendar-based release tags with a stable three-part structure:
+Use:
 
 ```text
 v<generation>.<YYMMDD>.<daily-sequence>
 ```
 
-The parts have these meanings:
-
-- `generation` identifies a fundamental generation of the application. Ordinary features and fixes do not increment it.
-- `YYMMDD` is the production deployment date in the `America/New_York` time zone.
-- `daily-sequence` starts at `1` and increments for each additional production release on the same date.
-
 Examples:
 
 ```text
 v1.260720.1
-v1.260724.1
-v1.260724.2
+v1.260729.1
+v1.260729.2
 ```
 
-Rules:
+- `generation` changes only for a fundamental application generation.
+- `YYMMDD` is the production deployment date in `America/New_York`.
+- `daily-sequence` begins at `1` each day and increments for additional deployments.
+- Never reuse, move, or delete a published production tag.
+- A corrective production deployment receives a new version.
+- A rollback does not erase the original Release.
 
-- Use the actual production deployment date in the `America/New_York` time zone.
-- Always include the daily sequence, including `.1` for the first release of a day.
-- Reset the daily sequence to `.1` on each new production deployment date.
-- Reserve a generation change such as `v2` for a fundamental application generation, not a routine release.
-- Never reuse a version.
-- Never move a published release tag to another commit.
-- Tag only commits that were successfully deployed to production.
-- A rollback does not erase or move the original tag.
-- A corrective deployment receives a new version.
+Known production records:
 
-The established initial production release is:
+| Version | Production commit | Deployment | Release state |
+| --- | --- | --- | --- |
+| `v1.260720.1` | Initial production baseline | 2026-07-20 | Established release |
+| `v1.260729.1` | `e637210` | 2026-07-29 13:58 EDT | Backfill the note below before publishing |
 
-```text
-v1.260720.1
-```
+## GitHub repository setup
 
-It identifies application generation `1`, the July 20, 2026 production deployment date, and the first release of that date. The convention is structurally compatible with three-part semantic-version tooling, but its numbers intentionally use calendar-version semantics. Revisit this decision if external consumers begin depending on a semantic compatibility contract.
-
-## GitHub setup checklist
-
-The deployment workflows already reference the `dev` and `production` GitHub Environments. The remaining settings must be confirmed in the GitHub repository because environment, ruleset, and secret configuration is not stored completely in Git.
-
-### Repository settings
+### Merge settings
 
 In **Settings → General**:
 
-- [X] Set `master` as the default branch.
-- [X] Allow **Merge commits** for feature integration and release pull requests.
-- [X] Disable **Squash merging** for releasable feature and fix branches.
-- [X] Disable **Rebase merging** for releasable feature and fix branches.
-- [X] Disable **Automatically delete head branches**; delete feature branches manually after they reach production or are abandoned.
+- Allow merge commits.
+- Disable squash merging for releasable branches.
+- Disable rebase merging for releasable branches.
+- Disable automatic head-branch deletion.
 
-The same feature commits must be able to reach both `dev` and `master`. Merge commits preserve that ancestry. Squash or rebase merging into `dev` rewrites commit identity and forces later selective releases to use duplicate cherry-picked commits.
+### Branch rulesets
 
-### `master` branch ruleset
+For both `master` and `dev`:
 
-In **Settings → Rules → Rulesets**, create an active branch ruleset targeting `master`:
+- Require pull requests with zero required approvals for the solo-developer workflow.
+- Do not require linear history.
+- Block force pushes and branch deletion.
 
-- [X] Require a pull request before merging.
-- [X] Set required approvals to `0`; this is a solo-developer repository.
-- [X] Require all configured status checks to pass.
-- [X] Require conversation resolution before merging.
-- [X] Do not require linear history; the release process intentionally uses merge commits.
-- [X] Block force pushes.
-- [X] Restrict branch deletion.
-- [ ] Do not permit routine direct pushes, including administrative bypasses.
-- [ ] Document how an emergency bypass will be recorded if bypass access is retained.
+For `master` also require:
 
-The pull request is the deliberate production release control. It remains useful without a second developer because it displays the complete production diff, CI result, testing record, and deployment considerations before the merge.
-
-### `dev` branch ruleset
-
-Create an active branch ruleset targeting `dev`:
-
-- [X] Require a pull request before merging.
-- [X] Set required approvals to `0`.
-- [ ] Require all configured status checks to pass.
-- [X] Do not require linear history; integration pull requests intentionally use merge commits.
-- [X] Block force pushes.
-- [X] Restrict branch deletion.
-
-Testers provide acceptance results; they are not required GitHub code reviewers and do not need repository write access.
-
-### Release-candidate branches
-
-Release-candidate branches:
-
-- Use the single-segment format `release/<short-name>`, such as `release/260726-enrollment-fix`.
-- Are created from current `master`, not from `dev`.
-- Merge only the preserved feature or fix branches selected for the release.
-- Deploy to staging but never deploy directly to production.
-- Reach production only through a pull request into protected `master`.
-- Are deleted after the production release or abandonment.
-
-Do not use additional slashes such as `release/260726/enrollment-fix`; deployment validation intentionally rejects nested release branch names.
-
-### Release tag ruleset
-
-After historical tags and releases have been backfilled, create an active tag ruleset targeting `v*`:
-
-- [X] Allow new version tags to be created.
-- [X] Restrict updates to existing tags.
-- [X] Restrict deletion of existing tags.
-- [X] Block force updates.
-- [X] Limit bypass access to the repository owner and use it only for a documented recovery.
-
-Optionally enable GitHub immutable releases after the backfill is complete. With immutable releases enabled, publish each release from a draft only after its tag, notes, and assets have been checked. Published immutable release tags cannot be moved or deleted while the release exists.
-
-### Continuous integration
-
-The repository currently contains deployment workflows but no separate pull-request CI workflow. Add one before making status checks mandatory.
-
-The CI workflow should run for pull requests targeting both `dev` and `master` and for pushes to `release/*`, and should include at least:
-
-- [ ] `composer validate`
-- [ ] Dependency installation from the committed lock files
-- [ ] `vendor/bin/pest --no-progress`
-- [ ] `vendor/bin/phpstan analyse --no-progress --error-format=raw`
-- [ ] `npm ci`
-- [ ] `npm run build`
-
-After the workflow has run successfully at least once, add its stable job name as a required status check in both branch rulesets. Keep required job names unique across workflows.
+- Conversation resolution.
+- The stable `updates-note` status check after it has completed successfully at least once.
+- Existing CI checks once their stable job names are available.
 
 ### GitHub Environments
 
-In **Settings → Environments**:
-
 For `dev`:
 
-- [X] Restrict deployment branches to `dev` and the branch pattern `release/*`.
-- [X] Store only staging deployment secrets in this environment.
-- [ ] Confirm the environment identifies the staging URL.
+- Restrict deployments to the `dev` branch only.
+- Store only dev deployment secrets.
+- Configure the dev server URL.
 
 For `production`:
 
-- [X] Restrict deployment branches to `master`.
-- [X] Store only production deployment secrets in this environment.
-- [ ] Confirm the environment identifies the production URL.
-- [ ] Consider a manual deployment approval as an intentional final pause, if the repository plan supports it.
-- [ ] If self-approval is needed, do not enable **Prevent self-review**.
+- Restrict deployments to `master`.
+- Store only production deployment secrets.
+- Configure the production URL.
+- Optionally require a manual deployment approval if the repository plan permits owner self-approval.
 
-Manual approval by the sole developer is not independent review, but it can prevent an accidental merge from immediately changing production.
+### Update-note automation
 
-Confirm these existing environment secrets are present, scoped correctly, and periodically rotated:
+Create these labels exactly:
 
-- [ ] `DEPLOY_HOST`
-- [ ] `DEPLOY_USER`
-- [ ] `PRIVATE_KEY`
-- [ ] `MY_PRIVATE_GH_TOKEN`
+- `updates-approved`
+- `skip-updates`
 
-### GitHub Actions safety
+In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The automation creates draft PRs but never approves its own update notes.
 
-- [ ] Give each workflow and job only the permissions it needs.
-- [X] Keep production and staging secrets in their respective environments.
-- [X] Prevent overlapping deployments to the same environment.
-- [X] Configure deployments so a newer run does not cancel an active migration or deployment.
-- [ ] Confirm the repository permits the production workflow's `GITHUB_TOKEN` to create tags and Releases with `contents: write`.
-- [ ] Confirm the `v*` tag ruleset permits `github-actions[bot]` to create new tags while still blocking updates and deletions.
-- [ ] Update aging actions in a dedicated reviewed change.
-- [ ] Pin third-party actions to reviewed full commit SHAs where practical.
-- [ ] Enable Dependabot alerts and dependency review appropriate to the repository plan.
-- [ ] Require two-factor authentication or a passkey on the repository owner's GitHub account.
-- [ ] Store GitHub recovery codes and deployment-key recovery instructions securely outside the repository.
+GitHub may place CI runs triggered by a `GITHUB_TOKEN`-created PR into an approval-required state. If the master draft shows an **Approve workflows** banner, a repository user with write access must approve those runs. The automation publishes the `updates-note` commit status directly, so its initial failing state does not depend on that generated PR event running.
 
-The reusable deployment job uses `cancel-in-progress: false`. One deployment runs per environment concurrency group, and a newer run waits instead of interrupting the active deployment. GitHub's default single-pending behavior may replace an older pending run with a newer one, so the active deployment finishes and the newest queued state deploys next. The production caller additionally serializes the entire deployment-and-release workflow so tagging cannot overlap a subsequent production deployment.
+The write-capable `workflow_run` and `pull_request_target` jobs check out automation from the default branch. Keep them limited to trusted scripts and do not change them to execute code from a pull-request head.
 
-### Pull request and release-note conventions
+For the bootstrap PR that introduces this workflow, merge and deploy it to dev, then manually open its draft PR into `master` because the `workflow_run` workflow does not become active until it exists on the default branch. Manually replace the template placeholders with reviewed note blocks if necessary. Add `updates-note` to the master ruleset only after that stable commit status has completed at least once.
 
-- [ ] Add a standard feature/fix pull request template.
-- [ ] Add a standard release pull request template.
-- [ ] Create the release-note labels listed below.
-- [ ] Add `.github/release.yml` to categorize generated release notes.
-- [ ] Keep pull request titles understandable to a non-developer.
-- [ ] Require each user-visible pull request to include testing instructions.
+For the private GitHub feed, create a fine-grained token restricted to `kyles71/eac` with read-only access to Contents, Pull Requests, and Deployments. Add these values to the shared `.env` on both servers:
 
-Recommended labels:
-
-- `release-feature`
-- `release-change`
-- `release-fix`
-- `release-security`
-- `release-internal`
-- `skip-release-notes`
-
-A suggested `.github/release.yml` configuration is:
-
-```yaml
-changelog:
-  exclude:
-    labels:
-      - skip-release-notes
-  categories:
-    - title: New features
-      labels:
-        - release-feature
-    - title: Changes
-      labels:
-        - release-change
-    - title: Fixes
-      labels:
-        - release-fix
-    - title: Security
-      labels:
-        - release-security
-    - title: Internal changes
-      labels:
-        - release-internal
-    - title: Other changes
-      labels:
-        - "*"
+```dotenv
+GITHUB_UPDATES_REPOSITORY=kyles71/eac
+GITHUB_UPDATES_TOKEN=<fine-grained-read-only-token>
+GITHUB_UPDATES_CACHE_TTL=300
+GITHUB_UPDATES_RELEASE_LIMIT=20
 ```
 
-## Historical release records and backfill
+Run `php artisan config:clear` after changing these values outside a deployment. Assign `View:AppUpdatesPage` to QA staff who need the admin page; owners and super administrators receive it by default.
 
-The initial production baseline is:
+## Hotfixes
 
-| Version | Production deployment time | Production commit SHA | Status |
-| --- | --- | --- | --- |
-| `v1.260720.1` | 2026-07-20 00:33 EDT (`-04:00`) | `6b4ff26a32a60f4962f5ec792b8686f8022b2f7a` | Annotated tag published |
+Use the same selective path for a hotfix:
 
-### 1. Establish the true deployment boundaries
+1. Branch from current `master`.
+2. Open and merge the PR into `dev`.
+3. Wait for the successful dev deployment and automatically created draft master PR.
+4. Approve its update note or explicitly skip it.
+5. Merge the hotfix PR into `master`.
+6. Smoke-test production and publish the corrective Release.
+7. Merge current `master` into any waiting feature branches, redeploy them to dev, and retest affected behavior.
 
-Do not choose a release commit solely from its commit date. A commit timestamp records when the commit was created, not when production deployed it.
+If an emergency makes dev testing impossible, record the reason and risk in the master PR. Do not edit production files directly or move an existing tag.
 
-For each historical production release, record:
+## Feature B conflicts with Feature A already on dev
 
-| Version | Actual production deployment time | Production commit SHA | Evidence |
-| --- | --- | --- | --- |
-| `v1.YYMMDD.N` | ISO 8601 time with offset | Full SHA | GitHub Actions run or deployment record |
+Scenario: `feature/feature-a` has been merge-committed into `dev` but has not reached `master`. `feature/feature-b` was correctly created from `master`. When Feature B's PR targets `dev`, GitHub reports conflicts with Feature A.
 
-Use evidence in this order:
+Do not use GitHub's web conflict editor or an **Update branch** action when either operation would merge `dev` into `feature/feature-b`. Do not resolve the conflict directly on `feature/feature-b`. Any of those approaches would place Feature A or other unreleased dev history in the branch intended for Feature B's selective master PR.
 
-1. The successful **Deploy to production** GitHub Actions run and its triggering commit SHA.
-2. GitHub's production Environment deployment history.
-3. Deployer release records and the active release on the server.
-4. Commit history, incident notes, and known production observations as supporting evidence.
-
-Fetch the current remote history and display likely production commits:
-
-```bash
-git fetch origin master --tags
-git log origin/master \
-    --first-parent \
-    --date=iso-local \
-    --pretty=format:'%h  %ad  %s'
-```
-
-Inspect a candidate:
-
-```bash
-git show --stat --oneline <commit-sha>
-git branch --remotes --contains <commit-sha>
-```
-
-Confirm that an older candidate is an ancestor of the next release:
-
-```bash
-git merge-base --is-ancestor <older-sha> <newer-sha>
-```
-
-A zero exit status means it is an ancestor. If it is not, stop and investigate instead of constructing a misleading release sequence.
-
-### 2. Preview the release contents
-
-For the first reconstructed release, treat it as the initial production baseline. Review the commits that established that baseline and summarize the capabilities that were actually available at launch:
-
-```bash
-git log --oneline --reverse <release-sha>
-git show --stat --oneline <release-sha>
-```
-
-For later releases:
-
-```bash
-git log --oneline --reverse <previous-release-sha>..<release-sha>
-git diff --stat <previous-release-sha>..<release-sha>
-```
-
-Review migrations, configuration changes, dependency changes, and user-visible behavior. Commit messages are evidence, not finished release notes.
-
-### 3. Create an annotated tag on the historical commit
-
-An annotated tag is the standard release tag because it records the tagger, a message, and a tag creation date.
-
-To tag a historical commit while truthfully recording that the tag was created today, replace the example version and SHA:
-
-```bash
-git tag -a v1.260724.1 <commit-sha> \
-    -m 'Production release v1.260724.1'
-```
-
-To backdate the annotated tag metadata to a known original deployment time:
-
-```bash
-GIT_COMMITTER_DATE='2026-07-24T14:30:00-04:00' \
-    git tag -a v1.260724.1 <commit-sha> \
-    -m 'Production release v1.260724.1'
-```
-
-Only set `GIT_COMMITTER_DATE` when the actual deployment timestamp and UTC offset are supported by a deployment record. Do not infer the deployment time from the commit time. Eastern time is `-04:00` or `-05:00` depending on daylight-saving time, so use the offset from the historical record.
-
-If tag signing is configured, use `git tag -s` instead of `git tag -a`.
-
-### 4. Verify before pushing
-
-Verify the tag annotation and the commit it resolves to:
-
-```bash
-git show --no-patch --pretty=fuller v1.260724.1
-git rev-parse v1.260724.1^{}
-git rev-parse <commit-sha>
-```
-
-The final two commands must print the same full commit SHA.
-
-List all reconstructed releases in version order:
-
-```bash
-git tag --list \
-    --sort=version:refname \
-    --format='%(refname:short)  %(objectname:short)  %(creatordate:iso8601)  %(subject)'
-```
-
-If an unpushed tag is wrong, delete it locally and recreate it:
-
-```bash
-git tag --delete v1.260724.1
-```
-
-### 5. Push one reviewed tag at a time
-
-```bash
-git push origin refs/tags/v1.260724.1
-```
-
-Do not use `git push --tags` for this process. An explicit ref prevents unrelated local tags from being published accidentally.
-
-After pushing, confirm the tag appears under **Releases → Tags** and points to the expected full commit SHA.
-
-Once a tag has been pushed or used for a GitHub Release, treat it as immutable. If published release history is materially wrong, prefer a new corrected version and mark the old GitHub Release as superseded. Do not silently force-move the tag.
-
-### 6. Create historical GitHub Releases
-
-Create historical releases from oldest to newest:
-
-1. Open **Releases → Draft a new release**.
-2. Select the existing tag.
-3. Select the correct previous tag.
-4. Enter a release title.
-5. Generate release notes.
-6. Replace raw technical wording with the release-note format in this document.
-7. Add `Originally deployed: YYYY-MM-DD HH:MM America/New_York`.
-8. Publish the release.
-9. Do not mark an older reconstructed release as the latest release.
-
-A Git tag date and a GitHub Release publication date are separate. A historical tag may point to and describe an old deployment, while the GitHub Release correctly shows that its notes were published later.
-
-Complete the full historical backfill before enabling immutable releases or strict tag rules.
-
-## Standard feature and fix workflow
-
-### 1. Start from production
-
-```bash
-git switch master
-git pull --ff-only origin master
-git switch --create feature/<short-description>
-```
-
-Use `fix/<short-description>` for a bug fix. A branch created from `master` contains only production plus that branch's work, so it can later be selected independently. Keep unrelated work in separate branches and pull requests.
-
-### 2. Develop and verify locally
-
-- Implement the smallest complete change.
-- Add or update automated tests.
-- Review migrations for backward and rollback compatibility.
-- Update `.env.example` when configuration requirements change, without adding secrets.
-- Run the focused tests and static analysis.
-- Build frontend assets when frontend code changes.
-- Review the diff for debug output, credentials, generated files, and unrelated changes.
-
-### 3. Open a pull request into `dev`
-
-Push the branch:
-
-```bash
-git push --set-upstream origin feature/<short-description>
-```
-
-The pull request should include:
-
-```markdown
-## Summary
-
-Describe the user or operational outcome.
-
-## How to test
-
-- [ ] A specific successful path
-- [ ] A relevant validation or failure path
-- [ ] A regression-sensitive existing path
-
-## Deployment considerations
-
-- Database migrations: Yes/No
-- New or changed environment variables: Yes/No
-- Queue or scheduled-task changes: Yes/No
-- External service changes: Yes/No
-- Backup or rollback concern: None/Describe
-
-## Release note
-
-One plain-language bullet, or `Not user-visible`.
-```
-
-Apply the appropriate release-note label. Merge into `dev` only after required checks pass.
-
-Use **Create a merge commit** for the integration pull request. Do not squash or rebase it. Keep the original feature branch after the `dev` merge because its preserved commits are the selectable production unit.
-
-Do not merge `dev` back into the feature branch merely to make it current. That would contaminate the feature with unrelated unreleased work. If integration conflicts require resolution, resolve them on a temporary branch created from `dev`, merge the feature into that temporary branch, and use the temporary branch only for the `dev` integration pull request.
-
-### 4. Validate staging
-
-After merging:
-
-- [ ] Confirm the **Deploy dev branch** workflow succeeds.
-- [ ] Confirm staging `/up` responds successfully.
-- [ ] Check recent staging errors and failed queue jobs.
-- [ ] Execute the pull request's testing instructions.
-- [ ] Ask available testers to execute the relevant user flows.
-- [ ] Record tester name, date, result, and discovered issues against the feature branch or pull request.
-
-Commit feature-specific corrections to the original feature branch and merge those additional commits into `dev` through another merge-commit pull request. This keeps the branch selected for production identical to the complete feature. Do not edit deployed files directly.
-
-## Standard selective production release workflow
-
-### 1. Select preserved feature branches
-
-Choose the feature and fix branches approved for this production release. Confirm each branch:
-
-- Was created from `master`.
-- Contains only its named feature or fix.
-- Has been integrated into and tested on `dev`.
-- Includes all corrections discovered during integration testing.
-- Does not depend on another unselected branch.
-
-Inspect its production diff:
+Use a dev-only integration branch:
 
 ```bash
 git fetch origin
-git log --oneline --reverse origin/master..origin/feature/<short-description>
-git diff --stat origin/master...origin/feature/<short-description>
+git switch --create integration/feature-b-on-dev origin/dev
+git merge --no-ff --no-commit origin/feature/feature-b
 ```
 
-Repeat for every selected branch.
-
-### 2. Build the release branch from production
+Resolve the files so the combined dev environment supports both Feature A and Feature B. Then complete the merge and push the integration branch:
 
 ```bash
-git switch master
-git pull --ff-only origin master
-git switch --create release/<YYMMDD-short-name>
-git merge --no-ff origin/feature/<short-description> \
-    -m 'Include feature/<short-description>'
+git status
+git add path/to/resolved-file
+git commit -m "Integrate Feature B with current dev for QA"
+git push -u origin integration/feature-b-on-dev
 ```
 
-Repeat the merge for each selected feature or fix branch in dependency order. Merging preserves the exact feature commits already integrated into `dev`; it does not create duplicate cherry-picked commits.
+If the resolution is wrong or unclear, use `git merge --abort` before committing and reassess the dependency.
 
-Review the exact candidate relative to production:
-
-```bash
-git log --oneline --reverse origin/master..HEAD
-git diff --stat origin/master...HEAD
-```
-
-Push the candidate:
-
-```bash
-git push --set-upstream origin release/<YYMMDD-short-name>
-```
-
-The **Deploy release candidate** workflow deploys this branch to staging. Its name must contain exactly one slash.
-
-### 3. Test the exact release candidate
-
-- [ ] Confirm the release-candidate deployment succeeded.
-- [ ] Confirm the staging deployment identifies the expected branch and commit.
-- [ ] Repeat the selected changes' acceptance tests.
-- [ ] Run critical regression smoke tests.
-- [ ] Check staging logs, Sentry, queues, scheduler behavior, and migrations.
-- [ ] Record tester results against the release candidate.
-
-While this candidate is being tested, do not merge another pull request into `dev`; doing so would redeploy `dev` and replace the candidate on staging.
-
-Prefer to fix the owning feature branch, merge that fix into both the release branch and `dev`, and redeploy. If an emergency fix must be committed directly to the release branch, immediately apply an equivalent reviewed change to `dev`.
-
-### 4. Promote only the candidate
-
-Open the production release pull request from `release/<YYMMDD-short-name>` into `master`. Use the standard release pull-request body below and confirm:
-
-- The base is `master`.
-- The head is the release branch, not `dev`.
-- The diff contains only the selected release.
-- CI and acceptance testing pass.
-
-Use **Create a merge commit**. Merging starts the normal production deployment.
-
-After production succeeds:
-
-1. Complete the production smoke tests.
-2. Tag and publish the release normally.
-3. Delete the release branch.
-4. Manually run **Deploy dev branch** to restore the full `dev` integration state on staging.
-5. Delete the selected feature branches after confirming their commits are reachable from `master`.
-6. Confirm any release-only conflict resolution or follow-up fix has also reached `dev`.
-
-Because the same feature commits are now reachable from both `dev` and `master`, future releases can distinguish the remaining unreleased feature branches without duplicate commit identities.
-
-## Exceptional full-dev batch release
-
-A direct pull request from `dev` into `master` is permitted only when every feature and fix currently on `dev` is deliberately approved for the same release. Do not use this as a shortcut around selecting and reviewing branches.
-
-The pull request must use **Create a merge commit**. Do not squash or rebase it. Then follow the production deployment and publication process below.
-
-## Production deployment and publication
-
-### 1. Open the release pull request
-
-For the standard selective process, open a draft pull request from `release/<YYMMDD-short-name>` into `master`. For the exceptional batch process, the head is `dev`. Its title should be:
-
-```text
-Release YYYY-MM-DD
-```
-
-Use this body:
+Open `integration/feature-b-on-dev` into `dev`. Put this exact marker in that dev PR body:
 
 ```markdown
-## User-visible changes
-
-### New
-- ...
-
-### Changed
-- ...
-
-### Fixed
-- ...
-
-## Acceptance testing
-
-- [ ] Staging deployment succeeded
-- [ ] Critical user flows passed
-- [ ] Available tester feedback recorded
-- [ ] Known issues documented and accepted
-
-## Deployment review
-
-- [ ] CI passes
-- [ ] Migrations reviewed
-- [ ] Production backup confirmed when required
-- [ ] Environment variables and secrets are ready
-- [ ] Queue and scheduler impact reviewed
-- [ ] External-service changes are ready
-- [ ] Rollback compatibility reviewed
-
-## Post-deployment smoke tests
-
-- [ ] `/up`
-- [ ] Authentication
-- [ ] Admin access
-- [ ] Relevant changed workflows
-- [ ] Queue health
-- [ ] Sentry and application logs
+<!-- eac-release-branch: feature/feature-b -->
 ```
 
-The release pull request is the acceptance record. Testers may report results outside GitHub; copy the outcome into the pull request. List and link every selected feature or fix pull request in the release description.
+Merge that integration PR using **Create a merge commit** and wait for the dev deployment. The automation will verify that the clean `feature/feature-b` head is an ancestor of the deployed dev commit, then create or update the master PR from `feature/feature-b`—not from the integration branch.
 
-### 2. Review the production diff
+Keep these boundaries clear:
 
-- Confirm the pull request base is `master`.
-- Confirm the head is the tested `release/*` candidate, or `dev` only for an explicitly approved batch release.
-- Confirm the diff contains only the selected and accepted changes.
-- Review all migrations and operational requirements.
-- Ensure `master` has not received an unmerged hotfix.
-- Confirm the previous production deployment is complete.
-- Resolve all open conversations and failed checks.
+- Conflict-only changes needed to combine A and B on dev stay on the integration branch.
+- Changes that Feature B requires in production must also be implemented on `feature/feature-b`, redeployed to dev through another integration PR, and retested.
+- If Feature B cannot operate without Feature A, release Feature A first, redesign B to be independent, or explicitly plan a batch release. Git history alone cannot make a runtime dependency independently releasable.
+- Keep both original feature branches until their production Releases are published.
+- For later Feature B fixes while Feature A remains only on dev, repeat this process from the latest `origin/dev` with a new integration branch.
 
-Use **Create a merge commit** for the release pull request. Do not use squash or rebase.
+This same integration-branch procedure can repair ancestry after an accidental squash merge into `dev`: create the integration branch from current `dev`, merge the clean feature head with `--no-ff`, and merge the integration PR into `dev` with a merge commit before relying on the Updates page or master-draft automation.
 
-### 3. Deploy production
+## Rollback
 
-After merging:
+Use the rollback procedure in `APPLICATION_MAINTENANCE_RUNBOOK.md`. After rollback:
 
-- [ ] Monitor **Deploy to production** until every deployment task succeeds.
-- [ ] Record the workflow run and deployed commit SHA.
-- [ ] Confirm the active Deployer release changed.
-- [ ] Confirm the workflow created exactly one version tag and one draft GitHub Release for the deployed commit.
-- [ ] Run the post-deployment smoke tests from the release pull request.
-- [ ] Check Sentry, Laravel logs, failed queue jobs, and the scheduler.
-- [ ] Confirm critical external integrations relevant to the release.
+- Keep the failed deployment's tag and Release record.
+- Record the rollback time, reason, and restored commit.
+- Fix forward from current `master` through the normal dev path.
+- Give the corrective deployment a new version.
 
-If deployment fails, do not create a release tag. Correct the problem through the normal branch process or follow the maintenance runbook when recovery is required.
+## Initial Updates-page backfill
 
-### 4. Verify the automated tag
+Before publishing the existing `v1.260729.1` draft, add a valid user-facing note block covering:
 
-After a successful deployment, the production workflow:
+- Clear password requirements and reactive feedback anywhere passwords are set.
+- User-list role filtering and clearer account/profile details.
+- Teacher course visibility and active/concluded filtering.
+- Immediate refresh of roles, permissions, and access-dependent content.
+- The global-search reliability fix.
 
-- Calculates the date in `America/New_York`.
-- Selects the next `v1.<YYMMDD>.<daily-sequence>` version.
-- Creates an annotated tag on the exact deployed commit.
-- Creates a draft GitHub Release with generated notes and deployment metadata.
-- Reuses an existing production tag or Release when the job is rerun for the same commit.
+Keep dependency updates, backup-notification configuration, and release automation in operational or technical notes. Complete the production smoke tests, then publish the Release so it becomes the first production entry on the Updates page.
 
-Confirm the tag's full commit SHA matches the successful deployment. If deployment succeeds but tag or draft creation fails, rerun the failed release job after correcting its permissions. Do not create a second version for the same deployed commit.
-
-### 5. Review and publish the GitHub Release
-
-Open the automatically created draft. GitHub supplies the merged pull requests, contributors, and full changelog; the workflow prepends the deployment time and commit. Review that generated material, then add the relevant user-facing sections:
-
-Use this final format:
+Copy-ready user-facing block:
 
 ```markdown
-Originally deployed: YYYY-MM-DD HH:MM America/New_York
-Production commit: `<short-sha>`
+<!-- eac-update-note:start -->
+### Clearer password security and user management
 
-## Highlights
+Password guidance and staff account-management tools are now clearer, more responsive, and easier to use.
 
-One to three sentences describing the most important outcome.
+#### Highlights
+- Password requirements now appear during registration, password reset, profile password changes, and admin user management.
+- Password feedback begins neutral, turns green as requirements are met, and shows relevant problems without displaying unnecessary warnings.
+- The user list now supports role filtering and uses the clearer “Member Since” label.
+- User profiles now show MFA use, last login, membership date, and teaching courses when applicable.
+- Role and permission changes take effect immediately without requiring a page reload, and global search is more reliable.
 
-## New
-
-- Plain-language user-visible additions.
-
-## Changed
-
-- Plain-language behavior changes.
-
-## Fixed
-
-- Problems users may recognize that are now resolved.
-
-## Operational notes
-
-- Migrations, configuration, integrations, or support considerations.
-- Write `None` when there are none.
-
-## Known issues
-
-- Accepted limitations or follow-up work.
-- Write `None known` when appropriate.
+#### Testing focus
+- Set passwords from registration, reset, profile, and admin user forms and verify length and breach checks.
+- Filter the user list by role and review the updated profile details.
+- Confirm teachers show active courses and can be filtered between active and concluded courses.
+- Add and remove the teacher role and confirm teaching courses appear or disappear immediately.
+- Search globally across available admin records and confirm results open without errors.
+<!-- eac-update-note:end -->
 ```
 
-Remove empty user-facing sections if that makes the notes easier to read. Keep generated pull-request links and the full changelog link below the curated summary for traceability.
+Copy-ready operational block:
 
-Publish only after the deployment and smoke tests succeed. Send the highlights to users through their normal communication channel; do not assume they monitor GitHub Releases.
-
-## Hotfix workflow
-
-For an urgent production defect:
-
-1. Branch from `master`, not `dev`.
-2. Implement the smallest safe correction with a regression test.
-3. Merge the fix branch into `dev` with a merge-commit pull request when time permits integration testing.
-4. Create `release/<YYMMDD-hotfix-name>` from current `master` and merge the fix branch into it.
-5. Deploy and test the exact hotfix candidate on staging.
-6. Open the release candidate into `master` and follow the normal production checks.
-7. Ensure the same fix branch commits are reachable from `dev` so the fix cannot be lost in a later release.
-8. Tag and document the hotfix with the next `v<generation>.<YYMMDD>.<daily-sequence>` version.
-
-Do not reset `dev`, bypass the release-candidate test without recording the emergency decision, or edit production files directly.
-
-## Rollback and failed-release records
-
-- Do not delete or move a tag for a release that reached production.
-- Add a prominent note to the GitHub Release stating when and why it was rolled back.
-- Follow `APPLICATION_MAINTENANCE_RUNBOOK.md` for Deployer rollback and database compatibility checks.
-- Never assume code rollback reverses a database migration.
-- The corrected deployment receives a new version and release notes.
-- If a merge never deployed successfully, do not tag it as a production release.
-
-## Periodic release-process review
-
-Quarterly, or after a release incident:
-
-- [ ] Confirm branch and tag rulesets are active.
-- [ ] Confirm required CI checks still exist and pass.
-- [ ] Review environment access and secrets.
-- [ ] Review GitHub Actions versions, permissions, and pinning.
-- [ ] Verify production deployments cannot cancel one another.
-- [ ] Confirm each production deployment since the last review has exactly one tag and GitHub Release.
-- [ ] Confirm release notes remain understandable to users.
-- [ ] Exercise the documented staging rollback procedure.
-- [ ] Update this document with lessons learned.
-
-## References
-
-- Common commands and credential rotation: `OPERATIONS_CHEAT_SHEET.md`
-- Git tag documentation: <https://git-scm.com/docs/git-tag>
-- GitHub releases: <https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository>
-- GitHub generated release notes: <https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes>
-- GitHub repository rulesets: <https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets>
-- GitHub deployment environments: <https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments>
-- GitHub immutable releases: <https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases>
-- GitHub Actions secure use: <https://docs.github.com/en/actions/reference/security/secure-use>
+```markdown
+<!-- eac-operational-notes:start -->
+- Includes dependency updates for shell-quote, concurrently, PostCSS, and Axios.
+- Refactors backup-notification configuration and its tests.
+- Adds production tagging and draft GitHub Release automation.
+- Complete focused smoke tests for password breach validation, role refresh behavior, and global search before publishing.
+<!-- eac-operational-notes:end -->
+```

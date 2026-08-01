@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "test:update-notes": "node --test --test-isolation=none .github/scripts/update-notes.test.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.1.18",
