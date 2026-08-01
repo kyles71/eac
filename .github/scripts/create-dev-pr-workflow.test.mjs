@@ -18,5 +18,5 @@ test('creates dev pull requests for fix and feature branch pushes', () => {
 test('avoids duplicate pull requests and uses the repository template', () => {
     assert.match(workflow, /existing_pr_url="\$\(gh pr list/);
     assert.match(workflow, /if \[\[ -n "\$existing_pr_url" \]\]; then/);
-    assert.match(workflow, /--template \.github\/pull_request_template\.md$/m);
+    assert.match(workflow, /--body-file \.github\/pull_request_template\.md$/m);
 });
