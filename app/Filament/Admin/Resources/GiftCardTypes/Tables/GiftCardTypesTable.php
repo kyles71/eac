@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\GiftCardTypes\Tables;
 use App\Filament\Actions\DeleteProductableAction;
 use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Models\GiftCardType;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -51,7 +52,9 @@ final class GiftCardTypesTable
             ])
             ->filters([])
             ->recordActions([
-                DeleteProductableAction::make(),
+                ActionGroup::make([
+                    DeleteProductableAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

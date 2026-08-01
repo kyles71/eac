@@ -248,6 +248,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'store_view' => StoreView::class,
+            'table_preferences' => 'array',
         ];
     }
 

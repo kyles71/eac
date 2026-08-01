@@ -64,6 +64,7 @@ it('has required table columns', function (string $column) {
     'payment_status',
     'installment_progress',
     'next_due_date',
+    'next_payment_amount',
     'total_amount',
     'paid_amount',
     'remaining',
@@ -90,8 +91,10 @@ it('shows payment status and installment progress without raw plan ids', functio
         ->assertTableColumnDoesNotExist('id')
         ->assertTableColumnStateSet('payment_status', 'Active', $plan)
         ->assertTableColumnStateSet('installment_progress', '1 / 2 paid', $plan)
+        ->assertTableColumnStateSet('next_payment_amount', 6000, $plan)
         ->assertTableColumnStateSet('paid_amount', 4000, $plan)
-        ->assertTableColumnStateSet('remaining', 6000, $plan);
+        ->assertTableColumnStateSet('remaining', 6000, $plan)
+        ->assertTableColumnDoesNotExist('number_of_installments');
 });
 
 it('has payment plan status and frequency filters', function () {

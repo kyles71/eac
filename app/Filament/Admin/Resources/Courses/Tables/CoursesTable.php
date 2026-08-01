@@ -9,6 +9,7 @@ use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\Course;
 use App\Services\CourseEmailRecipientsService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -72,9 +73,11 @@ final class CoursesTable
                 //
             ])
             ->recordActions([
-                SendEmailAction::make()
-                    ->to(fn (Course $record): array => app(CourseEmailRecipientsService::class)->forCourse($record)),
-                DeleteProductableAction::make(),
+                ActionGroup::make([
+                    SendEmailAction::make()
+                        ->to(fn (Course $record): array => app(CourseEmailRecipientsService::class)->forCourse($record)),
+                    DeleteProductableAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

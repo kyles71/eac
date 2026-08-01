@@ -42,6 +42,8 @@ final class CalendarWidget extends FullCalendarWidget
 
     public ?int $selectedCalendarId = null;
 
+    protected string $view = 'filament.shared.widgets.calendar-widget';
+
     protected int|string|array $columnSpan = 'full';
 
     public function mount(): void
@@ -54,6 +56,7 @@ final class CalendarWidget extends FullCalendarWidget
         return [
             'firstDay' => 0,
             'fixedWeekCount' => false,
+            'initialView' => 'dayGridMonth',
             'headerToolbar' => [
                 'left' => 'listMonth,dayGridMonth,dayGridWeek,dayGridDay',
                 'center' => 'title',
