@@ -9,10 +9,6 @@ on:
       concurrency_group:
         required: true
         type: string
-      staging_branch:
-        required: false
-        type: string
-        default: dev
 
 jobs:
   deploy:
@@ -45,7 +41,6 @@ jobs:
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          STAGING_BRANCH: ${{ inputs.staging_branch }}
         with:
           private-key: ${{ secrets.PRIVATE_KEY }}
           dep: deploy env=${{ inputs.environment }}

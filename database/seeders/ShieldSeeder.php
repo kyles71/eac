@@ -47,6 +47,7 @@ final class ShieldSeeder extends Seeder
             Permission::findByName('ViewAny:Event', 'web'),
             Permission::findByName('ViewAny:StaffNote', 'web'),
             Permission::findByName('ViewAny:Student', 'web'),
+            Permission::findByName('View:AppUpdatesPage', 'web'),
         ]);
 
         $this->command->info('Shield seeding completed.');

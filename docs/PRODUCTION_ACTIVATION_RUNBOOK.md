@@ -8,7 +8,7 @@ Production deployment target: `/var/www/html/eac` from the `master` branch
 
 This runbook describes the infrastructure, credentials, operating processes, and activation sequence required to turn up a production EAC instance. It is based on the application's current code, `.env.example`, GitHub Actions workflows, and `deploy.php`.
 
-Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. For routine maintenance, incident triage, debugging, and recovery after activation, use `APPLICATION_MAINTENANCE_RUNBOOK.md`. For the standard development, staging, production, tagging, and release-note process, use `RELEASE_WORKFLOW.md`.
+Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. For routine maintenance, incident triage, debugging, and recovery after activation, use `APPLICATION_MAINTENANCE_RUNBOOK.md`. For the standard development, dev, production, tagging, and release-note process, use `RELEASE_WORKFLOW.md`.
 
 Do not copy credentials from the test environment. Production must have its own application key, database, Stripe live-mode resources, storage credentials, monitoring environment, and verified mail configuration.
 
@@ -204,6 +204,11 @@ DEBUGBAR_ENABLED=false
 
 SEED_DEMO_DATA=false
 ENROLLMENT_UNASSIGN_CUTOFF_DAYS=7
+
+GITHUB_UPDATES_REPOSITORY=kyles71/eac
+GITHUB_UPDATES_TOKEN=<fine-grained-read-only-token>
+GITHUB_UPDATES_CACHE_TTL=300
+GITHUB_UPDATES_RELEASE_LIMIT=20
 ```
 
 Generate a new key without copying another environment's key. One safe method is to run `php artisan key:generate --show` from a matching release and place the result in the production secret store/`.env`. Back up this value securely and do not rotate it as a routine deployment step; Laravel uses it for encrypted application data, including authentication-related secrets.
@@ -326,7 +331,7 @@ Run `sudo -u www-data /usr/bin/php8.4 artisan schedule:list` after deployment an
 ## 6. First activation sequence
 
 1. Provision DNS, TLS, host packages, PHP-FPM, web server, database, storage, mail, Stripe, Sentry, backups, cron, and Supervisor/systemd.
-2. Create `/var/www/html/eac/shared/.env` with all production values. Ensure `APP_ENV=production`, `APP_DEBUG=false`, and `SEED_DEMO_DATA=false`.
+2. Create `/var/www/html/eac/shared/.env` with all production values. Ensure `APP_ENV=production`, `APP_DEBUG=false`, `SEED_DEMO_DATA=false`, and the read-only GitHub Updates feed token is configured.
 3. Configure GitHub's `production` Environment and required secrets. Apply branch/environment approval protections if desired.
 4. Confirm remote access to the EAC repository and both private Composer packages.
 5. Trigger the first production deployment by merging/pushing the reviewed release to `master`, or run the equivalent Deployer production target through the approved release process.
@@ -381,7 +386,7 @@ Validate from outside the host:
 For each release:
 
 1. Review migrations for backward compatibility and take a pre-deploy database backup when appropriate.
-2. Merge the approved `release/*` candidate into `master`. A direct `dev` batch is an exception requiring explicit approval of every included change.
+2. Merge the approved, dev-tested feature branch into `master`. A direct `dev` batch is an exception requiring explicit approval of every included change.
 3. Monitor the GitHub production deployment through migration, publication, and queue restart.
 4. Check `/up`, Sentry, web server/PHP logs, queue failures, scheduler output, and critical user flows.
 5. Confirm GitHub Actions created the `v<generation>.<YYMMDD>.<daily-sequence>` tag and draft GitHub Release for the deployed commit, then review and publish the draft after smoke testing. The initial production release is `v1.260720.1`.
