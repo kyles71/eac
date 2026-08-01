@@ -89,13 +89,10 @@ export function buildReleaseNotes(pullRequests) {
         .filter(isValidOperationalBlock);
 
     if (userBlocks.length === 0) {
-        return [
-            '> [!WARNING]',
-            '> No approved user-facing update note was found for this deployment. Add one before publishing this draft.',
-        ].join('\n');
+        return '';
     }
 
-    const sections = ['## What\'s new', '', ...userBlocks];
+    const sections = [...userBlocks];
 
     if (operationsBlocks.length > 0) {
         sections.push('', '## Operational notes', '', ...operationsBlocks);
@@ -132,15 +129,37 @@ export function validatePullRequestData(pullRequest) {
     return 'The update note is valid and approved.';
 }
 
-export function findMergedDevPullRequest(pullRequests, deployedSha) {
-    return pullRequests.find((pullRequest) => pullRequest.base?.ref === 'dev'
+export function shouldDeployForPullRequest(eventName, pullRequest) {
+    return eventName === 'workflow_dispatch'
+        || !pullRequest
+        || !labelNames(pullRequest).includes('skip-deployment');
+}
+
+export function findMergedPullRequest(pullRequests, deployedSha, targetBranch) {
+    return pullRequests.find((pullRequest) => pullRequest.base?.ref === targetBranch
         && Boolean(pullRequest.merged_at)
         && pullRequest.merge_commit_sha === deployedSha) ?? null;
 }
 
+export function findMergedDevPullRequest(pullRequests, deployedSha) {
+    return findMergedPullRequest(pullRequests, deployedSha, 'dev');
+}
+
+export function findDevPullRequestForFeatureHead(pullRequests, featureHeadSha) {
+    return pullRequests.find((pullRequest) => pullRequest.base?.ref === 'dev'
+        && pullRequest.head?.sha === featureHeadSha) ?? null;
+}
+
+export function featureHeadFromDevMergeCommit(commit) {
+    if (!Array.isArray(commit.parents) || commit.parents.length !== 2) {
+        return null;
+    }
+
+    return commit.parents[1]?.sha ?? null;
+}
+
 export function releaseBranchFor(pullRequest) {
-    const configured = pullRequest.body?.match(/<!--\s*eac-release-branch:\s*([^\s>]+)\s*-->/i)?.[1];
-    const branch = configured || pullRequest.head?.ref || '';
+    const branch = pullRequest.head?.ref || '';
 
     if (!isSafeReleaseBranchName(branch)) {
         throw new Error(`The release branch "${branch || '(missing)'}" is invalid.`);
@@ -182,11 +201,15 @@ export function replaceDeploymentBlock(markdown, values) {
 export async function createMasterPullRequest() {
     const deployedSha = requiredEnvironment('DEPLOYED_SHA');
     const repository = requiredEnvironment('GITHUB_REPOSITORY');
-    const associated = await githubRequest(`/commits/${deployedSha}/pulls`);
-    const devPullRequest = findMergedDevPullRequest(associated, deployedSha);
+    const devPullRequest = await devPullRequestForDeployment(deployedSha);
 
     if (!devPullRequest) {
-        await summary('No draft master PR was created because the deployed dev commit was not the merge commit of a dev PR.');
+        await summary('No draft master PR was created because the deployed dev commit could not be tied to an original feature PR into dev.');
+        return;
+    }
+
+    if (!shouldDeployForPullRequest('push', devPullRequest)) {
+        await summary(`No draft master PR was created because dev PR #${devPullRequest.number} is labeled skip-deployment.`);
         return;
     }
 
@@ -237,6 +260,60 @@ export async function createMasterPullRequest() {
 
     await removeLabel(masterPullRequest.number, 'updates-approved');
     await publishValidationStatus(masterPullRequest, false);
+}
+
+async function devPullRequestForDeployment(deployedSha) {
+    return pullRequestForDeployment(deployedSha, 'dev');
+}
+
+async function pullRequestForDeployment(deployedSha, targetBranch) {
+    const associated = await githubRequest(`/commits/${deployedSha}/pulls`);
+    const mergedPullRequest = findMergedPullRequest(associated, deployedSha, targetBranch);
+
+    if (mergedPullRequest) {
+        return mergedPullRequest;
+    }
+
+    if (targetBranch !== 'dev') {
+        return null;
+    }
+
+    const deployedCommit = await githubRequest(`/commits/${deployedSha}`);
+    const featureHeadSha = featureHeadFromDevMergeCommit(deployedCommit);
+
+    if (!featureHeadSha) {
+        return null;
+    }
+
+    const featurePullRequests = await githubRequest(`/commits/${featureHeadSha}/pulls`);
+
+    return findDevPullRequestForFeatureHead(featurePullRequests, featureHeadSha);
+}
+
+export async function deploymentDecision() {
+    const eventName = requiredEnvironment('GITHUB_EVENT_NAME');
+    let pullRequest = null;
+
+    if (eventName !== 'workflow_dispatch') {
+        pullRequest = await pullRequestForDeployment(
+            requiredEnvironment('GITHUB_SHA'),
+            requiredEnvironment('DEPLOYMENT_BRANCH'),
+        );
+    }
+
+    const shouldDeploy = shouldDeployForPullRequest(eventName, pullRequest);
+
+    await actionOutput('should_deploy', shouldDeploy ? 'true' : 'false');
+
+    if (!shouldDeploy) {
+        await summary(`Deployment skipped because PR #${pullRequest.number} is labeled skip-deployment.`);
+    } else if (eventName === 'workflow_dispatch') {
+        await summary('Deployment approved because this is a manual workflow run.');
+    } else if (pullRequest) {
+        await summary(`Deployment approved for PR #${pullRequest.number}.`);
+    } else {
+        await summary('Deployment approved because the pushed commit was not tied to a skip-deployment PR.');
+    }
 }
 
 export async function handlePullRequestEvent() {
@@ -453,6 +530,10 @@ async function summary(message) {
     }
 }
 
+async function actionOutput(name, value) {
+    await appendFile(requiredEnvironment('GITHUB_OUTPUT'), `${name}=${value}\n`);
+}
+
 function replaceDelimitedBlock(markdown, start, end, replacement) {
     const expression = new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}`);
 
@@ -511,6 +592,8 @@ async function main() {
 
     if (command === 'create-master-pr') {
         await createMasterPullRequest();
+    } else if (command === 'deployment-decision') {
+        await deploymentDecision();
     } else if (command === 'handle-pr-event') {
         await handlePullRequestEvent();
     } else if (command === 'release-preamble') {

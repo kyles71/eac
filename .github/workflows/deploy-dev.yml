@@ -6,7 +6,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  decision:
+    name: Decide whether to deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      should_deploy: ${{ steps.decision.outputs.should_deploy }}
+
+    steps:
+      - name: Check out deployment automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check source PR labels
+        id: decision
+        env:
+          DEPLOYMENT_BRANCH: dev
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/update-notes.mjs deployment-decision
+
   deploy:
+    needs: decision
+    if: ${{ needs.decision.outputs.should_deploy == 'true' }}
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     with:
