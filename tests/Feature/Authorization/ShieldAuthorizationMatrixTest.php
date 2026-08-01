@@ -120,6 +120,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:UserAccess',
             'Publish:LegalDocument',
             'Send:Email',
+            'View:AppUpdatesPage',
             'View:StaffNote',
             'View:AppUpdatesPage',
         )
