@@ -3,7 +3,7 @@
 ## User-facing update
 
 <!-- eac-update-note:start -->
-<!-- Write a friendly title, short summary, Highlights list, and Testing focus list here. Follow the format in docs/RELEASE_WORKFLOW.md, then apply updates-approved after review. -->
+<!-- Write a friendly title, short summary, Highlights list, and Testing focus list here. Follow the format in docs/RELEASE_WORKFLOW.md. Before merging a dev PR, apply updates-approved after review or skip-updates when this change should remain operational only. -->
 <!-- eac-update-note:end -->
 
 ## Operational notes
