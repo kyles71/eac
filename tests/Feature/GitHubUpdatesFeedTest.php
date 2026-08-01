@@ -25,6 +25,7 @@ afterEach(function (): void {
 it('shows multiple approved feature heads contained in the latest successful dev deployment', function (): void {
     Http::fake(function (Request $request) {
         $url = $request->url();
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
         if (str_contains($url, '/deployments/12/statuses')) {
             return Http::response([['state' => 'success', 'created_at' => '2026-07-31T14:30:00Z']]);
@@ -32,6 +33,18 @@ it('shows multiple approved feature heads contained in the latest successful dev
 
         if (str_contains($url, '/deployments')) {
             return Http::response([['id' => 12, 'sha' => 'dev-head', 'created_at' => '2026-07-31T14:25:00Z']]);
+        }
+
+        if (str_contains($url, '/pulls') && ($query['base'] ?? null) === 'dev') {
+            return Http::response(match ($query['head'] ?? null) {
+                'kyles71:feature/alpha' => [
+                    ['merged_at' => null],
+                    ['merged_at' => '2026-07-31T13:00:00Z'],
+                    ['merged_at' => '2026-07-30T13:00:00Z'],
+                ],
+                'kyles71:feature/beta' => [['merged_at' => '2026-07-31T13:00:00Z']],
+                default => [],
+            });
         }
 
         if (str_contains($url, '/pulls')) {
@@ -73,9 +86,11 @@ it('shows multiple approved feature heads contained in the latest successful dev
 
     expect($feed->testingUpdates)->toHaveCount(2)
         ->and(array_map(fn ($update): string => $update->branch, $feed->testingUpdates))->toBe([
-            'feature/alpha',
             'feature/beta',
+            'feature/alpha',
         ])
+        ->and($feed->testingUpdates[0]->mergedIntoDevAt?->toIso8601String())->toBe('2026-07-31T13:00:00+00:00')
+        ->and($feed->testingUpdates[1]->mergedIntoDevAt?->toIso8601String())->toBe('2026-07-30T13:00:00+00:00')
         ->and($feed->productionReleases)->toHaveCount(1)
         ->and($feed->productionReleases[0]->version)->toBe('v1.260731.2')
         ->and($feed->productionReleases[0]->notes)->toHaveCount(2)
@@ -86,6 +101,7 @@ it('shows multiple approved feature heads contained in the latest successful dev
 it('uses the previous successful deployment when a newer deployment failed', function (): void {
     Http::fake(function (Request $request) {
         $url = $request->url();
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
         return match (true) {
             str_contains($url, '/deployments/20/statuses') => Http::response([['state' => 'failure', 'created_at' => '2026-07-31T15:00:00Z']]),
@@ -93,6 +109,9 @@ it('uses the previous successful deployment when a newer deployment failed', fun
             str_contains($url, '/deployments') => Http::response([
                 ['id' => 20, 'sha' => 'failed-head'],
                 ['id' => 19, 'sha' => 'successful-head'],
+            ]),
+            str_contains($url, '/pulls') && ($query['base'] ?? null) === 'dev' => Http::response([
+                ['merged_at' => '2026-07-30T13:00:00Z'],
             ]),
             str_contains($url, '/pulls') => Http::response([
                 feedPullRequest('feature/alpha', 'alpha-sha', 'Alpha improvements'),

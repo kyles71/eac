@@ -113,7 +113,7 @@ Keep each branch focused on one production outcome. Do not branch from `dev` bec
 
 ### 3. Open the dev pull request
 
-Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Merge the dev PR with a merge commit and wait for the automatic dev deployment.
+Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Complete the user-facing and operational note blocks in the dev PR, then merge it with a merge commit and wait for the automatic dev deployment.
 
 If GitHub reports conflicts because another feature is already on `dev`, do not update the clean feature branch with `dev`. Follow [Feature B conflicts with Feature A already on dev](#feature-b-conflicts-with-feature-a-already-on-dev) and resolve a local merge directly on `dev`.
 
@@ -122,11 +122,12 @@ After that deployment succeeds, the trusted **Create master draft after dev depl
 1. Finds the dev PR that produced the deployed merge commit. For a direct conflict-resolution merge, it traces the merge commit's second parent back to the original dev PR.
 2. Verifies the latest clean feature head is contained in that deployment.
 3. Rejects a branch that appears to contain a merge from `dev` or another unreleased branch.
-4. Creates a draft PR from the same feature branch into `master`, or updates its deployment metadata when it already exists.
-5. Preserves the manually written update note when a later dev deployment refreshes the metadata.
-6. Publishes a failing `updates-note` status until a person completes and approves or explicitly skips the note.
+4. Copies the marked user-facing and operational note blocks from the dev PR into a new draft PR from the same feature branch into `master`.
+5. Backfills those blocks when an existing master draft still contains placeholders, while preserving valid notes already reviewed or edited on the master PR.
+6. Creates or updates the master PR's deployment metadata.
+7. Publishes a failing `updates-note` status until a person reviews and approves or explicitly skips the note.
 
-The master PR is the canonical production and update-note record. Write the note manually from the tested behavior and keep it understandable to non-technical staff. Automation validates the format and approval state but does not write or approve the note.
+Write the note in the dev PR from the tested behavior and keep it understandable to non-technical staff. The automation carries it into the master draft, which becomes the canonical production and update-note record. Review and adjust the copied note on the master PR as needed. Automation validates the format and approval state but does not write or approve the note.
 
 Complete and review these sections in the PR body:
 
