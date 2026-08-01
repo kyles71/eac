@@ -22,12 +22,14 @@ use App\Observers\HolidayObserver;
 use App\Observers\ProductableObserver;
 use App\Observers\StudentObserver;
 use App\Services\StripeService;
+use App\Support\PasswordRequirements;
 use App\Support\TextmagicMailTransportFactory;
 use BezhanSalleh\PanelSwitch\PanelSwitch;
 use Filament\Forms\Components\Builder;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Kyle\FilamentFormBuilder\Events\FormVersionActivated;
 use Stripe\StripeClient;
 
@@ -48,6 +50,8 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Password::defaults(fn (): Password => PasswordRequirements::rule());
+
         Course::observe(ProductableObserver::class);
         CourseForm::observe(CourseFormObserver::class);
         Enrollment::observe(EnrollmentObserver::class);

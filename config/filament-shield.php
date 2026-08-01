@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -291,6 +292,7 @@ return [
             CalendarPage::class,
             Dashboard::class,
             ManageDashboardAppearance::class,
+            Updates::class,
         ],
     ],
 
@@ -332,6 +334,7 @@ return [
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
+        'View:AppUpdatesPage' => 'View App Updates Page',
     ],
 
     /*

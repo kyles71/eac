@@ -49,14 +49,16 @@ final class PaymentPlansTable
                     ->placeholder('Paid')
                     ->searchable(false)
                     ->sortable(false),
+                TextColumn::make('next_payment_amount')
+                    ->label('Payment Amount')
+                    ->state(fn (PaymentPlan $record): ?int => self::nextUnpaidInstallment($record)?->amount)
+                    ->moneyCents('Paid')
+                    ->searchable(false)
+                    ->sortable(false),
                 TextColumn::make('total_amount')
                     ->label('Total')
                     ->moneyCents()
                     ->sortable(),
-                TextColumn::make('number_of_installments')
-                    ->label('Installments')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('frequency')
                     ->badge()
                     ->toggleable(),

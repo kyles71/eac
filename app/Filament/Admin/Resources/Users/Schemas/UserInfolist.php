@@ -32,15 +32,21 @@ final class UserInfolist
                         TextEntry::make('first_name'),
                         TextEntry::make('last_name'),
                         TextEntry::make('email'),
-                    ]),
-                Section::make('Access')
-                    ->columns(2)
-                    ->columnSpanFull()
-                    ->schema([
+                        IconEntry::make('uses_mfa')
+                            ->label('Uses MFA')
+                            ->state(fn (User $record): bool => filled($record->getAppAuthenticationSecret()))
+                            ->boolean(),
                         TextEntry::make('roles.name')
                             ->label('Roles')
                             ->badge()
                             ->listWithLineBreaks(),
+                        TextEntry::make('last_login_at')
+                            ->label('Last Logged In')
+                            ->dateTime()
+                            ->placeholder('Never'),
+                        TextEntry::make('created_at')
+                            ->label('Member Since')
+                            ->dateTime(),
                     ]),
                 Section::make('Staff Profile')
                     ->collapsed()
@@ -59,24 +65,6 @@ final class UserInfolist
                             ->columnSpanFull(),
                     ]),
                 CompetitionMembershipHistory::make(),
-                Section::make('Security & Record')
-                    ->columns(2)
-                    ->collapsed()
-                    ->columnSpanFull()
-                    ->schema([
-                        TextEntry::make('email_verified_at')
-                            ->label('Email Verified At')
-                            ->dateTime()
-                            ->placeholder('-'),
-                        IconEntry::make('app_authentication_enabled')
-                            ->label('Authenticator App MFA')
-                            ->state(fn (User $record): bool => filled($record->getAppAuthenticationSecret()))
-                            ->boolean(),
-                        TextEntry::make('created_at')
-                            ->dateTime(),
-                        TextEntry::make('updated_at')
-                            ->dateTime(),
-                    ]),
             ]);
     }
 }

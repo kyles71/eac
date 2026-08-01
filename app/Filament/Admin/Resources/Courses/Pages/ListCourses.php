@@ -14,6 +14,8 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Database\Eloquent\Builder;
 
 final class ListCourses extends ListRecords
 {
@@ -25,6 +27,26 @@ final class ListCourses extends ListRecords
 
     private ?int $courseDurationMinutes = null;
 
+    /**
+     * @return array<string, Tab>
+     */
+    public function getTabs(): array
+    {
+        return [
+            'all' => Tab::make(),
+            'active' => Tab::make()
+                ->modifyQueryUsing(fn (Builder $query): Builder => self::activeCoursesQuery($query)),
+            'my_active' => Tab::make('My Active')
+                ->modifyQueryUsing(fn (Builder $query): Builder => self::activeCoursesQuery($query)
+                    ->whereHas('teachers', fn (Builder $query): Builder => $query->whereKey(auth()->id()))),
+        ];
+    }
+
+    public function getDefaultActiveTab(): string
+    {
+        return 'my_active';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -32,6 +54,15 @@ final class ListCourses extends ListRecords
                 ->mutateDataUsing(fn (array $data): array => $this->prepareCourseCreateData($data))
                 ->after(fn (CreateAction $action): array => $this->createCourseEvents($action)),
         ];
+    }
+
+    /**
+     * @param  Builder<Course>  $query
+     * @return Builder<Course>
+     */
+    private static function activeCoursesQuery(Builder $query): Builder
+    {
+        return $query->notConcluded();
     }
 
     /**

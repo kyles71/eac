@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Users\Schemas;
 
 use App\Models\User;
 use App\Support\MediaDisks;
+use App\Support\PasswordRequirements;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -48,14 +49,17 @@ final class UserForm
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        TextInput::make('password')
-                            ->password()
-                            ->required(fn ($record): bool => $record === null)
-                            ->revealable(filament()->arePasswordsRevealable())
-                            ->rule(Password::default())
-                            ->autocomplete('new-password')
-                            ->dehydrated(fn ($state): bool => filled($state))
-                            ->dehydrateStateUsing(fn ($state): string => Hash::make($state)),
+                        PasswordRequirements::withFeedback(
+                            TextInput::make('password')
+                                ->password()
+                                ->required(fn ($record): bool => $record === null)
+                                ->revealable(filament()->arePasswordsRevealable())
+                                ->rule(Password::default())
+                                ->showAllValidationMessages()
+                                ->autocomplete('new-password')
+                                ->dehydrated(fn ($state): bool => filled($state))
+                                ->dehydrateStateUsing(fn ($state): string => Hash::make($state)),
+                        ),
                     ]),
                 Section::make('Staff Profile')
                     ->collapsed()

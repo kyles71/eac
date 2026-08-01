@@ -158,6 +158,6 @@ it('shows native authenticator status on the admin user view', function (): void
 
     livewire(ViewUser::class, ['record' => $user->getKey()])
         ->assertSchemaStateSet([
-            'app_authentication_enabled' => true,
+            'uses_mfa' => true,
         ], 'infolist');
 });

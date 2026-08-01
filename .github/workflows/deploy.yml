@@ -161,7 +161,7 @@ jobs:
 
       - name: Configure Composer GitHub auth
         env:
-          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
         run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
 
       - name: Install dependencies
@@ -171,7 +171,6 @@ jobs:
         uses: deployphp/action@v1
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         with:
           private-key: ${{ secrets.PRIVATE_KEY }}

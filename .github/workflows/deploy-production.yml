@@ -4,10 +4,70 @@ on:
   push:
     branches: [ master ]
 
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
 jobs:
+  decision:
+    name: Decide whether to deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      should_deploy: ${{ steps.decision.outputs.should_deploy }}
+
+    steps:
+      - name: Check out deployment automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check source PR labels
+        id: decision
+        env:
+          DEPLOYMENT_BRANCH: master
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/update-notes.mjs deployment-decision
+
   deploy:
+    needs: decision
+    if: ${{ needs.decision.outputs.should_deploy == 'true' }}
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     with:
       environment: production
       concurrency_group: production
+
+  release:
+    name: Tag and draft release
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_GENERATION: "1"
+      RELEASE_TIMEZONE: America/New_York
+
+    steps:
+      - name: Check out the deployed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Create production tag and draft release
+        id: release
+        run: .github/scripts/create-production-release.sh
+
+      - name: Summarize release
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          {
+            echo "### Production release"
+            echo
+            echo "Tag: \`${RELEASE_TAG}\`"
+            echo
+            echo "The GitHub Release is a draft until the post-deployment smoke tests and notes are reviewed."
+          } >> "$GITHUB_STEP_SUMMARY"

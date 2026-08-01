@@ -9,6 +9,7 @@ use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Field;
@@ -21,6 +22,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Facades\FilamentTimezone;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\ServiceProvider;
@@ -162,9 +164,14 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->reorderableColumns()
                 // ->columnManagerColumns(2)
                 ->defaultDateTimeDisplayFormat('M j, Y g:i A')
-                ->columnManagerTriggerAction(fn (Action $action) => $action->button()->label('Columns'))
-                ->filtersTriggerAction(fn (Action $action) => $action->button()->label('Filters')->closeModalByClickingAway(true))
+                ->columnManagerApplyAction(self::configureColumnManagerApplyAction(...))
+                ->columnManagerTriggerAction(self::configureColumnManagerTrigger(...))
+                ->filtersApplyAction(self::configureFiltersApplyAction(...))
+                ->filtersTriggerAction(self::configureFiltersTrigger(...))
                 ->filtersFormWidth(Width::Small)
+                ->recordActionsPosition(fn (): ?RecordActionsPosition => Filament::getCurrentPanel()?->getId() === 'admin'
+                    ? RecordActionsPosition::BeforeCells
+                    : null)
                 ->paginationPageOptions([10, 25, 50]);
         });
 
@@ -180,5 +187,42 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->defaultDateTimeDisplayFormat('M j, Y g:i A')
                 ->defaultTimeDisplayFormat('g:i A');
         });
+    }
+
+    private static function configureColumnManagerApplyAction(Action $action): Action
+    {
+        return $action->alpineClickHandler('applyTableColumnManager().then(() => close())');
+    }
+
+    private static function configureColumnManagerTrigger(Action $action): Action
+    {
+        $applyAction = $action->getExtraModalFooterActions()['applyTableColumnManager'] ?? null;
+
+        if ($applyAction instanceof Action) {
+            $applyAction->alpineClickHandler('applyTableColumnManager().then(() => close())');
+        }
+
+        return $action
+            ->button()
+            ->label('Columns');
+    }
+
+    private static function configureFiltersApplyAction(Action $action): Action
+    {
+        return $action->alpineClickHandler('$wire.applyTableFilters().then(() => close())');
+    }
+
+    private static function configureFiltersTrigger(Action $action): Action
+    {
+        $applyAction = $action->getExtraModalFooterActions()['applyFilters'] ?? null;
+
+        if ($applyAction instanceof Action) {
+            $applyAction->alpineClickHandler('$wire.applyTableFilters().then(() => close())');
+        }
+
+        return $action
+            ->button()
+            ->label('Filters')
+            ->closeModalByClickingAway(true);
     }
 }

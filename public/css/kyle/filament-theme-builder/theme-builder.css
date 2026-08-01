@@ -1,5 +1,5 @@
-.fi-theme-builder-page .fi-sidebar,
-.fi-theme-builder-page .fi-topbar nav {
+.fi-theme-builder-page--hide-sidebar .fi-sidebar,
+.fi-theme-builder-page--hide-sidebar .fi-topbar nav {
     display: none;
 }
 

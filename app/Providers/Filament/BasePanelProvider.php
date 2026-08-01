@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Shared\Pages\Auth\Login;
+use App\Filament\Shared\Pages\Auth\ResetPassword;
 use App\Filament\Shared\Pages\Profile\Profile;
 use App\Http\Middleware\ManagedBanners;
+use App\Http\Middleware\PersistTablePreferences;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -15,6 +17,8 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -29,7 +33,7 @@ abstract class BasePanelProvider extends PanelProvider
     {
         return $panel
             ->login(Login::class)
-            ->passwordReset()
+            ->passwordReset(resetAction: ResetPassword::class)
             ->profile(Profile::class, isSimple: false)
             ->multiFactorAuthentication([
                 AppAuthentication::make()
@@ -40,6 +44,10 @@ abstract class BasePanelProvider extends PanelProvider
             ->unsavedChangesAlerts()
             ->databaseTransactions()
             ->sidebarCollapsibleOnDesktop()
+            ->renderHook(
+                PanelsRenderHook::SCRIPTS_AFTER,
+                fn (): View => view('filament.shared.table-scrollbars'),
+            )
             ->colors([
                 'primary' => Color::Blue,
             ])
@@ -66,6 +74,7 @@ abstract class BasePanelProvider extends PanelProvider
                 ManagedBanners::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                PersistTablePreferences::class,
             ])
             ->persistentMiddleware([
                 ManagedBanners::class,

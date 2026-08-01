@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\GiftCards\Tables;
 
 use App\Filament\Actions\AssignAndRedeemGiftCardAction;
 use App\Models\GiftCard;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\IconColumn;
@@ -100,7 +101,9 @@ final class GiftCardsTable
                     ),
             ])
             ->recordActions([
-                AssignAndRedeemGiftCardAction::make(),
+                ActionGroup::make([
+                    AssignAndRedeemGiftCardAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

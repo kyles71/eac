@@ -72,6 +72,8 @@ final class ManageUserAccessAction extends Action
                     permissionIds: array_values($data['permissions'] ?? []),
                 );
 
+                $record->refresh()->load(['permissions', 'roles']);
+
                 Notification::make()
                     ->title('User access updated')
                     ->success()

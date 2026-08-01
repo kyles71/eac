@@ -11,6 +11,7 @@ use App\Models\Holiday;
 use App\Services\HolidayConflictService;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -33,6 +34,8 @@ use Filament\Tables\Table;
 final class HolidayResource extends Resource
 {
     protected static ?string $model = Holiday::class;
+
+    protected static bool $isGloballySearchable = false;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
@@ -117,9 +120,11 @@ final class HolidayResource extends Resource
                 //
             ])
             ->recordActions([
-                EditAction::make()
-                    ->successNotification(fn (Holiday $record): Notification => self::saveNotification($record, 'updated')),
-                DeleteAction::make(),
+                ActionGroup::make([
+                    EditAction::make()
+                        ->successNotification(fn (Holiday $record): Notification => self::saveNotification($record, 'updated')),
+                    DeleteAction::make(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -18,6 +18,8 @@ final class LegalDocumentResource extends Resource
 {
     protected static ?string $model = LegalDocument::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
 
     protected static ?string $cluster = SettingsCluster::class;

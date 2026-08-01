@@ -4,12 +4,13 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "test:update-notes": "node --test --test-isolation=none .github/scripts/update-notes.test.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.1.18",
-        "axios": "^1.11.0",
-        "concurrently": "^10.0.3",
+        "axios": "^1.18.0",
+        "concurrently": "^10.0.4",
         "laravel-vite-plugin": "^3.1.0",
         "tailwindcss": "^4.1.18",
         "vite": "^8.0.16"

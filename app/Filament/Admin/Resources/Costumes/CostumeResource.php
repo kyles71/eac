@@ -20,6 +20,8 @@ final class CostumeResource extends Resource
 {
     protected static ?string $model = Costume::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
     protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;

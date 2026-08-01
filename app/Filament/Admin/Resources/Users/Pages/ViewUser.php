@@ -18,8 +18,19 @@ final class ViewUser extends ViewRecord
     {
         return [
             IssueCreditGrantAction::make(),
-            ManageUserAccessAction::make(),
+            ManageUserAccessAction::make()
+                ->after(function (): void {
+                    $this->refreshAccessDependentContent();
+                }),
             EditAction::make(),
         ];
+    }
+
+    private function refreshAccessDependentContent(): void
+    {
+        unset(
+            $this->cachedSchemas['content'],
+            $this->cachedSchemas['infolist'],
+        );
     }
 }

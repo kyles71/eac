@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Models\CompetitionTeam;
 use App\Models\Student;
 use Carbon\CarbonInterface;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\AttachAction;
 use Filament\Actions\DetachAction;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -54,9 +55,11 @@ final class StudentsRelationManager extends RelationManager
                     ->recordSelectSearchColumns(['first_name', 'last_name']),
             ])
             ->recordActions([
-                SendEmailAction::make()
-                    ->to(fn (Student $record): array => [$record]),
-                DetachAction::make(),
+                ActionGroup::make([
+                    SendEmailAction::make()
+                        ->to(fn (Student $record): array => [$record]),
+                    DetachAction::make(),
+                ]),
             ]);
     }
 

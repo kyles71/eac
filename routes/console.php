@@ -51,7 +51,7 @@ Schedule::command('forms:reconcile-required')
     ->name('reconcile-required-forms')
     ->description('Reconcile course-required form assignments as event windows pass');
 
-Schedule::command('backup:clean', ['--disable-notifications' => true])
+Schedule::command('backup:clean', ['--disable-notifications'])
     ->dailyAt('03:10')
     ->timezone('America/New_York')
     ->environments('production')

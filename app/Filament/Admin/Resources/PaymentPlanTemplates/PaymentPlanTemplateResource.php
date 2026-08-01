@@ -20,6 +20,8 @@ final class PaymentPlanTemplateResource extends Resource
 {
     protected static ?string $model = PaymentPlanTemplate::class;
 
+    protected static bool $isGloballySearchable = false;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
     protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;

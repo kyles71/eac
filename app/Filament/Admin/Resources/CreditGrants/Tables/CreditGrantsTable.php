@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\CreditGrants\Tables;
 use App\Enums\CreditGrantStatus;
 use App\Filament\Actions\RevokeCreditGrantAction;
 use App\Models\CreditGrant;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -116,8 +117,10 @@ final class CreditGrantsTable
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                ViewAction::make(),
-                RevokeCreditGrantAction::make(),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    RevokeCreditGrantAction::make(),
+                ]),
             ]);
     }
 }

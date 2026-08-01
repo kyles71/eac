@@ -8,6 +8,7 @@ use App\Filament\Actions\SendEmailAction;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Models\CompetitionSeason;
 use App\Services\CompetitionEmailRecipientsService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -47,8 +48,10 @@ final class CompetitionSeasonsTable
                 //
             ])
             ->recordActions([
-                SendEmailAction::make()
-                    ->to(fn (CompetitionSeason $record): array => app(CompetitionEmailRecipientsService::class)->forSeason($record)),
+                ActionGroup::make([
+                    SendEmailAction::make()
+                        ->to(fn (CompetitionSeason $record): array => app(CompetitionEmailRecipientsService::class)->forSeason($record)),
+                ]),
             ])
             ->recordUrl(fn (CompetitionSeason $record): string => CompetitionSeasonResource::getUrl('view', ['record' => $record]))
             ->toolbarActions([

@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Users\UserResource;
 use App\Models\CompetitionTeam;
 use App\Models\User;
 use App\Services\CompetitionRosterService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\AttachAction;
 use Filament\Actions\DetachAction;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -54,9 +55,11 @@ final class StaffRelationManager extends RelationManager
                     ->recordSelectOptionsQuery(fn (Builder $query): Builder => app(CompetitionRosterService::class)->applyRoleBearingScope($query)),
             ])
             ->recordActions([
-                SendEmailAction::make()
-                    ->to(fn (User $record): array => [$record]),
-                DetachAction::make(),
+                ActionGroup::make([
+                    SendEmailAction::make()
+                        ->to(fn (User $record): array => [$record]),
+                    DetachAction::make(),
+                ]),
             ]);
     }
 }

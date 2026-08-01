@@ -8,10 +8,12 @@ use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\User;
 use App\Support\MediaDisks;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -63,6 +65,7 @@ final class UsersTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
+                    ->label('Member Since')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
@@ -72,13 +75,17 @@ final class UsersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('roles')
+                    ->relationship('roles', 'name')
+                    ->multiple()
+                    ->preload(),
             ])
             ->recordActions([
-                ManageUserAccessAction::make(),
-                SendEmailAction::make()
-                    ->to(fn ($record) => [$record->email]),
-
+                ActionGroup::make([
+                    ManageUserAccessAction::make(),
+                    SendEmailAction::make()
+                        ->to(fn ($record) => [$record->email]),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
