@@ -193,12 +193,12 @@ A push to `master` starts the production workflow. Unless the merged source PR h
 
 1. Deploys `master` to production.
 2. Creates an annotated version tag for the deployed commit.
-3. Collects approved update-note blocks from master PRs included since the prior production tag.
+3. Collects approved update-note blocks from master PRs included since the prior production tag and inserts their contents directly after the deployment metadata.
 4. Creates a draft GitHub Release with user-facing notes, operational notes, and the generated technical changelog.
 
 For a `skip-deployment` PR, the production deployment, tag, and draft Release are all skipped because no server state changed.
 
-If an approved note cannot be found, tagging still records the successful deployment and the draft Release contains a warning. Correct the draft before publishing it.
+If no approved update-note block is available, the workflow adds no user-facing placeholder or warning; the deployment metadata and generated technical changelog remain. The required `updates-note` check should make this exceptional unless the included PRs intentionally use `skip-updates`.
 
 Complete the production smoke tests:
 

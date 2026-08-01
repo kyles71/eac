@@ -97,13 +97,22 @@ test('builds release notes from approved pull requests only', () => {
         { labels: [{ name: 'skip-updates' }], body: `${userBlock}\n\n${operationsBlock}` },
     ]);
 
-    assert.match(releaseNotes, /## What's new/);
+    assert.equal(releaseNotes.startsWith(USER_START), true);
     assert.match(releaseNotes, /Clearer account security/);
+    assert.match(releaseNotes, /## Operational notes/);
+    assert.doesNotMatch(releaseNotes, /## What's new/);
     assert.equal((releaseNotes.match(/Clearer account security/g) ?? []).length, 1);
 });
 
-test('warns when a release has no approved notes', () => {
-    assert.match(buildReleaseNotes([]), /WARNING/);
+test('omits user-facing release content when there are no approved notes', () => {
+    assert.equal(buildReleaseNotes([]), '');
+});
+
+test('does not add release warning or review boilerplate', () => {
+    const releaseScript = readFileSync(new URL('./create-production-release.sh', import.meta.url), 'utf8');
+
+    assert.doesNotMatch(releaseScript, /No approved user-facing update note/);
+    assert.doesNotMatch(releaseScript, /Review the user-facing and operational notes/);
 });
 
 test('validates approved and explicitly skipped pull requests', () => {

@@ -89,13 +89,10 @@ export function buildReleaseNotes(pullRequests) {
         .filter(isValidOperationalBlock);
 
     if (userBlocks.length === 0) {
-        return [
-            '> [!WARNING]',
-            '> No approved user-facing update note was found for this deployment. Add one before publishing this draft.',
-        ].join('\n');
+        return '';
     }
 
-    const sections = ['## What\'s new', '', ...userBlocks];
+    const sections = [...userBlocks];
 
     if (operationsBlocks.length > 0) {
         sections.push('', '## Operational notes', '', ...operationsBlocks);

@@ -71,11 +71,15 @@ else
             node .github/scripts/update-notes.mjs release-preamble
     )"
     release_preamble="$(
-        printf 'Originally deployed: %s\nProduction commit: `%s`\n\n%s\n\nReview the user-facing and operational notes, complete the production smoke tests, and then publish this draft.' \
+        printf 'Originally deployed: %s\nProduction commit: `%s`' \
             "$deployed_at" \
-            "$short_sha" \
-            "$update_notes"
+            "$short_sha"
     )"
+
+    if [[ -n "$update_notes" ]]; then
+        release_preamble+=$'\n\n'
+        release_preamble+="$update_notes"
+    fi
 
     gh release create "$release_tag" \
         --repo "$GITHUB_REPOSITORY" \
