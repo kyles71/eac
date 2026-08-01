@@ -84,13 +84,21 @@ final readonly class UpdatesFeedService
                     continue;
                 }
 
-                $testingUpdates[] = new TestingUpdate($branch, $note);
+                $mergedIntoDevAt = $this->client->firstMergedIntoDevAt($branch);
+
+                $testingUpdates[] = new TestingUpdate(
+                    branch: $branch,
+                    mergedIntoDevAt: is_string($mergedIntoDevAt) ? CarbonImmutable::parse($mergedIntoDevAt) : null,
+                    note: $note,
+                );
             }
         }
 
         usort(
             $testingUpdates,
-            static fn (TestingUpdate $left, TestingUpdate $right): int => strnatcasecmp($left->note->title, $right->note->title),
+            static fn (TestingUpdate $left, TestingUpdate $right): int => ($right->mergedIntoDevAt?->getTimestamp() ?? 0)
+                <=> ($left->mergedIntoDevAt?->getTimestamp() ?? 0)
+                ?: strnatcasecmp($left->branch, $right->branch),
         );
 
         $productionReleases = [];

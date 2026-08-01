@@ -21,6 +21,7 @@ beforeEach(function (): void {
 
     Http::fake(function (Request $request) {
         $path = $request->url();
+        parse_str((string) parse_url($path, PHP_URL_QUERY), $query);
 
         if (str_contains($path, '/deployments/9/statuses')) {
             return Http::response([[
@@ -39,6 +40,12 @@ beforeEach(function (): void {
 
         if (str_contains($path, '/compare/feature-sha...dev-sha')) {
             return Http::response(['status' => 'ahead']);
+        }
+
+        if (str_contains($path, '/pulls') && ($query['base'] ?? null) === 'dev') {
+            return Http::response([[
+                'merged_at' => '2026-07-30T13:30:00Z',
+            ]]);
         }
 
         if (str_contains($path, '/pulls')) {
@@ -68,13 +75,21 @@ it('shows the admin updates page to permitted users', function (): void {
 
     expect($owner->can('View:AppUpdatesPage'))->toBeTrue();
 
-    $this->actingAs($owner)
+    $response = $this->actingAs($owner)
         ->get(Updates::getUrl(panel: 'admin'))
         ->assertOk()
         ->assertSee('Available for testing')
         ->assertSee('Friendlier account management')
         ->assertSee('feature/accounts')
+        ->assertSee('Merged into dev Jul 30, 2026 9:30 AM EDT')
+        ->assertSee('Dev last deployed Jul 31, 2026 10:00 AM EDT')
+        ->assertSee('fi-collapsible', escape: false)
+        ->assertSee('<strong>account details</strong>', escape: false)
+        ->assertSee('<a href="https://example.com/guidance">clearer guidance</a>', escape: false)
+        ->assertSee('<code>requirements</code>', escape: false)
         ->assertSee('v1.260731.1');
+
+    expect(mb_substr_count((string) $response->getContent(), 'data-update-timestamp-toggle'))->toBe(2);
 });
 
 it('hides and forbids updates without the dedicated permission', function (): void {
@@ -141,10 +156,10 @@ function updatesPageNote(string $title): string
 <!-- eac-update-note:start -->
 ### {$title}
 
-Staff can manage account details with clearer guidance.
+Staff can manage **account details** with [clearer guidance](https://example.com/guidance).
 
 #### Highlights
-- Account requirements are easier to understand.
+- Account `requirements` are easier to understand.
 
 #### Testing focus
 - Review the account page on dev.

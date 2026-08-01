@@ -9,6 +9,7 @@ import {
     USER_START,
     buildDeploymentBlock,
     buildReleaseNotes,
+    copyNoteBlocksFromDevPullRequest,
     createMasterPullRequest,
     extractOperationalBlocks,
     extractUserBlocks,
@@ -68,6 +69,45 @@ test('accepts the required manual note format and rejects malformed notes', () =
     assert.equal(extractOperationalBlocks(operationsBlock).length, 1);
     assert.equal(isValidOperationalBlock(operationsBlock), true);
     assert.equal(isValidOperationalBlock(`${OPERATIONS_START}\n<!-- placeholder -->\n${OPERATIONS_END}`), false);
+});
+
+test('copies both note blocks from the dev pull request into a new master draft', () => {
+    const template = [
+        '## User-facing update',
+        USER_START,
+        '<!-- Write the update note here. -->',
+        USER_END,
+        '',
+        '## Operational notes',
+        OPERATIONS_START,
+        '- None.',
+        OPERATIONS_END,
+    ].join('\n');
+    const copied = copyNoteBlocksFromDevPullRequest(template, `${userBlock}\n\n${operationsBlock}`, true);
+
+    assert.equal(extractUserBlocks(copied)[0], userBlock);
+    assert.equal(extractOperationalBlocks(copied)[0], operationsBlock);
+    assert.doesNotMatch(copied, /Write the update note here/);
+});
+
+test('backfills placeholders without replacing reviewed master notes', () => {
+    const placeholder = [
+        USER_START,
+        '<!-- Write the update note here. -->',
+        USER_END,
+        '',
+        OPERATIONS_START,
+        '- None.',
+        OPERATIONS_END,
+    ].join('\n');
+    const backfilled = copyNoteBlocksFromDevPullRequest(placeholder, `${userBlock}\n\n${operationsBlock}`);
+    const reviewedUserBlock = userBlock.replace('Clearer account security', 'Reviewed account security');
+    const reviewedOperationsBlock = operationsBlock.replace('focused account-management', 'reviewed account-management');
+    const reviewed = `${reviewedUserBlock}\n\n${reviewedOperationsBlock}`;
+
+    assert.equal(extractUserBlocks(backfilled)[0], userBlock);
+    assert.equal(extractOperationalBlocks(backfilled)[0], operationsBlock);
+    assert.equal(copyNoteBlocksFromDevPullRequest(reviewed, `${userBlock}\n\n${operationsBlock}`), reviewed);
 });
 
 test('validates detailed update notes without pathological backtracking', () => {
@@ -309,7 +349,7 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
         if (path === '/commits/release-sha/pulls') {
             return jsonResponse([{
                 base: { ref: 'dev' },
-                body: '',
+                body: `${userBlock}\n\n${operationsBlock}`,
                 head: { ref: 'feature/accounts', repo: { full_name: 'example/eac' }, sha: 'release-sha' },
                 labels: devLabels,
                 merge_commit_sha: null,
@@ -373,11 +413,6 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
 
     try {
         await createMasterPullRequest();
-
-        createdPullRequest.body = createdPullRequest.body
-            .replace(new RegExp(`${USER_START}[\\s\\S]*?${USER_END}`), userBlock)
-            .replace(new RegExp(`${OPERATIONS_START}[\\s\\S]*?${OPERATIONS_END}`), operationsBlock);
-
         await createMasterPullRequest();
 
         devLabels = [{ name: 'skip-deployment' }];

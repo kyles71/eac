@@ -21,6 +21,29 @@ final class GitHubUpdatesClientService
         ]);
     }
 
+    public function firstMergedIntoDevAt(string $branch): ?string
+    {
+        $owner = explode('/', $this->repository(), 2)[0];
+        $pullRequests = $this->paginate('/pulls', [
+            'state' => 'closed',
+            'base' => 'dev',
+            'head' => $owner.':'.$branch,
+            'sort' => 'created',
+            'direction' => 'asc',
+        ]);
+        $firstMergedAt = null;
+
+        foreach ($pullRequests as $pullRequest) {
+            $mergedAt = $pullRequest['merged_at'] ?? null;
+
+            if (is_string($mergedAt) && ($firstMergedAt === null || strcmp($mergedAt, $firstMergedAt) < 0)) {
+                $firstMergedAt = $mergedAt;
+            }
+        }
+
+        return $firstMergedAt;
+    }
+
     /**
      * @return array{sha: string, deployed_at: string}|null
      */
@@ -133,17 +156,12 @@ final class GitHubUpdatesClientService
     private function request(): PendingRequest
     {
         $token = config('services.github_updates.token');
-        $repository = config('services.github_updates.repository');
 
         if (! is_string($token) || mb_trim($token) === '') {
             throw new RuntimeException('The GitHub Updates token is not configured.');
         }
 
-        if (! is_string($repository) || preg_match('/\A[^\/]+\/[^\/]+\z/', $repository) !== 1) {
-            throw new RuntimeException('The GitHub Updates repository is not configured correctly.');
-        }
-
-        return Http::baseUrl('https://api.github.com/repos/'.$repository)
+        return Http::baseUrl('https://api.github.com/repos/'.$this->repository())
             ->withToken($token)
             ->acceptJson()
             ->withHeaders([
@@ -153,5 +171,16 @@ final class GitHubUpdatesClientService
             ->connectTimeout(5)
             ->timeout(10)
             ->retry(2, 250, throw: false);
+    }
+
+    private function repository(): string
+    {
+        $repository = config('services.github_updates.repository');
+
+        if (! is_string($repository) || preg_match('/\A[^\/]+\/[^\/]+\z/', $repository) !== 1) {
+            throw new RuntimeException('The GitHub Updates repository is not configured correctly.');
+        }
+
+        return $repository;
     }
 }

@@ -198,6 +198,34 @@ export function replaceDeploymentBlock(markdown, values) {
     return replaceDelimitedBlock(markdown ?? '', DEPLOYMENT_START, DEPLOYMENT_END, buildDeploymentBlock(values)).trimEnd() + '\n';
 }
 
+export function copyNoteBlocksFromDevPullRequest(markdown, devPullRequestBody, overwrite = false) {
+    let updatedMarkdown = markdown ?? '';
+    const sourceUserBlocks = extractUserBlocks(devPullRequestBody ?? '');
+    const sourceOperationalBlocks = extractOperationalBlocks(devPullRequestBody ?? '');
+    const targetUserBlocks = extractUserBlocks(updatedMarkdown);
+    const targetUserNeedsBackfill = targetUserBlocks.length !== 1 || !isValidUserBlock(targetUserBlocks[0]);
+
+    if (sourceUserBlocks.length === 1 && (overwrite || targetUserNeedsBackfill)) {
+        updatedMarkdown = replaceDelimitedBlock(updatedMarkdown, USER_START, USER_END, sourceUserBlocks[0]);
+    }
+
+    const targetOperationalBlocks = extractOperationalBlocks(updatedMarkdown);
+    const targetOperationalNeedsBackfill = targetOperationalBlocks.length !== 1
+        || !isValidOperationalBlock(targetOperationalBlocks[0])
+        || (targetUserNeedsBackfill && isDefaultOperationalBlock(targetOperationalBlocks[0]));
+
+    if (sourceOperationalBlocks.length === 1 && (overwrite || targetOperationalNeedsBackfill)) {
+        updatedMarkdown = replaceDelimitedBlock(
+            updatedMarkdown,
+            OPERATIONS_START,
+            OPERATIONS_END,
+            sourceOperationalBlocks[0],
+        );
+    }
+
+    return updatedMarkdown;
+}
+
 export async function createMasterPullRequest() {
     const deployedSha = requiredEnvironment('DEPLOYED_SHA');
     const repository = requiredEnvironment('GITHUB_REPOSITORY');
@@ -239,11 +267,12 @@ export async function createMasterPullRequest() {
     };
     if (!masterPullRequest) {
         const template = await readPullRequestTemplate();
+        const body = copyNoteBlocksFromDevPullRequest(template, devPullRequest.body ?? '', true);
         masterPullRequest = await githubRequest('/pulls', {
             method: 'POST',
             body: JSON.stringify({
                 base: 'master',
-                body: replaceDeploymentBlock(template, deploymentValues),
+                body: replaceDeploymentBlock(body, deploymentValues),
                 draft: true,
                 head: releaseBranch,
                 title: devPullRequest.title,
@@ -251,9 +280,10 @@ export async function createMasterPullRequest() {
         });
         await summary(`Created draft master PR #${masterPullRequest.number} from \`${releaseBranch}\` after dev deployment succeeded.`);
     } else {
+        const body = copyNoteBlocksFromDevPullRequest(masterPullRequest.body ?? '', devPullRequest.body ?? '');
         masterPullRequest = await githubRequest(`/pulls/${masterPullRequest.number}`, {
             method: 'PATCH',
-            body: JSON.stringify({ body: replaceDeploymentBlock(masterPullRequest.body ?? '', deploymentValues) }),
+            body: JSON.stringify({ body: replaceDeploymentBlock(body, deploymentValues) }),
         });
         await summary(`Updated draft master PR #${masterPullRequest.number} with the latest successful dev deployment.`);
     }
@@ -542,6 +572,14 @@ function replaceDelimitedBlock(markdown, start, end, replacement) {
     }
 
     return `${markdown.trimEnd()}\n\n${replacement}`.trimStart();
+}
+
+function isDefaultOperationalBlock(block) {
+    return block
+        .replace(OPERATIONS_START, '')
+        .replace(OPERATIONS_END, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .trim() === '- None.';
 }
 
 function extractDelimitedBlocks(markdown, start, end) {
