@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Deployer;
 
-use InvalidArgumentException;
-
 require 'recipe/laravel.php';
 
 // Config
@@ -22,22 +20,13 @@ set('writable_recursive', true);
 
 set('composer_options', '--verbose --prefer-dist --no-progress --no-interaction --no-dev --optimize-autoloader');
 
-$requestedStagingBranch = getenv('STAGING_BRANCH');
-$stagingBranch = $requestedStagingBranch === false || $requestedStagingBranch === ''
-    ? 'dev'
-    : $requestedStagingBranch;
-
-if ($stagingBranch !== 'dev' && preg_match('/\Arelease\/[A-Za-z0-9][A-Za-z0-9._-]*\z/', $stagingBranch) !== 1) {
-    throw new InvalidArgumentException('Staging deployments must use dev or a single-segment release/* branch.');
-}
-
 // Hosts
 host('dev')
     ->setHostname(getenv('DEPLOY_HOST'))
     ->setLabels([
         'env' => 'dev',
     ])
-    ->set('branch', $stagingBranch)
+    ->set('branch', 'dev')
     ->set('remote_user', getenv('DEPLOY_USER'))
     ->set('deploy_path', '/var/www/html/eac-test');
 

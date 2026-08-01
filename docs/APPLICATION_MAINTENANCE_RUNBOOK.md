@@ -1,18 +1,18 @@
 # EAC Application Maintenance and Debugging Runbook
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-31
 Application: Laravel 13 / Filament 5
 Host stack: Ubuntu, Apache, PHP 8.4, local MySQL, Supervisor, cron, and Deployer
 
 ## Purpose
 
-Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. This runbook is the day-to-day companion to `PRODUCTION_ACTIVATION_RUNBOOK.md`. It covers routine checks, incident triage, safe recovery, and debugging for both deployed environments. The standard development, staging, production, tagging, and release-note process is documented in `RELEASE_WORKFLOW.md`.
+Start with the [Operations Cheat Sheet](OPERATIONS_CHEAT_SHEET.md) for common commands, deployment-secret definitions, and credential rotation. This runbook is the day-to-day companion to `PRODUCTION_ACTIVATION_RUNBOOK.md`. It covers routine checks, incident triage, safe recovery, and debugging for both deployed environments. The standard development, dev, production, tagging, and release-note process is documented in `RELEASE_WORKFLOW.md`.
 
 Use this guide to gather evidence before changing state. Preserve timestamps, error messages, request or payment identifiers, the active release number, and relevant log excerpts in incident notes.
 
 ## Environment inventory
 
-| Concern | Production | Staging |
+| Concern | Production | Dev |
 | --- | --- | --- |
 | Branch | `master` | `dev` |
 | Deployment root | `/var/www/html/eac` | `/var/www/html/eac-test` |
@@ -22,7 +22,8 @@ Use this guide to gather evidence before changing state. Preserve timestamps, er
 | Supervisor program | `eac-laravel-worker` | `eac-test-laravel-worker` |
 | Scheduler owner | `www-data` personal crontab | `www-data` personal crontab |
 | Database | Local MySQL | Local MySQL |
-| Error reporting | Sentry, environment `production` | Sentry, staging environment/project |
+| Error reporting | Sentry, environment `production` | Sentry, dev environment/project |
+| Updates source | Read-only `kyles71/eac` GitHub API token | Read-only `kyles71/eac` GitHub API token |
 
 Confirm hostnames from each environment's `APP_URL`; do not infer them from memory during an incident.
 
@@ -37,7 +38,7 @@ Confirm hostnames from each environment's `APP_URL`; do not infer them from memo
 
 2. Use `deployer` for deployments and release-tree management. Use `kyle` for SSH administration. Do not broaden `kyle`'s application ACL merely to avoid `sudo -u www-data`.
 3. Do not run bare `sudo php artisan ...`. Root-created log, cache, session, and temporary files can break later web, queue, and scheduler processes.
-4. Start with production read-only checks. Reproduce in staging when possible before applying a production fix.
+4. Start with production read-only checks. Reproduce in dev when possible before applying a production fix.
 5. Never display, copy into tickets, or log `.env`, Stripe keys, webhook secrets, database passwords, backup passwords, or object-storage credentials.
 6. Before a state-changing command, confirm all three of these:
    - the environment and active release;
@@ -81,7 +82,7 @@ sudo -u www-data /usr/bin/php8.4 artisan queue:failed
 sudo -u www-data /usr/bin/php8.4 artisan schedule:list
 ```
 
-Repeat against `/var/www/html/eac-test/current` when staging is also affected. `schedule:list` uses scheduler mutex infrastructure and may fail when the database-backed cache is unavailable; treat that as database evidence rather than immediately clearing locks.
+Repeat against `/var/www/html/eac-test/current` when dev is also affected. `schedule:list` uses scheduler mutex infrastructure and may fail when the database-backed cache is unavailable; treat that as database evidence rather than immediately clearing locks.
 
 ### Check health from both sides of the host
 
@@ -91,7 +92,7 @@ From the server, use the canonical URLs stored in `APP_URL`:
 cd /var/www/html/eac/current
 sudo -u www-data /usr/bin/php8.4 artisan config:show app.url
 curl --fail --silent --show-error --head https://<production-host>/up
-curl --fail --silent --show-error --head https://<staging-host>/up
+curl --fail --silent --show-error --head https://<dev-host>/up
 ```
 
 Also test from another network. A local success with an external failure points toward DNS, TLS, firewall, proxy, or load-balancer behavior rather than Laravel itself.
@@ -164,7 +165,7 @@ cd /var/www/html/eac-test/current
 sudo -u www-data /usr/bin/php8.4 artisan sentry:test
 ```
 
-Test staging first. A test event changes external monitoring state and may trigger alerts.
+Test dev first. A test event changes external monitoring state and may trigger alerts.
 
 ## 3. Apache, PHP-FPM, and HTTP failures
 
@@ -242,7 +243,7 @@ readlink -f /var/www/html/eac/current/.env
 readlink -f /var/www/html/eac/current/storage
 ```
 
-Expected production links point into `/var/www/html/eac/shared`. Repeat with `eac-test` for staging.
+Expected production links point into `/var/www/html/eac/shared`. Repeat with `eac-test` for dev.
 
 ### Configuration changes
 
@@ -356,7 +357,7 @@ sudo -u www-data /usr/bin/php8.4 artisan queue:failed
 sudo -u www-data /usr/bin/php8.4 artisan queue:monitor database:default --max=100 --json
 ```
 
-Repeat in staging when appropriate. A growing backlog with a running worker often means a repeatedly failing or long-running job; a growing backlog with no running worker indicates Supervisor or worker startup failure.
+Repeat in dev when appropriate. A growing backlog with a running worker often means a repeatedly failing or long-running job; a growing backlog with no running worker indicates Supervisor or worker startup failure.
 
 ### Safe worker recovery
 
@@ -376,7 +377,7 @@ Restart the Supervisor group only when graceful restart is insufficient:
 sudo supervisorctl restart 'eac-laravel-worker:*'
 ```
 
-For staging, substitute `eac-test-laravel-worker:*`.
+For dev, substitute `eac-test-laravel-worker:*`.
 
 ### Failed jobs
 
@@ -449,7 +450,7 @@ Cron will continue invoking Laravel, but due tasks will be skipped using the pro
 sudo -u www-data /usr/bin/php8.4 artisan schedule:resume
 ```
 
-Record every pause so scheduling cannot be forgotten after maintenance. Production and staging have separate application caches and must be paused or resumed from their respective `current` directories.
+Record every pause so scheduling cannot be forgotten after maintenance. Production and dev have separate application caches and must be paused or resumed from their respective `current` directories.
 
 ## 8. Database troubleshooting
 
@@ -502,7 +503,7 @@ sudo -u www-data /usr/bin/php8.4 artisan backup:database -vvv
 
 `backup:database` creates and uploads a new encrypted backup. Confirm the resulting object, timestamp, size, and health rather than relying only on exit code.
 
-Do not run `backup:clean` merely to test connectivity. It deletes backups according to retention. Manual staging backups must use a distinct `BACKUP_NAME` and reviewed bucket/prefix so they cannot mix with production.
+Do not run `backup:clean` merely to test connectivity. It deletes backups according to retention. Manual dev backups must use a distinct `BACKUP_NAME` and reviewed bucket/prefix so they cannot mix with production.
 
 ### Backup failure checklist
 
@@ -546,17 +547,18 @@ Do not perform an emergency production restore without a second review of the ex
 Normal deployments run through GitHub Actions and Deployer:
 
 - `master` deploys production.
-- `dev` deploys staging.
-- A single-segment `release/*` branch assembled from selected master-based feature branches is the standard production candidate and temporarily deploys to staging.
+- `dev` deploys dev.
+- Feature branches are created from `master`, merge into `dev` for QA, and reach production through their own pull requests into `master`.
+- Several feature branches may be present on dev while remaining independently releasable.
 - A direct `dev` to `master` batch release is an exception requiring approval of every included change.
-- The manually triggered **Deploy dev branch** workflow restores `dev` to staging after release-candidate testing.
+- The manually triggered **Deploy dev branch** workflow redeploys the current `dev` branch.
 - Active deployments are never automatically canceled; a newer run waits, and GitHub may replace an older pending run with the newest pending deployment.
 - After a successful production deployment, GitHub Actions creates the next `v<generation>.<YYMMDD>.<daily-sequence>` tag and a draft GitHub Release; the initial release is `v1.260720.1`.
 - `current` is an atomic symlink to a numbered release.
 - `.env` and `storage` are shared between releases.
 - Deployer retains five releases.
 
-Because `dev` and release candidates share the staging deployment path, the most recent staging deployment replaces the prior one. Confirm the expected branch and commit before interpreting staging results.
+The dev server always deploys the `dev` branch. Confirm the latest successful dev deployment and commit before interpreting QA results; failed attempts do not replace the prior successful state shown on the Updates page.
 
 ### Failed deployment
 
@@ -572,7 +574,7 @@ If a stale deployment lock remains after proving no deployment process is active
 vendor/bin/dep deploy:unlock env=production
 ```
 
-Use `env=dev` for staging. This command must run from an authorized environment with the required `DEPLOY_HOST`, `DEPLOY_USER`, and SSH key; do not place those secrets on the command line.
+Use `env=dev` for dev. This command must run from an authorized environment with the required `DEPLOY_HOST`, `DEPLOY_USER`, and SSH key; do not place those secrets on the command line.
 
 ### Code rollback
 
@@ -637,7 +639,7 @@ Separate these capabilities when diagnosing credentials:
 - backup list/read/upload;
 - backup deletion for cleanup.
 
-A successful upload does not prove list or delete permission. Test the smallest operation related to the failure and verify the correct production or staging bucket before changing credentials.
+A successful upload does not prove list or delete permission. Test the smallest operation related to the failure and verify the correct production or dev bucket before changing credentials.
 
 ### Email and Textmagic
 
@@ -667,7 +669,7 @@ Keep test and live keys separate. Never print keys, put them in analytics, or em
 
 ### Sentry
 
-Sentry remains the canonical error and performance-debugging system. Keep staging and production distinguishable, set release identifiers, control trace sampling, configure actionable alerts, and filter noise rather than ignoring the issue stream.
+Sentry remains the canonical error and performance-debugging system. Keep dev and production distinguishable, set release identifiers, control trace sampling, configure actionable alerts, and filter noise rather than ignoring the issue stream.
 
 Sentry confirms that Laravel reported an exception; it does not by itself prove Apache availability, scheduler freshness, queue freshness, database health, or backup recoverability.
 
@@ -680,7 +682,7 @@ Sentry confirms that Laravel reported an exception; it does not by itself prove 
 3. Check Apache and FPM logs.
 4. Run `artisan about` as `www-data`.
 5. Verify MySQL, storage write access, and disk space.
-6. Reproduce in staging when possible.
+6. Reproduce in dev when possible.
 7. Roll back only after checking migration compatibility.
 
 ### HTTP 502/503
@@ -743,7 +745,7 @@ Sentry confirms that Laravel reported an exception; it does not by itself prove 
 
 ### Monthly
 
-- Review Ubuntu, Apache, PHP, MySQL, Composer, npm, and application security updates in staging first.
+- Review Ubuntu, Apache, PHP, MySQL, Composer, npm, and application security updates in dev first.
 - Review Apache, Laravel, worker, and journal log growth/retention.
 - Review Sentry volume, sampling, and alert quality.
 - Review Stripe Dashboard users, authentication strength, keys, webhook health, and unrecognized activity.
@@ -753,7 +755,7 @@ Sentry confirms that Laravel reported an exception; it does not by itself prove 
 ### Quarterly
 
 - Restore a production backup into an isolated scratch database and record results.
-- Exercise a staging deployment rollback.
+- Exercise a dev deployment rollback.
 - Review administrator, SSH, GitHub, Sentry, Stripe, Textmagic, IONOS, and database access.
 - Rotate credentials whose policy or exposure requires rotation; do not rotate `APP_KEY` routinely.
 - Review this runbook against the actual server configuration.
@@ -764,7 +766,7 @@ Prioritize operational visibility before adding product analytics.
 
 ### Highest priority
 
-1. Add an external uptime check for production `/up`, the public landing/login flow, and optionally staging. Alert through a channel that is noticed when no one is watching Sentry.
+1. Add an external uptime check for production `/up`, the public landing/login flow, and optionally dev. Alert through a channel that is noticed when no one is watching Sentry.
 2. Add scheduler heartbeat monitoring. Sentry Crons can provide missed/failed check-in monitoring, or a dedicated heartbeat service can be used.
 3. Add queue backlog and worker-presence alerts. `queue:monitor` can detect queue growth, but worker liveness also needs monitoring through Supervisor/system metrics or a heartbeat.
 4. Add host monitoring for disk, inodes, memory, load, Apache, PHP-FPM when used, and MySQL.
@@ -791,13 +793,13 @@ PostHog is worthwhile if there are defined product questions such as registratio
 Recommended rollout:
 
 1. Keep Sentry as the only error/performance tracker.
-2. Start with a separate PostHog staging project and a small allowlist of deliberately named product events.
+2. Start with a separate PostHog dev project and a small allowlist of deliberately named product events.
 3. Use stable pseudonymous user IDs; do not send names, email addresses, student details, medical/waiver answers, signatures, payment data, free text, or uploaded-file metadata.
-4. Use separate staging and production projects/tokens and disable capture in local/tests.
+4. Use separate dev and production projects/tokens and disable capture in local/tests.
 5. Review privacy disclosures, retention, IP capture, cookie/consent requirements, and data-region needs before production.
 6. Leave session replay disabled initially.
 
-This portal contains information about minors, medical waivers, payments, and private documents. If session replay is later justified, treat it as a separate privacy-reviewed implementation: mask all inputs and all text by default, block sensitive components/pages, redact URLs and query strings, disable sensitive network payload capture, exclude payment/authentication screens, and verify the result manually in staging. Use either PostHog or Sentry replay for a defined need rather than deploying overlapping replay systems by default.
+This portal contains information about minors, medical waivers, payments, and private documents. If session replay is later justified, treat it as a separate privacy-reviewed implementation: mask all inputs and all text by default, block sensitive components/pages, redact URLs and query strings, disable sensitive network payload capture, exclude payment/authentication screens, and verify the result manually in dev. Use either PostHog or Sentry replay for a defined need rather than deploying overlapping replay systems by default.
 
 ## References
 
