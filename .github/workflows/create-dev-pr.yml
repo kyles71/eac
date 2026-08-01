@@ -1,0 +1,59 @@
+name: Create dev PR
+
+on:
+  push:
+    branches:
+      - 'fix/**'
+      - 'feature/**'
+
+concurrency:
+  group: create-dev-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  create-dev-pr:
+    name: Create PR targeting dev
+    if: github.event.deleted == false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out trusted PR template
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Create PR when one does not exist
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          existing_pr_url="$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --base dev \
+            --head "$BRANCH_NAME" \
+            --state open \
+            --json url \
+            --jq '.[0].url // ""')"
+
+          if [[ -n "$existing_pr_url" ]]; then
+            echo "PR already exists: $existing_pr_url"
+            exit 0
+          fi
+
+          pr_title="${HEAD_COMMIT_MESSAGE%%$'\n'*}"
+
+          if [[ -z "$pr_title" ]]; then
+            pr_title="Merge $BRANCH_NAME into dev"
+          fi
+
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base dev \
+            --head "$BRANCH_NAME" \
+            --title "$pr_title" \
+            --template .github/pull_request_template.md
