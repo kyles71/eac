@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -39,6 +40,12 @@ const operationsBlock = [
     '- Run the focused account-management smoke tests.',
     OPERATIONS_END,
 ].join('\n');
+
+test('grants write access needed to update pull request labels', () => {
+    const workflow = readFileSync(new URL('../workflows/update-notes.yml', import.meta.url), 'utf8');
+
+    assert.match(workflow, /^\s{2}pull-requests: write$/m);
+});
 
 test('accepts the required manual note format and rejects malformed notes', () => {
     assert.equal(isValidUserBlock(userBlock), true);
