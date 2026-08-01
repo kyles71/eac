@@ -10,6 +10,7 @@ use App\Models\CalendarAudience;
 use App\Models\Course;
 use App\Models\Event;
 use App\Models\EventAttendee;
+use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
 use Closure;
@@ -22,6 +23,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 final class PeopleAndGroupsPicker
 {
@@ -41,7 +43,17 @@ final class PeopleAndGroupsPicker
             },
             saveRelationships: fn (Event $record, ?array $state) => self::saveEventInvitations($record, $state),
         )
-            ->visible(fn (Get $get): bool => $courseId === null && blank($get('course_id')));
+            ->visible(function (Get $get, ?Event $record) use ($courseId): bool {
+                $user = auth()->user();
+                $canViewPrivateContent = $user instanceof User
+                    && ($record instanceof Event
+                        ? $user->can('view', $record)
+                        : $user->can('Create:Event'));
+
+                return $canViewPrivateContent
+                    && $courseId === null
+                    && blank($get('course_id'));
+            });
     }
 
     public static function calendarAudiences(): Section
@@ -60,6 +72,7 @@ final class PeopleAndGroupsPicker
                     $record->audiences()
                         ->with('audience')
                         ->get()
+                        ->filter(fn (CalendarAudience $audience): bool => self::canSelectModel($audience->audience))
                         ->map(fn (CalendarAudience $audience): array => [
                             'audience_type' => $audience->audience_type,
                             'audience_id' => $audience->audience_id,
@@ -82,6 +95,7 @@ final class PeopleAndGroupsPicker
             state: $state ?? [],
             typeKey: 'attendee_type',
             idKey: 'attendee_id',
+            allowedModelClasses: [User::class, Student::class],
         );
     }
 
@@ -91,6 +105,7 @@ final class PeopleAndGroupsPicker
         return $event->attendees()
             ->with('attendee')
             ->get()
+            ->filter(fn (EventAttendee $attendee): bool => self::canSelectModel($attendee->attendee))
             ->map(fn (EventAttendee $attendee): array => [
                 'attendee_type' => $attendee->attendee_type,
                 'attendee_id' => $attendee->attendee_id,
@@ -112,6 +127,7 @@ final class PeopleAndGroupsPicker
             state: $state ?? [],
             typeKey: 'audience_type',
             idKey: 'audience_id',
+            allowedModelClasses: [User::class, Student::class, Course::class],
         );
     }
 
@@ -150,7 +166,7 @@ final class PeopleAndGroupsPicker
                 Select::make($fieldPrefix.'_course')
                     ->label('Add Course Roster')
                     ->loadingMessage('Loading courses...')
-                    ->options(fn (): array => Course::query()
+                    ->options(fn (): array => self::courseQuery()
                         ->orderBy('name')
                         ->pluck('name', 'id')
                         ->all())
@@ -163,7 +179,7 @@ final class PeopleAndGroupsPicker
                             return;
                         }
 
-                        $course = Course::query()
+                        $course = self::courseQuery()
                             ->when($expandCourseRoster, fn (Builder $query): Builder => $query->with('students'))
                             ->find($state);
 
@@ -222,7 +238,7 @@ final class PeopleAndGroupsPicker
         return Select::make($field)
             ->label($label)
             ->loadingMessage('Loading...')
-            ->options(fn (): array => $modelClass::query()
+            ->options(fn (): array => self::modelQuery($modelClass)
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get()
@@ -237,7 +253,7 @@ final class PeopleAndGroupsPicker
                     return;
                 }
 
-                $model = $modelClass::query()->find($state);
+                $model = self::modelQuery($modelClass)->find($state);
 
                 if (! $model instanceof Model) {
                     $set($field, null);
@@ -289,9 +305,16 @@ final class PeopleAndGroupsPicker
      *
      * @param  HasMany<TRelated, TParent>  $query
      * @param  array<int, mixed>  $state
+     * @param  list<class-string<User|Student|Course>>  $allowedModelClasses
      */
-    private static function syncMorphRecords(HasMany $query, array $state, string $typeKey, string $idKey): void
-    {
+    private static function syncMorphRecords(
+        HasMany $query,
+        array $state,
+        string $typeKey,
+        string $idKey,
+        array $allowedModelClasses,
+    ): void {
+        $user = self::authenticatedUser();
         $items = collect($state)
             ->filter(fn (mixed $item): bool => is_array($item) && filled($item[$typeKey] ?? null) && filled($item[$idKey] ?? null))
             ->map(fn (array $item): array => [
@@ -301,27 +324,134 @@ final class PeopleAndGroupsPicker
             ->unique(fn (array $item): string => $item[$typeKey].':'.$item[$idKey])
             ->values();
 
-        if ($items->isEmpty()) {
-            $query->delete();
-
-            return;
+        if ($items->contains(fn (array $item): bool => ! self::canSelectMorphRecord(
+            user: $user,
+            type: $item[$typeKey],
+            id: $item[$idKey],
+            allowedModelClasses: $allowedModelClasses,
+        ))) {
+            throw ValidationException::withMessages([
+                $idKey => 'You may only select people and groups within your access.',
+            ]);
         }
 
-        $query
-            ->whereNot(function (Builder $query) use ($idKey, $items, $typeKey): void {
-                foreach ($items as $item) {
-                    $query->orWhere(function (Builder $query) use ($idKey, $item, $typeKey): void {
-                        $query
-                            ->where($typeKey, $item[$typeKey])
-                            ->where($idKey, $item[$idKey]);
-                    });
-                }
-            })
-            ->delete();
+        foreach ($query->get() as $record) {
+            $recordType = (string) $record->getAttribute($typeKey);
+            $recordId = (int) $record->getAttribute($idKey);
+
+            if (! self::canSelectMorphRecord(
+                user: $user,
+                type: $recordType,
+                id: $recordId,
+                allowedModelClasses: $allowedModelClasses,
+            )) {
+                continue;
+            }
+
+            if (! $items->contains(
+                fn (array $item): bool => $item[$typeKey] === $recordType
+                    && $item[$idKey] === $recordId,
+            )) {
+                $record->delete();
+            }
+        }
 
         foreach ($items as $item) {
             $query->updateOrCreate($item);
         }
+    }
+
+    /** @param class-string<User|Student> $modelClass */
+    private static function modelQuery(string $modelClass): Builder
+    {
+        return match ($modelClass) {
+            User::class => self::userQuery(self::authenticatedUser()),
+            Student::class => self::studentQuery(self::authenticatedUser()),
+        };
+    }
+
+    private static function courseQuery(): Builder
+    {
+        return self::courseQueryFor(self::authenticatedUser());
+    }
+
+    private static function courseQueryFor(User $user): Builder
+    {
+        return Course::applyActiveTeachingAccessConstraint(Course::query(), $user);
+    }
+
+    private static function studentQuery(User $user): Builder
+    {
+        return Student::applyAdminAccessConstraint(Student::query(), $user);
+    }
+
+    private static function userQuery(User $user): Builder
+    {
+        $query = User::query();
+
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($user): void {
+            $query
+                ->whereHas(
+                    'roles',
+                    fn (Builder $query): Builder => $query->where('name', Role::OWNER),
+                )
+                ->orWhereHas(
+                    'students.courses',
+                    fn (Builder $query): Builder => Course::applyActiveTeachingAccessConstraint($query, $user),
+                );
+        });
+    }
+
+    private static function canSelectModel(?Model $model): bool
+    {
+        if (! $model instanceof Model) {
+            return false;
+        }
+
+        $user = self::authenticatedUser();
+
+        return match (true) {
+            $model instanceof Course => self::courseQueryFor($user)->whereKey($model->getKey())->exists(),
+            $model instanceof Student => self::studentQuery($user)->whereKey($model->getKey())->exists(),
+            $model instanceof User => self::userQuery($user)->whereKey($model->getKey())->exists(),
+            default => false,
+        };
+    }
+
+    /**
+     * @param  list<class-string<User|Student|Course>>  $allowedModelClasses
+     */
+    private static function canSelectMorphRecord(
+        User $user,
+        string $type,
+        int $id,
+        array $allowedModelClasses,
+    ): bool {
+        $modelClass = collect($allowedModelClasses)
+            ->first(fn (string $modelClass): bool => (new $modelClass)->getMorphClass() === $type);
+
+        if (! is_string($modelClass)) {
+            return false;
+        }
+
+        return match ($modelClass) {
+            User::class => self::userQuery($user)->whereKey($id)->exists(),
+            Student::class => self::studentQuery($user)->whereKey($id)->exists(),
+            Course::class => self::courseQueryFor($user)->whereKey($id)->exists(),
+        };
+    }
+
+    private static function authenticatedUser(): User
+    {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+
+        return $user;
     }
 
     private static function modelLabel(?Model $model): string

@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Students\Tables;
 
-use App\Filament\Actions\SendEmailAction;
+use App\Filament\Actions\StudentContactActionGroup;
 use App\Models\Student;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 
 final class StudentsTable
@@ -60,9 +61,8 @@ final class StudentsTable
             ])
             ->defaultSort('last_name')
             ->recordActions([
-                SendEmailAction::make()
-                    ->to(fn (Student $record): array => [$record]),
-            ])
+                StudentContactActionGroup::make(fn (Student $record): Student => $record),
+            ], RecordActionsPosition::BeforeCells)
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
