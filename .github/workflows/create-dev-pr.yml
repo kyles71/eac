@@ -56,4 +56,4 @@ jobs:
             --base dev \
             --head "$BRANCH_NAME" \
             --title "$pr_title" \
-            --template .github/pull_request_template.md
+            --body-file .github/pull_request_template.md
