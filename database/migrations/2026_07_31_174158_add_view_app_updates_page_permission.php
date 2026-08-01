@@ -11,7 +11,7 @@ return new class() extends Migration
 {
     public function up(): void
     {
-        $permission = Permission::findOrCreate('View:Updates', 'web');
+        $permission = Permission::findOrCreate('View:AppUpdatesPage', 'web');
 
         Role::findOrCreate(Role::SUPER_ADMIN, 'web')->givePermissionTo($permission);
         Role::findOrCreate('owner', 'web')->givePermissionTo($permission);
@@ -22,7 +22,7 @@ return new class() extends Migration
     public function down(): void
     {
         $permission = Permission::query()
-            ->where('name', 'View:Updates')
+            ->where('name', 'View:AppUpdatesPage')
             ->where('guard_name', 'web')
             ->first();
 

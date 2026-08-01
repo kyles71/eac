@@ -341,7 +341,7 @@ return [
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
         'Send:Email' => 'Send Email',
-        'View:Updates' => 'View Updates',
+        'View:AppUpdatesPage' => 'View App Updates Page',
     ],
 
     /*

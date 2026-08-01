@@ -121,7 +121,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Publish:LegalDocument',
             'Send:Email',
             'View:StaffNote',
-            'View:Updates',
+            'View:AppUpdatesPage',
         )
         ->and($desired)->not->toContain(
             'ViewAny:StudentCommunication',

@@ -297,7 +297,7 @@ GITHUB_UPDATES_CACHE_TTL=300
 GITHUB_UPDATES_RELEASE_LIMIT=20
 ```
 
-Run `php artisan config:clear` after changing these values outside a deployment. Assign `View:Updates` to QA staff who need the admin page; owners and super administrators receive it by default.
+Run `php artisan config:clear` after changing these values outside a deployment. Assign `View:AppUpdatesPage` to QA staff who need the admin page; owners and super administrators receive it by default.
 
 ## Hotfixes
 

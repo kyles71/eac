@@ -66,7 +66,7 @@ beforeEach(function (): void {
 it('shows the admin updates page to permitted users', function (): void {
     $owner = User::factory()->isOwner()->create();
 
-    expect($owner->can('View:Updates'))->toBeTrue();
+    expect($owner->can('View:AppUpdatesPage'))->toBeTrue();
 
     $this->actingAs($owner)
         ->get(Updates::getUrl(panel: 'admin'))
@@ -91,22 +91,22 @@ it('grants the updates permission to super administrators and owners only by def
     $owner = User::factory()->isOwner()->create();
     $teacher = User::factory()->isTeacher()->create();
 
-    expect(Role::findByName(Role::SUPER_ADMIN)->hasPermissionTo('View:Updates'))->toBeTrue()
-        ->and($owner->can('View:Updates'))->toBeTrue()
-        ->and($teacher->can('View:Updates'))->toBeFalse();
+    expect(Role::findByName(Role::SUPER_ADMIN)->hasPermissionTo('View:AppUpdatesPage'))->toBeTrue()
+        ->and($owner->can('View:AppUpdatesPage'))->toBeTrue()
+        ->and($teacher->can('View:AppUpdatesPage'))->toBeFalse();
 });
 
 it('adds and removes the updates permission through its migration', function (): void {
-    $migration = require database_path('migrations/2026_07_31_174158_add_view_updates_permission.php');
+    $migration = require database_path('migrations/2026_07_31_174158_add_view_app_updates_page_permission.php');
 
     $migration->down();
 
-    expect(Permission::query()->where('name', 'View:Updates')->exists())->toBeFalse();
+    expect(Permission::query()->where('name', 'View:AppUpdatesPage')->exists())->toBeFalse();
 
     $migration->up();
 
-    expect(Role::findByName(Role::SUPER_ADMIN)->hasPermissionTo('View:Updates'))->toBeTrue()
-        ->and(Role::findByName('owner')->hasPermissionTo('View:Updates'))->toBeTrue();
+    expect(Role::findByName(Role::SUPER_ADMIN)->hasPermissionTo('View:AppUpdatesPage'))->toBeTrue()
+        ->and(Role::findByName('owner')->hasPermissionTo('View:AppUpdatesPage'))->toBeTrue();
 });
 
 it('does not register the updates page in the user panel', function (): void {
