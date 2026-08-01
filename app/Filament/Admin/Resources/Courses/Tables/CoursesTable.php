@@ -11,6 +11,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Student;
 use Filament\Actions\ActionGroup;
+use App\Services\CourseEmailRecipientsService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -85,28 +86,5 @@ final class CoursesTable
                     DeleteProductableBulkAction::make(),
                 ]),
             ]);
-    }
-
-    /**
-     * @return array<int, Student|string>
-     */
-    private static function emailRecipients(Course $course): array
-    {
-        return Enrollment::query()
-            ->where('course_id', $course->id)
-            ->with(['student', 'user'])
-            ->get()
-            ->flatMap(function (Enrollment $enrollment): array {
-                if ($enrollment->student === null) {
-                    return [$enrollment->user->email];
-                }
-
-                if ($enrollment->student->user_id !== $enrollment->user_id) {
-                    return [$enrollment->student, $enrollment->user->email];
-                }
-
-                return [$enrollment->student];
-            })
-            ->all();
     }
 }
