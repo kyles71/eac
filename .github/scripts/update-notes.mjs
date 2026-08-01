@@ -21,12 +21,53 @@ export function extractOperationalBlocks(markdown) {
 }
 
 export function isValidUserBlock(block) {
-    const pattern = new RegExp(
-        `^${escapeRegExp(USER_START)}\\s*\\n###\\s+[^\\n]+\\n+.+?\\n+####\\s+Highlights\\s*\\n(?:\\s*-\\s+.+\\n?)+\\s*\\n####\\s+Testing focus\\s*\\n(?:\\s*-\\s+.+\\n?)+\\s*${escapeRegExp(USER_END)}$`,
-        's',
-    );
+    const trimmedBlock = block.trim();
 
-    return pattern.test(block.trim());
+    if (!trimmedBlock.startsWith(USER_START) || !trimmedBlock.endsWith(USER_END)) {
+        return false;
+    }
+
+    const lines = trimmedBlock
+        .slice(USER_START.length, -USER_END.length)
+        .trim()
+        .split(/\r?\n/);
+    const titleIndex = lines.findIndex((line) => line.trim() !== '');
+    const highlightsIndexes = headingIndexes(lines, '#### Highlights');
+    const testingFocusIndexes = headingIndexes(lines, '#### Testing focus');
+
+    if (titleIndex === -1
+        || !/^###\s+\S/.test(lines[titleIndex].trim())
+        || highlightsIndexes.length !== 1
+        || testingFocusIndexes.length !== 1) {
+        return false;
+    }
+
+    const highlightsIndex = highlightsIndexes[0];
+    const testingFocusIndex = testingFocusIndexes[0];
+
+    if (titleIndex >= highlightsIndex || highlightsIndex >= testingFocusIndex) {
+        return false;
+    }
+
+    const summaryLines = nonEmptyLines(lines.slice(titleIndex + 1, highlightsIndex));
+    const highlightLines = nonEmptyLines(lines.slice(highlightsIndex + 1, testingFocusIndex));
+    const testingFocusLines = nonEmptyLines(lines.slice(testingFocusIndex + 1));
+
+    return summaryLines.length > 0
+        && isBulletList(highlightLines)
+        && isBulletList(testingFocusLines);
+}
+
+function headingIndexes(lines, heading) {
+    return lines.flatMap((line, index) => line.trim() === heading ? [index] : []);
+}
+
+function nonEmptyLines(lines) {
+    return lines.map((line) => line.trim()).filter(Boolean);
+}
+
+function isBulletList(lines) {
+    return lines.length > 0 && lines.every((line) => /^-\s+\S/.test(line));
 }
 
 export function isValidOperationalBlock(block) {
