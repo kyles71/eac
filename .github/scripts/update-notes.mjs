@@ -129,6 +129,18 @@ export function validatePullRequestData(pullRequest) {
     return 'The update note is valid and approved.';
 }
 
+export function transferableUpdateLabel(pullRequest) {
+    try {
+        validatePullRequestData(pullRequest);
+    } catch {
+        return null;
+    }
+
+    return labelNames(pullRequest).includes('updates-approved')
+        ? 'updates-approved'
+        : 'skip-updates';
+}
+
 export function shouldDeployForPullRequest(eventName, pullRequest) {
     return eventName === 'workflow_dispatch'
         || !pullRequest
@@ -258,6 +270,7 @@ export async function createMasterPullRequest() {
     const owner = repository.split('/')[0];
     const existing = await githubPaginate(`/pulls?state=open&base=master&head=${encodeURIComponent(`${owner}:${releaseBranch}`)}`);
     let masterPullRequest = existing[0] ?? null;
+    let createdMasterPullRequest = false;
     const deploymentValues = {
         devPullRequestNumber: devPullRequest.number,
         deployedSha: releaseSha,
@@ -266,6 +279,7 @@ export async function createMasterPullRequest() {
         runUrl: process.env.DEPLOYMENT_RUN_URL ?? '',
     };
     if (!masterPullRequest) {
+        createdMasterPullRequest = true;
         const template = await readPullRequestTemplate();
         const body = copyNoteBlocksFromDevPullRequest(template, devPullRequest.body ?? '', true);
         masterPullRequest = await githubRequest('/pulls', {
@@ -288,7 +302,20 @@ export async function createMasterPullRequest() {
         await summary(`Updated draft master PR #${masterPullRequest.number} with the latest successful dev deployment.`);
     }
 
-    await removeLabel(masterPullRequest.number, 'updates-approved');
+    if (createdMasterPullRequest) {
+        const updateLabel = transferableUpdateLabel(devPullRequest);
+
+        if (updateLabel) {
+            await addLabel(masterPullRequest.number, updateLabel);
+            await summary(`Carried the reviewed ${updateLabel} decision from dev PR #${devPullRequest.number}.`);
+        } else {
+            await summary(`No update-note decision was carried from dev PR #${devPullRequest.number} because it is missing a valid updates-approved or skip-updates decision.`);
+        }
+    } else {
+        await removeLabel(masterPullRequest.number, 'updates-approved');
+    }
+
+    masterPullRequest = await githubRequest(`/pulls/${masterPullRequest.number}`);
     await publishValidationStatus(masterPullRequest, false);
 }
 
@@ -351,11 +378,11 @@ export async function handlePullRequestEvent() {
     const pullRequestNumber = requiredEnvironment('PULL_REQUEST_NUMBER');
     let pullRequest = await githubRequest(`/pulls/${pullRequestNumber}`);
 
-    if (pullRequest.base?.ref !== 'master') {
+    if (!['dev', 'master'].includes(pullRequest.base?.ref)) {
         return;
     }
 
-    if (action === 'synchronize') {
+    if (['edited', 'synchronize'].includes(action)) {
         await removeLabel(pullRequestNumber, 'updates-approved');
         pullRequest = await githubRequest(`/pulls/${pullRequestNumber}`);
     }
@@ -531,6 +558,13 @@ async function removeLabel(pullRequestNumber, label) {
             throw error;
         }
     }
+}
+
+async function addLabel(pullRequestNumber, label) {
+    await githubRequest(`/issues/${pullRequestNumber}/labels`, {
+        method: 'POST',
+        body: JSON.stringify({ labels: [label] }),
+    });
 }
 
 async function readPullRequestTemplate() {
