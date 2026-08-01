@@ -56,6 +56,27 @@ test('accepts the required manual note format and rejects malformed notes', () =
     assert.equal(isValidOperationalBlock(`${OPERATIONS_START}\n<!-- placeholder -->\n${OPERATIONS_END}`), false);
 });
 
+test('validates detailed update notes without pathological backtracking', () => {
+    const detailedBullet = `- ${'Confirm this detailed behavior during acceptance testing. '.repeat(8)}`;
+    const detailedBlock = [
+        USER_START,
+        '### Detailed administration updates',
+        '',
+        'Administrators can now review a comprehensive set of application updates.',
+        '',
+        '#### Highlights',
+        ...Array(13).fill(detailedBullet),
+        '',
+        '#### Testing focus',
+        ...Array(13).fill(detailedBullet),
+        USER_END,
+    ].join('\n');
+    const startedAt = Date.now();
+
+    assert.equal(isValidUserBlock(detailedBlock), true);
+    assert.ok(Date.now() - startedAt < 1_000);
+});
+
 test('builds release notes from approved pull requests only', () => {
     const releaseNotes = buildReleaseNotes([
         { labels: [{ name: 'updates-approved' }], body: `${userBlock}\n\n${operationsBlock}` },
