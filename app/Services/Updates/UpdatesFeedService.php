@@ -15,8 +15,8 @@ use Throwable;
 final readonly class UpdatesFeedService
 {
     public function __construct(
-        private GitHubUpdatesClient $client,
-        private UpdateNoteParser $parser,
+        private GitHubUpdatesClientService $client,
+        private UpdateNoteParserService $parser,
     ) {}
 
     public function get(): UpdatesFeed
@@ -84,7 +84,7 @@ final readonly class UpdatesFeedService
                     continue;
                 }
 
-                $testingUpdates[] = new TestingUpdate($branch, $note, $devDeployedAt);
+                $testingUpdates[] = new TestingUpdate($branch, $note);
             }
         }
 

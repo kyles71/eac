@@ -6,15 +6,11 @@ namespace App\Services\Updates;
 
 use App\Data\Updates\UpdateNote;
 
-final class UpdateNoteParser
+final class UpdateNoteParserService
 {
     public const string USER_START = '<!-- eac-update-note:start -->';
 
     public const string USER_END = '<!-- eac-update-note:end -->';
-
-    public const string OPERATIONS_START = '<!-- eac-operational-notes:start -->';
-
-    public const string OPERATIONS_END = '<!-- eac-operational-notes:end -->';
 
     public function first(string $markdown): ?UpdateNote
     {

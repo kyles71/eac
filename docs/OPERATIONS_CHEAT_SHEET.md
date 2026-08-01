@@ -240,8 +240,8 @@ git rev-parse origin/master
 
 More detail:
 
-- [Release workflow — Selective release](RELEASE_WORKFLOW.md#standard-selective-production-release-workflow)
-- [Release workflow — Production publication](RELEASE_WORKFLOW.md#production-deployment-and-publication)
+- [Release workflow — Feature lifecycle](RELEASE_WORKFLOW.md#standard-feature-lifecycle)
+- [Release workflow — Production deployment](RELEASE_WORKFLOW.md#7-production-deployment-and-release)
 
 ## Common server commands
 

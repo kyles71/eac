@@ -23,23 +23,27 @@ Each feature or fix remains independently releasable even when dev contains seve
 ```text
 feature branch created from master
         |
-        +--> merge-commit PR into dev --> automatic dev deployment --> QA
-        |
-        +--> early draft PR into master --> update note generated and reviewed
-                                                        |
-                         QA fixes stay on feature branch |
-                         and are merged into dev again   |
-                                                        v
-                                      merge feature PR into master
-                                                        |
-                                                        v
-                                      automatic production deployment
-                                                        |
-                                                        v
-                                      tag and draft GitHub Release
-                                                        |
-                                                        v
-                                      smoke test and publish Release
+        v
+merge-commit PR into dev --> automatic dev deployment
+                                      |
+                                      v
+                         draft PR into master created
+                         + update-note template added
+                                      |
+                         QA fixes stay on feature branch
+                         and are merged into dev again
+                                      |
+                                      v
+                         approve note and merge to master
+                                      |
+                                      v
+                         automatic production deployment
+                                      |
+                                      v
+                         tag and draft GitHub Release
+                                      |
+                                      v
+                         smoke test and publish Release
 ```
 
 Repository behavior:
@@ -91,18 +95,22 @@ Keep each branch focused on one production outcome. Do not branch from `dev` bec
 - Run `npm run build` for frontend changes.
 - Review migrations, queues, schedules, external services, and rollback considerations.
 
-### 3. Open both pull requests when dev QA begins
+### 3. Open the dev pull request
 
-Open:
+Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Merge the dev PR with a merge commit and wait for the automatic dev deployment.
 
-1. A normal PR from the feature branch into `dev`.
-2. A draft PR from the same feature branch into `master`.
+After that deployment succeeds, the trusted **Create master draft after dev deployment** workflow:
 
-The early master PR is the canonical production and update-note record. Do not merge it yet.
+1. Finds the dev PR that produced the deployed merge commit.
+2. Verifies the latest clean feature head is contained in that deployment.
+3. Rejects a branch that appears to contain a merge from `dev` or another unreleased branch.
+4. Creates a draft PR from the same feature branch into `master`, or updates its deployment metadata when it already exists.
+5. Preserves the manually written update note when a later dev deployment refreshes the metadata.
+6. Publishes a failing `updates-note` status until a person completes and approves or explicitly skips the note.
 
-The Update Notes workflow generates a draft user-facing note when the master PR opens. It may use the PR description, commit messages, changed filenames, and a bounded diff. The model does not decide whether code is deployed, tested, approved, or released.
+The master PR is the canonical production and update-note record. Write the note manually from the tested behavior and keep it understandable to non-technical staff. Automation validates the format and approval state but does not write or approve the note.
 
-Review the generated sections in the PR body:
+Complete and review these sections in the PR body:
 
 - User-facing title and summary.
 - Observable highlights.
@@ -114,11 +122,11 @@ Apply exactly one label before production merge:
 - `updates-approved` after the note has been reviewed.
 - `skip-updates` for changes that should not appear on the Updates page.
 
-Use `generate-update-note` to replace the generated sections after substantial QA changes. Pushing another commit automatically removes `updates-approved` so the note and code must be reviewed together again.
+A successful follow-up dev deployment removes `updates-approved`, updates the deployment metadata, and preserves the manually written note. Edit the note if the tested behavior changed, then review and reapply `updates-approved`.
 
-### 4. Merge to dev and QA
+### 4. QA on dev
 
-Merge the dev PR with a merge commit. The dev workflow deploys the combined `dev` branch, so testers may continue evaluating other features while this one is under review.
+The dev workflow deploys the combined `dev` branch, so testers may continue evaluating other features while this one is under review.
 
 Record acceptance results in the master PR or its linked dev PR. Confirm:
 
@@ -138,7 +146,8 @@ Keep fixes on the original feature branch:
 2. Open another PR from that branch into `dev` for the new commits.
 3. Merge it with a merge commit and wait for the dev deployment.
 4. Repeat the affected QA checks.
-5. Regenerate or edit the master PR note and reapply `updates-approved`.
+5. Confirm the automation updated the existing master PR deployment record and removed `updates-approved`.
+6. Edit the master PR note if needed and reapply `updates-approved`.
 
 The open master PR updates automatically as the feature branch changes. Do not create a replacement master PR.
 
@@ -253,13 +262,16 @@ For `production`:
 
 Create these labels exactly:
 
-- `generate-update-note`
 - `updates-approved`
 - `skip-updates`
 
-Enable GitHub Models for the repository. The workflow defaults to `openai/gpt-4.1`; set the repository variable `UPDATES_AI_MODEL` to change it without editing the workflow. The workflow uses only the built-in `GITHUB_TOKEN` and declares `models: read`.
+In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The automation creates draft PRs but never approves its own update notes.
 
-For the bootstrap PR that introduces this workflow, manually replace the template placeholders with reviewed note blocks if generation cannot run before the workflow reaches `master`. Add `updates-note` to the master ruleset only after that stable check name has completed at least once.
+GitHub may place CI runs triggered by a `GITHUB_TOKEN`-created PR into an approval-required state. If the master draft shows an **Approve workflows** banner, a repository user with write access must approve those runs. The automation publishes the `updates-note` commit status directly, so its initial failing state does not depend on that generated PR event running.
+
+The write-capable `workflow_run` and `pull_request_target` jobs check out automation from the default branch. Keep them limited to trusted scripts and do not change them to execute code from a pull-request head.
+
+For the bootstrap PR that introduces this workflow, merge and deploy it to dev, then manually open its draft PR into `master` because the `workflow_run` workflow does not become active until it exists on the default branch. Manually replace the template placeholders with reviewed note blocks if necessary. Add `updates-note` to the master ruleset only after that stable commit status has completed at least once.
 
 For the private GitHub feed, create a fine-grained token restricted to `kyles71/eac` with read-only access to Contents, Pull Requests, and Deployments. Add these values to the shared `.env` on both servers:
 
@@ -277,14 +289,29 @@ Run `php artisan config:clear` after changing these values outside a deployment.
 Use the same selective path for a hotfix:
 
 1. Branch from current `master`.
-2. Open the dev and draft master PRs.
-3. Deploy and test the hotfix on dev.
+2. Open and merge the PR into `dev`.
+3. Wait for the successful dev deployment and automatically created draft master PR.
 4. Approve its update note or explicitly skip it.
 5. Merge the hotfix PR into `master`.
 6. Smoke-test production and publish the corrective Release.
 7. Merge current `master` into any waiting feature branches, redeploy them to dev, and retest affected behavior.
 
 If an emergency makes dev testing impossible, record the reason and risk in the master PR. Do not edit production files directly or move an existing tag.
+
+## Dev-only conflict resolution
+
+Do not use GitHub's web conflict editor or an **Update branch** action on a feature-to-dev PR when either operation would merge `dev` into the feature branch. That would place unrelated dev-only commits in the branch intended for `master`.
+
+When a clean feature branch conflicts with other unreleased work already on `dev`:
+
+1. Keep the original feature branch unchanged.
+2. Create a temporary integration branch from current `dev`.
+3. Merge the clean feature branch into the temporary branch and resolve the conflict there.
+4. Open the temporary branch's PR into `dev`.
+5. Set `<!-- eac-release-branch: feature/example -->` in that dev PR body to identify the clean branch that should target `master`.
+6. Merge and deploy the integration PR.
+
+The automation verifies that the marked clean branch head is contained in the successful dev deployment. It creates the master PR from that clean branch, never from the temporary integration branch. Runtime dependencies between independently releasable changes—such as migrations, configuration, shared test data, or coupled behavior—still require explicit QA and production planning even when Git history is clean.
 
 ## Rollback
 

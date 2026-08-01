@@ -8,14 +8,18 @@ Describe the problem and the outcome of this change.
 - [ ] Latest feature branch commit is deployed to dev.
 - [ ] Acceptance testing is complete.
 
+<!-- For a temporary integration PR only, put the clean master-based branch after the colon below. Leave it empty for an ordinary feature-to-dev PR. -->
+<!-- eac-release-branch: -->
+
 ## User-facing update
 
 <!-- eac-update-note:start -->
-<!-- The update-note workflow replaces this placeholder. You may edit the generated Markdown before applying updates-approved. -->
+<!-- Write a friendly title, short summary, Highlights list, and Testing focus list here. Follow the format in docs/RELEASE_WORKFLOW.md, then apply updates-approved after review. -->
 <!-- eac-update-note:end -->
 
 ## Operational notes
 
-<!-- eac-operational-notes:start -->
 <!-- Record deployment, migration, configuration, monitoring, or smoke-test considerations here. -->
+<!-- eac-operational-notes:start -->
+- None.
 <!-- eac-operational-notes:end -->

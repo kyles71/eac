@@ -8,7 +8,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
-final class GitHubUpdatesClient
+final class GitHubUpdatesClientService
 {
     /** @return list<array<string, mixed>> */
     public function openMasterPullRequests(): array
@@ -101,7 +101,7 @@ final class GitHubUpdatesClient
      * @param  array<string, scalar>  $query
      * @return list<array<string, mixed>>
      */
-    private function paginate(string $path, array $query, ?int $maxItems = null): array
+    private function paginate(string $path, array $query): array
     {
         $items = [];
 
@@ -119,10 +119,6 @@ final class GitHubUpdatesClient
             foreach ($payload as $item) {
                 if (is_array($item)) {
                     $items[] = $item;
-                }
-
-                if ($maxItems !== null && count($items) >= $maxItems) {
-                    return $items;
                 }
             }
 

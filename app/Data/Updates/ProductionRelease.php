@@ -18,13 +18,12 @@ final readonly class ProductionRelease
     ) {}
 
     /**
-     * @return array{version: string, published_at: string, published_at_display: string, notes: list<array{title: string, summary: string, highlights: list<string>, testing_focus: list<string>}>}
+     * @return array{version: string, published_at_display: string, notes: list<array{title: string, summary: string, highlights: list<string>, testing_focus: list<string>}>}
      */
     public function toArray(): array
     {
         return [
             'version' => $this->version,
-            'published_at' => $this->publishedAt->toIso8601String(),
             'published_at_display' => $this->publishedAt
                 ->setTimezone((string) config('app.display_timezone', config('app.timezone')))
                 ->format('M j, Y g:i A T'),

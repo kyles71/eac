@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Services\Updates\GitHubUpdatesClient;
+use App\Services\Updates\GitHubUpdatesClientService;
 use App\Services\Updates\UpdatesFeedService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Request;
@@ -185,7 +185,7 @@ it('paginates pull requests and applies the release limit after marker validatio
         return Http::response([], 404);
     });
 
-    $client = app(GitHubUpdatesClient::class);
+    $client = app(GitHubUpdatesClientService::class);
 
     expect($client->openMasterPullRequests())->toHaveCount(101);
 
