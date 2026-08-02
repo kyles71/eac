@@ -116,7 +116,7 @@ Keep each branch focused on one production outcome. Do not branch from `dev` bec
 
 ### 3. Open the dev pull request
 
-Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Complete the user-facing and operational note blocks in the dev PR, review them, and apply exactly one of `updates-approved` or `skip-updates`. The trusted `updates-note` check validates the decision on dev PRs and removes `updates-approved` if the PR body or feature commits change. Merge with a merge commit only after the decision is valid, then wait for the automatic dev deployment.
+Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Complete the user-facing and operational note blocks in the dev PR, review them, and apply exactly one of `updates-approved` or `skip-updates`. The trusted `updates-note` check revalidates description edits without removing the decision label, but removes `updates-approved` when feature commits change. Merge with a merge commit only after the decision is valid, then wait for the automatic dev deployment.
 
 If GitHub reports conflicts because another feature is already on `dev`, do not update the clean feature branch with `dev`. Follow [Feature B conflicts with Feature A already on dev](#feature-b-conflicts-with-feature-a-already-on-dev) and resolve a local merge directly on `dev`.
 
