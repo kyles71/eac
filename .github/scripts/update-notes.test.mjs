@@ -267,7 +267,7 @@ test('updates deployment metadata without replacing the rest of the pull request
     assert.doesNotMatch(updated, /Dev PR: #10/);
 });
 
-test('removes approval and publishes a failing status after note or commit changes', async () => {
+test('keeps approval after body edits and removes it after new commits', async () => {
     const originalFetch = globalThis.fetch;
     const originalEnvironment = {
         EVENT_ACTION: process.env.EVENT_ACTION,
@@ -313,11 +313,19 @@ test('removes approval and publishes a failing status after note or commit chang
     };
 
     try {
+        await handlePullRequestEvent();
+        assert.equal(requests.filter((request) => request.method === 'DELETE').length, 0);
+        assert.equal(
+            requests.filter((request) => request.path === '/statuses/release-sha' && request.body?.state === 'success').length,
+            1,
+        );
+
+        process.env.EVENT_ACTION = 'synchronize';
         await assert.rejects(handlePullRequestEvent(), /exactly one/);
         assert.equal(requests.filter((request) => request.method === 'DELETE').length, 1);
         assert.equal(
-            requests.find((request) => request.path === '/statuses/release-sha')?.body?.state,
-            'failure',
+            requests.filter((request) => request.path === '/statuses/release-sha' && request.body?.state === 'failure').length,
+            1,
         );
     } finally {
         globalThis.fetch = originalFetch;
