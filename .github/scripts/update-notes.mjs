@@ -382,7 +382,7 @@ export async function handlePullRequestEvent() {
         return;
     }
 
-    if (['edited', 'synchronize'].includes(action)) {
+    if (action === 'synchronize') {
         await removeLabel(pullRequestNumber, 'updates-approved');
         pullRequest = await githubRequest(`/pulls/${pullRequestNumber}`);
     }

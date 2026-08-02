@@ -6,6 +6,8 @@ namespace App\Actions\Store;
 
 use App\Contracts\HasCapacity;
 use App\Models\CartItem;
+use App\Models\Course;
+use App\Models\CourseHoldSeat;
 use App\Models\User;
 use App\Services\ProductAvailabilityService;
 use App\Services\ProductQuestionAnswerService;
@@ -41,7 +43,20 @@ final readonly class UpdateCartQuantity
                 throw new InvalidArgumentException($availability->message());
             }
 
-            if ($product->productable instanceof HasCapacity) {
+            if ($cartItem->course_hold_id !== null && $product->productable instanceof Course) {
+                $availableCapacity = CourseHoldSeat::query()
+                    ->where('course_hold_id', $cartItem->course_hold_id)
+                    ->where('course_id', $product->productable->id)
+                    ->where('locked_unit_price', $cartItem->held_unit_price)
+                    ->claimable()
+                    ->count();
+
+                if ($quantity > $availableCapacity) {
+                    throw new InvalidArgumentException(
+                        "Only {$availableCapacity} held spot(s) remain for this course."
+                    );
+                }
+            } elseif ($product->productable instanceof HasCapacity) {
                 $availableCapacity = $product->productable->getAvailableCapacity();
 
                 if ($quantity > $availableCapacity) {

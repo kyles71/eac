@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Filament\Admin\Resources\SentEmails\Pages\ListSentEmails;
 use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
 use App\Models\User;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use FinityLabs\FinMail\Enums\EmailStatus;
@@ -28,12 +29,17 @@ beforeEach(function (): void {
 });
 
 it('registers the mail manager administration surfaces', function (): void {
-    livewire(ManageEmailTypes::class)
+    $emailTypesPage = livewire(ManageEmailTypes::class)
         ->loadTable()
         ->assertSee('Password Reset')
         ->assertSee('Verify Email Address')
         ->assertSee('New User Welcome')
         ->assertSee('Handcrafted Email');
+
+    expect($emailTypesPage->instance()->getTable()->getRecordActions())
+        ->toHaveCount(1)
+        ->and($emailTypesPage->instance()->getTable()->getRecordActions()[0])
+        ->toBeInstanceOf(ActionGroup::class);
 
     $this->get(ListMailLayouts::getUrl())
         ->assertOk()

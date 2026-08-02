@@ -168,7 +168,7 @@ final class Cart extends Page implements HasTable
     {
         return CartItem::query()
             ->where('user_id', auth()->id())
-            ->with(['product.productable', 'product.questions'])
+            ->with(['product.productable', 'product.questions', 'courseHold'])
             ->get();
     }
 
@@ -692,7 +692,7 @@ final class Cart extends Page implements HasTable
             ->query(
                 CartItem::query()
                     ->where('user_id', auth()->id())
-                    ->with(['product.productable', 'product.questions'])
+                    ->with(['product.productable', 'product.questions', 'courseHold'])
             )
             ->columns([
                 TextColumn::make('product.name')
@@ -715,6 +715,7 @@ final class Cart extends Page implements HasTable
                 TextColumn::make('unit_price')
                     ->label('Price')
                     ->state(fn (CartItem $record): string => $record->formattedEffectiveUnitPrice())
+                    ->description(fn (CartItem $record): ?string => $record->course_hold_id !== null ? 'Held price' : null)
                     ->toggleable(false)
                     ->searchable(false)
                     ->sortable(false),
@@ -728,6 +729,14 @@ final class Cart extends Page implements HasTable
                     ->label('Total')
                     ->state(fn (CartItem $record): string => $record->formattedLineTotal())
                     ->toggleable(false)
+                    ->searchable(false)
+                    ->sortable(false),
+                TextColumn::make('hold_expiration')
+                    ->label('Hold Expires')
+                    ->state(fn (CartItem $record): mixed => $record->courseHold?->expires_at)
+                    ->dateTime()
+                    ->placeholder('—')
+                    ->toggleable()
                     ->searchable(false)
                     ->sortable(false),
             ])

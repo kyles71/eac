@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Actions\CourseHolds\AddCourseHoldToCart;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Enums\StoreView;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\Costume;
 use App\Models\Course;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Filament\CustomGiftCardAmountField;
@@ -211,12 +214,23 @@ final class Store extends TablePage
                 }
 
                 $capacity = $record->productable->getAvailableCapacity();
+                $held = $this->heldSeatCount($record);
+
+                if ($held > 0) {
+                    return $capacity > 0
+                        ? "{$capacity} public · {$held} held for you"
+                        : "{$held} held for you";
+                }
 
                 return $capacity > 0 ? (string) $capacity : 'Sold Out';
             })
             ->badge()
             ->color(function (Product $record): string {
                 if ($record->productable instanceof HasCapacity) {
+                    if ($this->heldSeatCount($record) > 0) {
+                        return 'warning';
+                    }
+
                     return $record->productable->getAvailableCapacity() <= 0 ? 'danger' : 'success';
                 }
 
@@ -245,19 +259,33 @@ final class Store extends TablePage
             ])
             ->disabled(function (Product $record): bool {
                 return $record->productable instanceof HasCapacity
-                    && $record->productable->getAvailableCapacity() <= 0;
+                    && $record->productable->getAvailableCapacity() <= 0
+                    && $this->heldSeatCount($record) <= 0;
             })
             ->action(function (Product $record, array $data): void {
                 try {
-                    $addToCart = new AddToCart;
-                    $addToCart->handle(
-                        $this->getUser(),
-                        $record,
-                        customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($record, $data),
-                        questionAnswers: is_array($data['question_answers'] ?? null)
-                            ? $data['question_answers']
-                            : [],
-                    );
+                    $hold = $this->firstActiveHold($record);
+
+                    if ($hold !== null && $record->productable instanceof Course) {
+                        app(AddCourseHoldToCart::class)->handle(
+                            $this->getUser(),
+                            $hold,
+                            [$record->productable->id => 1],
+                            [$record->productable->id => is_array($data['question_answers'] ?? null)
+                                ? $data['question_answers']
+                                : []],
+                        );
+                    } else {
+                        $addToCart = new AddToCart;
+                        $addToCart->handle(
+                            $this->getUser(),
+                            $record,
+                            customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($record, $data),
+                            questionAnswers: is_array($data['question_answers'] ?? null)
+                                ? $data['question_answers']
+                                : [],
+                        );
+                    }
 
                     $this->dispatch('refresh-sidebar');
 
@@ -282,5 +310,34 @@ final class Store extends TablePage
         $user = auth()->user();
 
         return $user;
+    }
+
+    private function heldSeatCount(Product $product): int
+    {
+        if (! $product->productable instanceof Course) {
+            return 0;
+        }
+
+        return CourseHoldSeat::query()
+            ->where('course_id', $product->productable->id)
+            ->whereHas('hold', fn ($query) => $query->where('user_id', $this->getUser()->id))
+            ->claimable()
+            ->count();
+    }
+
+    private function firstActiveHold(Product $product): ?CourseHold
+    {
+        if (! $product->productable instanceof Course) {
+            return null;
+        }
+
+        return CourseHold::query()
+            ->where('user_id', $this->getUser()->id)
+            ->whereHas('seats', fn ($query) => $query
+                ->where('course_id', $product->productable->id)
+                ->claimable())
+            ->current()
+            ->orderBy('expires_at')
+            ->first();
     }
 }
