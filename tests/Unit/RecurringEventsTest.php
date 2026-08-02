@@ -71,6 +71,11 @@ it('treats repeat through as inclusive in the display timezone', function (): vo
 });
 
 it('uses no overflow monthly recurrence while preserving duration', function (): void {
+    config([
+        'app.timezone' => 'UTC',
+        'app.display_timezone' => 'America/Detroit',
+    ]);
+
     $recurring = recurringHarness();
     $data = $recurring->prepRecurringData([
         'start_time' => '2027-01-31 10:00:00',
@@ -88,10 +93,40 @@ it('uses no overflow monthly recurrence while preserving duration', function ():
 
     expect(array_column($created, 'start_time'))->toBe([
         '2027-02-28 10:00:00',
-        '2027-03-28 10:00:00',
+        '2027-03-28 09:00:00',
     ])->and(array_column($created, 'end_time'))->toBe([
         '2027-02-28 11:15:00',
-        '2027-03-28 11:15:00',
+        '2027-03-28 10:15:00',
+    ]);
+});
+
+it('preserves the local start time across the fall daylight saving transition', function (): void {
+    config([
+        'app.timezone' => 'UTC',
+        'app.display_timezone' => 'America/Detroit',
+    ]);
+
+    $recurring = recurringHarness();
+    $data = $recurring->prepRecurringData([
+        'start_time' => '2026-10-25 00:20:00',
+        'end_time' => '2026-10-25 01:20:00',
+        'repeat_frequency' => ScheduleFrequency::Weekly,
+        'repeat_through' => '2026-11-07',
+    ]);
+
+    $created = $recurring->createRecurring(
+        $data,
+        $recurring->repeatThrough(),
+        $recurring->repeatFrequency(),
+        fn (array $data): array => $data,
+    );
+
+    expect(array_column($created, 'start_time'))->toBe([
+        '2026-11-01 00:20:00',
+        '2026-11-08 01:20:00',
+    ])->and(array_column($created, 'end_time'))->toBe([
+        '2026-11-01 01:20:00',
+        '2026-11-08 02:20:00',
     ]);
 });
 
