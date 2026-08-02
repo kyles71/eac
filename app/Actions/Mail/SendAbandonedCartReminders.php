@@ -6,6 +6,8 @@ namespace App\Actions\Mail;
 
 use App\Contracts\HasCapacity;
 use App\Models\CartItem;
+use App\Models\Course;
+use App\Models\CourseHoldSeat;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Mail\AbandonedCartReminderContentService;
@@ -85,7 +87,19 @@ final readonly class SendAbandonedCartReminders
             return false;
         }
 
-        return ! ($product->productable instanceof HasCapacity)
-            || $product->productable->getAvailableCapacity() > 0;
+        if (! $product->productable instanceof HasCapacity) {
+            return true;
+        }
+
+        if ($cartItem->course_hold_id !== null && $product->productable instanceof Course) {
+            return CourseHoldSeat::query()
+                ->where('course_hold_id', $cartItem->course_hold_id)
+                ->where('course_id', $product->productable->id)
+                ->where('locked_unit_price', $cartItem->held_unit_price)
+                ->claimable()
+                ->count() >= $cartItem->quantity;
+        }
+
+        return $product->productable->getAvailableCapacity() >= $cartItem->quantity;
     }
 }

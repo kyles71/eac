@@ -7,8 +7,10 @@ namespace App\Filament\User\Widgets;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Filament\User\Pages\Billing;
+use App\Filament\User\Pages\HeldClasses;
 use App\Filament\User\Pages\MyEnrollments;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
+use App\Models\CourseHold;
 use App\Models\Enrollment;
 use App\Models\FormUser;
 use App\Models\Installment;
@@ -86,9 +88,25 @@ final class NeedsAttention extends Widget
                 'color' => 'warning',
             ]);
 
+        $holds = CourseHold::query()
+            ->where('user_id', $user->id)
+            ->current()
+            ->withCount(['seats as available_seats_count' => fn ($query) => $query->available()])
+            ->orderBy('expires_at')
+            ->get()
+            ->map(fn (CourseHold $hold): array => [
+                'title' => 'Class seats held for you',
+                'description' => $hold->available_seats_count.' '.str('seat')->plural($hold->available_seats_count)
+                    .' held until '.$hold->expires_at->format('M j, Y \a\t g:i A'),
+                'url' => HeldClasses::getUrl(['hold' => $hold->id]),
+                'action' => 'View held classes',
+                'color' => 'warning',
+            ]);
+
         return $installments
             ->concat($forms)
             ->concat($enrollments)
+            ->concat($holds)
             ->values()
             ->all();
     }
