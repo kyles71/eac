@@ -452,14 +452,9 @@ async function publishValidationStatus(pullRequest, throwOnInvalid) {
     }
 }
 
-async function releasePreamble() {
-    try {
-        const pullRequests = await pullRequestsSincePreviousTag();
-        process.stdout.write(buildReleaseNotes(pullRequests));
-    } catch (error) {
-        process.stderr.write(`Unable to collect approved update notes: ${error.message}\n`);
-        process.stdout.write(buildReleaseNotes([]));
-    }
+export async function releasePreamble() {
+    const pullRequests = await pullRequestsSincePreviousTag();
+    process.stdout.write(buildReleaseNotes(pullRequests));
 }
 
 async function pullRequestsSincePreviousTag() {
