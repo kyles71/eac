@@ -215,6 +215,7 @@ Never reuse the deployment/Composer token for the application feed; the feed tok
 
 | Goal | Action |
 | --- | --- |
+| Prepare a dev PR | Complete both note blocks and apply exactly one of `updates-approved` or `skip-updates` after review |
 | Deploy normal dev | Merge the feature PR into `dev` |
 | Resolve a conflicting dev PR | Locally merge the feature into `dev` with `--no-ff`, resolve, and push `dev` |
 | Merge GitHub-only automation/docs | Apply `skip-deployment` before merging; also apply the appropriate update-note label |
@@ -271,7 +272,7 @@ git commit -m "Merge feature/feature-b into dev for QA"
 git push origin dev
 ```
 
-The push automatically deploys `dev`. The automation traces the merge commit's second parent to the original dev PR, copies its marked user-facing and operational note blocks, then creates or updates the master draft from the clean Feature B branch. Existing valid notes on the master draft are preserved. GitHub will normally recognize the original dev PR as merged; do not create a replacement dev PR.
+The push automatically deploys `dev`. The automation traces the merge commit's second parent to the original dev PR, copies its marked user-facing and operational note blocks, and transfers its valid `updates-approved` or `skip-updates` decision when creating the master draft from the clean Feature B branch. Existing valid notes on an existing master draft are preserved, and a follow-up deployment removes its `updates-approved` label for another review. GitHub will normally recognize the original dev PR as merged; do not create a replacement dev PR.
 
 Conflict-only changes remain in the merge commit on `dev`; production-required changes must also be committed to Feature B and redeployed. Use `git merge --abort` before committing if the resolution is wrong. For subsequent Feature B fixes, open another dev PR and repeat the direct merge only if it conflicts. See [Release workflow — Feature B conflicts with Feature A already on dev](RELEASE_WORKFLOW.md#feature-b-conflicts-with-feature-a-already-on-dev) for rationale and edge cases.
 
