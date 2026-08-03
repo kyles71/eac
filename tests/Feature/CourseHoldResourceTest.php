@@ -87,6 +87,49 @@ it('creates a class hold from the administrator form', function (): void {
         ->and($hold->seats->pluck('locked_unit_price')->unique()->all())->toBe([15_000]);
 });
 
+it('shows a useful notification when a class hold exceeds available seats', function (): void {
+    $family = User::factory()->create();
+    $course = Course::factory()->create(['name' => 'Ballet 5', 'capacity' => 2]);
+    Product::factory()->forCourse($course)->create(['price' => 15_000]);
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addWeek(),
+        'end_time' => now()->addWeek()->addHour(),
+    ]);
+
+    $component = livewire(ListCourseHolds::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'user_id' => $family->id,
+            'expires_at' => now()->addDays(2),
+        ]);
+
+    $lineStateKey = array_key_first($component->instance()->mountedActions[0]['data']['lines']);
+
+    $component
+        ->fillForm([
+            'lines' => [
+                $lineStateKey => ['course_id' => (string) $course->id, 'quantity' => 3],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertActionHalted();
+
+    $notification = collect(
+        session()->get('filament.claimed_notifications')
+            ?? session()->get('filament.notifications'),
+    )
+        ->firstWhere('title', 'Class hold could not be created');
+
+    expect($notification)->not->toBeNull()
+        ->and($notification['body'])->toBe('Not enough unreserved seats remain in "Ballet 5".')
+        ->and($notification['status'])->toBe('danger');
+
+    $component->assertNotified('Class hold could not be created');
+
+    expect(CourseHold::query()->where('user_id', $family->id)->exists())->toBeFalse();
+});
+
 it('opens class hold create and edit forms in slideovers', function (): void {
     $hold = CourseHold::factory()->create(['user_id' => User::factory()]);
 

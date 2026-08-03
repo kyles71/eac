@@ -12,6 +12,7 @@ use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\CartItem;
+use App\Models\CourseHold;
 use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
@@ -736,6 +737,10 @@ final class Cart extends Page implements HasTable
                     ->state(fn (CartItem $record): mixed => $record->courseHold?->expires_at)
                     ->dateTime()
                     ->placeholder('—')
+                    ->visible(fn (): bool => CartItem::query()
+                        ->where('user_id', auth()->id())
+                        ->whereIn('course_hold_id', CourseHold::query()->current()->select('id'))
+                        ->exists())
                     ->toggleable()
                     ->searchable(false)
                     ->sortable(false),

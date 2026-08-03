@@ -18,10 +18,13 @@ use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use InvalidArgumentException;
 use UnitEnum;
 
 final class CourseHoldResource extends Resource
@@ -69,13 +72,23 @@ final class CourseHoldResource extends Resource
                 /** @var User|null $admin */
                 $admin = auth()->user();
 
-                return app(CreateCourseHoldAction::class)->handle(
-                    user: $user,
-                    expiresAt: Carbon::parse((string) $data['expires_at']),
-                    lines: $data['lines'],
-                    createdBy: $admin,
-                    notes: $data['notes'] ?? null,
-                );
+                try {
+                    return app(CreateCourseHoldAction::class)->handle(
+                        user: $user,
+                        expiresAt: Carbon::parse((string) $data['expires_at']),
+                        lines: $data['lines'],
+                        createdBy: $admin,
+                        notes: $data['notes'] ?? null,
+                    );
+                } catch (InvalidArgumentException $exception) {
+                    Notification::make()
+                        ->title('Class hold could not be created')
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+
+                    throw new Halt;
+                }
             });
     }
 
