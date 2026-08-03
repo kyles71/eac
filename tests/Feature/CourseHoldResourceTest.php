@@ -9,18 +9,45 @@ use App\Models\CourseHold;
 use App\Models\CourseHoldSeat;
 use App\Models\Event;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Mail;
+use Spatie\Permission\Models\Permission;
 
 use function Pest\Livewire\livewire;
 
 beforeEach(function (): void {
     Filament::setCurrentPanel('admin');
     Mail::fake();
+});
+
+it('grants course hold permissions to super administrators through its migration', function (): void {
+    $permissions = [
+        'Create:CourseHold',
+        'Update:CourseHold',
+        'View:CourseHold',
+        'ViewAny:CourseHold',
+    ];
+    $migration = require database_path('migrations/2026_08_03_032825_grant_course_hold_permissions_to_super_admin.php');
+
+    $migration->down();
+
+    expect(Permission::query()->whereIn('name', $permissions)->exists())->toBeFalse();
+
+    $migration->up();
+
+    $assignedPermissions = Role::findByName(Role::SUPER_ADMIN, 'web')
+        ->permissions()
+        ->whereIn('name', $permissions)
+        ->orderBy('name')
+        ->pluck('name')
+        ->all();
+
+    expect($assignedPermissions)->toBe($permissions);
 });
 
 it('creates a class hold from the administrator form', function (): void {
