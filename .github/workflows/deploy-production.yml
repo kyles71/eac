@@ -47,6 +47,7 @@ jobs:
       pull-requests: read
     env:
       GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
       RELEASE_GENERATION: "1"
       RELEASE_TIMEZONE: America/New_York
 

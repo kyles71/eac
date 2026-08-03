@@ -21,6 +21,7 @@ import {
     handlePullRequestEvent,
     isValidOperationalBlock,
     isValidUserBlock,
+    releasePreamble,
     releaseBranchFor,
     replaceDeploymentBlock,
     shouldDeployForPullRequest,
@@ -155,6 +156,44 @@ test('does not add release warning or review boilerplate', () => {
 
     assert.doesNotMatch(releaseScript, /No approved user-facing update note/);
     assert.doesNotMatch(releaseScript, /Review the user-facing and operational notes/);
+});
+
+test('provides the GitHub token names required by release notes and GitHub CLI', () => {
+    const workflow = readFileSync(new URL('../workflows/deploy-production.yml', import.meta.url), 'utf8');
+
+    assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 2);
+    assert.match(workflow, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+});
+
+test('stops release creation when approved note collection fails', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalEnvironment = {
+        GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY,
+        GITHUB_SHA: process.env.GITHUB_SHA,
+        GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+        PREVIOUS_RELEASE_TAG: process.env.PREVIOUS_RELEASE_TAG,
+    };
+
+    process.env.GITHUB_REPOSITORY = 'example/eac';
+    process.env.GITHUB_SHA = 'production-sha';
+    process.env.GITHUB_TOKEN = 'github-token';
+    delete process.env.PREVIOUS_RELEASE_TAG;
+
+    globalThis.fetch = async () => jsonResponse({ message: 'Server error' }, 500);
+
+    try {
+        await assert.rejects(releasePreamble(), /GitHub API returned 500/);
+    } finally {
+        globalThis.fetch = originalFetch;
+
+        for (const [name, value] of Object.entries(originalEnvironment)) {
+            if (value === undefined) {
+                delete process.env[name];
+            } else {
+                process.env[name] = value;
+            }
+        }
+    }
 });
 
 test('validates approved and explicitly skipped pull requests', () => {
