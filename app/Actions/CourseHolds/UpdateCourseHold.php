@@ -44,6 +44,7 @@ final readonly class UpdateCourseHold
                 'expires_at' => $expiresAt,
                 'notes' => filled($notes) ? $notes : null,
                 'reminder_sent_at' => $expirationChanged ? null : $lockedHold->reminder_sent_at,
+                'expired_email_sent_at' => $expirationChanged ? null : $lockedHold->expired_email_sent_at,
             ]);
 
             foreach (collect($additionalLines)->sortBy('course_id') as $line) {

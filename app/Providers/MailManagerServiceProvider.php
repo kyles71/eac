@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Mail\Types\AbandonedCartReminderEmailType;
 use App\Mail\Types\CourseHoldChangedEmailType;
 use App\Mail\Types\CourseHoldCreatedEmailType;
+use App\Mail\Types\CourseHoldExpiredEmailType;
 use App\Mail\Types\CourseHoldExpiringEmailType;
 use App\Mail\Types\EventCancellationEmailType;
 use App\Mail\Types\EventReminderEmailType;
@@ -45,6 +46,7 @@ final class MailManagerServiceProvider extends ServiceProvider
             AbandonedCartReminderEmailType::class,
             CourseHoldChangedEmailType::class,
             CourseHoldCreatedEmailType::class,
+            CourseHoldExpiredEmailType::class,
             CourseHoldExpiringEmailType::class,
             EventCancellationEmailType::class,
             EventReminderEmailType::class,

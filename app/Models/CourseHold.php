@@ -22,6 +22,7 @@ final class CourseHold extends Model
         'created_by_user_id' => 'integer',
         'expires_at' => 'datetime',
         'reminder_sent_at' => 'datetime',
+        'expired_email_sent_at' => 'datetime',
     ];
 
     /** @return BelongsTo<User, $this> */
