@@ -6,8 +6,11 @@ use App\Filament\Admin\Resources\Enrollments\Pages\ListEnrollments;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
+use App\Models\Product;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 
 use function Pest\Livewire\livewire;
 
@@ -94,4 +97,32 @@ it('shows assignment state and schedule context on the enrollment table', functi
         ->assertTableColumnStateSet('assignment_status', 'Needs student', $openEnrollment)
         ->assertTableFilterExists('assignment_status')
         ->assertTableFilterExists('course_id');
+});
+
+it('converts a manual enrollment to a class hold from the table', function (): void {
+    Mail::fake();
+    config(['app.display_timezone' => 'America/New_York']);
+    Carbon::setTestNow(Carbon::parse('2026-06-27 15:47:04', 'UTC'));
+
+    $course = Course::factory()->create();
+    Product::factory()->forCourse($course)->create(['price' => 14_000]);
+    $enrollment = Enrollment::factory()->create([
+        'course_id' => $course->id,
+        'order_item_id' => null,
+    ]);
+
+    livewire(ListEnrollments::class)
+        ->set('activeTab', 'all')
+        ->loadTable()
+        ->callAction(TestAction::make('convertToHold')->table($enrollment), data: [
+            'expires_at' => Carbon::now('America/New_York')->addMinutes(30)->format('Y-m-d H:i:s'),
+            'notes' => 'Waiting for payment',
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    $hold = $enrollment->user->courseHolds()->where('notes', 'Waiting for payment')->sole();
+
+    expect(Enrollment::query()->whereKey($enrollment->id)->exists())->toBeFalse()
+        ->and($hold->expires_at->toDateTimeString())->toBe(Carbon::now()->addMinutes(30)->startOfMinute()->toDateTimeString());
 });

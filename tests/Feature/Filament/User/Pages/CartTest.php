@@ -8,6 +8,8 @@ use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
 use App\Models\Course;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\CreditGrant;
 use App\Models\DiscountCode;
 use App\Models\GiftCard;
@@ -48,6 +50,43 @@ it('displays cart items in the table for the authenticated user', function () {
     livewire(Cart::class)
         ->loadTable()
         ->assertCanSeeTableRecords([$cartItem]);
+});
+
+it('hides the hold expiration column without an active held cart item', function (): void {
+    $expiredHold = CourseHold::factory()->create([
+        'user_id' => auth()->id(),
+        'expires_at' => now()->subMinute(),
+    ]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $expiredHold->id,
+        'course_id' => $this->course->id,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'course_hold_id' => $expiredHold->id,
+    ]);
+
+    livewire(Cart::class)
+        ->loadTable()
+        ->assertTableColumnHidden('hold_expiration');
+});
+
+it('shows the hold expiration column for an active held cart item', function (): void {
+    $activeHold = CourseHold::factory()->create(['user_id' => auth()->id()]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $activeHold->id,
+        'course_id' => $this->course->id,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'course_hold_id' => $activeHold->id,
+    ]);
+
+    livewire(Cart::class)
+        ->loadTable()
+        ->assertTableColumnVisible('hold_expiration');
 });
 
 it("displays each unit's product details beneath the product name", function (): void {

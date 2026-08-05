@@ -130,6 +130,12 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(Enrollment::class);
     }
 
+    /** @return HasMany<CourseHold, $this> */
+    public function courseHolds(): HasMany
+    {
+        return $this->hasMany(CourseHold::class);
+    }
+
     public function events(): MorphMany
     {
         return $this->morphMany(EventAttendee::class, 'attendee');

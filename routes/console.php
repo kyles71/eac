@@ -16,6 +16,25 @@ Schedule::command('orders:cancel-abandoned')
     ->name('cancel-abandoned-orders')
     ->description('Cancel pending orders abandoned for more than 24 hours');
 
+Schedule::command('course-holds:cancel-expired-checkouts')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('cancel-expired-course-hold-checkouts')
+    ->description('Release unpaid held-seat checkout leases after 30 minutes');
+
+Schedule::command('course-holds:send-reminders')
+    ->hourly()
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-course-hold-reminders')
+    ->description('Remind families about class holds expiring within 24 hours');
+
+Schedule::command('course-holds:send-expired-emails')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('send-expired-course-hold-emails')
+    ->description('Notify families when class holds expire with unpurchased seats');
+
 Schedule::command('installments:send-past-due-notifications')
     ->dailyAt('08:00')
     ->timezone('America/New_York')

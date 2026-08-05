@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
 use App\Filament\Admin\Resources\Costumes\CostumeResource;
+use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
@@ -204,6 +205,9 @@ return [
             ],
             CostumeResource::class => [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CourseHoldResource::class => [
+                'viewAny', 'view', 'create', 'update',
             ],
             CourseResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',

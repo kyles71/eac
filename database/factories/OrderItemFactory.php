@@ -28,6 +28,7 @@ final class OrderItemFactory extends Factory
         return [
             'order_id' => Order::factory(),
             'product_id' => Product::factory(),
+            'course_hold_id' => null,
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total_price' => $unitPrice * $quantity,
