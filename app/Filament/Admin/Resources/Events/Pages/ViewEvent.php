@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Models\Event;
 use App\Services\EventAttendanceService;
@@ -64,6 +65,7 @@ final class ViewEvent extends ViewRecord implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            EventSubstituteActions::group($this->event()),
             CancelEventAction::make(),
             EditAction::make()
                 ->visible(fn (): bool => ! $this->event()->isCancelled()),

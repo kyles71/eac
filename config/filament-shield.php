@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Pages\SubstituteEventDetails;
+use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
@@ -30,6 +32,7 @@ use App\Filament\Admin\Resources\Roles\RoleResource;
 use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Admin\Widgets\SubstituteRequestBanners;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Filament\Shared\Pages\Calendar as CalendarPage;
@@ -296,6 +299,8 @@ return [
             CalendarPage::class,
             Dashboard::class,
             ManageDashboardAppearance::class,
+            SubstituteEventDetails::class,
+            SubstituteRequest::class,
             Updates::class,
         ],
     ],
@@ -318,6 +323,7 @@ return [
             CalendarWidget::class,
             MessagesFromEac::class,
             QuickLinks::class,
+            SubstituteRequestBanners::class,
         ],
     ],
 

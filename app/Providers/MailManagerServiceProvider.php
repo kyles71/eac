@@ -11,6 +11,9 @@ use App\Mail\Types\CourseHoldExpiredEmailType;
 use App\Mail\Types\CourseHoldExpiringEmailType;
 use App\Mail\Types\EventCancellationEmailType;
 use App\Mail\Types\EventReminderEmailType;
+use App\Mail\Types\EventSubstituteRemovedEmailType;
+use App\Mail\Types\EventSubstituteRequestEmailType;
+use App\Mail\Types\EventSubstituteRequestReminderEmailType;
 use App\Mail\Types\GiftCardAssignedRedemptionEmailType;
 use App\Mail\Types\GiftCardDeliveryEmailType;
 use App\Mail\Types\HandcraftedEmailType;
@@ -48,6 +51,9 @@ final class MailManagerServiceProvider extends ServiceProvider
             CourseHoldExpiringEmailType::class,
             EventCancellationEmailType::class,
             EventReminderEmailType::class,
+            EventSubstituteRemovedEmailType::class,
+            EventSubstituteRequestEmailType::class,
+            EventSubstituteRequestReminderEmailType::class,
             GiftCardAssignedRedemptionEmailType::class,
             GiftCardDeliveryEmailType::class,
             HandcraftedEmailType::class,

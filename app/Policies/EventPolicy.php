@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Policies;
 
 use App\Models\Event;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 use Illuminate\Foundation\Auth\User as AuthUser;
 
@@ -30,6 +31,23 @@ final class EventPolicy
     public function update(AuthUser $authUser, Event $event): bool
     {
         return $authUser->can('Update:Event');
+    }
+
+    public function viewSubstituteDetails(AuthUser $authUser, Event $event): bool
+    {
+        return $authUser instanceof User && $event->substitute_teacher_id === $authUser->id;
+    }
+
+    public function recordSubstituteAttendance(AuthUser $authUser, Event $event): bool
+    {
+        return $this->viewSubstituteDetails($authUser, $event) && ! $event->isCancelled();
+    }
+
+    public function requestSubstituteRelease(AuthUser $authUser, Event $event): bool
+    {
+        return $this->viewSubstituteDetails($authUser, $event)
+            && ! $event->isCancelled()
+            && ! $event->isCompletedAt();
     }
 
     public function cancel(AuthUser $authUser, Event $event): bool
