@@ -30,6 +30,12 @@ Schedule::command('events:send-reminders')
     ->name('send-event-reminders')
     ->description('Send reminders for events occurring in two weeks');
 
+Schedule::command('events:send-substitute-request-reminders')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('send-event-substitute-request-reminders')
+    ->description('Remind teachers and staff about unanswered event substitute requests');
+
 Schedule::command('enrollments:send-open-reminders')
     ->dailyAt('08:00')
     ->timezone('America/New_York')
