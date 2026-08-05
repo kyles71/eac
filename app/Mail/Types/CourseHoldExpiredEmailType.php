@@ -13,7 +13,7 @@ final class CourseHoldExpiredEmailType implements EmailTypeContract
     {
         return new EmailTypeDefinition(
             key: 'course-hold-expired',
-            names: ['en' => 'Your EAC Dance Class Hold Has Expired'],
+            names: ['en' => 'Class Hold Expired'],
             description: 'Sent when a class hold expires with unpurchased seats remaining.',
             category: 'transactional',
             subjects: ['en' => 'Your EAC Dance Class Hold Has Expired'],
