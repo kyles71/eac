@@ -26,6 +26,7 @@ final class CourseHoldFactory extends Factory
             'expires_at' => now()->addDays(2),
             'notes' => fake()->optional()->sentence(),
             'reminder_sent_at' => null,
+            'expired_email_sent_at' => null,
         ];
     }
 }

@@ -23,7 +23,9 @@ use App\Models\ProductQuestion;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\EmailTypeRegistry;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Kyle\FilamentMailManager\MailManager;
 
 beforeEach(function (): void {
     Mail::fake();
@@ -270,4 +272,60 @@ it('sends one reminder for holds approaching expiration', function (): void {
         fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'course-hold-expiring'
             && $mail->hasTo($this->family->email),
     );
+});
+
+it('registers the expired class hold managed email', function (): void {
+    $definition = app(EmailTypeRegistry::class)->get('course-hold-expired');
+    $rendered = app(MailManager::class)->render('course-hold-expired', [
+        'user.first_name' => 'Jamie',
+        'course_hold.expires_at' => 'August 5, 2026 at 5:00 PM',
+    ]);
+
+    expect($definition->name('en'))->toBe('Your EAC Dance Class Hold Has Expired')
+        ->and($definition->subject('en'))->toBe('Your EAC Dance Class Hold Has Expired')
+        ->and($definition->body('en'))->toContain('{{ course_hold.expires_at }}')
+        ->and($rendered->subject)->toBe('Your EAC Dance Class Hold Has Expired')
+        ->and($rendered->html)->toContain('Hello Jamie')
+        ->toContain('August 5, 2026 at 5:00 PM');
+});
+
+it('sends one email when a class hold expires with unpurchased seats', function (): void {
+    $hold = CourseHold::factory()->create([
+        'user_id' => $this->family->id,
+        'expires_at' => now()->subMinute(),
+    ]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $hold->id,
+        'course_id' => $this->course->id,
+        'locked_unit_price' => 12_000,
+    ]);
+
+    $this->artisan('course-holds:send-expired-emails')->assertSuccessful();
+    $this->artisan('course-holds:send-expired-emails')->assertSuccessful();
+
+    expect($hold->refresh()->expired_email_sent_at)->not->toBeNull();
+
+    Mail::assertQueued(
+        ManagedMail::class,
+        fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'course-hold-expired'
+            && $mail->hasTo($this->family->email),
+    );
+    Mail::assertQueuedCount(1);
+});
+
+it('allows a reactivated hold to send another expiration email', function (): void {
+    $hold = CourseHold::factory()->create([
+        'user_id' => $this->family->id,
+        'expires_at' => now()->subMinute(),
+        'expired_email_sent_at' => now(),
+    ]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $hold->id,
+        'course_id' => $this->course->id,
+        'locked_unit_price' => 12_000,
+    ]);
+
+    app(UpdateCourseHold::class)->handle($hold, now()->addDay());
+
+    expect($hold->refresh()->expired_email_sent_at)->toBeNull();
 });
