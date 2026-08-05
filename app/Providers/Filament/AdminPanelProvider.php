@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Widgets\SubstituteRequestBanners;
 use App\Support\Filament\AdminNavigation;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\Support\Enums\Platform;
 use Filament\Support\Icons\Heroicon;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\Facades\Blade;
 use Kyle\FilamentMailManager\FilamentMailManagerPlugin;
 use Kyle\FilamentThemeBuilder\ThemeBuilderPlugin;
 
@@ -29,6 +33,12 @@ final class AdminPanelProvider extends BasePanelProvider
             ->brandName('EAC Admin')
             ->strictAuthorization()
             ->viteTheme('resources/css/filament/admin/theme.css')
+            ->renderHook(
+                PanelsRenderHook::CONTENT_START,
+                fn (): string => Filament::getCurrentPanel()?->getId() === 'admin'
+                    ? Blade::render('@livewire('.SubstituteRequestBanners::class.'::class)')
+                    : '',
+            )
             ->navigationGroups([
                 NavigationGroup::make(AdminNavigation::PeopleAndAccess)
                     ->icon(Heroicon::OutlinedUsers),

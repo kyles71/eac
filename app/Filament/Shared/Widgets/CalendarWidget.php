@@ -7,6 +7,8 @@ namespace App\Filament\Shared\Widgets;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\EventSubstituteActions;
+use App\Filament\Admin\Pages\SubstituteEventDetails;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -232,6 +234,15 @@ final class CalendarWidget extends FullCalendarWidget
             EditAction::make()
                 ->authorize('update')
                 ->visible(fn (Event $record): bool => ! $record->isCancelled()),
+            EventSubstituteActions::manage(fn (): ?string => $this->fullEventUrl()),
+            Action::make('viewSubstituteEventDetails')
+                ->label('View Substitute Details')
+                ->icon(Heroicon::OutlinedClipboardDocumentCheck)
+                ->color('primary')
+                ->visible(fn (): bool => $this->isConfirmedSubstitute())
+                ->url(fn (): ?string => ($record = $this->getRecord()) instanceof Event
+                    ? SubstituteEventDetails::getUrl(['event' => $record], panel: 'admin')
+                    : null),
             $cancelEventAction,
             Action::make('viewFullEvent')
                 ->label('View Full Event')
@@ -390,6 +401,16 @@ final class CalendarWidget extends FullCalendarWidget
         $user = auth()->user();
 
         return $user instanceof User && $user->can('view', $event);
+    }
+
+    private function isConfirmedSubstitute(): bool
+    {
+        $record = $this->getRecord();
+        $user = auth()->user();
+
+        return $record instanceof Event
+            && $user instanceof User
+            && $record->substitute_teacher_id === $user->id;
     }
 
     private function fullEventUrl(): ?string

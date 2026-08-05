@@ -225,6 +225,8 @@ Never reuse the deployment/Composer token for the application feed; the feed tok
 
 Use `skip-deployment` only when the PR changes GitHub-only automation or documentation and the servers do not need the commit. Never use it for application code, dependencies, built assets, migrations, seeders, configuration, queues, schedules, or worker behavior. A production skip also skips tagging and draft Release creation. Manual dev redeployments ignore the label and always run.
 
+If production deploys and receives a version tag but draft Release creation fails, fix the reported note-collection or GitHub API error and rerun the failed release job. The workflow reuses the existing tag and creates the draft; do not delete or move the tag.
+
 Inspect active releases on the server:
 
 ```bash

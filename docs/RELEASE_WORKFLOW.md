@@ -205,6 +205,8 @@ For a `skip-deployment` PR, the production deployment, tag, and draft Release ar
 
 If no approved update-note block is available, the workflow adds no user-facing placeholder or warning; the deployment metadata and generated technical changelog remain. The required `updates-note` check should make this exceptional unless the included PRs intentionally use `skip-updates`.
 
+If GitHub note collection fails because of missing permissions, configuration, or an API error, draft Release creation stops instead of silently creating an incomplete Release. The production tag remains attached to the successfully deployed commit. Correct the automation failure and rerun the failed release job; it reuses that tag and creates the complete draft. A successful collection with no notes still creates a technical-only draft when all included PRs intentionally use `skip-updates`.
+
 Complete the production smoke tests:
 
 - [ ] Production `/up` responds successfully.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Actions\SendEmailAction;
 use App\Filament\Actions\StudentContactActionGroup;
 use App\Filament\Admin\Resources\Events\EventResource;
@@ -84,6 +85,7 @@ final class ViewEvent extends ViewRecord implements HasTable
             SendEmailAction::make()
                 ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')
                 ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event())),
+            EventSubstituteActions::group($this->event()),
             CancelEventAction::make(),
             EditAction::make()
                 ->visible(fn (): bool => ! $this->event()->isCancelled()),
