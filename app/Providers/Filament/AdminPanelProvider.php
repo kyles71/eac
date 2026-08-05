@@ -83,6 +83,7 @@ final class AdminPanelProvider extends BasePanelProvider
                     ->authorizeUsing('Manage:ThemeBuilder'),
                 FilamentMailManagerPlugin::make()
                     ->emailTypeEditActionSlideOver()
+                    ->emailTypeRecordActionsGrouped()
                     ->enableSentEmails(false)
                     ->navigationGroup(AdminNavigation::Email),
             ])

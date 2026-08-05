@@ -3037,16 +3037,16 @@
         },
         {
             "name": "kyle/filament-mail-manager",
-            "version": "v0.1.5",
+            "version": "v0.1.6",
             "source": {
                 "type": "git",
                 "url": "git@github.com:kyles71/filament-mail-manager.git",
-                "reference": "b266ac2ebe6b16839024965ef1c7acd42e291685"
+                "reference": "8ac8d2566130faaf1ce4051bcd33d02b5c700f41"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kyles71/filament-mail-manager/zipball/b266ac2ebe6b16839024965ef1c7acd42e291685",
-                "reference": "b266ac2ebe6b16839024965ef1c7acd42e291685",
+                "url": "https://api.github.com/repos/kyles71/filament-mail-manager/zipball/8ac8d2566130faaf1ce4051bcd33d02b5c700f41",
+                "reference": "8ac8d2566130faaf1ce4051bcd33d02b5c700f41",
                 "shasum": ""
             },
             "require": {
@@ -3095,10 +3095,10 @@
             ],
             "description": "Registry-driven managed email templates and reusable layouts for Filament.",
             "support": {
-                "source": "https://github.com/kyles71/filament-mail-manager/tree/v0.1.5",
+                "source": "https://github.com/kyles71/filament-mail-manager/tree/v0.1.6",
                 "issues": "https://github.com/kyles71/filament-mail-manager/issues"
             },
-            "time": "2026-07-01T19:40:21+00:00"
+            "time": "2026-08-02T15:53:02+00:00"
         },
         {
             "name": "kyle/filament-theme-builder",
