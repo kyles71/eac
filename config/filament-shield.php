@@ -255,7 +255,7 @@ return [
                 'viewAny', 'view',
             ],
             PaymentPlanResource::class => [
-                'viewAny', 'view',
+                'viewAny', 'view', 'adjustDueDates',
             ],
             PaymentPlanTemplateResource::class => [
                 'viewAny', 'create', 'update',

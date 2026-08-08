@@ -777,6 +777,28 @@ it('shows the assigned card and payment method actions on active plans', functio
         ]);
 });
 
+it('shows revised installment due dates in the customer billing schedule', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+    ]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'due_date' => '2026-08-12',
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    livewire(Billing::class)
+        ->mountAction(
+            TestAction::make("installments_{$plan->id}")
+                ->schemaComponent(true, 'content')
+        )
+        ->assertMountedActionModalSee('Aug 12, 2026');
+});
+
 it('changes the saved payment method for one active plan', function () {
     auth()->user()->update(['stripe_id' => 'cus_test_123']);
     auth()->user()->refresh();
