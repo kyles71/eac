@@ -7,15 +7,18 @@ namespace App\Http\Controllers;
 use App\Actions\CourseHolds\ReleaseCourseHoldOrderClaims;
 use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreatePaymentPlan;
+use App\Actions\Store\ReconcileOrderRefundAction;
 use App\Actions\Store\SendGiftCardDeliveryEmails;
 use App\Actions\Store\SendInstallmentPaymentEmail;
 use App\Actions\Store\SendOrderReceipt;
 use App\Actions\Store\SendProductPurchaseNotification;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Installment;
 use App\Models\Order;
+use App\Models\OrderRefundPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -31,6 +34,7 @@ final class StripeWebhookController
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
         private readonly ReleaseCourseHoldOrderClaims $releaseCourseHoldOrderClaims,
+        private readonly ReconcileOrderRefundAction $reconcileOrderRefund,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -51,8 +55,47 @@ final class StripeWebhookController
         return match ($event->type) {
             'payment_intent.payment_failed' => $this->handlePaymentIntentFailed($event),
             'payment_intent.succeeded' => $this->handlePaymentIntentSucceeded($event),
+            'refund.created', 'refund.updated', 'refund.failed' => $this->handleRefundEvent($event),
             default => response()->json(['message' => 'Unhandled event type']),
         };
+    }
+
+    private function handleRefundEvent(\Stripe\Event $event): JsonResponse
+    {
+        $stripeRefund = $event->data->object;
+        $paymentId = $stripeRefund->metadata->order_refund_payment_id ?? null;
+
+        $payment = is_numeric($paymentId)
+            ? OrderRefundPayment::query()->find((int) $paymentId)
+            : null;
+
+        if ($payment === null && is_string($stripeRefund->id ?? null)) {
+            $payment = OrderRefundPayment::query()
+                ->where('stripe_refund_id', $stripeRefund->id)
+                ->first();
+        }
+
+        if ($payment === null) {
+            Log::info('Stripe refund event did not match an admin order refund.', [
+                'stripe_refund_id' => $stripeRefund->id ?? null,
+            ]);
+
+            return response()->json(['message' => 'Refund is not managed by an admin order refund']);
+        }
+
+        $status = $event->type === 'refund.failed'
+            ? OrderRefundPaymentStatus::Failed
+            : OrderRefundPaymentStatus::fromStripe($this->stringValue($stripeRefund->status ?? null));
+
+        $payment = $payment->recordStripeStatus(
+            stripeRefundId: $this->stringValue($stripeRefund->id ?? null),
+            status: $status,
+            failureReason: $this->stringValue($stripeRefund->failure_reason ?? null),
+        );
+
+        $this->reconcileOrderRefund->handle($payment->orderRefund);
+
+        return response()->json(['message' => 'Refund status processed']);
     }
 
     private function handlePaymentIntentFailed(\Stripe\Event $event): JsonResponse
