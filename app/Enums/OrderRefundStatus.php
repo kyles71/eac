@@ -7,13 +7,13 @@ namespace App\Enums;
 use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
-enum InstallmentStatus: string implements HasColor, HasLabel
+enum OrderRefundStatus: string implements HasColor, HasLabel
 {
+    case Processing = 'Processing';
     case Pending = 'Pending';
-    case Paid = 'Paid';
+    case Succeeded = 'Succeeded';
+    case PartiallyFailed = 'Partially Failed';
     case Failed = 'Failed';
-    case Overdue = 'Overdue';
-    case Cancelled = 'Cancelled';
 
     public function getLabel(): string
     {
@@ -23,11 +23,9 @@ enum InstallmentStatus: string implements HasColor, HasLabel
     public function getColor(): string
     {
         return match ($this) {
-            self::Paid => 'success',
-            self::Pending => 'warning',
-            self::Failed => 'danger',
-            self::Overdue => 'danger',
-            self::Cancelled => 'gray',
+            self::Processing, self::Pending => 'warning',
+            self::Succeeded => 'success',
+            self::PartiallyFailed, self::Failed => 'danger',
         };
     }
 }

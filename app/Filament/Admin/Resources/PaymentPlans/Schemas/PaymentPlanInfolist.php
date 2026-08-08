@@ -68,6 +68,7 @@ final class PaymentPlanInfolist
                                         InstallmentStatus::Pending => 'warning',
                                         InstallmentStatus::Failed => 'danger',
                                         InstallmentStatus::Overdue => 'danger',
+                                        InstallmentStatus::Cancelled => 'gray',
                                     }),
                                 TextEntry::make('paid_at')
                                     ->label('Paid At')

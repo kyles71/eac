@@ -21,4 +21,9 @@ final class OrderPolicy
     {
         return $authUser->can('View:Order');
     }
+
+    public function refund(AuthUser $authUser, Order $order): bool
+    {
+        return $authUser->can('Refund:Order');
+    }
 }
