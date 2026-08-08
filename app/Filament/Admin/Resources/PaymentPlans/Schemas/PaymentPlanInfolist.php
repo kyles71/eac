@@ -70,6 +70,7 @@ final class PaymentPlanInfolist
                                         InstallmentStatus::Pending => 'warning',
                                         InstallmentStatus::Failed => 'danger',
                                         InstallmentStatus::Overdue => 'danger',
+                                        InstallmentStatus::Cancelled => 'gray',
                                     }),
                                 TextEntry::make('retry_count')
                                     ->label('Retries'),

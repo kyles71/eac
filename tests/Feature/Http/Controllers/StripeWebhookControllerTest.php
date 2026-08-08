@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
 use App\Http\Controllers\StripeWebhookController;
@@ -13,6 +15,8 @@ use App\Models\GiftCardType;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
+use App\Models\OrderRefundPayment;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
@@ -563,3 +567,63 @@ it('ignores invoice webhooks for payment plans', function (string $eventType) {
     'paid invoice' => 'invoice.paid',
     'failed invoice' => 'invoice.payment_failed',
 ]);
+
+it('reconciles successful refund updates idempotently', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 5000,
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_refund_webhook',
+    ]);
+    $refund = OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 5000,
+        'status' => OrderRefundStatus::Pending,
+    ]);
+    $payment = OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'stripe_payment_intent_id' => 'pi_refund_webhook',
+        'stripe_refund_id' => 're_webhook',
+        'amount' => 5000,
+        'status' => OrderRefundPaymentStatus::Pending,
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'refund.updated';
+    $event->data = (object) [
+        'object' => (object) [
+            'id' => 're_webhook',
+            'status' => 'succeeded',
+            'failure_reason' => null,
+            'metadata' => (object) [
+                'order_refund_payment_id' => (string) $payment->id,
+            ],
+        ],
+    ];
+    $staleEvent = clone $event;
+    $staleEvent->type = 'refund.created';
+    $staleEvent->data = (object) [
+        'object' => (object) [
+            'id' => 're_webhook',
+            'status' => 'pending',
+            'failure_reason' => null,
+            'metadata' => (object) [
+                'order_refund_payment_id' => (string) $payment->id,
+            ],
+        ],
+    ];
+
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $stripe->shouldReceive('constructWebhookEvent')->twice()->andReturn($event, $staleEvent);
+    $this->app->instance(StripeServiceContract::class, $stripe);
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    expect(app(StripeWebhookController::class)($request)->getData(true))
+        ->toBe(['message' => 'Refund status processed'])
+        ->and(app(StripeWebhookController::class)($request)->getData(true))
+        ->toBe(['message' => 'Refund status processed'])
+        ->and($payment->refresh()->status)->toBe(OrderRefundPaymentStatus::Succeeded)
+        ->and($refund->refresh()->status)->toBe(OrderRefundStatus::Succeeded)
+        ->and($order->refresh()->status)->toBe(OrderStatus::Refunded);
+});
