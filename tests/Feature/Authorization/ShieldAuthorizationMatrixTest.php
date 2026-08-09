@@ -6,6 +6,7 @@ use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
 use App\Filament\Admin\Resources\Costumes\CostumeResource;
+use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
@@ -48,6 +49,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         CompetitionSeasonResource::class => $sixAbilities,
         CompetitionTeamResource::class => $sixAbilities,
         CostumeResource::class => $fiveAbilities,
+        CourseHoldResource::class => ['viewAny', 'view', 'create', 'update'],
         CourseResource::class => $sixAbilities,
         CreditGrantResource::class => ['viewAny', 'view', 'create', 'revoke'],
         DashboardMessageResource::class => $fiveAbilities,

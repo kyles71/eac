@@ -41,6 +41,7 @@ final readonly class AddToCart
             $cartItem = CartItem::query()
                 ->where('user_id', $user->id)
                 ->where('product_id', $product->id)
+                ->whereNull('course_hold_id')
                 ->where('custom_gift_card_amount', $customGiftCardAmount)
                 ->first();
             $existingQuantity = $cartItem instanceof CartItem ? $cartItem->quantity : 0;
@@ -85,8 +86,10 @@ final readonly class AddToCart
             return CartItem::query()->create([
                 'user_id' => $user->id,
                 'product_id' => $product->id,
+                'course_hold_id' => null,
                 'quantity' => $quantity,
                 'custom_gift_card_amount' => $customGiftCardAmount,
+                'held_unit_price' => null,
                 'question_answers' => $storedQuestionAnswers === [] ? null : $storedQuestionAnswers,
             ]);
         });

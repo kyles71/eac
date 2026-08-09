@@ -62,6 +62,8 @@ interface StripeServiceContract
 
     public function refundPaymentIntent(string $paymentIntentId, ?int $amount = null): Refund;
 
+    public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent;
+
     /**
      * Charge a saved payment method off-session.
      *

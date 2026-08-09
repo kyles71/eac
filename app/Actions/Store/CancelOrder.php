@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Actions\CourseHolds\ReleaseCourseHoldOrderClaims;
 use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Models\Order;
@@ -17,6 +18,7 @@ final readonly class CancelOrder
     public function __construct(
         private StripeServiceContract $stripeService,
         private CreditLedgerService $creditLedger,
+        private ReleaseCourseHoldOrderClaims $releaseCourseHoldOrderClaims,
     ) {}
 
     public function handle(Order $order): bool
@@ -51,6 +53,7 @@ final readonly class CancelOrder
             }
 
             $order->update(['status' => OrderStatus::Cancelled]);
+            $this->releaseCourseHoldOrderClaims->handle($order);
 
             return true;
         });

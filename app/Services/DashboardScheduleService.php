@@ -32,6 +32,9 @@ final class DashboardScheduleService
     public function upcoming(User $user, Calendar $calendar, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
     {
         $accessibleCalendars = $this->accessibleCalendars($user);
+        $databaseTimezone = (string) config('app.timezone', 'UTC');
+        $startsAt = $startsAt->copy()->timezone($databaseTimezone);
+        $endsAt = $endsAt->copy()->timezone($databaseTimezone);
 
         $events = Event::query()
             ->with(['calendar', 'course.tags'])

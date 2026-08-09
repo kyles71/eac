@@ -121,12 +121,14 @@ trait HasRecurring
 
     private function nextOccurrenceStart(Carbon $start, ScheduleFrequency $frequency): Carbon
     {
-        return match ($frequency) {
-            ScheduleFrequency::Daily => $start->copy()->addDay(),
-            ScheduleFrequency::Weekly => $start->copy()->addWeek(),
-            ScheduleFrequency::Biweekly => $start->copy()->addWeeks(2),
-            ScheduleFrequency::Monthly => $start->copy()->addMonthNoOverflow(),
-        };
+        $displayStart = $start->copy()->timezone($this->displayTimezone());
+
+        return (match ($frequency) {
+            ScheduleFrequency::Daily => $displayStart->addDay(),
+            ScheduleFrequency::Weekly => $displayStart->addWeek(),
+            ScheduleFrequency::Biweekly => $displayStart->addWeeks(2),
+            ScheduleFrequency::Monthly => $displayStart->addMonthNoOverflow(),
+        })->timezone(config('app.timezone'));
     }
 
     private function displayTimezone(): string

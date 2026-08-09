@@ -8,6 +8,8 @@ use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
 use App\Models\Course;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\Enrollment;
 use App\Models\GiftCardType;
 use App\Models\ManagedBanner;
@@ -362,4 +364,28 @@ it('keeps product navigation and quick add available in card view', function () 
         ->where('user_id', auth()->id())
         ->where('product_id', $this->product->id)
         ->value('quantity'))->toBe(1);
+});
+
+it('lets a family add its held seat when public capacity is sold out', function (): void {
+    $hold = CourseHold::factory()->create([
+        'user_id' => auth()->id(),
+        'expires_at' => now()->addDays(2),
+    ]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $hold->id,
+        'course_id' => $this->course->id,
+        'locked_unit_price' => 4_000,
+    ]);
+    Enrollment::factory(4)->create(['course_id' => $this->course->id]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertActionEnabled(TestAction::make('addToCart')->table($this->product))
+        ->callAction(TestAction::make('addToCart')->table($this->product))
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()->where('user_id', auth()->id())->sole();
+
+    expect($cartItem->course_hold_id)->toBe($hold->id)
+        ->and($cartItem->held_unit_price)->toBe(4_000);
 });

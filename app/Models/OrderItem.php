@@ -19,6 +19,7 @@ final class OrderItem extends Model
         'id' => 'integer',
         'order_id' => 'integer',
         'product_id' => 'integer',
+        'course_hold_id' => 'integer',
         'quantity' => 'integer',
         'unit_price' => 'integer',
         'total_price' => 'integer',
@@ -36,6 +37,18 @@ final class OrderItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /** @return BelongsTo<CourseHold, $this> */
+    public function courseHold(): BelongsTo
+    {
+        return $this->belongsTo(CourseHold::class);
+    }
+
+    /** @return HasMany<CourseHoldSeat, $this> */
+    public function claimedCourseHoldSeats(): HasMany
+    {
+        return $this->hasMany(CourseHoldSeat::class, 'claimed_order_item_id');
     }
 
     /** @return HasMany<Enrollment, $this> */

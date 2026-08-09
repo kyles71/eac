@@ -17,8 +17,10 @@ final class CartItem extends Model
         'id' => 'integer',
         'user_id' => 'integer',
         'product_id' => 'integer',
+        'course_hold_id' => 'integer',
         'quantity' => 'integer',
         'custom_gift_card_amount' => 'integer',
+        'held_unit_price' => 'integer',
         'question_answers' => 'array',
         'reminder_sent_at' => 'datetime',
     ];
@@ -35,6 +37,12 @@ final class CartItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    /** @return BelongsTo<CourseHold, $this> */
+    public function courseHold(): BelongsTo
+    {
+        return $this->belongsTo(CourseHold::class);
+    }
+
     public function customGiftCardAmount(): ?int
     {
         return $this->custom_gift_card_amount > 0 ? $this->custom_gift_card_amount : null;
@@ -48,7 +56,7 @@ final class CartItem extends Model
 
     public function effectiveUnitPrice(): int
     {
-        return $this->customGiftCardAmount() ?? $this->product->price ?? 0;
+        return $this->held_unit_price ?? $this->customGiftCardAmount() ?? $this->product->price ?? 0;
     }
 
     public function lineTotal(): int

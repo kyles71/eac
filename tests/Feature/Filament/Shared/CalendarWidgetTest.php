@@ -215,6 +215,35 @@ it('serializes event times in the display timezone', function (): void {
         ->and($calendarEvent['end'])->toBe('2027-01-15T14:00:00-05:00');
 });
 
+it('includes events near a calendar boundary after converting the range to the database timezone', function (): void {
+    config([
+        'app.timezone' => 'UTC',
+        'app.display_timezone' => 'America/Detroit',
+    ]);
+
+    $user = User::factory()->create();
+    $calendar = calendarBySlug(Calendar::SLUG_EAC);
+    $event = Event::factory()->create([
+        'name' => 'DST Boundary Event',
+        'course_id' => null,
+        'calendar_id' => $calendar->id,
+        'start_time' => Carbon::parse('2026-11-01 00:20:00', 'UTC'),
+        'end_time' => Carbon::parse('2026-11-01 01:20:00', 'UTC'),
+    ]);
+
+    $this->actingAs($user);
+
+    $calendarEvent = fetchCalendarEvents(
+        calendar: $calendar,
+        start: '2026-09-27T00:00:00-04:00',
+        end: '2026-11-01T00:00:00-04:00',
+    )->firstWhere('id', $event->id);
+
+    expect($calendarEvent)->not->toBeNull()
+        ->and($calendarEvent['start'])->toBe('2026-10-31T20:20:00-04:00')
+        ->and($calendarEvent['end'])->toBe('2026-10-31T21:20:00-04:00');
+});
+
 it('uses the routed calendar color for visible course events on my calendar', function (): void {
     $user = User::factory()->create();
     assignStudentToCurrentCompetition($user);

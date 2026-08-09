@@ -25,6 +25,7 @@ final class EnrollmentFactory extends Factory
         return [
             'course_id' => Course::factory(),
             'user_id' => User::factory(),
+            'course_hold_seat_id' => null,
             'student_id' => null,
         ];
     }

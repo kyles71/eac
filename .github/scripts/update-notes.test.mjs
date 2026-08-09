@@ -21,9 +21,11 @@ import {
     handlePullRequestEvent,
     isValidOperationalBlock,
     isValidUserBlock,
+    releasePreamble,
     releaseBranchFor,
     replaceDeploymentBlock,
     shouldDeployForPullRequest,
+    transferableUpdateLabel,
     validatePullRequestData,
 } from './update-notes.mjs';
 
@@ -50,6 +52,7 @@ test('grants write access needed to update pull request labels', () => {
     const workflow = readFileSync(new URL('../workflows/update-notes.yml', import.meta.url), 'utf8');
 
     assert.match(workflow, /^\s{2}pull-requests: write$/m);
+    assert.match(workflow, /^\s{4}branches: \[dev, master\]$/m);
 });
 
 test('gates dev and production deployments through the PR label decision', () => {
@@ -155,6 +158,44 @@ test('does not add release warning or review boilerplate', () => {
     assert.doesNotMatch(releaseScript, /Review the user-facing and operational notes/);
 });
 
+test('provides the GitHub token names required by release notes and GitHub CLI', () => {
+    const workflow = readFileSync(new URL('../workflows/deploy-production.yml', import.meta.url), 'utf8');
+
+    assert.equal((workflow.match(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/g) ?? []).length, 2);
+    assert.match(workflow, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+});
+
+test('stops release creation when approved note collection fails', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalEnvironment = {
+        GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY,
+        GITHUB_SHA: process.env.GITHUB_SHA,
+        GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+        PREVIOUS_RELEASE_TAG: process.env.PREVIOUS_RELEASE_TAG,
+    };
+
+    process.env.GITHUB_REPOSITORY = 'example/eac';
+    process.env.GITHUB_SHA = 'production-sha';
+    process.env.GITHUB_TOKEN = 'github-token';
+    delete process.env.PREVIOUS_RELEASE_TAG;
+
+    globalThis.fetch = async () => jsonResponse({ message: 'Server error' }, 500);
+
+    try {
+        await assert.rejects(releasePreamble(), /GitHub API returned 500/);
+    } finally {
+        globalThis.fetch = originalFetch;
+
+        for (const [name, value] of Object.entries(originalEnvironment)) {
+            if (value === undefined) {
+                delete process.env[name];
+            } else {
+                process.env[name] = value;
+            }
+        }
+    }
+});
+
 test('validates approved and explicitly skipped pull requests', () => {
     assert.match(validatePullRequestData({
         labels: [{ name: 'updates-approved' }],
@@ -172,6 +213,23 @@ test('validates approved and explicitly skipped pull requests', () => {
         }),
         /non-empty operational-notes block/,
     );
+});
+
+test('transfers only explicit and valid dev pull request decisions', () => {
+    assert.equal(transferableUpdateLabel({
+        labels: [{ name: 'updates-approved' }],
+        body: `${userBlock}\n\n${operationsBlock}`,
+    }), 'updates-approved');
+    assert.equal(transferableUpdateLabel({ labels: [{ name: 'skip-updates' }] }), 'skip-updates');
+    assert.equal(transferableUpdateLabel({
+        labels: [{ name: 'updates-approved' }],
+        body: `${USER_START}\n### Incomplete\n${USER_END}`,
+    }), null);
+    assert.equal(transferableUpdateLabel({ labels: [] }), null);
+    assert.equal(transferableUpdateLabel({
+        labels: [{ name: 'updates-approved' }, { name: 'skip-updates' }],
+        body: `${userBlock}\n\n${operationsBlock}`,
+    }), null);
 });
 
 test('skips automatic deployment only for a labeled source pull request', () => {
@@ -248,7 +306,7 @@ test('updates deployment metadata without replacing the rest of the pull request
     assert.doesNotMatch(updated, /Dev PR: #10/);
 });
 
-test('removes approval and publishes a failing status after new commits', async () => {
+test('keeps approval after body edits and removes it after new commits', async () => {
     const originalFetch = globalThis.fetch;
     const originalEnvironment = {
         EVENT_ACTION: process.env.EVENT_ACTION,
@@ -259,7 +317,7 @@ test('removes approval and publishes a failing status after new commits', async 
     const requests = [];
     let labels = [{ name: 'updates-approved' }];
 
-    process.env.EVENT_ACTION = 'synchronize';
+    process.env.EVENT_ACTION = 'edited';
     process.env.GITHUB_REPOSITORY = 'example/eac';
     process.env.GITHUB_TOKEN = 'github-token';
     process.env.PULL_REQUEST_NUMBER = '41';
@@ -272,7 +330,7 @@ test('removes approval and publishes a failing status after new commits', async 
 
         if (path === '/pulls/41') {
             return jsonResponse({
-                base: { ref: 'master' },
+                base: { ref: 'dev' },
                 body: `${userBlock}\n\n${operationsBlock}`,
                 head: { sha: 'release-sha' },
                 html_url: 'https://github.com/example/eac/pull/41',
@@ -294,11 +352,19 @@ test('removes approval and publishes a failing status after new commits', async 
     };
 
     try {
+        await handlePullRequestEvent();
+        assert.equal(requests.filter((request) => request.method === 'DELETE').length, 0);
+        assert.equal(
+            requests.filter((request) => request.path === '/statuses/release-sha' && request.body?.state === 'success').length,
+            1,
+        );
+
+        process.env.EVENT_ACTION = 'synchronize';
         await assert.rejects(handlePullRequestEvent(), /exactly one/);
         assert.equal(requests.filter((request) => request.method === 'DELETE').length, 1);
         assert.equal(
-            requests.find((request) => request.path === '/statuses/release-sha')?.body?.state,
-            'failure',
+            requests.filter((request) => request.path === '/statuses/release-sha' && request.body?.state === 'failure').length,
+            1,
         );
     } finally {
         globalThis.fetch = originalFetch;
@@ -324,7 +390,7 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
     };
     const requests = [];
     let createdPullRequest = null;
-    let devLabels = [];
+    let devLabels = [{ name: 'updates-approved' }];
 
     process.env.DEPLOYED_AT = '2026-07-31T15:00:00Z';
     process.env.DEPLOYED_SHA = 'deployed-sha';
@@ -389,18 +455,29 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
                 body: body.body,
                 head: { ref: 'feature/accounts', sha: 'release-sha' },
                 html_url: 'https://github.com/example/eac/pull/41',
+                labels: [],
                 number: 41,
             };
 
             return jsonResponse(createdPullRequest, 201);
         }
 
+        if (path === '/issues/41/labels' && method === 'POST') {
+            createdPullRequest.labels = body.labels.map((name) => ({ name }));
+            return jsonResponse(createdPullRequest.labels);
+        }
+
         if (path === '/issues/41/labels/updates-approved' && method === 'DELETE') {
-            return jsonResponse({ message: 'Not Found' }, 404);
+            createdPullRequest.labels = createdPullRequest.labels.filter((label) => label.name !== 'updates-approved');
+            return new Response(null, { status: 204 });
         }
 
         if (path === '/pulls/41' && method === 'PATCH') {
             createdPullRequest = { ...createdPullRequest, ...body };
+            return jsonResponse(createdPullRequest);
+        }
+
+        if (path === '/pulls/41' && method === 'GET') {
             return jsonResponse(createdPullRequest);
         }
 
@@ -420,12 +497,18 @@ test('creates one draft master PR after a direct dev conflict merge and reuses i
 
         assert.equal(requests.filter((request) => request.path === '/pulls' && request.method === 'POST').length, 1);
         assert.equal(requests.filter((request) => request.path === '/pulls/41' && request.method === 'PATCH').length, 1);
+        assert.equal(requests.filter((request) => request.path === '/issues/41/labels' && request.method === 'POST').length, 1);
+        assert.equal(requests.filter((request) => request.path === '/issues/41/labels/updates-approved' && request.method === 'DELETE').length, 1);
         assert.equal(requests.filter((request) => request.path === '/branches/feature%2Faccounts').length, 2);
         assert.match(createdPullRequest.body, /Dev PR: #30/);
         assert.match(createdPullRequest.body, /Clearer account security/);
         assert.equal(
+            requests.filter((request) => request.path === '/statuses/release-sha' && request.body?.state === 'success').length,
+            1,
+        );
+        assert.equal(
             requests.filter((request) => request.path === '/statuses/release-sha' && request.body?.state === 'failure').length,
-            2,
+            1,
         );
     } finally {
         globalThis.fetch = originalFetch;

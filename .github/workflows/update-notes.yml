@@ -2,7 +2,7 @@ name: Update notes
 
 on:
   pull_request_target:
-    branches: [master]
+    branches: [dev, master]
     types: [opened, reopened, synchronize, edited, labeled, unlabeled]
 
 permissions:

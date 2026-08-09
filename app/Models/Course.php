@@ -206,6 +206,12 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return $this->hasMany(Enrollment::class);
     }
 
+    /** @return HasMany<CourseHoldSeat, $this> */
+    public function holdSeats(): HasMany
+    {
+        return $this->hasMany(CourseHoldSeat::class);
+    }
+
     public function purchasers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'enrollments');
@@ -219,13 +225,62 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     /**
      * Get the number of available enrollment spots remaining.
      */
-    public function getAvailableCapacity(): int
+    public function getAvailableCapacity(?User $user = null): int
     {
-        return $this->capacity - $this->enrollments()->count();
+        $publicCapacity = max(
+            0,
+            $this->capacity
+                - $this->enrollments()->count()
+                - CourseHoldSeat::query()
+                    ->where('course_id', $this->id)
+                    ->reservingCapacity()
+                    ->count(),
+        );
+
+        if ($user === null) {
+            return $publicCapacity;
+        }
+
+        $heldForUser = CourseHoldSeat::query()
+            ->where('course_id', $this->id)
+            ->whereHas('hold', fn (Builder $query): Builder => $query
+                ->where('user_id', $user->id)
+                ->where('expires_at', '>', now()))
+            ->available()
+            ->count();
+
+        return $publicCapacity + $heldForUser;
     }
 
     public function fulfillOrderItem(OrderItem $orderItem, User $purchaser): bool
     {
+        if ($orderItem->course_hold_id !== null) {
+            $heldSeats = CourseHoldSeat::query()
+                ->where('claimed_order_item_id', $orderItem->id)
+                ->where('course_id', $this->id)
+                ->whereDoesntHave('enrollment')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($heldSeats->count() !== $orderItem->quantity) {
+                return false;
+            }
+
+            /** @var CourseHoldSeat $heldSeat */
+            foreach ($heldSeats as $heldSeat) {
+                Enrollment::query()->create([
+                    'course_id' => $this->id,
+                    'user_id' => $purchaser->id,
+                    'order_item_id' => $orderItem->id,
+                    'course_hold_seat_id' => $heldSeat->id,
+                    'student_id' => $heldSeat->student_id,
+                ]);
+            }
+
+            return true;
+        }
+
         for ($i = 0; $i < $orderItem->quantity; $i++) {
             Enrollment::query()->create([
                 'course_id' => $this->id,
@@ -260,11 +315,17 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
      */
     public function scopeAvailable(Builder $query): void
     {
-        $query->where(
-            'capacity',
-            '>',
-            Enrollment::selectRaw('count(*)')
-                ->whereColumn('enrollments.course_id', 'courses.id')
+        $enrollmentCount = Enrollment::query()
+            ->selectRaw('count(*)')
+            ->whereColumn('enrollments.course_id', 'courses.id');
+        $holdCount = CourseHoldSeat::query()
+            ->selectRaw('count(*)')
+            ->whereColumn('course_hold_seats.course_id', 'courses.id')
+            ->reservingCapacity();
+
+        $query->whereRaw(
+            'courses.capacity > (('.$enrollmentCount->toSql().') + ('.$holdCount->toSql().'))',
+            [...$enrollmentCount->getBindings(), ...$holdCount->getBindings()],
         );
     }
 

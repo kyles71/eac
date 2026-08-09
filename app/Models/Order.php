@@ -36,6 +36,7 @@ final class Order extends Model
         'payment_plan_credit_applied' => 'integer',
         'payment_plan_template_id' => 'integer',
         'payment_plan_terms_version_id' => 'integer',
+        'hold_checkout_expires_at' => 'datetime',
         'cart_items_cleared_at' => 'datetime',
         'receipt_queued_at' => 'datetime',
         'purchase_notification_queued_at' => 'datetime',
@@ -205,6 +206,7 @@ final class Order extends Model
                 $cartItem = CartItem::query()
                     ->where('user_id', $order->user_id)
                     ->where('product_id', $orderItem->product_id)
+                    ->where('course_hold_id', $orderItem->course_hold_id)
                     ->where('custom_gift_card_amount', $orderItem->custom_gift_card_amount)
                     ->lockForUpdate()
                     ->first();

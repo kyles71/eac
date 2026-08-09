@@ -24,8 +24,10 @@ final class CartItemFactory extends Factory
         return [
             'user_id' => User::factory(),
             'product_id' => Product::factory(),
+            'course_hold_id' => null,
             'quantity' => 1,
             'custom_gift_card_amount' => 0,
+            'held_unit_price' => null,
             'question_answers' => null,
         ];
     }

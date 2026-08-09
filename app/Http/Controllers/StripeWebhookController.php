@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\CourseHolds\ReleaseCourseHoldOrderClaims;
 use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreatePaymentPlan;
 use App\Actions\Store\SendGiftCardDeliveryEmails;
@@ -29,6 +30,7 @@ final class StripeWebhookController
         private readonly SendOrderReceipt $sendOrderReceipt,
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
+        private readonly ReleaseCourseHoldOrderClaims $releaseCourseHoldOrderClaims,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -68,6 +70,7 @@ final class StripeWebhookController
 
         if ($order !== null && $order->status === OrderStatus::Processing) {
             $order->update(['status' => OrderStatus::Failed]);
+            $this->releaseCourseHoldOrderClaims->handle($order);
 
             Log::info("Order #{$order->id} marked as failed due to payment intent failure.", [
                 'payment_intent_id' => $paymentIntent->id,

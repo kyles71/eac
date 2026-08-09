@@ -104,7 +104,6 @@ final readonly class StripeService implements StripeServiceContract
 
         return $this->client->setupIntents->create([
             'customer' => $customer->id,
-            'payment_method_types' => ['card'],
             'usage' => 'off_session',
             'metadata' => $metadata,
         ]);
@@ -181,6 +180,11 @@ final readonly class StripeService implements StripeServiceContract
         }
 
         return $this->client->refunds->create($params);
+    }
+
+    public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent
+    {
+        return $this->client->paymentIntents->retrieve($paymentIntentId);
     }
 
     /**

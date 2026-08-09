@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Actions\CourseHolds\ReleaseCourseHoldOrderClaims;
 use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
 use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
+use App\Models\CourseHoldSeat;
 use App\Models\Order;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +18,7 @@ final readonly class CompleteOrder
 {
     public function __construct(
         private StripeServiceContract $stripeService,
+        private ReleaseCourseHoldOrderClaims $releaseCourseHoldOrderClaims,
     ) {}
 
     public function handle(Order $order): bool
@@ -57,6 +60,18 @@ final readonly class CompleteOrder
 
                 $productableClass = $productable::class;
 
+                if ($orderItem->course_hold_id !== null) {
+                    $claimedSeats = CourseHoldSeat::query()
+                        ->where('claimed_order_item_id', $orderItem->id)
+                        ->reservingCapacity()
+                        ->lockForUpdate()
+                        ->count();
+
+                    if ($claimedSeats === $orderItem->quantity) {
+                        continue;
+                    }
+                }
+
                 if ($orderItem->quantity > $availableCapacity) {
                     Log::warning("Order #{$order->id} failed: insufficient capacity for {$productableClass} #{$productable->getKey()}.", [
                         'requested' => $orderItem->quantity,
@@ -64,6 +79,7 @@ final readonly class CompleteOrder
                     ]);
 
                     $order->update(['status' => OrderStatus::Failed]);
+                    $this->releaseCourseHoldOrderClaims->handle($order);
 
                     // Refund the payment
                     if ($order->stripe_payment_intent_id !== null) {

@@ -21,6 +21,7 @@ final class Enrollment extends Model
         'course_id' => 'integer',
         'user_id' => 'integer',
         'order_item_id' => 'integer',
+        'course_hold_seat_id' => 'integer',
         'student_id' => 'integer',
         'assignment_reminder_sent_at' => 'datetime',
     ];
@@ -95,6 +96,12 @@ final class Enrollment extends Model
     public function orderItem(): BelongsTo
     {
         return $this->belongsTo(OrderItem::class);
+    }
+
+    /** @return BelongsTo<CourseHoldSeat, $this> */
+    public function courseHoldSeat(): BelongsTo
+    {
+        return $this->belongsTo(CourseHoldSeat::class);
     }
 
     /** @return BelongsTo<Student, $this> */

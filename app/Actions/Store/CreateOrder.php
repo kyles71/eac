@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Actions\CourseHolds\ClaimCourseHoldSeatsForOrder;
 use App\Contracts\HasCapacity;
 use App\Enums\OrderStatus;
 use App\Enums\ProductAvailabilityStatus;
 use App\Models\CartItem;
+use App\Models\Course;
+use App\Models\CourseHoldSeat;
 use App\Models\DiscountCode;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -19,6 +22,7 @@ use App\Services\ProductAvailabilityService;
 use App\Services\ProductQuestionAnswerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -33,6 +37,7 @@ final class CreateOrder
         private readonly CreditLedgerService $creditLedger,
         private readonly PaymentPlanBreakdownCalculator $paymentPlanBreakdownCalculator,
         private readonly ProductQuestionAnswerService $productQuestionAnswers,
+        private readonly ClaimCourseHoldSeatsForOrder $claimCourseHoldSeats,
     ) {}
 
     public function handle(
@@ -81,7 +86,19 @@ final class CreateOrder
                 }
 
                 if ($product->productable instanceof HasCapacity) {
-                    $available = $product->productable->getAvailableCapacity();
+                    if ($cartItem->course_hold_id !== null && $product->productable instanceof Course) {
+                        $available = CourseHoldSeat::query()
+                            ->where('course_hold_id', $cartItem->course_hold_id)
+                            ->where('course_id', $product->productable->id)
+                            ->where('locked_unit_price', $cartItem->held_unit_price)
+                            ->whereHas('hold', fn (Builder $query): Builder => $query
+                                ->where('user_id', $user->id)
+                                ->where('expires_at', '>', now()))
+                            ->claimable()
+                            ->count();
+                    } else {
+                        $available = $product->productable->getAvailableCapacity();
+                    }
 
                     if ($cartItem->quantity > $available) {
                         throw new InvalidArgumentException(
@@ -106,6 +123,7 @@ final class CreateOrder
                 $orderItems[] = [
                     'attributes' => [
                         'product_id' => $product->id,
+                        'course_hold_id' => $cartItem->course_hold_id,
                         'quantity' => $cartItem->quantity,
                         'unit_price' => $unitPrice,
                         'total_price' => $totalPrice,
@@ -142,6 +160,8 @@ final class CreateOrder
                 $orderItem = $order->orderItems()->create($item['attributes']);
                 $orderItem->questionAnswers()->createMany($item['question_answers']);
             }
+
+            $this->claimCourseHoldSeats->handle($order);
 
             $total = $subtotal;
             $discountAmount = 0;
