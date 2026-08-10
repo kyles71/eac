@@ -28,6 +28,8 @@ use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResourc
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
 use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
+use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
+use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
@@ -266,6 +268,9 @@ return [
             RoleResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
+            StaffNoteResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete',
+            ],
             StudentResource::class => [
                 'viewAny', 'view', 'create', 'update', 'deleteAny',
             ],
@@ -275,6 +280,7 @@ return [
         ],
         'exclude' => [
             SentEmailResource::class,
+            StudentCommunicationResource::class,
         ],
     ],
 
@@ -338,6 +344,7 @@ return [
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
+        'Send:Email' => 'Send Email',
         'View:AppUpdatesPage' => 'View App Updates Page',
     ],
 

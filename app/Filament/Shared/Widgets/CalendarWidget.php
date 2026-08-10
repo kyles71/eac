@@ -250,14 +250,24 @@ final class CalendarWidget extends FullCalendarWidget
             ->modalHeading(fn (Event $record): string => $record->name);
 
         if ($this->isAdminPanel()) {
-            return $action;
+            return $action->mutateRecordDataUsing(function (array $data, Event $record): array {
+                if (! $this->canViewPrivateEventContent($record)) {
+                    unset($data['details']);
+                }
+
+                return $data;
+            });
         }
 
-        return $action->mutateRecordDataUsing(fn (array $data, Event $record): array => [
-            ...$data,
-            'calendar_name' => $record->calendar?->name,
-            'course_name' => $record->course?->name,
-        ]);
+        return $action->mutateRecordDataUsing(function (array $data, Event $record): array {
+            unset($data['details']);
+
+            return [
+                ...$data,
+                'calendar_name' => $record->calendar?->name,
+                'course_name' => $record->course?->name,
+            ];
+        });
     }
 
     private function selectedCalendar(): ?Calendar
@@ -373,6 +383,13 @@ final class CalendarWidget extends FullCalendarWidget
         $record = $this->getRecord();
 
         return $record instanceof Event && EventResource::canView($record);
+    }
+
+    private function canViewPrivateEventContent(Event $event): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->can('view', $event);
     }
 
     private function fullEventUrl(): ?string

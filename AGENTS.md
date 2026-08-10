@@ -30,6 +30,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
 - Be mindful of SOLID design principles when choosing boundaries. Prefer DRY and SOLID design: extract repeated behavior into focused services, helpers, components, traits, or model methods when it has a clear single responsibility and is reused by more than one surface.
+- In the admin panel, place table row actions at the start of the row and wrap them in an action group, even when the group contains only one action.
 - When implementation details are ambiguous or multiple reasonable product behaviors exist, ask Kyle targeted questions before coding.
 
 ## Verification Scripts

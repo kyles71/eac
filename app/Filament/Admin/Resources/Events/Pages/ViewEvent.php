@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\SendEmailAction;
+use App\Filament\Actions\StudentContactActionGroup;
 use App\Filament\Admin\Resources\Events\EventResource;
+use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Event;
+use App\Models\Student;
 use App\Services\EventAttendanceService;
+use App\Services\EventEmailRecipientsService;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\EmbeddedSchema;
@@ -15,12 +20,14 @@ use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
 use LogicException;
 
 final class ViewEvent extends ViewRecord implements HasTable
@@ -42,28 +49,41 @@ final class ViewEvent extends ViewRecord implements HasTable
     {
         return $table
             ->query($this->attendanceQuery())
-            ->heading('Attendance')
+            ->heading($this->attendanceHeading())
             ->columns([
                 TextColumn::make('attendance_student_name')
                     ->label('Student')
                     ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
-                ToggleColumn::make('attended')
-                    ->label('Attended')
-                    ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->event(), $record))
-                    ->updateStateUsing(fn (Model $record, mixed $state): bool => $this->attendance()
-                        ->setRecordStudentAttendance($this->event(), $record, $state)),
+                AttendanceRadioColumn::make('attendance_status')
+                    ->label('Attendance')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
+                    ->state(fn (Model $record): ?string => $this->attendance()
+                        ->recordStudentAttendanceStatus($this->event(), $record))
+                    ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
+                        ->setRecordStudentAttendanceStatus($this->event(), $record, $state)),
                 TextInputColumn::make('notes')
                     ->label('Notes')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
                     ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
                         ->setRecordStudentNotes($this->event(), $record, $state)),
             ])
+            ->recordActions([
+                StudentContactActionGroup::make(
+                    student: fn (Model $record): Student => $this->attendanceStudent($record),
+                    event: fn (): Event => $this->event(),
+                )
+                    ->visible(fn (Model $record): bool => $this->canEmailAttendanceRecord($record)),
+            ], RecordActionsPosition::BeforeCells)
             ->paginated(false);
     }
 
     protected function getHeaderActions(): array
     {
         return [
+            SendEmailAction::make()
+                ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')
+                ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event())),
             CancelEventAction::make(),
             EditAction::make()
                 ->visible(fn (): bool => ! $this->event()->isCancelled()),
@@ -81,6 +101,42 @@ final class ViewEvent extends ViewRecord implements HasTable
     private function attendance(): EventAttendanceService
     {
         return app(EventAttendanceService::class);
+    }
+
+    private function attendanceStudent(Model $record): Student
+    {
+        $student = $this->attendance()->studentForAttendanceRecord($record);
+
+        if (! $student instanceof Student) {
+            throw new LogicException('The attendance student is unavailable.');
+        }
+
+        return $student;
+    }
+
+    private function canEmailAttendanceRecord(Model $record): bool
+    {
+        $student = $this->attendance()->studentForAttendanceRecord($record);
+
+        return $student instanceof Student && Gate::allows('view', $student);
+    }
+
+    private function attendanceHeading(): string
+    {
+        $startTime = $this->event()->start_time;
+
+        if ($startTime === null) {
+            return 'Attendance — Date not set';
+        }
+
+        return 'Attendance — '.Carbon::parse($startTime)
+            ->timezone($this->displayTimezone())
+            ->format('l, F j, Y');
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private function event(): Event

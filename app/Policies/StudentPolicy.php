@@ -5,34 +5,36 @@ declare(strict_types=1);
 namespace App\Policies;
 
 use App\Models\Student;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
-use Illuminate\Foundation\Auth\User as AuthUser;
 
 final class StudentPolicy
 {
     use HandlesAuthorization;
 
-    public function viewAny(AuthUser $authUser): bool
+    public function viewAny(User $authUser): bool
     {
         return $authUser->can('ViewAny:Student');
     }
 
-    public function view(AuthUser $authUser, Student $student): bool
+    public function view(User $authUser, Student $student): bool
     {
-        return $authUser->can('View:Student');
+        return $authUser->can('View:Student')
+            && $student->isAccessibleToAdminUser($authUser);
     }
 
-    public function create(AuthUser $authUser): bool
+    public function create(User $authUser): bool
     {
         return $authUser->can('Create:Student');
     }
 
-    public function update(AuthUser $authUser, Student $student): bool
+    public function update(User $authUser, Student $student): bool
     {
-        return $authUser->can('Update:Student');
+        return $authUser->can('Update:Student')
+            && $student->isAccessibleToAdminUser($authUser);
     }
 
-    public function deleteAny(AuthUser $authUser): bool
+    public function deleteAny(User $authUser): bool
     {
         return $authUser->can('DeleteAny:Student');
     }
