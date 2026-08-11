@@ -18,9 +18,9 @@ beforeEach(function (): void {
     Filament::setCurrentPanel('user');
 });
 
-function createMyFormsTestAssignment(Form $form, FormVersion $version, User $user): FormAssignment
+function createMyFormsTestAssignment(Form $form, FormVersion $version, User $user, ?Student $student = null): FormAssignment
 {
-    $student = Student::factory()->create(['user_id' => $user->id]);
+    $student ??= Student::factory()->create(['user_id' => $user->id]);
 
     return FormAssignment::factory()->create([
         'form_id' => $form->id,
@@ -79,6 +79,34 @@ it('uses tab-specific empty-state copy', function (string $tab, string $heading)
     ['completed', 'No completed forms'],
     ['expired', 'No expired forms'],
 ]);
+
+it('can search forms by the assigned student name', function (string $search): void {
+    /** @var User $user */
+    $user = auth()->user();
+    $form = Form::factory()->create();
+    $version = FormVersion::factory()
+        ->for($form)
+        ->published()
+        ->create();
+    $matchingStudent = Student::factory()->create([
+        'user_id' => $user->id,
+        'first_name' => 'Avery',
+        'last_name' => 'Stone',
+    ]);
+    $otherStudent = Student::factory()->create([
+        'user_id' => $user->id,
+        'first_name' => 'Jordan',
+        'last_name' => 'River',
+    ]);
+    $matchingAssignment = createMyFormsTestAssignment($form, $version, $user, $matchingStudent);
+    $otherAssignment = createMyFormsTestAssignment($form, $version, $user, $otherStudent);
+
+    livewire(ListFormUsers::class)
+        ->loadTable()
+        ->searchTable($search)
+        ->assertCanSeeTableRecords([$matchingAssignment])
+        ->assertCanNotSeeTableRecords([$otherAssignment]);
+})->with(['Avery', 'Stone']);
 
 it('uses the form name and response state in the edit-page title', function (bool $isCompleted, string $expectedTitle): void {
     /** @var User $user */

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\User\Resources\FormUsers\Tables;
 
 use App\Models\FormAssignment;
+use App\Models\Student;
 use App\Models\User;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 final class FormUsersTable
 {
@@ -33,7 +35,15 @@ final class FormUsersTable
                     ->searchable(),
                 TextColumn::make('subject_label')
                     ->label('Student')
-                    ->state(fn (FormAssignment $record): string => self::modelLabel($record->subject)),
+                    ->state(fn (FormAssignment $record): string => self::modelLabel($record->subject))
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query
+                        ->whereHasMorph(
+                            'subject',
+                            Student::class,
+                            fn (Builder $query): Builder => $query
+                                ->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%"),
+                        )),
                 TextColumn::make('version.version')
                     ->label('Version'),
                 TextColumn::make('latestSubmittedResponse.date_signed')
