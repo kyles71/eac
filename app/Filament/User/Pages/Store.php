@@ -33,7 +33,7 @@ use InvalidArgumentException;
 
 final class Store extends TablePage
 {
-    public StoreView $storeView = StoreView::List;
+    public StoreView $storeView = StoreView::Cards;
 
     protected static ?string $title = 'Store';
 
