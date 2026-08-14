@@ -7,6 +7,8 @@ use App\Enums\StoreView;
 use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\CourseHold;
 use App\Models\CourseHoldSeat;
@@ -16,6 +18,7 @@ use App\Models\ManagedBanner;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
+use App\Models\Student;
 use App\Services\UserBannerRenderHookRegistrarService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -195,10 +198,8 @@ it('displays early access products to directly granted users', function () {
 
 it('does not display products that require an unpurchased enrollment', function () {
     $requiredCourse = Course::factory()->create();
-    $restrictedProduct = Product::factory()->create([
-        'requires_course_id' => $requiredCourse->id,
-        'price' => 5000,
-    ]);
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
 
     livewire(Store::class)
         ->loadTable()
@@ -208,10 +209,8 @@ it('does not display products that require an unpurchased enrollment', function 
 
 it('displays products that require an already purchased enrollment', function () {
     $requiredCourse = Course::factory()->create();
-    $restrictedProduct = Product::factory()->create([
-        'requires_course_id' => $requiredCourse->id,
-        'price' => 5000,
-    ]);
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
 
     Enrollment::factory()->create([
         'course_id' => $requiredCourse->id,
@@ -221,6 +220,27 @@ it('displays products that require an already purchased enrollment', function ()
     livewire(Store::class)
         ->loadTable()
         ->assertCanSeeTableRecords([$this->product, $restrictedProduct]);
+});
+
+it('only displays a team restricted product to members of a required team', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCompetitionTeams()->attach($requiredTeam);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanNotSeeTableRecords([$restrictedProduct]);
+
+    Student::factory()
+        ->for(auth()->user())
+        ->create()
+        ->competitionTeams()
+        ->attach($requiredTeam);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$restrictedProduct]);
 });
 
 it('has required columns', function (string $column) {

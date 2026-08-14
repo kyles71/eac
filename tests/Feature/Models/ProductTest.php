@@ -204,9 +204,8 @@ it('delegates gift card storefront details to the linked gift card type', functi
 it('checks purchase eligibility from existing enrollments', function () {
     $user = User::factory()->create();
     $requiredCourse = Course::factory()->create();
-    $product = Product::factory()->create([
-        'requires_course_id' => $requiredCourse->id,
-    ]);
+    $product = Product::factory()->create();
+    $product->requiredCourses()->attach($requiredCourse);
 
     expect($product->canBePurchasedBy($user))->toBeFalse();
 
@@ -216,6 +215,122 @@ it('checks purchase eligibility from existing enrollments', function () {
     ]);
 
     expect($product->canBePurchasedBy($user))->toBeTrue();
+});
+
+it('accepts enrollment in any required course', function () {
+    $user = User::factory()->create();
+    $requiredCourses = Course::factory(2)->create();
+    $unrelatedCourse = Course::factory()->create();
+    $product = Product::factory()->create();
+    $product->requiredCourses()->attach($requiredCourses);
+
+    Enrollment::factory()->create([
+        'course_id' => $unrelatedCourse->id,
+        'user_id' => $user->id,
+    ]);
+
+    expect($product->canBePurchasedBy($user))->toBeFalse()
+        ->and($product->availabilityFor($user))->toBe(ProductAvailabilityStatus::EligibilityRequired)
+        ->and(Product::query()->visibleTo($user)->pluck('id')->all())->not->toContain($product->id);
+
+    Enrollment::factory()->create([
+        'course_id' => $requiredCourses->last()->id,
+        'user_id' => $user->id,
+    ]);
+
+    expect($product->canBePurchasedBy($user))->toBeTrue()
+        ->and(Product::query()->visibleTo($user)->pluck('id')->all())->toContain($product->id);
+});
+
+it('accepts required competition team membership through a student household or staff assignment', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $unrelatedTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $familyUser = User::factory()->create();
+    $staffUser = User::factory()->isTeacher()->create();
+    $unrelatedUser = User::factory()->create();
+    $familyStudent = Student::factory()->for($familyUser)->create();
+    $unrelatedStudent = Student::factory()->for($unrelatedUser)->create();
+    $product = Product::factory()->create();
+    $product->requiredCompetitionTeams()->attach($requiredTeam);
+
+    $familyStudent->competitionTeams()->attach($requiredTeam);
+    $requiredTeam->staff()->attach($staffUser);
+    $unrelatedStudent->competitionTeams()->attach($unrelatedTeam);
+
+    expect($product->canBePurchasedBy($familyUser))->toBeTrue()
+        ->and($product->canBePurchasedBy($staffUser))->toBeTrue()
+        ->and($product->canBePurchasedBy($unrelatedUser))->toBeFalse()
+        ->and(Product::query()->visibleTo($familyUser)->pluck('id')->all())->toContain($product->id)
+        ->and(Product::query()->visibleTo($staffUser)->pluck('id')->all())->toContain($product->id)
+        ->and(Product::query()->visibleTo($unrelatedUser)->pluck('id')->all())->not->toContain($product->id);
+});
+
+it('allows upcoming team members and stops eligibility when the selected season ends', function () {
+    $now = Carbon::parse('2026-07-01 12:00:00', 'UTC');
+    Carbon::setTestNow($now);
+
+    try {
+        $currentSeason = CompetitionSeason::factory()->create([
+            'starts_on' => $now->copy()->subMonth()->toDateString(),
+            'ends_on' => $now->copy()->addDay()->toDateString(),
+        ]);
+        $upcomingSeason = CompetitionSeason::factory()->create([
+            'starts_on' => $now->copy()->addDays(2)->toDateString(),
+            'ends_on' => $now->copy()->addYear()->toDateString(),
+        ]);
+        $currentTeam = CompetitionTeam::factory()->for($currentSeason, 'season')->create();
+        $upcomingTeam = CompetitionTeam::factory()->for($upcomingSeason, 'season')->create();
+        $currentUser = User::factory()->create();
+        $upcomingUser = User::factory()->create();
+        Student::factory()->for($currentUser)->create()->competitionTeams()->attach($currentTeam);
+        Student::factory()->for($upcomingUser)->create()->competitionTeams()->attach($upcomingTeam);
+        $currentProduct = Product::factory()->create();
+        $upcomingProduct = Product::factory()->create();
+        $currentProduct->requiredCompetitionTeams()->attach($currentTeam);
+        $upcomingProduct->requiredCompetitionTeams()->attach($upcomingTeam);
+
+        expect($currentProduct->canBePurchasedBy($currentUser))->toBeTrue()
+            ->and($upcomingProduct->canBePurchasedBy($upcomingUser))->toBeTrue();
+
+        Carbon::setTestNow($now->copy()->addDays(2));
+
+        expect($currentProduct->canBePurchasedBy($currentUser))->toBeFalse()
+            ->and($currentProduct->availabilityFor($currentUser))->toBe(ProductAvailabilityStatus::EligibilityRequired)
+            ->and(Product::query()->visibleTo($currentUser)->pluck('id')->all())->not->toContain($currentProduct->id);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('requires a match in both course and competition team categories when both are configured', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredCourse = Course::factory()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $courseOnlyUser = User::factory()->create();
+    $teamOnlyUser = User::factory()->create();
+    $eligibleUser = User::factory()->create();
+    $product = Product::factory()->create();
+    $product->requiredCourses()->attach($requiredCourse);
+    $product->requiredCompetitionTeams()->attach($requiredTeam);
+
+    Enrollment::factory()->create([
+        'course_id' => $requiredCourse->id,
+        'user_id' => $courseOnlyUser->id,
+    ]);
+    Student::factory()->for($teamOnlyUser)->create()->competitionTeams()->attach($requiredTeam);
+    Enrollment::factory()->create([
+        'course_id' => $requiredCourse->id,
+        'user_id' => $eligibleUser->id,
+    ]);
+    Student::factory()->for($eligibleUser)->create()->competitionTeams()->attach($requiredTeam);
+
+    expect($product->canBePurchasedBy($courseOnlyUser))->toBeFalse()
+        ->and($product->canBePurchasedBy($teamOnlyUser))->toBeFalse()
+        ->and($product->canBePurchasedBy($eligibleUser))->toBeTrue()
+        ->and(Product::query()->visibleTo($courseOnlyUser)->pluck('id')->all())->not->toContain($product->id)
+        ->and(Product::query()->visibleTo($teamOnlyUser)->pluck('id')->all())->not->toContain($product->id)
+        ->and(Product::query()->visibleTo($eligibleUser)->pluck('id')->all())->toContain($product->id);
 });
 
 it('evaluates scheduled product availability boundaries', function () {
@@ -360,7 +475,7 @@ it('grants computed competition audience early access to current competition fam
         ->and(Product::query()->visibleTo($user)->pluck('id')->all())->toContain($product->id);
 });
 
-it('does not let early access bypass expiration or enrollment restrictions', function () {
+it('does not let early access bypass expiration or purchase eligibility restrictions', function () {
     $user = User::factory()->create();
     $requiredCourse = Course::factory()->create();
     $expiredProduct = Product::factory()
@@ -368,10 +483,8 @@ it('does not let early access bypass expiration or enrollment restrictions', fun
         ->create(['price' => 5000]);
     $restrictedProduct = Product::factory()
         ->availableFrom(now()->addDay())
-        ->create([
-            'price' => 5000,
-            'requires_course_id' => $requiredCourse->id,
-        ]);
+        ->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
 
     ProductEarlyAccessWindow::factory()
         ->for($expiredProduct)
@@ -387,7 +500,7 @@ it('does not let early access bypass expiration or enrollment restrictions', fun
     expect($expiredProduct->refresh()->canBePurchasedBy($user))->toBeFalse()
         ->and($expiredProduct->availabilityFor($user))->toBe(ProductAvailabilityStatus::Expired)
         ->and($restrictedProduct->refresh()->canBePurchasedBy($user))->toBeFalse()
-        ->and($restrictedProduct->availabilityFor($user))->toBe(ProductAvailabilityStatus::EnrollmentRequired);
+        ->and($restrictedProduct->availabilityFor($user))->toBe(ProductAvailabilityStatus::EligibilityRequired);
 });
 
 it('morphs to a course', function () {

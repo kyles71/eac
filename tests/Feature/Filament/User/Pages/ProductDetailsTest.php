@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
@@ -12,6 +14,7 @@ use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
+use App\Models\Student;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Carbon\CarbonImmutable;
@@ -280,11 +283,38 @@ it('renders early access product details for directly granted users', function (
 
 it('redirects enrollment restricted products back to the store', function () {
     $requiredCourse = Course::factory()->create();
-    $product = Product::factory()->create([
-        'price' => 5000,
-        'requires_course_id' => $requiredCourse->id,
-    ]);
+    $product = Product::factory()->create(['price' => 5000]);
+    $product->requiredCourses()->attach($requiredCourse);
 
     $this->get(ProductDetails::getUrl(['product' => $product], false))
         ->assertRedirect(Store::getUrl());
+});
+
+it('shows all course and competition team eligibility requirements', function () {
+    $requiredCourses = Course::factory(2)->create();
+    $season = CompetitionSeason::factory()->current()->create(['name' => '2026 Competition Season']);
+    $requiredTeams = CompetitionTeam::factory(2)->for($season, 'season')->create();
+    $product = Product::factory()->create(['price' => 5000]);
+    $product->requiredCourses()->attach($requiredCourses);
+    $product->requiredCompetitionTeams()->attach($requiredTeams);
+
+    Enrollment::factory()->create([
+        'course_id' => $requiredCourses->last()->id,
+        'user_id' => auth()->id(),
+    ]);
+    Student::factory()
+        ->for(auth()->user())
+        ->create()
+        ->competitionTeams()
+        ->attach($requiredTeams->last());
+
+    livewire(ProductDetails::class, ['product' => $product])
+        ->assertOk()
+        ->assertSee('Requires Enrollment In At Least One Of')
+        ->assertSee($requiredCourses->first()->name)
+        ->assertSee($requiredCourses->last()->name)
+        ->assertSee('Requires Membership In At Least One Of')
+        ->assertSee('2026 Competition Season')
+        ->assertSee($requiredTeams->first()->name)
+        ->assertSee($requiredTeams->last()->name);
 });

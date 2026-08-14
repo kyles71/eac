@@ -24,7 +24,7 @@ final class PaymentPlanScheduleAdjustedEmailType implements EmailTypeContract
                 <p>Hello {{ user.first_name }},</p>
                 <p>Your payment schedule for order #{{ order.number }} has been updated.</p>
                 <p><strong>Reason:</strong> {{ adjustment.reason }}</p>
-                <p>Automatic payments are attempted at 12:01 AM Eastern on each due date.</p>
+                <p>Automatic payments are attempted at 10:00 AM Eastern on each due date.</p>
                 {{ slot.revised-schedule }}
                 HTML],
             tokens: [

@@ -88,7 +88,7 @@ it('adjusts unpaid installments reactivates failures audits the change and email
             && str_contains($rendered->html, 'Moved for paycheck &lt;Friday&gt;.')
             && str_contains($rendered->html, 'August 9, 2026')
             && str_contains($rendered->html, 'August 25, 2026')
-            && str_contains($rendered->html, '12:01 AM Eastern');
+            && str_contains($rendered->html, '10:00 AM Eastern');
     });
 });
 
