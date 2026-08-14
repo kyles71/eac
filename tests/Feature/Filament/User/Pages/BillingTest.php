@@ -9,6 +9,7 @@ use App\Enums\PaymentPlanStatus;
 use App\Enums\ProductType;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\BillingCreditGrantsTable;
+use App\Filament\User\Pages\Cart;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
@@ -280,6 +281,48 @@ it('refreshes the credits tab after redeeming a store gift card', function () {
         ->assertDontSee('No store credit')
         ->assertSee('$50.00')
         ->assertSee('Redeemed gift card STORE-CARD-50');
+});
+
+it('shares failed code attempts between the cart and billing', function () {
+    $giftCard = GiftCard::factory()->amount(5000)->create();
+
+    foreach (range(1, 3) as $attempt) {
+        livewire(Cart::class)
+            ->set('code', "INVALID_CART_CODE_{$attempt}")
+            ->call('applyCode')
+            ->assertNotified('Invalid code');
+    }
+
+    foreach (range(4, 5) as $attempt) {
+        livewire(Billing::class)
+            ->callAction(
+                TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+                ['code' => "INVALID_BILLING_CODE_{$attempt}"],
+            )
+            ->assertNotified('Invalid gift card');
+    }
+
+    livewire(Billing::class)
+        ->callAction(
+            TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+            ['code' => $giftCard->code],
+        )
+        ->assertNotified('Too many code attempts');
+
+    expect($giftCard->refresh()->isRedeemed())->toBeFalse()
+        ->and(auth()->user()->refresh()->credit_balance)->toBe(0);
+
+    $this->travel(61)->seconds();
+
+    livewire(Billing::class)
+        ->callAction(
+            TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+            ['code' => $giftCard->code],
+        )
+        ->assertNotified('Gift card redeemed!');
+
+    expect($giftCard->refresh()->isRedeemed())->toBeTrue()
+        ->and(auth()->user()->refresh()->credit_balance)->toBe(5000);
 });
 
 it('refreshes the credits tab after redeeming a limited use gift card', function () {
