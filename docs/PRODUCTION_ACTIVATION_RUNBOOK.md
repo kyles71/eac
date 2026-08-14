@@ -316,7 +316,7 @@ The alternative system-crontab format used in `/etc/crontab` or `/etc/cron.d/*` 
 
 The current schedule includes:
 
-- 12:01 a.m. Eastern: process payment-plan installments.
+- 10:00 a.m. Eastern: process payment-plan installments.
 - 12:01 a.m. Eastern: cancel orders abandoned for more than 24 hours.
 - 3:10 a.m. Eastern: remove database backups outside the retention policy.
 - 3:40 a.m. Eastern: create an encrypted production database backup.
