@@ -7,6 +7,7 @@ use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
 use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Models\Form;
 use App\Models\FormUser;
+use App\Models\Student;
 use Filament\Facades\Filament;
 
 use function Pest\Livewire\livewire;
@@ -53,6 +54,38 @@ it('uses tab-specific empty-state copy', function (string $tab, string $heading)
     ['completed', 'No completed forms'],
     ['expired', 'No expired forms'],
 ]);
+
+it('can search forms by the assigned student name', function (string $search): void {
+    $form = Form::factory()->create([
+        'valid_until' => now()->addMonth(),
+    ]);
+    $matchingStudent = Student::factory()->for(auth()->user())->create([
+        'first_name' => 'Avery',
+        'last_name' => 'Stone',
+    ]);
+    $otherStudent = Student::factory()->for(auth()->user())->create([
+        'first_name' => 'Jordan',
+        'last_name' => 'River',
+    ]);
+    $matchingForm = FormUser::factory()
+        ->for($form)
+        ->for(auth()->user())
+        ->forStudent($matchingStudent)
+        ->unsigned()
+        ->create();
+    $otherForm = FormUser::factory()
+        ->for($form)
+        ->for(auth()->user())
+        ->forStudent($otherStudent)
+        ->unsigned()
+        ->create();
+
+    livewire(ListFormUsers::class)
+        ->loadTable()
+        ->searchTable($search)
+        ->assertCanSeeTableRecords([$matchingForm])
+        ->assertCanNotSeeTableRecords([$otherForm]);
+})->with(['Avery', 'Stone']);
 
 it('uses the form name and response state in the edit-page title', function (bool $isUnsigned, string $expectedTitle): void {
     $form = Form::factory()->create([
