@@ -43,7 +43,7 @@ final class AdjustPaymentPlanDueDatesAction extends Action
                     ->where('status', '!=', InstallmentStatus::Paid->value)
                     ->exists())
             ->modalHeading('Adjust Payment Plan Due Dates')
-            ->modalDescription('Automatic payments are attempted at 12:01 AM Eastern on each due date. Paid installments cannot be changed.')
+            ->modalDescription('Automatic payments are attempted at 10:00 AM Eastern on each due date. Paid installments cannot be changed.')
             ->modalWidth(Width::FiveExtraLarge)
             ->modalSubmitActionLabel('Save Due Dates')
             ->fillForm(function (PaymentPlan $record): array {
