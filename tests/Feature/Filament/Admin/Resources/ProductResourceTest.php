@@ -6,6 +6,8 @@ use App\Enums\DashboardAudience;
 use App\Enums\ProductQuestionType;
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
@@ -16,6 +18,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Illuminate\Support\Carbon;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
@@ -63,6 +66,105 @@ it('shows linked item controls before store details on the product form', functi
     livewire(ListProducts::class)
         ->mountAction(CreateAction::class)
         ->assertSeeInOrder(['Linked Item', 'Store Details']);
+});
+
+it('shows purchase eligibility controls for every product type', function (?string $productableType) {
+    $component = livewire(ListProducts::class)
+        ->mountAction(CreateAction::class);
+
+    if ($productableType !== null) {
+        $component->fillForm(['productable_type' => $productableType]);
+    }
+
+    $component
+        ->assertSchemaComponentVisible('requiredCourses')
+        ->assertSchemaComponentVisible('requiredCompetitionTeams');
+})->with([
+    'standalone' => null,
+    'course' => Course::class,
+    'costume' => Costume::class,
+    'gift card' => GiftCardType::class,
+]);
+
+it('can configure multiple required courses and competition teams', function () {
+    $courses = Course::factory(2)->create();
+    $season = CompetitionSeason::factory()->current()->create(['name' => '2026 Competition Season']);
+    $teams = CompetitionTeam::factory(2)->for($season, 'season')->create();
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'name' => 'Competition Bundle',
+            'description' => null,
+            'price' => '75.00',
+            'is_active' => true,
+            'productable_type' => null,
+            'productable_id' => null,
+            'requiredCourses' => $courses->modelKeys(),
+            'requiredCompetitionTeams' => $teams->modelKeys(),
+        ])
+        ->callMountedAction()
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    $product = Product::query()->where('name', 'Competition Bundle')->firstOrFail();
+
+    expect($product->requiredCourses()->pluck('courses.id')->sort()->values()->all())
+        ->toBe($courses->modelKeys())
+        ->and($product->requiredCompetitionTeams()->pluck('competition_teams.id')->sort()->values()->all())
+        ->toBe($teams->modelKeys());
+
+    livewire(ViewProduct::class, ['record' => $product->id])
+        ->assertSee($courses->first()->name)
+        ->assertSee($courses->last()->name)
+        ->assertSee('2026 Competition Season');
+});
+
+it('offers current and future teams while retaining a selected ended team on edit', function () {
+    $now = Carbon::parse('2026-07-01 12:00:00', 'UTC');
+    Carbon::setTestNow($now);
+
+    try {
+        $endingSeason = CompetitionSeason::factory()->create([
+            'name' => 'Ending Season',
+            'starts_on' => $now->copy()->subMonth()->toDateString(),
+            'ends_on' => $now->copy()->addDay()->toDateString(),
+        ]);
+        $futureSeason = CompetitionSeason::factory()->create([
+            'name' => 'Future Season',
+            'starts_on' => $now->copy()->addDays(3)->toDateString(),
+            'ends_on' => $now->copy()->addYear()->toDateString(),
+        ]);
+        $hiddenEndedTeam = CompetitionTeam::factory()->for($endingSeason, 'season')->create(['name' => 'Hidden']);
+        $selectedEndedTeam = CompetitionTeam::factory()->for($endingSeason, 'season')->create(['name' => 'Selected']);
+        $futureTeam = CompetitionTeam::factory()->for($futureSeason, 'season')->create(['name' => 'Upcoming']);
+        $product = Product::factory()->create();
+        $product->requiredCompetitionTeams()->attach($selectedEndedTeam);
+
+        Carbon::setTestNow($now->copy()->addDays(2));
+
+        $component = livewire(ViewProduct::class, ['record' => $product->id])
+            ->mountAction(EditAction::class)
+            ->assertSchemaComponentExists(
+                'requiredCompetitionTeams',
+                checkComponentUsing: fn (Select $select): bool => $select->getOptions() === [
+                    $selectedEndedTeam->id => 'Ending Season: Selected (Ended)',
+                    $futureTeam->id => 'Future Season: Upcoming (Upcoming)',
+                ],
+            );
+
+        $component
+            ->fillForm(['name' => 'Updated Product'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        expect($hiddenEndedTeam->id)->not->toBeIn([$selectedEndedTeam->id, $futureTeam->id])
+            ->and($product->refresh()->requiredCompetitionTeams()->pluck('competition_teams.id')->all())
+            ->toBe([$selectedEndedTeam->id]);
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 it('does not require or save a fixed product price for custom gift card products', function () {
@@ -386,7 +488,8 @@ it('can edit product early access windows', function () {
             'productable_type' => null,
             'productable_id' => null,
             'include_productable_images' => false,
-            'requires_course_id' => null,
+            'requiredCourses' => [],
+            'requiredCompetitionTeams' => [],
         ])
         ->callMountedAction()
         ->assertHasNoActionErrors()

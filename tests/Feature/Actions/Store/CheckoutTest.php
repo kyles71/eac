@@ -9,6 +9,8 @@ use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Enums\ProductType;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CreditGrant;
@@ -115,6 +117,23 @@ it('fails when a cart product became unavailable before checkout', function () {
     $action = app(CreateOrder::class);
     $action->handle($this->user);
 })->throws(InvalidArgumentException::class, '"Jazz Shoes" is no longer available for purchase.');
+
+it('fails when a cart product gains unmet purchase eligibility requirements', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $this->product->update(['name' => 'Competition Jacket']);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $this->product->requiredCompetitionTeams()->attach($requiredTeam);
+
+    $action = app(CreateOrder::class);
+    $action->handle($this->user);
+})->throws(InvalidArgumentException::class, '"Competition Jacket" requires qualifying course enrollment and/or competition team membership.');
 
 it('checks early access window timing at checkout', function () {
     $this->product->update([

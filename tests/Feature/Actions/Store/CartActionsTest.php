@@ -6,6 +6,8 @@ use App\Actions\Store\AddToCart;
 use App\Actions\Store\RemoveFromCart;
 use App\Actions\Store\UpdateCartQuantity;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\GiftCardType;
@@ -195,14 +197,22 @@ it('allows directly granted early access users to add a scheduled product', func
 
 it('rejects adding a product that requires an unpurchased enrollment', function () {
     $requiredCourse = Course::factory()->create();
-    $restrictedProduct = Product::factory()->create([
-        'requires_course_id' => $requiredCourse->id,
-        'price' => 5000,
-    ]);
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
 
     $action = new AddToCart;
     $action->handle($this->user, $restrictedProduct);
-})->throws(InvalidArgumentException::class, 'This product requires an existing course enrollment.');
+})->throws(InvalidArgumentException::class, 'This product requires qualifying course enrollment and/or competition team membership.');
+
+it('rejects adding a product without required competition team membership', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCompetitionTeams()->attach($requiredTeam);
+
+    $action = new AddToCart;
+    $action->handle($this->user, $restrictedProduct);
+})->throws(InvalidArgumentException::class, 'This product requires qualifying course enrollment and/or competition team membership.');
 
 it('can remove an item from the cart', function () {
     $cartItem = CartItem::factory()->create([
