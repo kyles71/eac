@@ -7,6 +7,8 @@ namespace App\Filament\Admin\Resources\Products\Schemas;
 use App\Enums\DashboardAudience;
 use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\GiftCardType;
@@ -81,17 +83,6 @@ final class ProductForm
                                     $set('price', number_format($giftCardType->denomination / 100, 2, '.', ''));
                                 }
                             }),
-                        Select::make('requires_course_id')
-                            ->label('Requires Enrollment In')
-                            ->helperText('Only available to users already enrolled in this course.')
-                            ->relationship(
-                                name: 'requiresCourse',
-                                titleAttribute: 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
-                            )
-                            ->nullable()
-                            ->preload()
-                            ->visible(fn (Get $get): bool => in_array($get('productable_type'), [Course::class, Costume::class], true)),
                     ]),
                 Section::make('Store Details')
                     ->columns(2)
@@ -166,6 +157,53 @@ final class ProductForm
                             ->reorderable(false)
                             ->collapsible()
                             ->columnSpanFull(),
+                    ]),
+                Section::make('Purchase Eligibility')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('requiredCourses')
+                            ->label('Requires Enrollment In At Least One Of')
+                            ->relationship(
+                                name: 'requiredCourses',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn (Builder $query): Builder => $query->orderBy('name'),
+                            )
+                            ->multiple()
+                            ->searchable(['name'])
+                            ->preload()
+                            ->helperText('Leave empty for no course requirement. When teams are also selected, both requirements must be met.'),
+                        Select::make('requiredCompetitionTeams')
+                            ->label('Requires Membership In At Least One Of')
+                            ->relationship(
+                                name: 'requiredCompetitionTeams',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: function (Builder $query, ?Product $record): Builder {
+                                    return $query
+                                        ->with('season')
+                                        ->where(function (Builder $query) use ($record): void {
+                                            $query->whereHas(
+                                                'season',
+                                                fn (Builder $query): Builder => CompetitionSeason::constrainToNotEnded($query),
+                                            );
+
+                                            if ($record !== null) {
+                                                $query->orWhereIn(
+                                                    'competition_teams.id',
+                                                    $record->requiredCompetitionTeams()->select('competition_teams.id'),
+                                                );
+                                            }
+                                        })
+                                        ->orderBy('name');
+                                },
+                            )
+                            ->multiple()
+                            ->searchable(['name'])
+                            ->preload()
+                            ->getOptionLabelFromRecordUsing(
+                                fn (CompetitionTeam $record): string => "{$record->season->name}: {$record->name} ({$record->season->status()})",
+                            )
+                            ->helperText('Leave empty for no team requirement. Student households and assigned team staff qualify; ended seasons do not. When courses are also selected, both requirements must be met.'),
                     ]),
                 Section::make('Purchaser Questions & Notifications')
                     ->columnSpanFull()
