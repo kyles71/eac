@@ -241,7 +241,7 @@ final readonly class ProductQuestionAnswerService
                 continue;
             }
 
-            $selectedOption = $this->normalizeStringAnswer($submittedAnswer);
+            $selectedOption = $this->normalizeSelectedOption($submittedAnswer);
 
             if ($question->is_required && $selectedOption === null) {
                 throw new InvalidArgumentException($this->requiredQuestionMessage($product, $question, $unitNumber, $totalQuantity));
@@ -271,6 +271,15 @@ final readonly class ProductQuestionAnswerService
         }
 
         return $normalizedAnswers;
+    }
+
+    private function normalizeSelectedOption(mixed $answer): ?string
+    {
+        if (is_int($answer)) {
+            $answer = (string) $answer;
+        }
+
+        return $this->normalizeStringAnswer($answer);
     }
 
     private function normalizeStringAnswer(mixed $answer): ?string
