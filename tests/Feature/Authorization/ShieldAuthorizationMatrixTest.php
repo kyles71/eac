@@ -65,7 +65,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
         OrderResource::class => ['viewAny', 'view'],
-        PaymentPlanResource::class => ['viewAny', 'view'],
+        PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
         RoleResource::class => $sixAbilities,
@@ -117,6 +117,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:ThemeBuilder',
             'Manage:UserAccess',
             'Publish:LegalDocument',
+            'AdjustDueDates:PaymentPlan',
             'View:AppUpdatesPage',
         );
 

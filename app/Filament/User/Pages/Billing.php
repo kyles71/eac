@@ -629,8 +629,7 @@ final class Billing extends Page
                                     TextEntry::make("installment_{$installment->id}_due")
                                         ->label('Due Date')
                                         ->state($installment->due_date)
-                                        ->date('M j, Y')
-                                        ->timezone($this->displayTimezone()),
+                                        ->date('M j, Y'),
                                     TextEntry::make("installment_{$installment->id}_status")
                                         ->label('Status')
                                         ->state($installment->status)
