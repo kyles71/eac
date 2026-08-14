@@ -349,6 +349,36 @@ it('asks purchaser questions in the table add to cart modal and stores the answe
     ]);
 });
 
+it('stores digit-only select answers from the table add to cart modal', function (): void {
+    $question = ProductQuestion::factory()
+        ->for($this->product)
+        ->required()
+        ->select(['4', '6', 'YXS'])
+        ->create([
+            'question' => 'Jacket size',
+        ]);
+
+    livewire(Store::class)
+        ->mountAction(TestAction::make('addToCart')->table($this->product->refresh()))
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => '6'],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->firstOrFail();
+
+    expect($cartItem->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => '6'],
+    ]);
+});
+
 it('shows custom gift card amount and purchaser questions in the same table modal', function (): void {
     $giftCardType = GiftCardType::factory()
         ->denomination(5000)

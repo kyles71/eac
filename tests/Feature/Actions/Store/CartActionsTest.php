@@ -73,6 +73,28 @@ it('stores distinct purchaser answers when the same product is added repeatedly'
         ]);
 });
 
+it('normalizes digit-only select answers when adding a product to the cart', function () {
+    $question = ProductQuestion::factory()
+        ->for($this->product)
+        ->required()
+        ->select(['4', '6', 'YXS'])
+        ->create([
+            'question' => 'Jacket size',
+        ]);
+
+    $cartItem = (new AddToCart)->handle(
+        $this->user,
+        $this->product->refresh(),
+        questionAnswers: [
+            1 => ["question_{$question->id}" => 6],
+        ],
+    );
+
+    expect($cartItem->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => '6'],
+    ]);
+});
+
 it('requires configured purchaser answers when adding to cart', function () {
     ProductQuestion::factory()->for($this->product)->required()->create([
         'question' => 'Dancer name',
