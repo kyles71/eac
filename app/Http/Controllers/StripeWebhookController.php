@@ -32,7 +32,6 @@ final class StripeWebhookController
         private readonly SendOrderReceipt $sendOrderReceipt,
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
-        private readonly ReleaseCourseHoldOrderClaims $releaseCourseHoldOrderClaims,
         private readonly ReconcileOrderRefundAction $reconcileOrderRefund,
     ) {}
 
