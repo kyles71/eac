@@ -88,6 +88,7 @@ final class PaymentPlansTable
                         'paid' => 'Paid',
                         'overdue' => 'Overdue',
                         'failed' => 'Failed',
+                        'cancelled' => 'Cancelled',
                         'no_installments' => 'No installments',
                     ])
                     ->query(fn (Builder $query, array $data): Builder => self::applyStatusFilter($query, $data['value'] ?? null)),
@@ -108,6 +109,11 @@ final class PaymentPlansTable
             return 'Paid';
         }
 
+        if ($installments->reject(fn (Installment $installment): bool => $installment->status === InstallmentStatus::Paid)
+            ->every(fn (Installment $installment): bool => $installment->status === InstallmentStatus::Cancelled)) {
+            return 'Cancelled';
+        }
+
         if ($installments->contains(fn (Installment $installment): bool => $installment->status === InstallmentStatus::Overdue)) {
             return 'Overdue';
         }
@@ -124,7 +130,7 @@ final class PaymentPlansTable
         return match ($status) {
             'Paid' => 'success',
             'Overdue', 'Failed' => 'danger',
-            'No installments' => 'gray',
+            'No installments', 'Cancelled' => 'gray',
             default => 'warning',
         };
     }
@@ -141,7 +147,7 @@ final class PaymentPlansTable
     private static function nextUnpaidInstallment(PaymentPlan $record): ?Installment
     {
         return self::installments($record)
-            ->filter(fn (Installment $installment): bool => $installment->status !== InstallmentStatus::Paid)
+            ->filter(fn (Installment $installment): bool => ! in_array($installment->status, [InstallmentStatus::Paid, InstallmentStatus::Cancelled], true))
             ->sortBy('due_date')
             ->first();
     }
@@ -172,6 +178,12 @@ final class PaymentPlansTable
                 ->whereDoesntHave('installments', fn (Builder $query): Builder => $query->where('status', '!=', InstallmentStatus::Paid->value)),
             'overdue' => $query->whereHas('installments', fn (Builder $query): Builder => $query->where('status', InstallmentStatus::Overdue->value)),
             'failed' => $query->whereHas('installments', fn (Builder $query): Builder => $query->where('status', InstallmentStatus::Failed->value)),
+            'cancelled' => $query
+                ->whereHas('installments', fn (Builder $query): Builder => $query->where('status', InstallmentStatus::Cancelled->value))
+                ->whereDoesntHave('installments', fn (Builder $query): Builder => $query->whereNotIn('status', [
+                    InstallmentStatus::Paid->value,
+                    InstallmentStatus::Cancelled->value,
+                ])),
             'no_installments' => $query->doesntHave('installments'),
             default => $query,
         };

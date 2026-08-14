@@ -18,6 +18,7 @@ use App\Models\Installment;
 use App\Models\LegalDocumentVersion;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
 use App\Models\PaymentPlan;
 use App\Models\Product;
 use App\Models\ProductQuestionAnswer;
@@ -62,6 +63,21 @@ it('shows only the authenticated users orders', function () {
     livewire(Billing::class)
         ->assertSee("Order #{$order->id}")
         ->assertDontSee("Order #{$otherOrder->id}");
+});
+
+it('never shows internal refund reasons to the customer', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'total' => 5000,
+    ]);
+    OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'reason' => 'PRIVATE ADMIN REFUND NOTE',
+    ]);
+
+    livewire(Billing::class)
+        ->assertSee("Order #{$order->id}")
+        ->assertDontSee('PRIVATE ADMIN REFUND NOTE');
 });
 
 it('resends a completed order receipt from billing', function () {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -68,6 +69,19 @@ final class Installment extends Model
                     ->whereNull('last_attempted_at')
                     ->orWhere('last_attempted_at', '<', $startOfToday);
             });
+    }
+
+    public function scopeNotBlockedByRefundCancellation(Builder $query): void
+    {
+        $query->whereDoesntHave('paymentPlan.order.refunds', function (Builder $query): void {
+            $query
+                ->where('cancel_remaining_installments', true)
+                ->whereIn('status', [
+                    OrderRefundStatus::Processing,
+                    OrderRefundStatus::Pending,
+                    OrderRefundStatus::PartiallyFailed,
+                ]);
+        });
     }
 
     /**
