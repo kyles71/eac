@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('installments:process')
-    ->dailyAt('00:01')
+    ->dailyAt('10:00')
     ->timezone('America/New_York')
     ->name('process-installments')
     ->description('Process due and retryable payment plan installments');
