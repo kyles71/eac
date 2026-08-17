@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -48,6 +49,12 @@ final class Event extends Model implements HasMedia
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    /** @return HasOne<RecurringPrivateLessonCharge, $this> */
+    public function recurringPrivateLessonCharge(): HasOne
+    {
+        return $this->hasOne(RecurringPrivateLessonCharge::class);
     }
 
     public function isCancelled(): bool
@@ -105,6 +112,33 @@ final class Event extends Model implements HasMedia
 
     public function scopeVisibleOnCalendar(Builder $query, Calendar $calendar, User $user): Builder
     {
+        if (! $user->hasAnyRole(['owner', 'super_admin'])) {
+            $isStaff = $user->hasRole('teacher');
+
+            $query->where(function (Builder $query) use ($isStaff, $user): void {
+                $query
+                    ->whereNull('course_id')
+                    ->orWhereHas('course', function (Builder $query) use ($isStaff, $user): void {
+                        $query
+                            ->where('is_private', false)
+                            ->orWhere(function (Builder $query) use ($isStaff, $user): void {
+                                $query
+                                    ->where('is_private', true)
+                                    ->where(function (Builder $query) use ($isStaff, $user): void {
+                                        $query
+                                            ->whereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id))
+                                            ->orWhereHas(
+                                                'recurringPrivateLesson',
+                                                fn (Builder $query): Builder => $isStaff
+                                                    ? $query
+                                                    : $query->where('user_id', $user->id),
+                                            );
+                                    });
+                            });
+                    });
+            });
+        }
+
         $query->whereDoesntHave(
             'excludedUsers',
             fn (Builder $query): Builder => $query->whereKey($user->id)

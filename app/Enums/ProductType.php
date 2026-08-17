@@ -7,6 +7,7 @@ namespace App\Enums;
 use App\Models\Course;
 use App\Models\Gear;
 use App\Models\GiftCardType;
+use App\Models\RecurringPrivateLessonCharge;
 use Filament\Support\Contracts\HasLabel;
 use InvalidArgumentException;
 
@@ -16,6 +17,7 @@ enum ProductType: string implements HasLabel
     case Course = 'Course';
     case GiftCardType = 'Gift Card';
     case Gear = 'Gear';
+    case RecurringPrivateLesson = 'Recurring Private Lesson';
     case Standalone = 'Generic Product';
 
     /**
@@ -33,6 +35,7 @@ enum ProductType: string implements HasLabel
             Course::class => self::Course,
             GiftCardType::class => self::GiftCardType,
             Gear::class => self::Gear,
+            RecurringPrivateLessonCharge::class => self::RecurringPrivateLesson,
             default => throw new InvalidArgumentException("Unrecognized productable type: {$morphClass}"),
         };
     }
@@ -60,6 +63,7 @@ enum ProductType: string implements HasLabel
             self::Course => Course::class,
             self::GiftCardType => GiftCardType::class,
             self::Gear => Gear::class,
+            self::RecurringPrivateLesson => RecurringPrivateLessonCharge::class,
             self::Standalone => null,
         };
     }

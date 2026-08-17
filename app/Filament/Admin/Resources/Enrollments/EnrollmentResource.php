@@ -8,12 +8,14 @@ use App\Filament\Admin\Resources\Enrollments\Pages\ListEnrollments;
 use App\Filament\Admin\Resources\Enrollments\Schemas\EnrollmentForm;
 use App\Filament\Admin\Resources\Enrollments\Tables\EnrollmentsTable;
 use App\Models\Enrollment;
+use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class EnrollmentResource extends Resource
@@ -48,5 +50,19 @@ final class EnrollmentResource extends Resource
         return [
             'index' => ListEnrollments::route('/'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
+            $query->whereHas('course', fn (Builder $query): Builder => $query
+                ->where('is_private', false)
+                ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id)));
+        }
+
+        return $query;
     }
 }

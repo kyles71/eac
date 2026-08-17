@@ -22,6 +22,7 @@ use App\Services\ProductAvailabilityService;
 use App\Services\ProductQuestionAnswerService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
+use App\Support\Store\AllocateOrderItemPayments;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -38,6 +39,7 @@ final class CreateOrder
         private readonly PaymentPlanBreakdownCalculator $paymentPlanBreakdownCalculator,
         private readonly ProductQuestionAnswerService $productQuestionAnswers,
         private readonly ClaimCourseHoldSeatsForOrder $claimCourseHoldSeats,
+        private readonly AllocateOrderItemPayments $allocateOrderItemPayments,
     ) {}
 
     public function handle(
@@ -49,14 +51,6 @@ final class CreateOrder
         return DB::transaction(function () use ($user, $discountCode, $creditToApply, $paymentPlanTemplate): Order {
             if ($paymentPlanTemplate !== null && ! $paymentPlanTemplate->is_active) {
                 throw new InvalidArgumentException('The selected payment plan is no longer available.');
-            }
-
-            $paymentPlanTermsVersion = $paymentPlanTemplate !== null
-                ? PaymentPlanTerms::currentVersion()
-                : null;
-
-            if ($paymentPlanTemplate !== null && $paymentPlanTermsVersion === null) {
-                throw new InvalidArgumentException('Payment plan terms are not available.');
             }
 
             // Cancel any existing pending orders for this user to prevent duplicates
@@ -71,6 +65,19 @@ final class CreateOrder
 
             if ($cartItems->isEmpty()) {
                 throw new InvalidArgumentException('Your cart is empty.');
+            }
+
+            if ($paymentPlanTemplate !== null
+                && $cartItems->contains(fn (CartItem $cartItem): bool => ! $cartItem->product->allows_payment_plan)) {
+                throw new InvalidArgumentException('Payment plans are not available for recurring private lessons.');
+            }
+
+            $paymentPlanTermsVersion = $paymentPlanTemplate !== null
+                ? PaymentPlanTerms::currentVersion()
+                : null;
+
+            if ($paymentPlanTemplate !== null && $paymentPlanTermsVersion === null) {
+                throw new InvalidArgumentException('Payment plan terms are not available.');
             }
 
             // Soft capacity pre-check
@@ -209,7 +216,26 @@ final class CreateOrder
                 $restrictedCreditTotal = $restrictedCreditApplication['total'];
                 $restrictedCreditByOrderItemId = $restrictedCreditApplication['by_key'];
             } else {
-                $restrictedCreditTotal = $this->creditLedger->applyRestrictedToOrder($order);
+                $discountByOrderItemId = $this->allocateOrderItemPayments->allocateProportionally(
+                    $order->orderItems->mapWithKeys(
+                        fn (OrderItem $orderItem): array => [$orderItem->id => $orderItem->total_price],
+                    )->all(),
+                    $discountAmount,
+                );
+                $restrictedCreditApplication = $this->creditLedger->applyRestrictedToOrderUsingLineAmounts(
+                    $order,
+                    $order->orderItems->mapWithKeys(
+                        fn (OrderItem $orderItem): array => [
+                            $orderItem->id => max(
+                                0,
+                                $orderItem->total_price - ($discountByOrderItemId[$orderItem->id] ?? 0),
+                            ),
+                        ],
+                    )->all(),
+                    $total,
+                );
+                $restrictedCreditTotal = $restrictedCreditApplication['total'];
+                $restrictedCreditByOrderItemId = $restrictedCreditApplication['by_key'];
             }
 
             if ($restrictedCreditTotal > 0) {
@@ -270,6 +296,8 @@ final class CreateOrder
                     'user_agent' => request()->userAgent(),
                 ]);
             }
+
+            $this->allocateOrderItemPayments->handle($order->refresh(), $restrictedCreditByOrderItemId);
 
             // If fully covered by discount + credit, complete immediately
             if ($total === 0) {

@@ -33,6 +33,7 @@ final class CourseFactory extends Factory
             'description' => fake()->text(),
             'semester' => fake()->randomElement(CourseSemester::cases())->value,
             'capacity' => fake()->randomElement([10, 15]),
+            'is_private' => false,
             'guest_teacher' => null,
         ];
     }

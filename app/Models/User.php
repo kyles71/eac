@@ -173,9 +173,23 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasManyThrough(PaymentPlan::class, Order::class);
     }
 
+    /** @return HasMany<CartItem, $this> */
     public function cartItems(): HasMany
     {
         return $this->hasMany(CartItem::class);
+    }
+
+    /** @return HasMany<RecurringPrivateLesson, $this> */
+    public function recurringPrivateLessons(): HasMany
+    {
+        return $this->hasMany(RecurringPrivateLesson::class);
+    }
+
+    /** @return BelongsToMany<Product, $this> */
+    public function assignedProducts(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'product_user_assignment')
+            ->withTimestamps();
     }
 
     public function giftCardsPurchased(): HasMany

@@ -125,6 +125,9 @@ final readonly class ProductAvailabilityService
             })
             ->where(function (Builder $query) use ($at, $user): void {
                 $this->applyRequiredCompetitionTeamEligibilityToQuery($query, $user, $at);
+            })
+            ->where(function (Builder $query) use ($user): void {
+                $this->applyAssignedUserEligibilityToQuery($query, $user);
             });
     }
 
@@ -327,7 +330,24 @@ final readonly class ProductAvailabilityService
         CarbonInterface $at,
     ): bool {
         return $this->hasRequiredCourseEnrollment($product, $user)
-            && $this->hasRequiredCompetitionTeamMembership($product, $user, $at);
+            && $this->hasRequiredCompetitionTeamMembership($product, $user, $at)
+            && $this->hasAssignedUserEligibility($product, $user);
+    }
+
+    private function applyAssignedUserEligibilityToQuery(Builder $query, User $user): Builder
+    {
+        return $query
+            ->whereDoesntHave('assignedUsers')
+            ->orWhereHas(
+                'assignedUsers',
+                fn (Builder $query): Builder => $query->whereKey($user->getKey()),
+            );
+    }
+
+    private function hasAssignedUserEligibility(Product $product, User $user): bool
+    {
+        return $product->assignedUsers()->doesntExist()
+            || $product->assignedUsers()->whereKey($user->getKey())->exists();
     }
 
     private function hasRequiredCourseEnrollment(Product $product, User $user): bool

@@ -16,6 +16,7 @@ use App\Models\GiftCard;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\PaymentPlan;
+use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
 use App\Services\DashboardAccountSummaryService;
 use BackedEnum;
@@ -28,13 +29,16 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Icon;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\IconSize;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\View\View as ViewContract;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use InvalidArgumentException;
 use Throwable;
@@ -85,6 +89,10 @@ final class Billing extends Page
                         Tab::make('Payment Plans')
                             ->id('payment-plans')
                             ->schema($this->getPaymentPlansSchema()),
+                        Tab::make('Recurring Private Lessons')
+                            ->id('private-lessons')
+                            ->visible(fn (): bool => $this->hasRecurringPrivateLessons())
+                            ->schema($this->getRecurringPrivateLessonsSchema()),
                         Tab::make('Credits & Gift Cards')
                             ->id('credits')
                             ->schema($this->getCreditsAndGiftCardsSchema()),
@@ -286,6 +294,37 @@ final class Billing extends Page
             Section::make('Recent Orders')
                 ->schema($this->getRecentOrdersSchema()),
         ];
+    }
+
+    /**
+     * @return array<\Filament\Schemas\Components\Component>
+     */
+    private function getRecurringPrivateLessonsSchema(): array
+    {
+        return [
+            Flex::make([
+                Icon::make(Heroicon::OutlinedExclamationTriangle)
+                    ->key('recurring_private_lesson_payment_policy_icon')
+                    ->color('warning')
+                    ->size(IconSize::Large)
+                    ->grow(false),
+                TextEntry::make('recurring_private_lesson_payment_policy')
+                    ->hiddenLabel()
+                    ->state('Recurring private lessons must be paid at least 24 hours before the lesson starts. Unpaid lessons will be cancelled.'),
+            ])->verticallyAlignCenter()->alignCenter(),
+            EmbeddedTable::make(BillingRecurringPrivateLessonsTable::class)
+                ->columnSpanFull(),
+        ];
+    }
+
+    private function hasRecurringPrivateLessons(): bool
+    {
+        return RecurringPrivateLessonCharge::query()
+            ->whereHas(
+                'recurringPrivateLesson',
+                fn (Builder $query): Builder => $query->where('user_id', auth()->id()),
+            )
+            ->exists();
     }
 
     /**

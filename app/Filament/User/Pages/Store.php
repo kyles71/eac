@@ -66,6 +66,7 @@ final class Store extends TablePage
     protected function makeTable(): Table
     {
         $query = Product::query()
+            ->where('is_store_listed', true)
             ->visibleTo($this->getUser())
             ->with(['productable', 'questions']);
 

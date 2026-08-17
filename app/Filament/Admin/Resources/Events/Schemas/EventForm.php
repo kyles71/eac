@@ -45,7 +45,17 @@ final class EventForm
                     Select::make('course_id')
                         ->label('Course')
                         ->hidden(fn (): bool => $course_id !== null)
-                        ->relationship('course', 'name')
+                        ->relationship('course', 'name', function (Builder $query): void {
+                            $user = auth()->user();
+
+                            if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
+                                $query->where(function (Builder $query) use ($user): void {
+                                    $query
+                                        ->where('is_private', false)
+                                        ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id));
+                                });
+                            }
+                        })
                         ->searchable()
                         ->preload()
                         ->live(),

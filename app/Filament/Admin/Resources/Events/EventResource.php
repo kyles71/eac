@@ -10,12 +10,14 @@ use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Events\Schemas\EventInfolist;
 use App\Filament\Admin\Resources\Events\Tables\EventsTable;
 use App\Models\Event;
+use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class EventResource extends Resource
@@ -65,5 +67,23 @@ final class EventResource extends Resource
             'index' => ListEvents::route('/'),
             'view' => ViewEvent::route('/{record}'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
+            $query->where(function (Builder $query) use ($user): void {
+                $query
+                    ->whereNull('course_id')
+                    ->orWhereHas('course', fn (Builder $query): Builder => $query
+                        ->where('is_private', false)
+                        ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id)));
+            });
+        }
+
+        return $query;
     }
 }

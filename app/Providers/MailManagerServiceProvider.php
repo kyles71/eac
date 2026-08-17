@@ -22,6 +22,11 @@ use App\Mail\Types\PasswordResetEmailType;
 use App\Mail\Types\PastDueInstallmentEmailType;
 use App\Mail\Types\PaymentPlanScheduleAdjustedEmailType;
 use App\Mail\Types\ProductPurchaseNotificationEmailType;
+use App\Mail\Types\RecurringPrivateLessonAutomaticCancellationEmailType;
+use App\Mail\Types\RecurringPrivateLessonBillingEmailType;
+use App\Mail\Types\RecurringPrivateLessonPaymentReminderEmailType;
+use App\Mail\Types\RecurringPrivateLessonRemovedEmailType;
+use App\Mail\Types\RecurringPrivateLessonRescheduledEmailType;
 use App\Mail\Types\VerifyEmailType;
 use App\Mail\Types\WelcomeEmailType;
 use App\Models\User;
@@ -59,6 +64,11 @@ final class MailManagerServiceProvider extends ServiceProvider
             PastDueInstallmentEmailType::class,
             PaymentPlanScheduleAdjustedEmailType::class,
             ProductPurchaseNotificationEmailType::class,
+            RecurringPrivateLessonAutomaticCancellationEmailType::class,
+            RecurringPrivateLessonBillingEmailType::class,
+            RecurringPrivateLessonPaymentReminderEmailType::class,
+            RecurringPrivateLessonRemovedEmailType::class,
+            RecurringPrivateLessonRescheduledEmailType::class,
             PasswordResetEmailType::class,
             VerifyEmailType::class,
             WelcomeEmailType::class,

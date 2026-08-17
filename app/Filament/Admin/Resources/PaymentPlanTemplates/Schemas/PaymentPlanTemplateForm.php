@@ -30,7 +30,10 @@ final class PaymentPlanTemplateForm
                             ->maxLength(255),
                         Select::make('product_type')
                             ->label('Product Type')
-                            ->options(ProductType::class)
+                            ->options(fn (): array => collect(ProductType::cases())
+                                ->reject(fn (ProductType $type): bool => $type === ProductType::RecurringPrivateLesson)
+                                ->mapWithKeys(fn (ProductType $type): array => [$type->value => $type->getLabel()])
+                                ->all())
                             ->required()
                             ->live()
                             ->afterStateUpdated(function (Set $set): void {

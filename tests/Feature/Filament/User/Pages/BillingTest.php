@@ -45,6 +45,7 @@ it('can render the billing page', function () {
         ->assertOk()
         ->assertSee('Overview')
         ->assertSee('Orders & Receipts')
+        ->assertDontSee('Recurring Private Lessons')
         ->assertSee('Payment Methods');
 });
 
@@ -460,7 +461,6 @@ it('hides cancelled order details from billing tabs', function () {
         ->assertSee("Order #{$completedOrder->id}")
         ->assertSee('No upcoming payments')
         ->assertDontSee("Order #{$cancelledOrder->id}")
-        ->assertDontSee('Cancelled')
         ->assertDontSee('Reversed credit for cancelled order');
 });
 

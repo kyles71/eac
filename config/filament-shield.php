@@ -36,6 +36,7 @@ use App\Filament\Shared\Pages\Calendar as CalendarPage;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
+use App\Filament\Shared\Widgets\RecurringPrivateLessonAttention;
 
 return [
 
@@ -318,6 +319,7 @@ return [
             CalendarWidget::class,
             MessagesFromEac::class,
             QuickLinks::class,
+            RecurringPrivateLessonAttention::class,
         ],
     ],
 
