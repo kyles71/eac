@@ -14,6 +14,7 @@ use App\Models\Form;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
 use App\Models\Student;
+use App\Models\User;
 use App\Observers\CourseFormObserver;
 use App\Observers\EnrollmentObserver;
 use App\Observers\EventObserver;
@@ -21,6 +22,7 @@ use App\Observers\FormObserver;
 use App\Observers\HolidayObserver;
 use App\Observers\ProductableObserver;
 use App\Observers\StudentObserver;
+use App\Observers\UserObserver;
 use App\Services\StripeService;
 use App\Support\PasswordRequirements;
 use App\Support\TextmagicMailTransportFactory;
@@ -56,6 +58,7 @@ final class AppServiceProvider extends ServiceProvider
         Holiday::observe(HolidayObserver::class);
         Student::observe(StudentObserver::class);
         Costume::observe(ProductableObserver::class);
+        User::observe(UserObserver::class);
 
         Mail::extend('textmagic', fn (array $config) => TextmagicMailTransportFactory::make($config));
 
