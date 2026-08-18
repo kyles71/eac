@@ -8,8 +8,8 @@ use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
-use App\Models\Costume;
 use App\Models\Course;
+use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
@@ -82,7 +82,7 @@ it('shows purchase eligibility controls for every product type', function (?stri
 })->with([
     'standalone' => null,
     'course' => Course::class,
-    'costume' => Costume::class,
+    'gear' => Gear::class,
     'gift card' => GiftCardType::class,
 ]);
 
@@ -348,7 +348,7 @@ it('only offers linked items without an existing product', function (string $pro
 })->with([
     Course::class,
     GiftCardType::class,
-    Costume::class,
+    Gear::class,
 ]);
 
 it('keeps the current linked item available when editing a product', function () {
@@ -372,17 +372,17 @@ it('keeps the current linked item available when editing a product', function ()
 });
 
 it('can create a linked product that includes linked item images', function () {
-    $costume = Costume::factory()->create();
+    $gear = Gear::factory()->create();
 
     livewire(ListProducts::class)
         ->mountAction(CreateAction::class)
         ->fillForm([
-            'name' => 'Costume Product',
+            'name' => 'Gear Product',
             'description' => null,
             'price' => '42.50',
             'is_active' => true,
-            'productable_type' => Costume::class,
-            'productable_id' => $costume->id,
+            'productable_type' => Gear::class,
+            'productable_id' => $gear->id,
             'include_productable_images' => true,
         ])
         ->callMountedAction()
@@ -390,10 +390,10 @@ it('can create a linked product that includes linked item images', function () {
         ->assertNotified();
 
     assertDatabaseHas(Product::class, [
-        'name' => 'Costume Product',
+        'name' => 'Gear Product',
         'price' => 4250,
-        'productable_type' => Costume::class,
-        'productable_id' => $costume->id,
+        'productable_type' => Gear::class,
+        'productable_id' => $gear->id,
         'include_productable_images' => true,
     ]);
 });
@@ -568,14 +568,14 @@ it('requires an early access window end to be after its start', function () {
 it('formats product type labels', function () {
     $courseProduct = Product::factory()->forCourse()->create();
     $giftCardProduct = Product::factory()->forGiftCardType()->create();
-    $costumeProduct = Product::factory()->forCostume()->create();
+    $gearProduct = Product::factory()->forGear()->create();
     $standaloneProduct = Product::factory()->standalone()->create();
 
     livewire(ListProducts::class)
         ->loadTable()
         ->assertTableColumnFormattedStateSet('productable_type', 'Course', $courseProduct)
         ->assertTableColumnFormattedStateSet('productable_type', 'Gift Card', $giftCardProduct)
-        ->assertTableColumnFormattedStateSet('productable_type', 'Costume', $costumeProduct)
+        ->assertTableColumnFormattedStateSet('productable_type', 'Gear', $gearProduct)
         ->assertTableColumnFormattedStateSet('productable_type', 'Generic Product', $standaloneProduct);
 });
 

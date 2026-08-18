@@ -7,9 +7,9 @@ namespace Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Costume>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Gear>
  */
-final class CostumeFactory extends Factory
+final class GearFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -19,7 +19,7 @@ final class CostumeFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->words(2, true).' costume',
+            'name' => fake()->words(2, true).' gear',
         ];
     }
 }

@@ -530,7 +530,7 @@ it('filters payment plan templates by product type and line total', function () 
     ]);
 
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 12000,
         'number_of_installments' => 4,
@@ -609,7 +609,7 @@ it('shows templates that are eligible for at least one item in a mixed cart', fu
     ]);
 
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 10000,
         'number_of_installments' => 4,

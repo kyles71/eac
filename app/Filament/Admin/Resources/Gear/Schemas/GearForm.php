@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Admin\Resources\Costumes\Schemas;
+namespace App\Filament\Admin\Resources\Gear\Schemas;
 
 use App\Support\MediaDisks;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -10,13 +10,13 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
-final class CostumeForm
+final class GearForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Costume')
+                Section::make('Gear')
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
