@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use App\Enums\ProductType;
-use App\Models\Costume;
 use App\Models\Course;
+use App\Models\Gear;
 use App\Models\GiftCardType;
 
 it('maps Course productable_type to Course case', function () {
@@ -15,8 +15,8 @@ it('maps GiftCardType productable_type to GiftCardType case', function () {
     expect(ProductType::fromProductableType(GiftCardType::class))->toBe(ProductType::GiftCardType);
 });
 
-it('maps Costume productable_type to Costume case', function () {
-    expect(ProductType::fromProductableType(Costume::class))->toBe(ProductType::Costume);
+it('maps Gear productable_type to Gear case', function () {
+    expect(ProductType::fromProductableType(Gear::class))->toBe(ProductType::Gear);
 });
 
 it('maps null productable_type to Standalone case', function () {
@@ -35,8 +35,8 @@ it('maps GiftCardType case to GiftCardType class', function () {
     expect(ProductType::GiftCardType->toProductableClass())->toBe(GiftCardType::class);
 });
 
-it('maps Costume case to Costume class', function () {
-    expect(ProductType::Costume->toProductableClass())->toBe(Costume::class);
+it('maps Gear case to Gear class', function () {
+    expect(ProductType::Gear->toProductableClass())->toBe(Gear::class);
 });
 
 it('maps Standalone case to null', function () {
@@ -53,6 +53,6 @@ it('has correct labels', function (ProductType $type, string $label) {
     [ProductType::Any, 'Any'],
     [ProductType::Course, 'Course'],
     [ProductType::GiftCardType, 'Gift Card'],
-    [ProductType::Costume, 'Costume'],
+    [ProductType::Gear, 'Gear'],
     [ProductType::Standalone, 'Generic Product'],
 ]);

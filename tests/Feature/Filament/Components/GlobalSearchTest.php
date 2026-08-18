@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
-use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
 use App\Filament\Admin\Resources\DashboardQuickLinks\DashboardQuickLinkResource;
 use App\Filament\Admin\Resources\DiscountCodes\DiscountCodeResource;
+use App\Filament\Admin\Resources\Gear\GearResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
@@ -35,7 +35,7 @@ it('can global search', function (): void {
 
 it('keeps resources out of global search when they have no record-level view ability', function (): void {
     expect(CalendarResource::canGloballySearch())->toBeFalse()
-        ->and(CostumeResource::canGloballySearch())->toBeFalse()
+        ->and(GearResource::canGloballySearch())->toBeFalse()
         ->and(DashboardMessageResource::canGloballySearch())->toBeFalse()
         ->and(DashboardQuickLinkResource::canGloballySearch())->toBeFalse()
         ->and(DiscountCodeResource::canGloballySearch())->toBeFalse()

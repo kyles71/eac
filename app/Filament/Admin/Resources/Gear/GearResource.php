@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Admin\Resources\Costumes;
+namespace App\Filament\Admin\Resources\Gear;
 
-use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
-use App\Filament\Admin\Resources\Costumes\Schemas\CostumeForm;
-use App\Filament\Admin\Resources\Costumes\Tables\CostumesTable;
-use App\Models\Costume;
+use App\Filament\Admin\Resources\Gear\Pages\ListGear;
+use App\Filament\Admin\Resources\Gear\Schemas\GearForm;
+use App\Filament\Admin\Resources\Gear\Tables\GearTable;
+use App\Models\Gear;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -16,9 +16,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
 
-final class CostumeResource extends Resource
+final class GearResource extends Resource
 {
-    protected static ?string $model = Costume::class;
+    protected static ?string $model = Gear::class;
 
     protected static bool $isGloballySearchable = false;
 
@@ -26,9 +26,11 @@ final class CostumeResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Storefront;
 
-    protected static ?int $navigationSort = AdminNavigation::StoreCostumes;
+    protected static ?int $navigationSort = AdminNavigation::StoreGear;
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    protected static ?string $pluralModelLabel = 'Gear';
 
     public static function getGloballySearchableAttributes(): array
     {
@@ -39,12 +41,12 @@ final class CostumeResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return CostumeForm::configure($schema);
+        return GearForm::configure($schema);
     }
 
     public static function table(Table $table): Table
     {
-        return CostumesTable::configure($table);
+        return GearTable::configure($table);
     }
 
     public static function getRelations(): array
@@ -55,7 +57,7 @@ final class CostumeResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListCostumes::route('/'),
+            'index' => ListGear::route('/'),
         ];
     }
 }

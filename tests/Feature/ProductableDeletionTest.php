@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
+use App\Filament\Admin\Resources\Gear\Pages\ListGear;
 use App\Filament\Admin\Resources\GiftCardTypes\Pages\ListGiftCardTypes;
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
-use App\Models\Costume;
 use App\Models\Course;
+use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -94,11 +94,11 @@ it('warns that deleting a linked item also deletes its product', function (strin
 })->with('productable resources');
 
 it('warns that bulk deleting items also deletes linked products', function () {
-    $costume = Costume::factory()->create();
+    $gear = Gear::factory()->create();
 
-    livewire(ListCostumes::class)
+    livewire(ListGear::class)
         ->loadTable()
-        ->selectTableRecords([$costume])
+        ->selectTableRecords([$gear])
         ->mountAction(TestAction::make('delete')->table()->bulk())
         ->assertMountedActionModalSee(
             'Any selected items with linked products will also permanently delete those products.',
@@ -158,11 +158,11 @@ it('only bulk deletes inactive products without sales', function () {
 dataset('productable types', [
     Course::class,
     GiftCardType::class,
-    Costume::class,
+    Gear::class,
 ]);
 
 dataset('productable resources', [
     [Course::class, ListCourses::class],
     [GiftCardType::class, ListGiftCardTypes::class],
-    [Costume::class, ListCostumes::class],
+    [Gear::class, ListGear::class],
 ]);

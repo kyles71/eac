@@ -6,6 +6,7 @@ use App\Actions\Store\SendOrderReceipt;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
+use App\Models\Gear;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -35,7 +36,7 @@ it('renders escaped purchase details and only applicable product content', funct
         'layout_mode' => LayoutMode::None,
         'conditional_sections' => [
             'course' => '<p>COURSE CONTENT for {{ user.first_name }}</p>',
-            'costume' => '<p>COSTUME CONTENT</p>',
+            'gear' => '<p>GEAR CONTENT</p>',
             'gift-card' => '<p>GIFT CARD CONTENT</p>',
             'standalone' => '<p>OTHER CONTENT</p>',
         ],
@@ -54,9 +55,37 @@ it('renders escaped purchase details and only applicable product content', funct
         ->toContain('Ballet &lt;script&gt;alert(1)&lt;/script&gt;')
         ->toContain('COURSE CONTENT')
         ->not->toContain('<script>')
-        ->not->toContain('COSTUME CONTENT')
+        ->not->toContain('GEAR CONTENT')
         ->not->toContain('GIFT CARD CONTENT')
         ->not->toContain('OTHER CONTENT');
+});
+
+it('renders gear content and exposes the transitional costume condition alias', function (): void {
+    $order = receiptOrder();
+    $gearProduct = Product::factory()->forGear(Gear::factory()->create())->create();
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $gearProduct->id,
+    ]);
+
+    app(ManagedTemplateRepository::class)->saveOverride('order-receipt', [
+        'layout_mode' => LayoutMode::None,
+        'conditional_sections' => [
+            'gear' => '<p>GEAR CONTENT</p>',
+        ],
+    ]);
+
+    $payload = app(OrderReceiptContentService::class)->for($order);
+    $rendered = app(MailManager::class)->render(
+        emailTypeKey: 'order-receipt',
+        tokens: $payload['tokens'],
+        slots: $payload['slots'],
+        conditions: $payload['conditions'],
+    );
+
+    expect($payload['conditions']['gear'])->toBeTrue()
+        ->and($payload['conditions']['costume'])->toBeTrue()
+        ->and($rendered->html)->toContain('GEAR CONTENT');
 });
 
 it('queues an initial receipt once through the transactional mailer', function (): void {
