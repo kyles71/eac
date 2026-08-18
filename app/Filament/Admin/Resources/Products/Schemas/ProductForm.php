@@ -9,8 +9,8 @@ use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
-use App\Models\Costume;
 use App\Models\Course;
+use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Support\MediaDisks;
@@ -45,7 +45,7 @@ final class ProductForm
                             ->options([
                                 Course::class => 'Course',
                                 GiftCardType::class => 'Gift Card',
-                                Costume::class => 'Costume',
+                                Gear::class => 'Gear',
                             ])
                             ->placeholder(ProductType::Standalone->getLabel())
                             ->live()
@@ -57,13 +57,13 @@ final class ProductForm
                             ->label(fn (Get $get): string => match ($get('productable_type')) {
                                 Course::class => 'Linked Course',
                                 GiftCardType::class => 'Linked Gift Card Type',
-                                Costume::class => 'Linked Costume',
+                                Gear::class => 'Linked Gear',
                                 default => 'Linked Item',
                             })
                             ->options(fn (Get $get, ?Product $record) => match ($get('productable_type')) {
                                 Course::class => self::availableProductableOptions(Course::class, $record),
                                 GiftCardType::class => self::availableProductableOptions(GiftCardType::class, $record),
-                                Costume::class => self::availableProductableOptions(Costume::class, $record),
+                                Gear::class => self::availableProductableOptions(Gear::class, $record),
                                 default => [],
                             })
                             ->required(fn (Get $get): bool => $get('productable_type') !== null)
@@ -291,7 +291,7 @@ final class ProductForm
                     ->schema([
                         Toggle::make('include_productable_images')
                             ->label('Include linked item images')
-                            ->helperText('Show linked course, costume, or gift card images after product images.')
+                            ->helperText('Show linked course, gear, or gift card images after product images.')
                             ->default(false)
                             ->visible(fn (Get $get): bool => $get('productable_type') !== null && $get('productable_id') !== null)
                             ->columnSpanFull(),
@@ -325,7 +325,7 @@ final class ProductForm
     }
 
     /**
-     * @param  class-string<Costume|Course|GiftCardType>  $productableType
+     * @param  class-string<Course|Gear|GiftCardType>  $productableType
      * @return array<int, string>
      */
     private static function availableProductableOptions(string $productableType, ?Product $currentProduct): array

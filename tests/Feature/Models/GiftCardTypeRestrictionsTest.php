@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use App\Enums\ProductType;
-use App\Models\Costume;
 use App\Models\Course;
+use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Product;
 
@@ -49,12 +49,12 @@ it('restricts by product type', function () {
     $course = Course::factory()->create();
     $courseProduct = Product::factory()->forCourse($course)->create();
     $standaloneProduct = Product::factory()->standalone()->create();
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create();
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create();
 
     expect($giftCardType->appliesToProduct($courseProduct))->toBeTrue()
         ->and($giftCardType->appliesToProduct($standaloneProduct))->toBeFalse()
-        ->and($giftCardType->appliesToProduct($costumeProduct))->toBeFalse();
+        ->and($giftCardType->appliesToProduct($gearProduct))->toBeFalse();
 });
 
 it('restricts to specific products', function () {

@@ -6,7 +6,6 @@ use App\Models\Calendar;
 use App\Models\CartItem;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
-use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
@@ -19,6 +18,7 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Form;
 use App\Models\FormUser;
+use App\Models\Gear;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
@@ -86,7 +86,7 @@ it('seeds the development database with all models', function (): void {
         ->and(Product::count())->toBeGreaterThanOrEqual(20)
         ->and(Product::query()->whereNull('price')->exists())->toBeTrue()
         ->and($seededProductImageCounts->unique()->sort()->values()->all())->toBe([0, 1, 2, 3])
-        ->and(Costume::count())->toBe(5)
+        ->and(Gear::count())->toBe(5)
         ->and(GiftCardType::count())->toBe(4)
         ->and(GiftCardType::query()->where('allows_custom_amount', true)->exists())->toBeTrue()
         ->and(PaymentPlanTemplate::count())->toBe(3)

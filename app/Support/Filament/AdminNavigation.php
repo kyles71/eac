@@ -40,7 +40,7 @@ final class AdminNavigation
 
     public const int StoreProducts = 10;
 
-    public const int StoreCostumes = 20;
+    public const int StoreGear = 20;
 
     public const int StoreGiftCardTypes = 30;
 
