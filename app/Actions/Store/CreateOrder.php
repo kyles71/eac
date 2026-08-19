@@ -7,7 +7,6 @@ namespace App\Actions\Store;
 use App\Actions\CourseHolds\ClaimCourseHoldSeatsForOrder;
 use App\Contracts\HasCapacity;
 use App\Enums\OrderStatus;
-use App\Enums\ProductAvailabilityStatus;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\CourseHoldSeat;
@@ -89,7 +88,7 @@ final class CreateOrder
                 $availability = app(ProductAvailabilityService::class)->resultFor($product, $user);
 
                 if (! $availability->isPurchasable()) {
-                    throw new InvalidArgumentException($this->cartItemUnavailableMessage($product, $availability));
+                    throw new InvalidArgumentException($availability->message($product->name));
                 }
 
                 if ($product->productable instanceof HasCapacity) {
@@ -310,16 +309,5 @@ final class CreateOrder
 
             return $order;
         });
-    }
-
-    private function cartItemUnavailableMessage(Product $product, ProductAvailabilityStatus $availability): string
-    {
-        return match ($availability) {
-            ProductAvailabilityStatus::EligibilityRequired => "\"{$product->name}\" requires qualifying course enrollment and/or competition team membership.",
-            ProductAvailabilityStatus::InvalidPrice => "\"{$product->name}\" does not have a valid price.",
-            ProductAvailabilityStatus::Scheduled => "\"{$product->name}\" is not available yet.",
-            ProductAvailabilityStatus::Expired => "\"{$product->name}\" is no longer available for purchase.",
-            default => "\"{$product->name}\" is not available for purchase.",
-        };
     }
 }

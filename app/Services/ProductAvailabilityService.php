@@ -6,7 +6,6 @@ namespace App\Services;
 
 use App\Enums\DashboardAudience;
 use App\Enums\ProductAvailabilityStatus;
-use App\Models\CompetitionSeason;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\User;
@@ -16,6 +15,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 final readonly class ProductAvailabilityService
 {
+    public function __construct(private ProductAudienceService $audienceService) {}
+
     public function resultFor(Product $product, ?User $user = null, ?CarbonInterface $at = null): ProductAvailabilityStatus
     {
         $at = $this->comparisonTime($at);
@@ -37,14 +38,14 @@ final readonly class ProductAvailabilityService
                 return ProductAvailabilityStatus::Scheduled;
             }
 
-            if (! $this->hasRequiredPurchaseEligibility($product, $user, $at)) {
+            if (! $this->audienceService->includes($product, $user, $at)) {
                 return ProductAvailabilityStatus::EligibilityRequired;
             }
 
             return ProductAvailabilityStatus::EarlyAccess;
         }
 
-        if ($user !== null && ! $this->hasRequiredPurchaseEligibility($product, $user, $at)) {
+        if ($user !== null && ! $this->audienceService->includes($product, $user, $at)) {
             return ProductAvailabilityStatus::EligibilityRequired;
         }
 
@@ -106,7 +107,7 @@ final readonly class ProductAvailabilityService
         $at = $this->comparisonTime($at);
         $audienceValues = $this->audienceValuesFor($user);
 
-        return $query
+        $query
             ->where('is_active', true)
             ->where(function (Builder $query): void {
                 $this->validPricingQuery($query);
@@ -119,16 +120,9 @@ final readonly class ProductAvailabilityService
                     ->orWhere(function (Builder $query) use ($at, $audienceValues, $user): void {
                         $this->applyEarlyAccessScheduleToQuery($query, $user, $audienceValues, $at);
                     });
-            })
-            ->where(function (Builder $query) use ($user): void {
-                $this->applyRequiredCourseEligibilityToQuery($query, $user);
-            })
-            ->where(function (Builder $query) use ($at, $user): void {
-                $this->applyRequiredCompetitionTeamEligibilityToQuery($query, $user, $at);
-            })
-            ->where(function (Builder $query) use ($user): void {
-                $this->applyAssignedUserEligibilityToQuery($query, $user);
             });
+
+        return $this->audienceService->applyToQuery($query, $user, $at);
     }
 
     /**
@@ -275,104 +269,6 @@ final readonly class ProductAvailabilityService
                 $query->orWhereJsonContains('audiences', $audienceValue);
             }
         });
-    }
-
-    private function applyRequiredCourseEligibilityToQuery(Builder $query, User $user): Builder
-    {
-        return $query
-            ->whereDoesntHave('requiredCourses')
-            ->orWhereHas(
-                'requiredCourses',
-                fn (Builder $query): Builder => $query
-                    ->whereIn('courses.id', $user->enrollments()->select('course_id')),
-            );
-    }
-
-    private function applyRequiredCompetitionTeamEligibilityToQuery(
-        Builder $query,
-        User $user,
-        CarbonInterface $at,
-    ): Builder {
-        return $query
-            ->whereDoesntHave('requiredCompetitionTeams')
-            ->orWhereHas(
-                'requiredCompetitionTeams',
-                fn (Builder $query): Builder => $this->applyMatchingCompetitionTeamToQuery($query, $user, $at),
-            );
-    }
-
-    private function applyMatchingCompetitionTeamToQuery(
-        Builder $query,
-        User $user,
-        CarbonInterface $at,
-    ): Builder {
-        return $query
-            ->whereHas(
-                'season',
-                fn (Builder $query): Builder => CompetitionSeason::constrainToNotEnded($query, $at),
-            )
-            ->where(function (Builder $query) use ($user): void {
-                $query
-                    ->whereHas(
-                        'staff',
-                        fn (Builder $query): Builder => $query->whereKey($user->getKey()),
-                    )
-                    ->orWhereHas(
-                        'students',
-                        fn (Builder $query): Builder => $query->where('students.user_id', $user->getKey()),
-                    );
-            });
-    }
-
-    private function hasRequiredPurchaseEligibility(
-        Product $product,
-        User $user,
-        CarbonInterface $at,
-    ): bool {
-        return $this->hasRequiredCourseEnrollment($product, $user)
-            && $this->hasRequiredCompetitionTeamMembership($product, $user, $at)
-            && $this->hasAssignedUserEligibility($product, $user);
-    }
-
-    private function applyAssignedUserEligibilityToQuery(Builder $query, User $user): Builder
-    {
-        return $query
-            ->whereDoesntHave('assignedUsers')
-            ->orWhereHas(
-                'assignedUsers',
-                fn (Builder $query): Builder => $query->whereKey($user->getKey()),
-            );
-    }
-
-    private function hasAssignedUserEligibility(Product $product, User $user): bool
-    {
-        return $product->assignedUsers()->doesntExist()
-            || $product->assignedUsers()->whereKey($user->getKey())->exists();
-    }
-
-    private function hasRequiredCourseEnrollment(Product $product, User $user): bool
-    {
-        if ($product->requiredCourses()->doesntExist()) {
-            return true;
-        }
-
-        return $product->requiredCourses()
-            ->whereIn('courses.id', $user->enrollments()->select('course_id'))
-            ->exists();
-    }
-
-    private function hasRequiredCompetitionTeamMembership(
-        Product $product,
-        User $user,
-        CarbonInterface $at,
-    ): bool {
-        if ($product->requiredCompetitionTeams()->doesntExist()) {
-            return true;
-        }
-
-        return $product->requiredCompetitionTeams()
-            ->where(fn (Builder $query): Builder => $this->applyMatchingCompetitionTeamToQuery($query, $user, $at))
-            ->exists();
     }
 
     private function hasEarlyAccess(Product $product, User $user, CarbonInterface $at): bool

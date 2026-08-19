@@ -224,7 +224,7 @@ it('rejects adding a product that requires an unpurchased enrollment', function 
 
     $action = new AddToCart;
     $action->handle($this->user, $restrictedProduct);
-})->throws(InvalidArgumentException::class, 'This product requires qualifying course enrollment and/or competition team membership.');
+})->throws(InvalidArgumentException::class, 'This product is limited to its configured purchase audience.');
 
 it('rejects adding a product without required competition team membership', function () {
     $season = CompetitionSeason::factory()->current()->create();
@@ -234,7 +234,18 @@ it('rejects adding a product without required competition team membership', func
 
     $action = new AddToCart;
     $action->handle($this->user, $restrictedProduct);
-})->throws(InvalidArgumentException::class, 'This product requires qualifying course enrollment and/or competition team membership.');
+})->throws(InvalidArgumentException::class, 'This product is limited to its configured purchase audience.');
+
+it('allows a directly assigned user when another Product audience does not match', function () {
+    $requiredCourse = Course::factory()->create();
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
+    $restrictedProduct->assignedUsers()->attach($this->user);
+
+    $cartItem = (new AddToCart)->handle($this->user, $restrictedProduct);
+
+    expect($cartItem->product_id)->toBe($restrictedProduct->id);
+});
 
 it('can remove an item from the cart', function () {
     $cartItem = CartItem::factory()->create([

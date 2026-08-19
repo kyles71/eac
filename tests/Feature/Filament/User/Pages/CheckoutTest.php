@@ -7,6 +7,7 @@ use App\Enums\OrderStatus;
 use App\Filament\User\Pages\Cart;
 use App\Filament\User\Pages\Checkout;
 use App\Models\CartItem;
+use App\Models\Course;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlan;
@@ -112,6 +113,58 @@ it('does not load a completed order', function () {
 
     livewire(Checkout::class)
         ->assertRedirect(Cart::getUrl());
+});
+
+it('does not create a payment intent when a pending Order is no longer available to the customer', function () {
+    $product = Product::factory()->create(['name' => 'Restricted Jacket']);
+    $product->requiredCourses()->attach(Course::factory()->create());
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+    ]);
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+    ]);
+
+    $stripeMock = Mockery::mock(StripeServiceContract::class);
+    $stripeMock->shouldNotReceive('createPaymentIntent');
+    $stripeMock->shouldNotReceive('createCustomerSession');
+    $this->app->instance(StripeServiceContract::class, $stripeMock);
+
+    livewire(Checkout::class)
+        ->assertNotified('Checkout unavailable')
+        ->assertRedirect(Cart::getUrl())
+        ->assertSet('order', null);
+
+    expect($order->refresh()->status)->toBe(OrderStatus::Pending)
+        ->and($order->stripe_payment_intent_id)->toBeNull();
+});
+
+it('rechecks Product availability immediately before payment processing', function () {
+    $product = Product::factory()->create(['name' => 'Restricted Jacket']);
+    $order = Order::factory()->create([
+        'user_id' => auth()->id(),
+        'status' => OrderStatus::Pending,
+    ]);
+    OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $product->id,
+    ]);
+
+    $component = livewire(Checkout::class)
+        ->assertOk()
+        ->assertSet('order.id', $order->id);
+
+    $product->requiredCourses()->attach(Course::factory()->create());
+
+    $component
+        ->call('markOrderProcessing')
+        ->assertNotified('Checkout unavailable')
+        ->assertRedirect(Cart::getUrl())
+        ->assertSet('order', null);
+
+    expect($order->refresh()->status)->toBe(OrderStatus::Pending);
 });
 
 it('shows limited use credit in the checkout summary', function () {

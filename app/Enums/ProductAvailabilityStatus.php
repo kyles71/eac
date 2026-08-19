@@ -56,15 +56,17 @@ enum ProductAvailabilityStatus: string implements HasColor, HasLabel
         return in_array($this, [self::Available, self::EarlyAccess], true);
     }
 
-    public function message(): string
+    public function message(?string $productName = null): string
     {
+        $subject = $productName === null ? 'This product' : "\"{$productName}\"";
+
         return match ($this) {
-            self::Available, self::EarlyAccess => 'This product is available for purchase.',
-            self::Draft => 'This product is not available for purchase.',
-            self::InvalidPrice => 'This product does not have a valid price.',
-            self::Scheduled => 'This product is not available yet.',
-            self::Expired => 'This product is no longer available for purchase.',
-            self::EligibilityRequired => 'This product requires qualifying course enrollment and/or competition team membership.',
+            self::Available, self::EarlyAccess => "{$subject} is available for purchase.",
+            self::Draft => "{$subject} is not available for purchase.",
+            self::InvalidPrice => "{$subject} does not have a valid price.",
+            self::Scheduled => "{$subject} is not available yet.",
+            self::Expired => "{$subject} is no longer available for purchase.",
+            self::EligibilityRequired => "{$subject} is limited to its configured purchase audience.",
         };
     }
 }

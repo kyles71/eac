@@ -14,7 +14,6 @@ use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
-use App\Models\Student;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Carbon\CarbonImmutable;
@@ -327,23 +326,14 @@ it('shows all course and competition team eligibility requirements', function ()
     $product = Product::factory()->create(['price' => 5000]);
     $product->requiredCourses()->attach($requiredCourses);
     $product->requiredCompetitionTeams()->attach($requiredTeams);
-
-    Enrollment::factory()->create([
-        'course_id' => $requiredCourses->last()->id,
-        'user_id' => auth()->id(),
-    ]);
-    Student::factory()
-        ->for(auth()->user())
-        ->create()
-        ->competitionTeams()
-        ->attach($requiredTeams->last());
+    $product->assignedUsers()->attach(auth()->user());
 
     livewire(ProductDetails::class, ['product' => $product])
         ->assertOk()
-        ->assertSee('Requires Enrollment In At Least One Of')
+        ->assertSee('Requires Enrollment In Any Of')
         ->assertSee($requiredCourses->first()->name)
         ->assertSee($requiredCourses->last()->name)
-        ->assertSee('Requires Membership In At Least One Of')
+        ->assertSee('Requires Membership In Any Of')
         ->assertSee('2026 Competition Season')
         ->assertSee($requiredTeams->first()->name)
         ->assertSee($requiredTeams->last()->name);
