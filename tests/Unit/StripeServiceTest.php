@@ -8,6 +8,7 @@ use Stripe\Customer;
 use Stripe\CustomerSession;
 use Stripe\PaymentIntent;
 use Stripe\PaymentMethod;
+use Stripe\Refund;
 use Stripe\StripeClient;
 
 it('creates a new payment intent without preassigning a saved payment method', function () {
@@ -109,6 +110,46 @@ it('makes an attached payment method redisplayable', function () {
     expect($paymentMethods->updatedWith)->toBe([
         'paymentMethodId' => 'pm_plan',
         'params' => ['allow_redisplay' => 'always'],
+    ]);
+});
+
+it('passes an idempotency key when refunding a payment intent', function () {
+    $refunds = new class
+    {
+        /** @var array<string, mixed> */
+        public array $createdWith = [];
+
+        /** @var array<string, string>|null */
+        public ?array $options = null;
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, string>|null  $options
+         */
+        public function create(array $params, ?array $options = null): Refund
+        {
+            $this->createdWith = $params;
+            $this->options = $options;
+
+            return Refund::constructFrom(['id' => 're_private_lesson']);
+        }
+    };
+
+    $service = new StripeService(stripeClientForTest([
+        'refunds' => $refunds,
+    ]));
+
+    $service->refundPaymentIntent(
+        'pi_private_lesson',
+        6000,
+        'recurring-private-lesson-coverage-123-refund-idempotency-key',
+    );
+
+    expect($refunds->createdWith)->toBe([
+        'payment_intent' => 'pi_private_lesson',
+        'amount' => 6000,
+    ])->and($refunds->options)->toBe([
+        'idempotency_key' => 'recurring-private-lesson-coverage-123-refund-idempotency-key',
     ]);
 });
 

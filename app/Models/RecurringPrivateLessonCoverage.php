@@ -24,6 +24,7 @@ final class RecurringPrivateLessonCoverage extends Model
         'restricted_credit_amount' => 'integer',
         'credit_amount' => 'integer',
         'stripe_amount' => 'integer',
+        'stripe_refund_id' => 'string',
     ];
 
     /** @return BelongsTo<RecurringPrivateLessonCharge, $this> */

@@ -26,6 +26,9 @@ return new class extends Migration
             $table->unsignedInteger('restricted_credit_amount')->default(0);
             $table->unsignedInteger('credit_amount')->default(0);
             $table->unsignedInteger('stripe_amount')->default(0);
+            $table->string('stripe_refund_id')
+                ->nullable()
+                ->unique('rpl_coverage_stripe_refund_unique');
             $table->timestamps();
         });
     }

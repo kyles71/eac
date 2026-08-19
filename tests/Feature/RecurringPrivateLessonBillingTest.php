@@ -23,6 +23,7 @@ use App\Models\PaymentPlanTemplate;
 use App\Models\Student;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Stripe\Refund;
 
@@ -155,12 +156,23 @@ it('partially refunds only the Stripe amount allocated to a cancelled paid lesso
     $order = app(CreateOrder::class)->handle($this->household);
     $order->update(['stripe_payment_intent_id' => 'pi_private_lesson']);
     $stripe = Mockery::mock(StripeServiceContract::class);
-    $stripe->shouldReceive('refundPaymentIntent')
-        ->once()
-        ->with('pi_private_lesson', 6000)
-        ->andReturn(Mockery::mock(Refund::class));
     $this->app->instance(StripeServiceContract::class, $stripe);
     app(CompleteOrder::class)->handle($order);
+    $coverageId = $charge->refresh()->coverage->id;
+    $transactionLevelBeforeRefund = DB::connection()->transactionLevel();
+    $idempotencyKey = "recurring-private-lesson-coverage-{$coverageId}-refund-".hash('sha256', 'pi_private_lesson');
+    $stripe->shouldReceive('refundPaymentIntent')
+        ->once()
+        ->with(
+            'pi_private_lesson',
+            6000,
+            $idempotencyKey,
+        )
+        ->andReturnUsing(function () use ($transactionLevelBeforeRefund): Refund {
+            expect(DB::connection()->transactionLevel())->toBeGreaterThan($transactionLevelBeforeRefund);
+
+            return Refund::constructFrom(['id' => 're_private_lesson']);
+        });
     app(RemoveRecurringPrivateLessonCharge::class)->handle(
         $charge,
         $this->owner,
@@ -169,7 +181,8 @@ it('partially refunds only the Stripe amount allocated to a cancelled paid lesso
     );
 
     expect($charge->refresh()->status)->toBe(RecurringPrivateLessonChargeStatus::Refunded)
-        ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Refunded);
+        ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Refunded)
+        ->and($charge->coverage->stripe_refund_id)->toBe('re_private_lesson');
 });
 
 it('keeps a paid lesson active when its Stripe refund fails', function (): void {
@@ -180,12 +193,21 @@ it('keeps a paid lesson active when its Stripe refund fails', function (): void 
     $order = app(CreateOrder::class)->handle($this->household);
     $order->update(['stripe_payment_intent_id' => 'pi_failed_private_lesson_refund']);
     $stripe = Mockery::mock(StripeServiceContract::class);
-    $stripe->shouldReceive('refundPaymentIntent')
-        ->once()
-        ->with('pi_failed_private_lesson_refund', 6000)
-        ->andThrow(new RuntimeException('Stripe refund failed'));
     $this->app->instance(StripeServiceContract::class, $stripe);
     app(CompleteOrder::class)->handle($order);
+    $coverageId = $charge->refresh()->coverage->id;
+    $idempotencyKey = "recurring-private-lesson-coverage-{$coverageId}-refund-".hash(
+        'sha256',
+        'pi_failed_private_lesson_refund',
+    );
+    $stripe->shouldReceive('refundPaymentIntent')
+        ->once()
+        ->with(
+            'pi_failed_private_lesson_refund',
+            6000,
+            $idempotencyKey,
+        )
+        ->andThrow(new RuntimeException('Stripe refund failed'));
 
     expect(fn () => app(RemoveRecurringPrivateLessonCharge::class)->handle(
         $charge,
@@ -195,5 +217,51 @@ it('keeps a paid lesson active when its Stripe refund fails', function (): void 
     ))->toThrow(RuntimeException::class, 'Stripe refund failed')
         ->and($charge->refresh()->status)->toBe(RecurringPrivateLessonChargeStatus::Paid)
         ->and($charge->event->refresh()->isCancelled())->toBeFalse()
-        ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Active);
+        ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Active)
+        ->and($charge->coverage->stripe_refund_id)->toBeNull();
+});
+
+it('reuses the same Stripe idempotency key after a post-refund database rollback', function (): void {
+    $period = $this->series->billingPeriods->first();
+    app(BillRecurringPrivateLessonBillingPeriod::class)->handle($period, $this->owner);
+    $charge = $period->charges()->orderBy('id')->firstOrFail();
+    app(AddToCart::class)->handle($this->household, $charge->product);
+    $order = app(CreateOrder::class)->handle($this->household);
+    $order->update(['stripe_payment_intent_id' => 'pi_retry_private_lesson_refund']);
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $this->app->instance(StripeServiceContract::class, $stripe);
+    app(CompleteOrder::class)->handle($order);
+    $coverageId = $charge->refresh()->coverage->id;
+    $idempotencyKey = "recurring-private-lesson-coverage-{$coverageId}-refund-".hash(
+        'sha256',
+        'pi_retry_private_lesson_refund',
+    );
+    $stripe->shouldReceive('refundPaymentIntent')
+        ->twice()
+        ->with('pi_retry_private_lesson_refund', 6000, $idempotencyKey)
+        ->andReturn(
+            Refund::constructFrom([]),
+            Refund::constructFrom(['id' => 're_retried_private_lesson']),
+        );
+
+    expect(fn () => app(RemoveRecurringPrivateLessonCharge::class)->handle(
+        $charge,
+        $this->owner,
+        'Retry the interrupted refund',
+        RecurringPrivateLessonResolutionType::Refund,
+    ))->toThrow(UnexpectedValueException::class, 'Stripe did not return a refund identifier')
+        ->and($charge->refresh()->status)->toBe(RecurringPrivateLessonChargeStatus::Paid)
+        ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Active)
+        ->and($charge->coverage->stripe_refund_id)->toBeNull();
+
+    app(RemoveRecurringPrivateLessonCharge::class)->handle(
+        $charge,
+        $this->owner,
+        'Retry the interrupted refund',
+        RecurringPrivateLessonResolutionType::Refund,
+    );
+
+    expect($charge->refresh()->status)->toBe(RecurringPrivateLessonChargeStatus::Refunded)
+        ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Refunded)
+        ->and($charge->coverage->stripe_refund_id)->toBe('re_retried_private_lesson');
 });

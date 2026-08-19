@@ -171,15 +171,22 @@ final readonly class StripeService implements StripeServiceContract
         );
     }
 
-    public function refundPaymentIntent(string $paymentIntentId, ?int $amount = null): Refund
-    {
+    public function refundPaymentIntent(
+        string $paymentIntentId,
+        ?int $amount = null,
+        ?string $idempotencyKey = null,
+    ): Refund {
         $params = ['payment_intent' => $paymentIntentId];
 
         if ($amount !== null) {
             $params['amount'] = $amount;
         }
 
-        return $this->client->refunds->create($params);
+        $options = $idempotencyKey === null
+            ? null
+            : ['idempotency_key' => $idempotencyKey];
+
+        return $this->client->refunds->create($params, $options);
     }
 
     public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent

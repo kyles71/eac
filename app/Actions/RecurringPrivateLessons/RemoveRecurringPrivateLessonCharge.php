@@ -18,6 +18,7 @@ use App\Services\CreditLedgerService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use UnexpectedValueException;
 
 final readonly class RemoveRecurringPrivateLessonCharge
 {
@@ -58,11 +59,6 @@ final readonly class RemoveRecurringPrivateLessonCharge
 
         $this->validatePaymentResolution($charge->status, $paymentResolution);
 
-        if ($charge->status === RecurringPrivateLessonChargeStatus::Paid
-            && $paymentResolution === RecurringPrivateLessonResolutionType::Refund) {
-            $this->refundStripePayment($charge);
-        }
-
         DB::transaction(function () use ($charge, $removedBy, $reason, $paymentResolution): void {
             $lockedCharge = RecurringPrivateLessonCharge::query()
                 ->with(['event', 'product', 'recurringPrivateLesson.user'])
@@ -97,6 +93,10 @@ final readonly class RemoveRecurringPrivateLessonCharge
 
             if ($lockedCharge->status === RecurringPrivateLessonChargeStatus::Paid) {
                 $coverage = $this->lockedActiveCoverage($lockedCharge);
+
+                if ($paymentResolution === RecurringPrivateLessonResolutionType::Refund) {
+                    $this->refundStripePayment($coverage);
+                }
 
                 if ($paymentResolution === RecurringPrivateLessonResolutionType::Credit) {
                     $this->issuePrivateLessonCredit(
@@ -158,18 +158,17 @@ final readonly class RemoveRecurringPrivateLessonCharge
         }
     }
 
-    private function refundStripePayment(RecurringPrivateLessonCharge $charge): void
+    private function refundStripePayment(RecurringPrivateLessonCoverage $coverage): void
     {
-        $coverage = $charge->coverage;
-
-        if (! $coverage instanceof RecurringPrivateLessonCoverage
-            || $coverage->status !== RecurringPrivateLessonCoverageStatus::Active) {
-            throw new InvalidArgumentException('This lesson does not have active payment coverage to refund.');
-        }
-
         if ($coverage->stripe_amount <= 0) {
             return;
         }
+
+        if ($coverage->stripe_refund_id !== null) {
+            return;
+        }
+
+        $coverage->loadMissing('orderItem.order');
 
         $paymentIntentId = $coverage->orderItem?->order?->stripe_payment_intent_id;
 
@@ -177,7 +176,24 @@ final readonly class RemoveRecurringPrivateLessonCharge
             throw new InvalidArgumentException('The Stripe payment for this lesson could not be found.');
         }
 
-        $this->stripeService->refundPaymentIntent($paymentIntentId, $coverage->stripe_amount);
+        $refund = $this->stripeService->refundPaymentIntent(
+            $paymentIntentId,
+            $coverage->stripe_amount,
+            idempotencyKey: $this->refundIdempotencyKey($coverage, $paymentIntentId),
+        );
+
+        if (! is_string($refund->id) || $refund->id === '') {
+            throw new UnexpectedValueException('Stripe did not return a refund identifier.');
+        }
+
+        $coverage->update(['stripe_refund_id' => $refund->id]);
+    }
+
+    private function refundIdempotencyKey(
+        RecurringPrivateLessonCoverage $coverage,
+        string $paymentIntentId,
+    ): string {
+        return "recurring-private-lesson-coverage-{$coverage->id}-refund-".hash('sha256', $paymentIntentId);
     }
 
     private function lockedActiveCoverage(

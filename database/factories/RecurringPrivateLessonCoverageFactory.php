@@ -34,6 +34,7 @@ final class RecurringPrivateLessonCoverageFactory extends Factory
             'restricted_credit_amount' => 0,
             'credit_amount' => 0,
             'stripe_amount' => $grossAmount,
+            'stripe_refund_id' => null,
         ];
     }
 }
