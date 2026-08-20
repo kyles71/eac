@@ -6,6 +6,8 @@ namespace App\Actions\RecurringPrivateLessons;
 
 use App\Actions\Mail\SendRecurringPrivateLessonEmail;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
+use App\Models\RecurringPrivateLesson;
 use App\Models\RecurringPrivateLessonBillingPeriod;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
@@ -19,6 +21,14 @@ final readonly class BillRecurringPrivateLessonBillingPeriod
     public function handle(RecurringPrivateLessonBillingPeriod $billingPeriod, User $billedBy): int
     {
         $billedCount = DB::transaction(function () use ($billingPeriod, $billedBy): int {
+            $recurringPrivateLesson = RecurringPrivateLesson::query()
+                ->lockForUpdate()
+                ->findOrFail($billingPeriod->recurring_private_lesson_id);
+
+            if ($recurringPrivateLesson->status !== RecurringPrivateLessonStatus::Active) {
+                throw new InvalidArgumentException('Only active recurring private lesson series may be billed.');
+            }
+
             $billingPeriod->loadMissing('charges.event');
             $billedCount = 0;
 

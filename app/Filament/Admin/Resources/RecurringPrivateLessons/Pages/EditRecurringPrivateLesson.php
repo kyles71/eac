@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\RecurringPrivateLessons\Pages;
 
-use App\Actions\RecurringPrivateLessons\SynchronizeRecurringPrivateLessonCharges;
+use App\Actions\RecurringPrivateLessons\UpdateRecurringPrivateLessonStatus;
 use App\Enums\RecurringPrivateLessonStatus;
 use App\Filament\Admin\Resources\RecurringPrivateLessons\RecurringPrivateLessonResource;
 use Filament\Actions\ViewAction;
@@ -37,11 +37,13 @@ final class EditRecurringPrivateLesson extends EditRecord
             $record->course->teachers()->sync(array_map('intval', $data['teacher_ids']));
             $record->update([
                 'lesson_price' => (int) round(((float) $data['lesson_price_dollars']) * 100),
-                'status' => $data['status'] instanceof RecurringPrivateLessonStatus
+            ]);
+            app(UpdateRecurringPrivateLessonStatus::class)->handle(
+                $record,
+                $data['status'] instanceof RecurringPrivateLessonStatus
                     ? $data['status']
                     : RecurringPrivateLessonStatus::from($data['status']),
-            ]);
-            app(SynchronizeRecurringPrivateLessonCharges::class)->handle($record);
+            );
 
             return $record->refresh();
         });

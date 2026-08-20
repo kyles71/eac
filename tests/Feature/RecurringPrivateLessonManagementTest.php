@@ -7,6 +7,8 @@ use App\Actions\RecurringPrivateLessons\BillRecurringPrivateLessonBillingPeriod;
 use App\Actions\RecurringPrivateLessons\CreateRecurringPrivateLesson;
 use App\Actions\RecurringPrivateLessons\RemoveRecurringPrivateLessonCharge;
 use App\Actions\RecurringPrivateLessons\RescheduleRecurringPrivateLessonCharge;
+use App\Actions\RecurringPrivateLessons\SynchronizeRecurringPrivateLessonCharges;
+use App\Actions\RecurringPrivateLessons\UpdateRecurringPrivateLessonStatus;
 use App\Actions\Store\AddToCart;
 use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreateOrder;
@@ -14,6 +16,7 @@ use App\Enums\CourseSemester;
 use App\Enums\RecurringPrivateLessonChargeStatus;
 use App\Enums\RecurringPrivateLessonCoverageStatus;
 use App\Enums\RecurringPrivateLessonResolutionType;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Enums\ScheduleFrequency;
 use App\Models\CartItem;
 use App\Models\Event;
@@ -29,7 +32,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
-use InvalidArgumentException;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -286,6 +288,56 @@ it('rejects household and teacher lesson management attempts', function (): void
             'Teacher tried to remove it',
         ))->toThrow(InvalidArgumentException::class, 'Only owners and super admins');
 });
+
+it('stops unpaid operations for an inactive series and restores them when reactivated', function (RecurringPrivateLessonStatus $status): void {
+    $series = managementSeries($this->household, $this->student, $this->teacher);
+    $charge = $series->charges->sole();
+    app(BillRecurringPrivateLessonBillingPeriod::class)->handle($charge->billingPeriod, $this->owner);
+    app(AddToCart::class)->handle($this->household, $charge->product);
+
+    app(UpdateRecurringPrivateLessonStatus::class)->handle($series, $status);
+
+    expect($series->refresh()->status)->toBe($status)
+        ->and($charge->product->refresh()->is_active)->toBeFalse()
+        ->and($charge->refresh()->getAvailableCapacity($this->household))->toBe(0)
+        ->and(fn () => app(BillRecurringPrivateLessonBillingPeriod::class)->handle(
+            $charge->billingPeriod,
+            $this->owner,
+        ))->toThrow(InvalidArgumentException::class, 'Only active recurring private lesson series may be billed')
+        ->and(fn () => app(RescheduleRecurringPrivateLessonCharge::class)->handle(
+            $charge,
+            CarbonImmutable::parse('2026-08-12 18:00', 'America/New_York'),
+            $this->owner,
+            'Attempted while the series is inactive',
+        ))->toThrow(InvalidArgumentException::class, 'Only lessons in an active recurring series may be rescheduled');
+
+    assertDatabaseMissing(CartItem::class, [
+        'user_id' => $this->household->id,
+        'product_id' => $charge->product->id,
+    ]);
+
+    Event::factory()->create([
+        'course_id' => $series->course_id,
+        'start_time' => CarbonImmutable::parse('2026-08-17 17:00', 'America/New_York'),
+        'end_time' => CarbonImmutable::parse('2026-08-17 18:30', 'America/New_York'),
+    ]);
+
+    expect(app(SynchronizeRecurringPrivateLessonCharges::class)->handle($series))->toBe(0)
+        ->and($series->charges()->count())->toBe(1);
+
+    app(UpdateRecurringPrivateLessonStatus::class)->handle(
+        $series,
+        RecurringPrivateLessonStatus::Active,
+    );
+
+    expect($series->refresh()->status)->toBe(RecurringPrivateLessonStatus::Active)
+        ->and($charge->product->refresh()->is_active)->toBeTrue()
+        ->and($charge->refresh()->getAvailableCapacity($this->household))->toBe(1)
+        ->and($series->charges()->count())->toBe(2);
+})->with([
+    RecurringPrivateLessonStatus::Completed,
+    RecurringPrivateLessonStatus::Cancelled,
+]);
 
 function managementSeries(User $household, Student $student, User $teacher): RecurringPrivateLesson
 {

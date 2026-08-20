@@ -6,6 +6,8 @@ namespace App\Actions\RecurringPrivateLessons;
 
 use App\Actions\Mail\SendRecurringPrivateLessonEmail;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
+use App\Models\RecurringPrivateLesson;
 use App\Models\RecurringPrivateLessonBillingPeriod;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
@@ -49,6 +51,14 @@ final readonly class RescheduleRecurringPrivateLessonCharge
             &$originalStartsAt,
             &$oldBillingPeriodId,
         ): void {
+            $recurringPrivateLesson = RecurringPrivateLesson::query()
+                ->lockForUpdate()
+                ->findOrFail($charge->recurring_private_lesson_id);
+
+            if ($recurringPrivateLesson->status !== RecurringPrivateLessonStatus::Active) {
+                throw new InvalidArgumentException('Only lessons in an active recurring series may be rescheduled.');
+            }
+
             $lockedCharge = RecurringPrivateLessonCharge::query()
                 ->with(['event', 'recurringPrivateLesson'])
                 ->lockForUpdate()

@@ -8,6 +8,7 @@ use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
 use App\Enums\RecurringPrivateLessonChargeStatus;
 use App\Enums\RecurringPrivateLessonResolutionType;
+use App\Enums\RecurringPrivateLessonStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -88,6 +89,7 @@ final class RecurringPrivateLessonCharge extends Model implements HasCapacity, P
         $this->loadMissing(['event', 'recurringPrivateLesson']);
 
         if ($this->status !== RecurringPrivateLessonChargeStatus::Billed
+            || $this->recurringPrivateLesson->status !== RecurringPrivateLessonStatus::Active
             || $this->event->isCancelled()
             || $this->event->start_time === null
             || ! $this->event->start_time->gt(now()->addDay())) {

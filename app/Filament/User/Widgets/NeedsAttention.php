@@ -7,6 +7,7 @@ namespace App\Filament\User\Widgets;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\HeldClasses;
 use App\Filament\User\Pages\MyEnrollments;
@@ -107,7 +108,9 @@ final class NeedsAttention extends Widget
 
         $privateLessons = RecurringPrivateLessonCharge::query()
             ->where('status', RecurringPrivateLessonChargeStatus::Billed)
-            ->whereHas('recurringPrivateLesson', fn ($query) => $query->where('user_id', $user->id))
+            ->whereHas('recurringPrivateLesson', fn ($query) => $query
+                ->where('user_id', $user->id)
+                ->where('status', RecurringPrivateLessonStatus::Active))
             ->whereHas('event', fn ($query) => $query
                 ->whereNull('cancelled_at')
                 ->where('start_time', '>', now()->addDay()))
@@ -122,7 +125,9 @@ final class NeedsAttention extends Widget
                 'title' => 'Recurring private lesson payment due',
                 'description' => $charge->recurringPrivateLesson->student->displayName()
                     .' · '.format_money($charge->amount)
-                    .' · '.$charge->event->start_time->format('M j, Y \a\t g:i A'),
+                    .' · '.$charge->event->start_time
+                        ->timezone((string) config('app.display_timezone', config('app.timezone')))
+                        ->format('M j, Y \a\t g:i A'),
                 'url' => Billing::getUrl(['tab' => 'private-lessons']),
                 'action' => 'Review recurring private lessons',
                 'color' => 'warning',

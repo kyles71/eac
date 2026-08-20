@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\RecurringPrivateLessons;
 
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Models\Event;
 use App\Models\Product;
 use App\Models\RecurringPrivateLesson;
@@ -17,11 +18,19 @@ final class SynchronizeRecurringPrivateLessonCharges
     public function handle(RecurringPrivateLesson $recurringPrivateLesson): int
     {
         return DB::transaction(function () use ($recurringPrivateLesson): int {
-            $recurringPrivateLesson->loadMissing(['course.events', 'student']);
+            $lockedLesson = RecurringPrivateLesson::query()
+                ->lockForUpdate()
+                ->findOrFail($recurringPrivateLesson->id);
+
+            if ($lockedLesson->status !== RecurringPrivateLessonStatus::Active) {
+                return 0;
+            }
+
+            $lockedLesson->loadMissing(['course.events', 'student']);
             $created = 0;
 
             /** @var Event $event */
-            foreach ($recurringPrivateLesson->course->events->sortBy('start_time') as $event) {
+            foreach ($lockedLesson->course->events->sortBy('start_time') as $event) {
                 if ($event->start_time === null) {
                     continue;
                 }
@@ -31,13 +40,13 @@ final class SynchronizeRecurringPrivateLessonCharges
                     ->startOfMonth()
                     ->toDateString();
                 $billingPeriod = RecurringPrivateLessonBillingPeriod::query()
-                    ->where('recurring_private_lesson_id', $recurringPrivateLesson->id)
+                    ->where('recurring_private_lesson_id', $lockedLesson->id)
                     ->whereDate('period_start', $periodStart)
                     ->first();
 
                 if (! $billingPeriod instanceof RecurringPrivateLessonBillingPeriod) {
                     $billingPeriod = RecurringPrivateLessonBillingPeriod::query()->create([
-                        'recurring_private_lesson_id' => $recurringPrivateLesson->id,
+                        'recurring_private_lesson_id' => $lockedLesson->id,
                         'period_start' => $periodStart,
                     ]);
                 }
@@ -58,7 +67,7 @@ final class SynchronizeRecurringPrivateLessonCharges
 
                     if ($existingCharge->status === RecurringPrivateLessonChargeStatus::Scheduled) {
                         $existingCharge->update([
-                            'amount' => $recurringPrivateLesson->lesson_price,
+                            'amount' => $lockedLesson->lesson_price,
                         ]);
                     }
 
@@ -68,10 +77,13 @@ final class SynchronizeRecurringPrivateLessonCharges
                         RecurringPrivateLessonChargeStatus::Paid,
                     ], true)) {
                         $existingCharge->product()->update([
-                            'name' => $recurringPrivateLesson->student->displayName().' — '.$event->start_time
+                            'name' => $lockedLesson->student->displayName().' — '.$event->start_time
                                 ->timezone((string) config('app.display_timezone', 'America/New_York'))
                                 ->format('M j, Y g:i A'),
                             'price' => $existingCharge->amount,
+                            'is_active' => $existingCharge->status === RecurringPrivateLessonChargeStatus::Billed
+                                && ! $event->isCancelled()
+                                && $event->start_time->gt(now()->addDay()),
                             'available_until' => $event->start_time->copy()->subDay(),
                         ]);
                     }
@@ -80,17 +92,17 @@ final class SynchronizeRecurringPrivateLessonCharges
                 }
 
                 $charge = RecurringPrivateLessonCharge::query()->create([
-                    'recurring_private_lesson_id' => $recurringPrivateLesson->id,
+                    'recurring_private_lesson_id' => $lockedLesson->id,
                     'recurring_private_lesson_billing_period_id' => $billingPeriod->id,
                     'event_id' => $event->id,
                     'status' => RecurringPrivateLessonChargeStatus::Scheduled,
-                    'amount' => $recurringPrivateLesson->lesson_price,
+                    'amount' => $lockedLesson->lesson_price,
                 ]);
                 $product = new Product([
-                    'name' => $recurringPrivateLesson->student->displayName().' — '.$event->start_time
+                    'name' => $lockedLesson->student->displayName().' — '.$event->start_time
                         ->timezone((string) config('app.display_timezone', 'America/New_York'))
                         ->format('M j, Y g:i A'),
-                    'description' => $recurringPrivateLesson->course->name.' recurring private lesson',
+                    'description' => $lockedLesson->course->name.' recurring private lesson',
                     'price' => $charge->amount,
                     'is_active' => false,
                     'is_store_listed' => false,
@@ -100,7 +112,7 @@ final class SynchronizeRecurringPrivateLessonCharges
                     'available_until' => $event->start_time->copy()->subDay(),
                 ]);
                 $charge->product()->save($product);
-                $product->assignedUsers()->attach($recurringPrivateLesson->user_id);
+                $product->assignedUsers()->attach($lockedLesson->user_id);
                 $created++;
             }
 

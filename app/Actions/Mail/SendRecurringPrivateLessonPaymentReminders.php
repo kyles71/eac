@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Mail;
 
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Models\RecurringPrivateLessonCharge;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -34,6 +35,8 @@ final readonly class SendRecurringPrivateLessonPaymentReminders
                     RecurringPrivateLessonChargeStatus::Billed,
                 ])
                 ->whereNull($timestampColumn)
+                ->whereHas('recurringPrivateLesson', fn (Builder $query): Builder => $query
+                    ->where('status', RecurringPrivateLessonStatus::Active))
                 ->whereHas('event', fn (Builder $query): Builder => $query
                     ->whereNull('cancelled_at')
                     ->whereBetween('start_time', [$start, $end]))

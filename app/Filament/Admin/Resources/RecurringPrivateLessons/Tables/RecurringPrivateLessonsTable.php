@@ -39,7 +39,10 @@ final class RecurringPrivateLessonsTable
                 TextColumn::make('next_unbilled')
                     ->label('Next Unbilled')
                     ->state(fn (RecurringPrivateLesson $record) => $record->nextUnbilledLessonAt())
-                    ->dateTime('M j, Y g:i A')
+                    ->dateTime(
+                        'M j, Y g:i A',
+                        timezone: (string) config('app.display_timezone', config('app.timezone')),
+                    )
                     ->placeholder('None'),
                 TextColumn::make('status')
                     ->badge()

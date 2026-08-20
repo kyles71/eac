@@ -6,14 +6,20 @@ use App\Actions\Mail\SendRecurringPrivateLessonPaymentReminders;
 use App\Actions\RecurringPrivateLessons\BillRecurringPrivateLessonBillingPeriod;
 use App\Actions\RecurringPrivateLessons\CancelUnpaidRecurringPrivateLessons;
 use App\Actions\RecurringPrivateLessons\CreateRecurringPrivateLesson;
+use App\Actions\RecurringPrivateLessons\UpdateRecurringPrivateLessonStatus;
+use App\Actions\Store\AddToCart;
 use App\Enums\CourseSemester;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Enums\ScheduleFrequency;
+use App\Models\CartItem;
 use App\Models\Student;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+
+use function Pest\Laravel\assertDatabaseMissing;
 
 beforeEach(function (): void {
     Mail::fake();
@@ -61,6 +67,49 @@ it('automatically cancels billed or scheduled unpaid lessons at the 24 hour cuto
 
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-automatic-cancellation'
         && $mail->hasTo('household@example.com'));
+});
+
+it('removes an automatically cancelled billed lesson from the household cart', function (): void {
+    $series = reminderSeries($this->household, $this->student, $this->teacher, '2026-08-03 17:00');
+    $charge = $series->charges->first();
+    app(BillRecurringPrivateLessonBillingPeriod::class)->handle($series->billingPeriods->first(), $this->owner);
+    app(AddToCart::class)->handle($this->household, $charge->product);
+    $this->travelTo(CarbonImmutable::parse('2026-08-02 17:00', 'America/New_York'));
+
+    expect(app(CancelUnpaidRecurringPrivateLessons::class)->handle())->toBe(1);
+
+    assertDatabaseMissing(CartItem::class, [
+        'user_id' => $this->household->id,
+        'product_id' => $charge->product->id,
+    ]);
+});
+
+it('skips reminders and automatic cancellation for an inactive series', function (): void {
+    $reminderSeries = reminderSeries($this->household, $this->student, $this->teacher, '2026-08-08 17:00');
+    app(UpdateRecurringPrivateLessonStatus::class)->handle(
+        $reminderSeries,
+        RecurringPrivateLessonStatus::Completed,
+    );
+
+    expect(app(SendRecurringPrivateLessonPaymentReminders::class)->handle(now()))->toBe([
+        'charges_processed' => 0,
+        'emails_queued' => 0,
+    ]);
+
+    $cancellationSeries = reminderSeries(
+        $this->household,
+        Student::factory()->for($this->household)->create(),
+        $this->teacher,
+        '2026-08-03 17:00',
+    );
+    app(UpdateRecurringPrivateLessonStatus::class)->handle(
+        $cancellationSeries,
+        RecurringPrivateLessonStatus::Cancelled,
+    );
+    $this->travelTo(CarbonImmutable::parse('2026-08-02 17:00', 'America/New_York'));
+
+    expect(app(CancelUnpaidRecurringPrivateLessons::class)->handle())->toBe(0)
+        ->and($cancellationSeries->charges->first()->event->refresh()->isCancelled())->toBeFalse();
 });
 
 function reminderSeries(User $household, Student $student, User $teacher, string $startsAt): App\Models\RecurringPrivateLesson

@@ -6,6 +6,8 @@ namespace App\Actions\RecurringPrivateLessons;
 
 use App\Actions\Mail\SendRecurringPrivateLessonEmail;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
+use App\Models\RecurringPrivateLesson;
 use App\Models\RecurringPrivateLessonCharge;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,8 @@ final class CancelUnpaidRecurringPrivateLessons
                 RecurringPrivateLessonChargeStatus::Scheduled,
                 RecurringPrivateLessonChargeStatus::Billed,
             ])
+            ->whereHas('recurringPrivateLesson', fn (Builder $query): Builder => $query
+                ->where('status', RecurringPrivateLessonStatus::Active))
             ->whereHas('event', fn (Builder $query): Builder => $query
                 ->whereNull('cancelled_at')
                 ->whereNotNull('start_time')
@@ -31,6 +35,15 @@ final class CancelUnpaidRecurringPrivateLessons
             ->orderBy('id')
             ->eachById(function (RecurringPrivateLessonCharge $charge) use (&$cancelled): void {
                 DB::transaction(function () use ($charge, &$cancelled): void {
+                    $recurringPrivateLesson = RecurringPrivateLesson::query()
+                        ->lockForUpdate()
+                        ->find($charge->recurring_private_lesson_id);
+
+                    if (! $recurringPrivateLesson instanceof RecurringPrivateLesson
+                        || $recurringPrivateLesson->status !== RecurringPrivateLessonStatus::Active) {
+                        return;
+                    }
+
                     $lockedCharge = RecurringPrivateLessonCharge::query()
                         ->with('event')
                         ->lockForUpdate()

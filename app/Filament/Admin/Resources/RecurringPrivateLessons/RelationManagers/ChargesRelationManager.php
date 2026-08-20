@@ -9,6 +9,7 @@ use App\Actions\RecurringPrivateLessons\RemoveRecurringPrivateLessonCharge;
 use App\Actions\RecurringPrivateLessons\RescheduleRecurringPrivateLessonCharge;
 use App\Enums\RecurringPrivateLessonChargeStatus;
 use App\Enums\RecurringPrivateLessonResolutionType;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -44,10 +45,14 @@ final class ChargesRelationManager extends RelationManager
         return $schema->components([
             Section::make('Lesson Billing')->schema([
                 Grid::make(3)->schema([
-                    TextEntry::make('event.start_time')->label('Lesson')->dateTime('M j, Y g:i A'),
+                    TextEntry::make('event.start_time')
+                        ->label('Lesson')
+                        ->dateTime('M j, Y g:i A', timezone: $this->displayTimezone()),
                     TextEntry::make('amount')->money('USD', divideBy: 100),
                     TextEntry::make('status')->badge(),
-                    TextEntry::make('billed_at')->dateTime('M j, Y g:i A')->placeholder('Not billed'),
+                    TextEntry::make('billed_at')
+                        ->dateTime('M j, Y g:i A', timezone: $this->displayTimezone())
+                        ->placeholder('Not billed'),
                     TextEntry::make('resolution_note')
                         ->label('Paid Removal Reason')
                         ->placeholder('No paid removal resolution'),
@@ -63,7 +68,7 @@ final class ChargesRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('event.start_time')
                     ->label('Lesson')
-                    ->dateTime('M j, Y g:i A')
+                    ->dateTime('M j, Y g:i A', timezone: $this->displayTimezone())
                     ->icon(fn (RecurringPrivateLessonCharge $record): ?Icon => $this->notesIndicator(
                         $this->rescheduleNotesTooltip($record),
                     ))
@@ -85,7 +90,7 @@ final class ChargesRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('billed_at')
                     ->label('Billed')
-                    ->dateTime('M j, Y')
+                    ->dateTime('M j, Y', timezone: $this->displayTimezone())
                     ->placeholder('Not billed'),
             ])
             ->recordActions([
@@ -96,6 +101,7 @@ final class ChargesRelationManager extends RelationManager
                         ->icon('heroicon-o-paper-airplane')
                         ->requiresConfirmation()
                         ->visible(fn (RecurringPrivateLessonCharge $record): bool => $this->canManage()
+                            && $record->recurringPrivateLesson->status === RecurringPrivateLessonStatus::Active
                             && $record->status === RecurringPrivateLessonChargeStatus::Scheduled)
                         ->action(function (RecurringPrivateLessonCharge $record): void {
                             $this->runAction(
@@ -125,6 +131,7 @@ final class ChargesRelationManager extends RelationManager
                             Textarea::make('reason')->required(),
                         ])
                         ->visible(fn (RecurringPrivateLessonCharge $record): bool => $this->canManage()
+                            && $record->recurringPrivateLesson->status === RecurringPrivateLessonStatus::Active
                             && in_array($record->status, [
                                 RecurringPrivateLessonChargeStatus::Scheduled,
                                 RecurringPrivateLessonChargeStatus::Billed,
@@ -228,6 +235,11 @@ final class ChargesRelationManager extends RelationManager
     private function canManage(): bool
     {
         return $this->actor()->hasAnyRole(['owner', 'super_admin']);
+    }
+
+    private function displayTimezone(): string
+    {
+        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private function actor(): User

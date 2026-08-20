@@ -55,6 +55,7 @@ final class AllocateOrderItemPayments
      */
     public function allocateProportionally(array $amountsByItemId, int $amount): array
     {
+        $amountsByItemId = array_map(fn (int $lineAmount): int => max(0, $lineAmount), $amountsByItemId);
         $total = array_sum($amountsByItemId);
 
         if ($amount <= 0 || $total <= 0) {
@@ -63,15 +64,36 @@ final class AllocateOrderItemPayments
 
         $amount = min($amount, $total);
         $allocated = [];
-        $remaining = $amount;
-        $lastItemId = array_key_last($amountsByItemId);
+        $remainders = [];
 
         foreach ($amountsByItemId as $itemId => $lineAmount) {
-            $lineAllocation = $itemId === $lastItemId
-                ? $remaining
-                : min($lineAmount, intdiv($amount * $lineAmount, $total));
-            $allocated[$itemId] = $lineAllocation;
-            $remaining -= $lineAllocation;
+            $weightedAmount = $amount * $lineAmount;
+            $allocated[$itemId] = min($lineAmount, intdiv($weightedAmount, $total));
+            $remainders[] = [
+                'item_id' => $itemId,
+                'remainder' => $weightedAmount % $total,
+            ];
+        }
+
+        $remaining = $amount - array_sum($allocated);
+        usort(
+            $remainders,
+            fn (array $left, array $right): int => $right['remainder'] <=> $left['remainder'],
+        );
+
+        foreach ($remainders as $remainder) {
+            $itemId = $remainder['item_id'];
+
+            if ($remaining === 0) {
+                break;
+            }
+
+            if ($allocated[$itemId] >= $amountsByItemId[$itemId]) {
+                continue;
+            }
+
+            $allocated[$itemId]++;
+            $remaining--;
         }
 
         return $allocated;

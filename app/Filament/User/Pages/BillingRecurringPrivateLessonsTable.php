@@ -6,6 +6,7 @@ namespace App\Filament\User\Pages;
 
 use App\Actions\Store\AddToCart;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -125,7 +126,9 @@ final class BillingRecurringPrivateLessonsTable extends Component implements Has
             ->where('status', RecurringPrivateLessonChargeStatus::Billed)
             ->whereHas(
                 'recurringPrivateLesson',
-                fn (Builder $query): Builder => $query->where('user_id', $this->household()->id),
+                fn (Builder $query): Builder => $query
+                    ->where('user_id', $this->household()->id)
+                    ->where('status', RecurringPrivateLessonStatus::Active),
             )
             ->whereHas('event', fn (Builder $query): Builder => $query
                 ->whereNull('cancelled_at')

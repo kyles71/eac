@@ -98,6 +98,7 @@ final class RecurringPrivateLessonForm
                             ->formatStateUsing(fn (mixed $state, ?RecurringPrivateLesson $record): mixed => $record?->course->description ?? $state),
                         Select::make('status')
                             ->options(RecurringPrivateLessonStatus::class)
+                            ->helperText('Completed and cancelled series stop billing, payment reminders, rescheduling, and new lesson synchronization. Paid lessons remain available for individual resolution.')
                             ->required()
                             ->default(RecurringPrivateLessonStatus::Active->value)
                             ->visibleOn('edit'),

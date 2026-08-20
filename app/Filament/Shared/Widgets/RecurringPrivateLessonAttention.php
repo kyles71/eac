@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Shared\Widgets;
 
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Filament\Admin\Resources\RecurringPrivateLessons\RecurringPrivateLessonResource;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
@@ -24,6 +25,8 @@ final class RecurringPrivateLessonAttention extends StatsOverviewWidget
             && $user->hasAnyRole(['owner', 'super_admin'])
             && RecurringPrivateLessonCharge::query()
                 ->where('status', RecurringPrivateLessonChargeStatus::Scheduled)
+                ->whereHas('recurringPrivateLesson', fn ($query) => $query
+                    ->where('status', RecurringPrivateLessonStatus::Active))
                 ->exists();
     }
 
@@ -32,6 +35,8 @@ final class RecurringPrivateLessonAttention extends StatsOverviewWidget
     {
         $scheduledCount = RecurringPrivateLessonCharge::query()
             ->where('status', RecurringPrivateLessonChargeStatus::Scheduled)
+            ->whereHas('recurringPrivateLesson', fn ($query) => $query
+                ->where('status', RecurringPrivateLessonStatus::Active))
             ->count();
         $soonestMonth = RecurringPrivateLessonCharge::query()
             ->join(
@@ -41,6 +46,8 @@ final class RecurringPrivateLessonAttention extends StatsOverviewWidget
                 'recurring_private_lesson_charges.recurring_private_lesson_billing_period_id',
             )
             ->where('recurring_private_lesson_charges.status', RecurringPrivateLessonChargeStatus::Scheduled)
+            ->whereHas('recurringPrivateLesson', fn ($query) => $query
+                ->where('status', RecurringPrivateLessonStatus::Active))
             ->selectRaw('billing_periods.period_start as billing_month, COUNT(*) as scheduled_count')
             ->groupBy('billing_periods.period_start')
             ->orderBy('billing_periods.period_start')

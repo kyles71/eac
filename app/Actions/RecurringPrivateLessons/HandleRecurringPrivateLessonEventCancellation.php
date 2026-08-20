@@ -27,6 +27,7 @@ final class HandleRecurringPrivateLessonEventCancellation
             $charge->update(['status' => RecurringPrivateLessonChargeStatus::Cancelled]);
         }
 
+        $charge->product?->cartItems()->delete();
         $charge->product()->update(['is_active' => false]);
     }
 }
