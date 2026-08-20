@@ -224,19 +224,22 @@ it('can delete a student without enrollments', function () {
     ]);
 });
 
-it('hides delete for students with enrollments', function () {
+it('hides delete for students with course or event history', function (string $history): void {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
 
-    Enrollment::factory()
-        ->withStudent($student)
-        ->create([
-            'user_id' => auth()->id(),
-            'student_id' => $student->id,
-        ]);
+    match ($history) {
+        'course' => Enrollment::factory()
+            ->withStudent($student)
+            ->create([
+                'user_id' => auth()->id(),
+                'student_id' => $student->id,
+            ]),
+        'event' => EventAttendee::factory()->forStudent($student)->create(),
+    };
 
     livewire(ListStudents::class)
         ->assertActionHidden(TestAction::make(DeleteAction::class)->table($student));
-});
+})->with(['course', 'event']);
 
 it('shows current classes and progressively loads past enrollment history', function () {
     $student = Student::factory()->create(['user_id' => auth()->id()]);

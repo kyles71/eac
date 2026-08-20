@@ -17,13 +17,18 @@ return new class extends Migration
             $table->id();
             $table->foreignId('course_id')->unique()->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('student_id')->constrained()->restrictOnDelete();
             $table->unsignedInteger('lesson_price');
             $table->string('status')->default('Active');
             $table->timestamps();
 
             $table->index(['user_id', 'status']);
             $table->index(['student_id', 'status']);
+        });
+
+        Schema::table('enrollments', function (Blueprint $table): void {
+            $table->dropForeign(['student_id']);
+            $table->foreign('student_id')->references('id')->on('students')->restrictOnDelete();
         });
     }
 
@@ -33,5 +38,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('recurring_private_lessons');
+
+        Schema::table('enrollments', function (Blueprint $table): void {
+            $table->dropForeign(['student_id']);
+            $table->foreign('student_id')->references('id')->on('students')->nullOnDelete();
+        });
     }
 };

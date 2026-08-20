@@ -98,6 +98,18 @@ final class Student extends Model
         return $this->morphMany(EventAttendee::class, 'attendee');
     }
 
+    public function hasCourseOrEventHistory(): bool
+    {
+        return $this->enrollments()->exists()
+            || $this->recurringPrivateLesson()->exists()
+            || $this->events()->exists();
+    }
+
+    public function canBeDeleted(): bool
+    {
+        return ! $this->hasCourseOrEventHistory();
+    }
+
     /** @return HasMany<FormUser, $this> */
     public function forms(): HasMany
     {

@@ -32,6 +32,11 @@ final class StudentPolicy
         return $authUser->can('Update:Student');
     }
 
+    public function delete(AuthUser $authUser, Student $student): bool
+    {
+        return $authUser->can('DeleteAny:Student') && $student->canBeDeleted();
+    }
+
     public function deleteAny(AuthUser $authUser): bool
     {
         return $authUser->can('DeleteAny:Student');
