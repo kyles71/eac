@@ -113,11 +113,9 @@ final class ProductForm
                     ->schema([
                         DateTimePicker::make('available_from')
                             ->label('Available From')
-                            ->timezone(self::displayTimezone())
                             ->helperText('Leave blank to make this product available immediately when active.'),
                         DateTimePicker::make('available_until')
                             ->label('Available Until')
-                            ->timezone(self::displayTimezone())
                             ->after('available_from')
                             ->helperText('Leave blank to keep this product available indefinitely while active.'),
                         Repeater::make('earlyAccessWindows')
@@ -133,11 +131,9 @@ final class ProductForm
                             ->schema([
                                 DateTimePicker::make('available_from')
                                     ->label('Available From')
-                                    ->timezone(self::displayTimezone())
                                     ->required(),
                                 DateTimePicker::make('available_until')
                                     ->label('Available Until')
-                                    ->timezone(self::displayTimezone())
                                     ->after('available_from'),
                                 Select::make('audiences')
                                     ->label('Audiences')
@@ -347,11 +343,6 @@ final class ProductForm
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
-    }
-
-    private static function displayTimezone(): string
-    {
-        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private static function requiresFixedPrice(Get $get): bool

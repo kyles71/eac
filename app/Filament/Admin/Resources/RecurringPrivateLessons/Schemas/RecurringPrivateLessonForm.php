@@ -113,8 +113,7 @@ final class RecurringPrivateLessonForm
                             ->label('First Lesson')
                             ->required()
                             ->seconds(false)
-                            ->minDate(now()->addDay()->startOfMinute()->addMinute())
-                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                            ->minDate(now()->addDay()->startOfMinute()->addMinute()),
                         TextInput::make('duration_minutes')
                             ->label('Duration (minutes)')
                             ->numeric()

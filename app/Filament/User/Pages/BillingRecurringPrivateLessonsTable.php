@@ -42,7 +42,7 @@ final class BillingRecurringPrivateLessonsTable extends Component implements Has
             ->columns([
                 TextColumn::make('event.start_time')
                     ->label('Lesson Date')
-                    ->dateTime('M j, Y g:i A', timezone: (string) config('app.display_timezone', config('app.timezone')))
+                    ->dateTime()
                     ->sortable(),
                 TextColumn::make('dancer')
                     ->label('Dancer')

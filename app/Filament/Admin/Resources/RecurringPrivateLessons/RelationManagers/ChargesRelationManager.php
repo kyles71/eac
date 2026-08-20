@@ -47,11 +47,11 @@ final class ChargesRelationManager extends RelationManager
                 Grid::make(3)->schema([
                     TextEntry::make('event.start_time')
                         ->label('Lesson')
-                        ->dateTime('M j, Y g:i A', timezone: $this->displayTimezone()),
+                        ->dateTime(),
                     TextEntry::make('amount')->money('USD', divideBy: 100),
                     TextEntry::make('status')->badge(),
                     TextEntry::make('billed_at')
-                        ->dateTime('M j, Y g:i A', timezone: $this->displayTimezone())
+                        ->dateTime()
                         ->placeholder('Not billed'),
                     TextEntry::make('resolution_note')
                         ->label('Paid Removal Reason')
@@ -68,7 +68,7 @@ final class ChargesRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('event.start_time')
                     ->label('Lesson')
-                    ->dateTime('M j, Y g:i A', timezone: $this->displayTimezone())
+                    ->dateTime()
                     ->icon(fn (RecurringPrivateLessonCharge $record): ?Icon => $this->notesIndicator(
                         $this->rescheduleNotesTooltip($record),
                     ))
@@ -90,7 +90,7 @@ final class ChargesRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('billed_at')
                     ->label('Billed')
-                    ->dateTime('M j, Y', timezone: $this->displayTimezone())
+                    ->dateTime('M j, Y')
                     ->placeholder('Not billed'),
             ])
             ->recordActions([
@@ -126,8 +126,7 @@ final class ChargesRelationManager extends RelationManager
                                 ->seconds(false)
                                 ->minDate(fn (RecurringPrivateLessonCharge $record) => $record->status === RecurringPrivateLessonChargeStatus::Paid
                                     ? now()->startOfMinute()->addMinute()
-                                    : now()->addDay()->startOfMinute()->addMinute())
-                                ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                                    : now()->addDay()->startOfMinute()->addMinute()),
                             Textarea::make('reason')->required(),
                         ])
                         ->visible(fn (RecurringPrivateLessonCharge $record): bool => $this->canManage()
@@ -235,11 +234,6 @@ final class ChargesRelationManager extends RelationManager
     private function canManage(): bool
     {
         return $this->actor()->hasAnyRole(['owner', 'super_admin']);
-    }
-
-    private function displayTimezone(): string
-    {
-        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private function actor(): User
