@@ -48,7 +48,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         CalendarResource::class => $fiveAbilities,
         CompetitionSeasonResource::class => $sixAbilities,
         CompetitionTeamResource::class => $sixAbilities,
-        GearResource::class => $fiveAbilities,
+        GearResource::class => $sixAbilities,
         CourseHoldResource::class => ['viewAny', 'view', 'create', 'update'],
         CourseResource::class => $sixAbilities,
         CreditGrantResource::class => ['viewAny', 'view', 'create', 'revoke'],
@@ -118,6 +118,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:UserAccess',
             'Publish:LegalDocument',
             'AdjustDueDates:PaymentPlan',
+            'View:Gear',
             'View:AppUpdatesPage',
         );
 

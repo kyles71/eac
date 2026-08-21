@@ -22,6 +22,11 @@ final class GearPolicy
         return $authUser->can('Create:Gear');
     }
 
+    public function view(AuthUser $authUser, Gear $gear): bool
+    {
+        return $authUser->can('View:Gear');
+    }
+
     public function update(AuthUser $authUser, Gear $gear): bool
     {
         return $authUser->can('Update:Gear');
@@ -30,7 +35,7 @@ final class GearPolicy
     public function delete(AuthUser $authUser, Gear $gear): bool
     {
         return $authUser->can('Delete:Gear')
-            && ($gear->product?->canBeDeleted() ?? true);
+            && $gear->canBeDeleted();
     }
 
     public function deleteAny(AuthUser $authUser): bool
