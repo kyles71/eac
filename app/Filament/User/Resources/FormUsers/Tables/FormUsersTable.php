@@ -25,7 +25,7 @@ final class FormUsersTable
                 TextColumn::make('form.name')
                     ->searchable(),
                 TextColumn::make('student.fullName')
-                    ->searchable(),
+                    ->searchable(['first_name', 'last_name']),
                 TextColumn::make('signature')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('date_signed')

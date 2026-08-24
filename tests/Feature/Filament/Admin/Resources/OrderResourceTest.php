@@ -7,7 +7,7 @@ use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
-use App\Models\Costume;
+use App\Models\Gear;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -110,14 +110,14 @@ it('can search orders by customer name', function () {
 });
 
 it('can mark order items as fulfilled via ViewOrder action', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create(['price' => 3000]);
 
     $order = Order::factory()->completed()->create();
 
     $orderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
-        'product_id' => $costumeProduct->id,
+        'product_id' => $gearProduct->id,
         'quantity' => 1,
         'unit_price' => 3000,
         'total_price' => 3000,

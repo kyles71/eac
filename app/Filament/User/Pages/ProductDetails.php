@@ -8,6 +8,7 @@ use App\Actions\CourseHolds\AddCourseHoldToCart;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\CourseHold;
 use App\Models\CourseHoldSeat;
@@ -47,7 +48,12 @@ final class ProductDetails extends Page
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        $product->loadMissing(['media', 'productable', 'requiresCourse']);
+        $product->loadMissing([
+            'media',
+            'productable',
+            'requiredCourses',
+            'requiredCompetitionTeams.season',
+        ]);
         $product->loadMorph('productable', [
             Course::class => ['events', 'teachers.media'],
         ]);
@@ -247,10 +253,19 @@ final class ProductDetails extends Page
                 ->color('warning');
         }
 
-        if ($product->requiresCourse !== null) {
-            $details[] = TextEntry::make('requires_course')
-                ->label('Requires Enrollment In')
-                ->state($product->requiresCourse->name);
+        if ($product->requiredCourses->isNotEmpty()) {
+            $details[] = TextEntry::make('required_courses')
+                ->label('Requires Enrollment In At Least One Of')
+                ->state($product->requiredCourses->sortBy('name')->pluck('name')->join(', '));
+        }
+
+        if ($product->requiredCompetitionTeams->isNotEmpty()) {
+            $details[] = TextEntry::make('required_competition_teams')
+                ->label('Requires Membership In At Least One Of')
+                ->state($product->requiredCompetitionTeams
+                    ->sortBy(fn (CompetitionTeam $team): string => $team->season->name.' '.$team->name)
+                    ->map(fn (CompetitionTeam $team): string => "{$team->season->name}: {$team->name}")
+                    ->join(', '));
         }
 
         $details[] = Actions::make([

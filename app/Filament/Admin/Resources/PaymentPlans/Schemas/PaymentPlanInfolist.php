@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\PaymentPlans\Schemas;
 
 use App\Models\Installment;
+use App\Models\InstallmentDueDateAdjustment;
+use App\Models\PaymentPlan;
 use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -52,7 +55,6 @@ final class PaymentPlanInfolist
                     ->schema([
                         RepeatableEntry::make('installments')
                             ->hiddenLabel()
-                            ->grid(6)
                             ->schema([
                                 TextEntry::make('installment_number')
                                     ->label('#'),
@@ -65,14 +67,68 @@ final class PaymentPlanInfolist
                                     ->badge()
                                     ->state(fn (Installment $record): string => $record->paymentStatusLabel())
                                     ->color(fn (Installment $record): string => $record->paymentStatusColor()),
+                                TextEntry::make('retry_count')
+                                    ->label('Retries'),
                                 TextEntry::make('paid_at')
                                     ->label('Paid At')
                                     ->dateTime()
                                     ->placeholder('—'),
-                                TextEntry::make('retry_count')
-                                    ->label('Retries'),
-                            ]),
+                            ])
+                            ->columns(3),
                     ]),
+                Section::make('Due Date Adjustment History')
+                    ->columnSpanFull()
+                    ->extraAttributes(['style' => 'min-width: 0;'])
+                    ->schema([
+                        RepeatableEntry::make('dueDateAdjustments')
+                            ->hiddenLabel()
+                            ->table([
+                                TableColumn::make('Installment'),
+                                TableColumn::make('Previous Status')->wrapHeader(),
+                                TableColumn::make('Previous Due Date')->wrapHeader(),
+                                TableColumn::make('New Due Date')->wrapHeader(),
+                                TableColumn::make('Reason')->wrapHeader(),
+                                TableColumn::make('Customer Email')->wrapHeader(),
+                                TableColumn::make('Adjusted By')->wrapHeader(),
+                                TableColumn::make('Adjusted At')->wrapHeader(),
+                            ])
+                            ->schema([
+                                TextEntry::make('installment.installment_number')
+                                    ->label('Installment')
+                                    ->formatStateUsing(fn (int $state): string => "#{$state}"),
+                                TextEntry::make('previous_status')
+                                    ->label('Previous Status')
+                                    ->badge(),
+                                TextEntry::make('old_due_date')
+                                    ->label('Previous Due Date')
+                                    ->date(),
+                                TextEntry::make('new_due_date')
+                                    ->label('New Due Date')
+                                    ->date(),
+                                TextEntry::make('reason')
+                                    ->label('Reason'),
+                                TextEntry::make('customer_notification_status')
+                                    ->label('Customer Email')
+                                    ->badge()
+                                    ->tooltip(fn (InstallmentDueDateAdjustment $record): ?string => $record->customer_notification_note)
+                                    ->color(fn (string $state): string => match ($state) {
+                                        'Queued' => 'success',
+                                        'Skipped' => 'warning',
+                                        'Failed' => 'danger',
+                                        default => 'gray',
+                                    }),
+                                TextEntry::make('adjustedBy.full_name')
+                                    ->label('Adjusted By')
+                                    ->placeholder('Deleted administrator'),
+                                TextEntry::make('created_at')
+                                    ->label('Adjusted At')
+                                    ->dateTime(),
+                            ])
+                            ->extraAttributes([
+                                'style' => 'min-width: 0; max-width: 100%; overflow-x: auto;',
+                            ]),
+                    ])
+                    ->visible(fn (?PaymentPlan $record): bool => $record?->dueDateAdjustments()->exists() ?? false),
             ]);
     }
 }

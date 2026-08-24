@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
-use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
@@ -16,6 +15,7 @@ use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Forms\FormResource;
 use App\Filament\Admin\Resources\FormUsers\FormUserResource;
+use App\Filament\Admin\Resources\Gear\GearResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
@@ -48,7 +48,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         CalendarResource::class => $fiveAbilities,
         CompetitionSeasonResource::class => $sixAbilities,
         CompetitionTeamResource::class => $sixAbilities,
-        CostumeResource::class => $fiveAbilities,
+        GearResource::class => $fiveAbilities,
         CourseHoldResource::class => ['viewAny', 'view', 'create', 'update'],
         CourseResource::class => $sixAbilities,
         CreditGrantResource::class => ['viewAny', 'view', 'create', 'revoke'],
@@ -65,7 +65,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
         OrderResource::class => ['viewAny', 'view', 'refund'],
-        PaymentPlanResource::class => ['viewAny', 'view'],
+        PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
         RoleResource::class => $sixAbilities,
@@ -117,6 +117,7 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:ThemeBuilder',
             'Manage:UserAccess',
             'Publish:LegalDocument',
+            'AdjustDueDates:PaymentPlan',
             'View:AppUpdatesPage',
         );
 

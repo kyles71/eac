@@ -39,7 +39,7 @@ it('scopes for product by type and price', function () {
         'max_price' => 10000,
     ]);
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 5000,
     ]);
