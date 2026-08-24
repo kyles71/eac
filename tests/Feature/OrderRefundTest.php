@@ -210,6 +210,54 @@ it('allocates a payment plan refund newest first and optionally cancels future i
         ->and($order->refresh()->status)->toBe(OrderStatus::Refunded);
 });
 
+it('shows refund status for fully and partially refunded installments', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 6000,
+        'total' => 6000,
+        'stripe_payment_intent_id' => 'pi_first_installment',
+    ]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'total_amount' => 6000,
+        'number_of_installments' => 2,
+    ]);
+    $firstInstallment = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 1,
+        'amount' => 3000,
+        'stripe_payment_intent_id' => null,
+    ]);
+    $secondInstallment = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'amount' => 3000,
+        'stripe_payment_intent_id' => 'pi_second_installment',
+    ]);
+    $refund = App\Models\OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 4000,
+        'status' => OrderRefundStatus::Succeeded,
+        'completed_at' => now(),
+    ]);
+    OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'stripe_payment_intent_id' => 'pi_first_installment',
+        'amount' => 1000,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+    OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'stripe_payment_intent_id' => 'pi_second_installment',
+        'amount' => 3000,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+
+    expect($firstInstallment->paymentStatusLabel())->toBe('Partial Refund')
+        ->and($secondInstallment->paymentStatusLabel())->toBe('Refund')
+        ->and($firstInstallment->status)->toBe(InstallmentStatus::Paid)
+        ->and($secondInstallment->status)->toBe(InstallmentStatus::Paid);
+});
+
 it('optionally restores applied store credit after a full Stripe refund', function (): void {
     $order = Order::factory()->completed()->create([
         'subtotal' => 6000,

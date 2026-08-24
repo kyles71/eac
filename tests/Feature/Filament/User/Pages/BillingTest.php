@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanStatus;
 use App\Enums\ProductType;
@@ -18,6 +20,7 @@ use App\Models\LegalDocumentVersion;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderRefund;
+use App\Models\OrderRefundPayment;
 use App\Models\PaymentPlan;
 use App\Models\Product;
 use App\Models\ProductQuestionAnswer;
@@ -77,6 +80,47 @@ it('never shows internal refund reasons to the customer', function (): void {
     livewire(Billing::class)
         ->assertSee("Order #{$order->id}")
         ->assertDontSee('PRIVATE ADMIN REFUND NOTE');
+});
+
+it('shows successful refund receipts without the internal reason', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 10000,
+        'total' => 10000,
+    ]);
+    $refund = OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 2500,
+        'reason' => 'PRIVATE ADMIN REFUND NOTE',
+        'status' => OrderRefundStatus::Succeeded,
+        'completed_at' => now(),
+    ]);
+    OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'amount' => 2500,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+
+    livewire(Billing::class)
+        ->assertSee("View Refund Receipt #{$refund->id}")
+        ->assertDontSee('PRIVATE ADMIN REFUND NOTE');
+
+    $component = livewire(Billing::class);
+    $method = new ReflectionMethod(Billing::class, 'refundReceiptSchema');
+    $method->setAccessible(true);
+    $schema = Schema::make($component->instance())
+        ->components($method->invoke($component->instance(), $refund));
+    $entries = collect($schema->getFlatComponents(withHidden: true))
+        ->filter(fn ($component): bool => $component instanceof \Filament\Infolists\Components\TextEntry);
+
+    expect($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Refund Amount'
+        && $entry->getState() === '$25.00'))->toBeTrue()
+        ->and($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Original Order Total'
+            && $entry->getState() === '$100.00'))->toBeTrue()
+        ->and($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Amount Collected'
+            && $entry->getState() === '$100.00'))->toBeTrue()
+        ->and($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Net Paid'
+            && $entry->getState() === '$75.00'))->toBeTrue();
 });
 
 it('resends a completed order receipt from billing', function () {
