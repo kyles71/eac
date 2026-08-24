@@ -171,9 +171,13 @@ final readonly class StripeService implements StripeServiceContract
         );
     }
 
+    /**
+     * @param  array<string, string>  $metadata
+     */
     public function refundPaymentIntent(
         string $paymentIntentId,
         ?int $amount = null,
+        array $metadata = [],
         ?string $idempotencyKey = null,
     ): Refund {
         $params = ['payment_intent' => $paymentIntentId];
@@ -182,11 +186,19 @@ final readonly class StripeService implements StripeServiceContract
             $params['amount'] = $amount;
         }
 
-        $options = $idempotencyKey === null
-            ? null
-            : ['idempotency_key' => $idempotencyKey];
+        if ($metadata !== []) {
+            $params['metadata'] = $metadata;
+        }
 
-        return $this->client->refunds->create($params, $options);
+        $requestOptions = [
+            'stripe_version' => config('services.stripe.api_version'),
+        ];
+
+        if ($idempotencyKey !== null) {
+            $requestOptions['idempotency_key'] = $idempotencyKey;
+        }
+
+        return $this->client->refunds->create($params, $requestOptions);
     }
 
     public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent

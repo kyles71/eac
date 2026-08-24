@@ -166,6 +166,7 @@ it('partially refunds only the Stripe amount allocated to a cancelled paid lesso
         ->with(
             'pi_private_lesson',
             6000,
+            [],
             $idempotencyKey,
         )
         ->andReturnUsing(function () use ($transactionLevelBeforeRefund): Refund {
@@ -205,6 +206,7 @@ it('keeps a paid lesson active when its Stripe refund fails', function (): void 
         ->with(
             'pi_failed_private_lesson_refund',
             6000,
+            [],
             $idempotencyKey,
         )
         ->andThrow(new RuntimeException('Stripe refund failed'));
@@ -238,7 +240,7 @@ it('reuses the same Stripe idempotency key after a post-refund database rollback
     );
     $stripe->shouldReceive('refundPaymentIntent')
         ->twice()
-        ->with('pi_retry_private_lesson_refund', 6000, $idempotencyKey)
+        ->with('pi_retry_private_lesson_refund', 6000, [], $idempotencyKey)
         ->andReturn(
             Refund::constructFrom([]),
             Refund::constructFrom(['id' => 're_retried_private_lesson']),

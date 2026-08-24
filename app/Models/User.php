@@ -47,7 +47,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'store_view' => StoreView::List->value,
+        'store_view' => StoreView::Cards->value,
     ];
 
     /**
@@ -89,7 +89,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     {
         $storeView = $this->getAttribute('store_view');
 
-        return $storeView instanceof StoreView ? $storeView : StoreView::List;
+        return $storeView instanceof StoreView ? $storeView : StoreView::Cards;
     }
 
     public function getStaffPhotoUrl(): ?string
