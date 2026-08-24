@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +30,8 @@ final class Installment extends Model
         'last_attempted_at' => 'datetime',
         'past_due_notification_sent_at' => 'datetime',
     ];
+
+    private ?int $resolvedRefundedAmount = null;
 
     /** @return BelongsTo<PaymentPlan, $this> */
     public function paymentPlan(): BelongsTo
@@ -78,6 +82,19 @@ final class Installment extends Model
             });
     }
 
+    public function scopeNotBlockedByRefundCancellation(Builder $query): void
+    {
+        $query->whereDoesntHave('paymentPlan.order.refunds', function (Builder $query): void {
+            $query
+                ->where('cancel_remaining_installments', true)
+                ->whereIn('status', [
+                    OrderRefundStatus::Processing,
+                    OrderRefundStatus::Pending,
+                    OrderRefundStatus::PartiallyFailed,
+                ]);
+        });
+    }
+
     /**
      * Mark this installment as paid.
      */
@@ -126,6 +143,50 @@ final class Installment extends Model
             'last_failure_code' => $failureCode,
             'stripe_payment_intent_id' => $stripePaymentIntentId,
         ]);
+    }
+
+    public function refundedAmount(): int
+    {
+        $paymentIntentId = $this->stripe_payment_intent_id;
+
+        if ($paymentIntentId === null && $this->installment_number === 1) {
+            $paymentIntentId = $this->paymentPlan->order?->stripe_payment_intent_id;
+        }
+
+        if ($paymentIntentId === null) {
+            return 0;
+        }
+
+        return $this->resolvedRefundedAmount ??= (int) OrderRefundPayment::query()
+            ->where('stripe_payment_intent_id', $paymentIntentId)
+            ->where('status', OrderRefundPaymentStatus::Succeeded)
+            ->whereHas(
+                'orderRefund',
+                fn (Builder $query): Builder => $query->where('order_id', $this->paymentPlan->order_id),
+            )
+            ->sum('amount');
+    }
+
+    public function paymentStatusLabel(): string
+    {
+        $refundedAmount = $this->refundedAmount();
+
+        if ($refundedAmount >= $this->amount) {
+            return 'Refund';
+        }
+
+        if ($refundedAmount > 0) {
+            return 'Partial Refund';
+        }
+
+        return $this->status->getLabel();
+    }
+
+    public function paymentStatusColor(): string
+    {
+        return $this->refundedAmount() > 0
+            ? 'gray'
+            : $this->status->getColor();
     }
 
     private static function todayInDisplayTimezone(): string

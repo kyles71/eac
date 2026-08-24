@@ -56,19 +56,25 @@ it('keeps scoped managed banners visible after the store table loads', function 
         ->assertSee('Store table notice');
 });
 
-it('defaults to list view', function () {
+it('defaults new users to card view', function () {
     $component = livewire(Store::class);
 
-    expect($component->instance()->storeView)->toBe(StoreView::List)
-        ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
-        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
+    expect($component->instance()->storeView)->toBe(StoreView::Cards)
+        ->and($component->instance()->getTable()->getContentGrid())->toBe([
+            'default' => 1,
+            'md' => 2,
+            'xl' => 3,
+        ])
+        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::Cards);
 
     $component
-        ->assertActionDisabled(TestAction::make('listView')->table())
-        ->assertActionEnabled(TestAction::make('cardView')->table());
+        ->assertActionEnabled(TestAction::make('listView')->table())
+        ->assertActionDisabled(TestAction::make('cardView')->table());
 });
 
 it('switches to card view and persists the preference', function () {
+    auth()->user()->update(['store_view' => StoreView::List]);
+
     $component = livewire(Store::class)
         ->callAction(TestAction::make('cardView')->table());
 
@@ -95,6 +101,19 @@ it('switches back to list view and persists the preference', function () {
     expect($component->instance()->storeView)->toBe(StoreView::List)
         ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
         ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
+});
+
+it('keeps list view for an existing user who selected it', function () {
+    auth()->user()->update(['store_view' => StoreView::List]);
+
+    $component = livewire(Store::class);
+
+    expect($component->instance()->storeView)->toBe(StoreView::List)
+        ->and($component->instance()->getTable()->getContentGrid())->toBeNull();
+
+    $component
+        ->assertActionDisabled(TestAction::make('listView')->table())
+        ->assertActionEnabled(TestAction::make('cardView')->table());
 });
 
 it('shows the first storefront image in card view', function () {
@@ -251,6 +270,7 @@ it('does not search or sort by computed available spots', function () {
 it('shows the full description in a tooltip when the table value is truncated', function () {
     $description = 'This is a longer store description that should stay compact in the table but be visible in full on hover.';
 
+    auth()->user()->update(['store_view' => StoreView::List]);
     $this->product->update(['description' => $description]);
 
     livewire(Store::class)

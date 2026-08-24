@@ -64,7 +64,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         HolidayResource::class => $fiveAbilities,
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
-        OrderResource::class => ['viewAny', 'view'],
+        OrderResource::class => ['viewAny', 'view', 'refund'],
         PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,

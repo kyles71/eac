@@ -113,23 +113,70 @@ it('makes an attached payment method redisplayable', function () {
     ]);
 });
 
-it('passes an idempotency key when refunding a payment intent', function () {
+it('creates an idempotent partial refund with private identifiers only', function (): void {
     $refunds = new class
     {
         /** @var array<string, mixed> */
         public array $createdWith = [];
 
-        /** @var array<string, string>|null */
-        public ?array $options = null;
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
 
         /**
          * @param  array<string, mixed>  $params
-         * @param  array<string, string>|null  $options
+         * @param  array<string, mixed>  $options
          */
-        public function create(array $params, ?array $options = null): Refund
+        public function create(array $params, array $options): Refund
         {
             $this->createdWith = $params;
-            $this->options = $options;
+            $this->requestOptions = $options;
+
+            return Refund::constructFrom(['id' => 're_test', 'status' => 'succeeded']);
+        }
+    };
+
+    $service = new StripeService(stripeClientForTest(['refunds' => $refunds]));
+
+    $service->refundPaymentIntent(
+        paymentIntentId: 'pi_test',
+        amount: 2500,
+        metadata: [
+            'order_id' => '123',
+            'order_refund_id' => '456',
+        ],
+        idempotencyKey: 'order-refund-payment-789',
+    );
+
+    expect($refunds->createdWith)->toBe([
+        'payment_intent' => 'pi_test',
+        'amount' => 2500,
+        'metadata' => [
+            'order_id' => '123',
+            'order_refund_id' => '456',
+        ],
+    ])->and($refunds->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
+        'idempotency_key' => 'order-refund-payment-789',
+    ]);
+});
+
+it('passes an idempotency key when refunding a payment intent without metadata', function (): void {
+    $refunds = new class
+    {
+        /** @var array<string, mixed> */
+        public array $createdWith = [];
+
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, mixed>  $options
+         */
+        public function create(array $params, array $options): Refund
+        {
+            $this->createdWith = $params;
+            $this->requestOptions = $options;
 
             return Refund::constructFrom(['id' => 're_private_lesson']);
         }
@@ -140,15 +187,16 @@ it('passes an idempotency key when refunding a payment intent', function () {
     ]));
 
     $service->refundPaymentIntent(
-        'pi_private_lesson',
-        6000,
-        'recurring-private-lesson-coverage-123-refund-idempotency-key',
+        paymentIntentId: 'pi_private_lesson',
+        amount: 6000,
+        idempotencyKey: 'recurring-private-lesson-coverage-123-refund-idempotency-key',
     );
 
     expect($refunds->createdWith)->toBe([
         'payment_intent' => 'pi_private_lesson',
         'amount' => 6000,
-    ])->and($refunds->options)->toBe([
+    ])->and($refunds->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
         'idempotency_key' => 'recurring-private-lesson-coverage-123-refund-idempotency-key',
     ]);
 });

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\PaymentPlans\Schemas;
 
-use App\Enums\InstallmentStatus;
+use App\Models\Installment;
 use App\Models\InstallmentDueDateAdjustment;
 use App\Models\PaymentPlan;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -65,12 +65,8 @@ final class PaymentPlanInfolist
                                     ->date(),
                                 TextEntry::make('status')
                                     ->badge()
-                                    ->color(fn (InstallmentStatus $state): string => match ($state) {
-                                        InstallmentStatus::Paid => 'success',
-                                        InstallmentStatus::Pending => 'warning',
-                                        InstallmentStatus::Failed => 'danger',
-                                        InstallmentStatus::Overdue => 'danger',
-                                    }),
+                                    ->state(fn (Installment $record): string => $record->paymentStatusLabel())
+                                    ->color(fn (Installment $record): string => $record->paymentStatusColor()),
                                 TextEntry::make('retry_count')
                                     ->label('Retries'),
                                 TextEntry::make('paid_at')
