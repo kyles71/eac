@@ -75,7 +75,7 @@ Use `pgsql` and port `5432` instead when PostgreSQL is selected. Install the mat
 
 The application has separate public and private media abstractions:
 
-- Public media includes storefront/course/event/costume imagery and dashboard appearance assets.
+- Public media includes storefront/course/event/gear imagery and dashboard appearance assets.
 - Private media includes user files, staff photos, and private course/event/product attachments.
 
 Two production patterns are supported by the current code:
@@ -316,7 +316,7 @@ The alternative system-crontab format used in `/etc/crontab` or `/etc/cron.d/*` 
 
 The current schedule includes:
 
-- 12:01 a.m. Eastern: process payment-plan installments.
+- 10:00 a.m. Eastern: process payment-plan installments.
 - 12:01 a.m. Eastern: cancel orders abandoned for more than 24 hours.
 - 3:10 a.m. Eastern: remove database backups outside the retention policy.
 - 3:40 a.m. Eastern: create an encrypted production database backup.

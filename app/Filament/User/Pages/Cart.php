@@ -16,8 +16,10 @@ use App\Models\CourseHold;
 use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\CreditLedgerService;
 use App\Services\ProductQuestionAnswerService;
+use App\Services\StoreCodeAttemptLimiter;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdown;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
@@ -208,7 +210,7 @@ final class Cart extends Page implements HasTable
             return $this->paymentPlanBreakdown->restrictedCreditAmount;
         }
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
         $items = $this->cartItems->map(fn (CartItem $cartItem): array => [
             'product' => $this->productForCartItem($cartItem),
@@ -440,6 +442,21 @@ final class Cart extends Page implements HasTable
 
     public function applyCode(): void
     {
+        /** @var User $user */
+        $user = auth()->user();
+        $code = mb_trim($this->code);
+        $attemptLimiter = app(StoreCodeAttemptLimiter::class);
+
+        if ($code !== '' && $attemptLimiter->hasTooManyAttempts($user)) {
+            Notification::make()
+                ->title('Too many code attempts')
+                ->body("Try again in {$attemptLimiter->secondsUntilAvailable($user)} seconds.")
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         try {
             $applyCode = new ApplyCode;
 
@@ -450,7 +467,7 @@ final class Cart extends Page implements HasTable
 
             $result = $applyCode->handle(
                 $this->code,
-                auth()->user(),
+                $user,
                 $this->subtotal,
                 $productIds,
             );
@@ -477,6 +494,10 @@ final class Cart extends Page implements HasTable
                     ->send();
             }
         } catch (InvalidArgumentException $e) {
+            if ($code !== '') {
+                $attemptLimiter->recordFailure($user);
+            }
+
             Notification::make()
                 ->title('Invalid code')
                 ->body($e->getMessage())
@@ -602,7 +623,7 @@ final class Cart extends Page implements HasTable
                         ? DiscountCode::query()->find($this->appliedDiscountCodeId)
                         : null;
 
-                    /** @var \App\Models\User $user */
+                    /** @var User $user */
                     $user = auth()->user();
                     $creditToApply = $this->useCredit ? $this->getPreviewStoreCreditBalance() : 0;
 
@@ -897,7 +918,7 @@ final class Cart extends Page implements HasTable
 
     private function getPreviewStoreCreditBalance(): int
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         return app(CreditLedgerService::class)->previewUnrestrictedBalance($user);
@@ -905,7 +926,7 @@ final class Cart extends Page implements HasTable
 
     private function paymentPlanBreakdownForTemplate(PaymentPlanTemplate $template): PaymentPlanBreakdown
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         $calculator = app(PaymentPlanBreakdownCalculator::class);

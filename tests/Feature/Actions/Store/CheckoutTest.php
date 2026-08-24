@@ -9,12 +9,14 @@ use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Enums\ProductType;
 use App\Models\CartItem;
-use App\Models\Costume;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\DiscountCode;
 use App\Models\Enrollment;
+use App\Models\Gear;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\LegalDocumentAcceptance;
@@ -115,6 +117,23 @@ it('fails when a cart product became unavailable before checkout', function () {
     $action = app(CreateOrder::class);
     $action->handle($this->user);
 })->throws(InvalidArgumentException::class, '"Jazz Shoes" is no longer available for purchase.');
+
+it('fails when a cart product gains unmet purchase eligibility requirements', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $this->product->update(['name' => 'Competition Jacket']);
+
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $this->product->requiredCompetitionTeams()->attach($requiredTeam);
+
+    $action = app(CreateOrder::class);
+    $action->handle($this->user);
+})->throws(InvalidArgumentException::class, '"Competition Jacket" requires qualifying course enrollment and/or competition team membership.');
 
 it('checks early access window timing at checkout', function () {
     $this->product->update([
@@ -398,13 +417,13 @@ it('fulfills custom amount gift cards when order completes at zero total', funct
         && $mail->usesMailer('transactional'));
 });
 
-it('leaves costume order items as pending in zero total order', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+it('leaves gear order items as pending in zero total order', function () {
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create(['price' => 3000]);
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
-        'product_id' => $costumeProduct->id,
+        'product_id' => $gearProduct->id,
         'quantity' => 1,
     ]);
 
@@ -441,9 +460,9 @@ it('leaves standalone order items as pending in zero total order', function () {
     expect($orderItem->status)->toBe(OrderItemStatus::Pending);
 });
 
-it('marks course items fulfilled and leaves costume items pending in mixed zero total order', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+it('marks course items fulfilled and leaves gear items pending in mixed zero total order', function () {
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create(['price' => 3000]);
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
@@ -453,7 +472,7 @@ it('marks course items fulfilled and leaves costume items pending in mixed zero 
 
     CartItem::factory()->create([
         'user_id' => $this->user->id,
-        'product_id' => $costumeProduct->id,
+        'product_id' => $gearProduct->id,
         'quantity' => 1,
     ]);
 
@@ -471,11 +490,11 @@ it('marks course items fulfilled and leaves costume items pending in mixed zero 
         ->first();
     expect($courseOrderItem->status)->toBe(OrderItemStatus::Fulfilled);
 
-    $costumeOrderItem = OrderItem::query()
+    $gearOrderItem = OrderItem::query()
         ->where('order_id', $order->id)
-        ->where('product_id', $costumeProduct->id)
+        ->where('product_id', $gearProduct->id)
         ->first();
-    expect($costumeOrderItem->status)->toBe(OrderItemStatus::Pending);
+    expect($gearOrderItem->status)->toBe(OrderItemStatus::Pending);
 
     // Course enrollment should exist
     expect(Enrollment::query()->where('course_id', $this->course->id)->count())->toBe(1);

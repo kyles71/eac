@@ -5,8 +5,10 @@ declare(strict_types=1);
 use App\Actions\Store\ProcessInstallments;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Models\Installment;
 use App\Models\Order;
+use App\Models\OrderRefund;
 use App\Models\PaymentPlan;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
@@ -220,6 +222,7 @@ it('retries failed installments', function () {
     $installment = Installment::factory()->failed(1)->create([
         'payment_plan_id' => $plan->id,
         'amount' => 3333,
+        'due_date' => now()->toDateString(),
     ]);
 
     $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_retry_123', 'status' => 'succeeded']);
@@ -246,6 +249,7 @@ it('does not consume more than one failed retry per eastern calendar day', funct
     ]);
     $installment = Installment::factory()->failed(1)->create([
         'payment_plan_id' => $plan->id,
+        'due_date' => now()->toDateString(),
         'last_attempted_at' => now()->subDay(),
     ]);
 
@@ -293,6 +297,34 @@ it('does not process future installments', function () {
     expect($result['processed'])->toBe(0);
 });
 
+it('does not retry a failed installment before its rescheduled due date', function () {
+    $this->travelTo('2026-08-08 12:00:00');
+    $plan = PaymentPlan::factory()->create([
+        'stripe_customer_id' => 'cus_rescheduled_retry',
+        'stripe_payment_method_id' => 'pm_rescheduled_retry',
+    ]);
+    $installment = Installment::factory()->failed()->create([
+        'payment_plan_id' => $plan->id,
+        'due_date' => '2026-08-10',
+        'last_attempted_at' => now()->subDay(),
+    ]);
+
+    expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(0)
+        ->and($installment->refresh()->retry_count)->toBe(1);
+
+    $this->travelTo('2026-08-10 12:00:00');
+    $this->mockStripe
+        ->shouldReceive('chargePaymentMethod')
+        ->once()
+        ->andReturn(PaymentIntent::constructFrom([
+            'id' => 'pi_rescheduled_retry',
+            'status' => 'succeeded',
+        ]));
+
+    expect(app(ProcessInstallments::class)->handle()['succeeded'])->toBe(1)
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
+});
+
 it('marks as failed when missing stripe credentials for auto-charge', function () {
     $plan = PaymentPlan::factory()->create([
         'stripe_customer_id' => null,
@@ -311,4 +343,22 @@ it('marks as failed when missing stripe credentials for auto-charge', function (
 
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Failed);
+});
+
+it('does not charge installments while their cancellation refund is in flight', function (): void {
+    $order = Order::factory()->completed()->create();
+    $plan = PaymentPlan::factory()->create(['order_id' => $order->id]);
+    $installment = Installment::factory()->dueToday()->create([
+        'payment_plan_id' => $plan->id,
+    ]);
+    OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'cancel_remaining_installments' => true,
+        'status' => OrderRefundStatus::Pending,
+    ]);
+
+    $this->mockStripe->shouldNotReceive('chargePaymentMethod');
+
+    expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(0)
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Pending);
 });

@@ -16,12 +16,14 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 /**
  * @property-read Product|null $product
  */
-final class Costume extends Model implements HasMedia, Productable, ProvidesStorefrontDetails
+final class Gear extends Model implements HasMedia, Productable, ProvidesStorefrontDetails
 {
-    /** @use HasFactory<\Database\Factories\CostumeFactory> */
+    /** @use HasFactory<\Database\Factories\GearFactory> */
     use HasFactory;
 
     use InteractsWithMedia;
+
+    protected $table = 'gear';
 
     protected $casts = [
         'id' => 'integer',

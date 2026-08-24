@@ -38,7 +38,7 @@ beforeEach(function (): void {
 it('manages dashboard messages from settings', function (): void {
     livewire(CreateDashboardMessage::class)
         ->fillForm([
-            'message' => 'Costume orders due Monday.',
+            'message' => 'Gear orders due Monday.',
             'audience' => DashboardAudience::Semester->value,
             'published_at' => now()->subMinute(),
             'expires_at' => now()->addWeek(),
@@ -48,7 +48,7 @@ it('manages dashboard messages from settings', function (): void {
         ->assertNotified();
 
     assertDatabaseHas(DashboardMessage::class, [
-        'message' => 'Costume orders due Monday.',
+        'message' => 'Gear orders due Monday.',
         'audience' => DashboardAudience::Semester->value,
     ]);
 

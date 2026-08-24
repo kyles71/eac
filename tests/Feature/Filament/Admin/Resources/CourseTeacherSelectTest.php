@@ -365,10 +365,10 @@ it('searches non user models by split terms', function () {
     $course = Course::factory()->create(['name' => 'Ballet 1']);
     $otherCourse = Course::factory()->create(['name' => 'Ballet 2']);
 
-    $results = Select::make('requires_course_id')
+    $results = Select::make('requiredCourses')
         ->model(Product::class)
         ->searchableRelationship(
-            name: 'requiresCourse',
+            name: 'requiredCourses',
             searchColumns: ['name'],
             labelFromRecord: fn (Course $course): string => $course->name,
             orderBy: ['name'],

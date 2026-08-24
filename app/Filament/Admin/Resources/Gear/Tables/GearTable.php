@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Admin\Resources\Costumes\Tables;
+namespace App\Filament\Admin\Resources\Gear\Tables;
 
 use App\Filament\Actions\DeleteProductableAction;
 use App\Filament\Actions\DeleteProductableBulkAction;
@@ -14,7 +14,7 @@ use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-final class CostumesTable
+final class GearTable
 {
     public static function configure(Table $table): Table
     {

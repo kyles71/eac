@@ -13,6 +13,7 @@ enum InstallmentStatus: string implements HasColor, HasLabel
     case Paid = 'Paid';
     case Failed = 'Failed';
     case Overdue = 'Overdue';
+    case Cancelled = 'Cancelled';
 
     public function getLabel(): string
     {
@@ -26,6 +27,7 @@ enum InstallmentStatus: string implements HasColor, HasLabel
             self::Pending => 'warning',
             self::Failed => 'danger',
             self::Overdue => 'danger',
+            self::Cancelled => 'gray',
         };
     }
 }

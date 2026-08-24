@@ -25,7 +25,7 @@ final class OrderReceiptEmailType implements EmailTypeContract
                 <p>Thank you for your purchase from {{ app.name }}. Here are the details for order #{{ order.number }} placed on {{ order.date }}.</p>
                 {{ slot.order-details }}
                 {{ conditional.course }}
-                {{ conditional.costume }}
+                {{ conditional.gear }}
                 {{ conditional.gift-card }}
                 {{ conditional.standalone }}
                 HTML],
@@ -51,10 +51,10 @@ final class OrderReceiptEmailType implements EmailTypeContract
                     description: 'Shown when the order contains at least one course.',
                 ),
                 new ConditionalSection(
-                    key: 'costume',
-                    label: 'Costume purchase content',
-                    contents: ['en' => '<p>We will share any costume pickup details separately.</p>'],
-                    description: 'Shown when the order contains at least one costume.',
+                    key: 'gear',
+                    label: 'Gear purchase content',
+                    contents: ['en' => '<p>We will share any gear pickup details separately.</p>'],
+                    description: 'Shown when the order contains at least one gear item.',
                 ),
                 new ConditionalSection(
                     key: 'gift-card',

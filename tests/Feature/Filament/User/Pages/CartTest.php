@@ -353,6 +353,65 @@ it('shows error for invalid promo code', function () {
         ->assertNotified('Invalid code');
 });
 
+it('blocks a sixth failed code attempt until the cooldown expires', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $discountCode = DiscountCode::factory()->percentage(20)->create();
+    $cart = livewire(Cart::class);
+
+    foreach (range(1, 5) as $attempt) {
+        $cart
+            ->set('code', "INVALID_CODE_{$attempt}")
+            ->call('applyCode')
+            ->assertSet('appliedDiscountCodeId', null)
+            ->assertNotified('Invalid code');
+    }
+
+    $cart
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
+        ->assertSet('appliedDiscountCodeId', null)
+        ->assertNotified('Too many code attempts');
+
+    $this->travel(61)->seconds();
+
+    livewire(Cart::class)
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
+        ->assertSet('appliedDiscountCodeId', $discountCode->id)
+        ->assertNotified('Discount applied');
+});
+
+it('does not count empty or successful code submissions as failures', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $discountCodes = DiscountCode::factory()->count(6)->percentage(20)->create();
+    $cart = livewire(Cart::class);
+
+    foreach (range(1, 6) as $attempt) {
+        $cart
+            ->set('code', '   ')
+            ->call('applyCode')
+            ->assertNotified('Invalid code');
+    }
+
+    foreach ($discountCodes as $discountCode) {
+        $cart
+            ->set('code', $discountCode->code)
+            ->call('applyCode')
+            ->assertSet('appliedDiscountCodeId', $discountCode->id)
+            ->assertNotified('Discount applied');
+    }
+});
+
 it('can remove an applied discount', function () {
     CartItem::factory()->create([
         'user_id' => auth()->id(),
@@ -471,7 +530,7 @@ it('filters payment plan templates by product type and line total', function () 
     ]);
 
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 12000,
         'number_of_installments' => 4,
@@ -550,7 +609,7 @@ it('shows templates that are eligible for at least one item in a mixed cart', fu
     ]);
 
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 10000,
         'number_of_installments' => 4,
