@@ -21,11 +21,16 @@ final class StudentCommunicationInfolist
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('type')
+                            ->label('Note Type')
                             ->badge(),
                         TextEntry::make('stop_light_color')
-                            ->label('Stop Light Color')
+                            ->label('Type')
                             ->badge()
                             ->visible(fn (StudentCommunication $record): bool => $record->type === StudentCommunicationType::StopLight),
+                        TextEntry::make('first_aid_type')
+                            ->label('Type')
+                            ->badge()
+                            ->visible(fn (StudentCommunication $record): bool => $record->type === StudentCommunicationType::FirstAid),
                         TextEntry::make('occurred_at')
                             ->label('Date and Time')
                             ->dateTime(timezone: (string) config('app.display_timezone', config('app.timezone'))),
@@ -37,6 +42,9 @@ final class StudentCommunicationInfolist
                             ->placeholder('Deleted user'),
                         TextEntry::make('student.full_name')
                             ->label('Student'),
+                        TextEntry::make('subject')
+                            ->columnSpanFull()
+                            ->visible(fn (StudentCommunication $record): bool => filled($record->subject)),
                         TextEntry::make('note')
                             ->columnSpanFull(),
                         TextEntry::make('recipient_emails')

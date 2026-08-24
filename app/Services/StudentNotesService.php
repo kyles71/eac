@@ -127,7 +127,11 @@ final class StudentNotesService
                     author: $communication->author,
                     note: (string) $communication->note,
                 );
-                $record['stop_light_color'] = $communication->stop_light_color?->value;
+                $record['communication_type'] = $communication->first_aid_type?->getLabel()
+                    ?? $communication->stop_light_color?->getLabel();
+                $record['communication_type_color'] = $communication->stop_light_color?->getColor()
+                    ?? ($communication->first_aid_type === null ? 'gray' : 'info');
+                $record['subject'] = $communication->subject;
                 $record['recipient_emails'] = $communication->recipient_emails;
                 $record['queued_at'] = $this->formatDate($communication->queued_at, includesTime: true);
                 $record['details'] = count($communication->recipient_emails) === 1
@@ -162,7 +166,9 @@ final class StudentNotesService
             'event_id' => $event?->id,
             'author' => $author?->full_name,
             'note' => $note,
-            'stop_light_color' => null,
+            'communication_type' => null,
+            'communication_type_color' => 'gray',
+            'subject' => null,
             'details' => null,
             'recipient_emails' => [],
             'queued_at' => null,

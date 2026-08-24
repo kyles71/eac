@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\FirstAidType;
 use App\Enums\StudentCommunicationType;
 use App\Models\Student;
 use App\Models\StudentCommunication;
@@ -27,8 +28,10 @@ final class StudentCommunicationFactory extends Factory
             'event_id' => null,
             'author_id' => User::factory(),
             'type' => StudentCommunicationType::FirstAid,
+            'first_aid_type' => FirstAidType::FirstAid,
             'stop_light_color' => null,
             'occurred_at' => fake()->dateTime(),
+            'subject' => fake()->sentence(),
             'note' => fake()->paragraph(),
             'recipient_emails' => [fake()->safeEmail()],
             'queued_at' => now(),

@@ -44,6 +44,21 @@ final class Event extends Model implements HasMedia
         );
     }
 
+    public static function applyNotPassedConstraint(Builder $query, ?CarbonInterface $dateTime = null): Builder
+    {
+        $dateTime ??= now();
+
+        return $query->where(function (Builder $query) use ($dateTime): void {
+            $query
+                ->where('end_time', '>=', $dateTime)
+                ->orWhere(function (Builder $query) use ($dateTime): void {
+                    $query
+                        ->whereNull('end_time')
+                        ->where('start_time', '>=', $dateTime);
+                });
+        });
+    }
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
@@ -119,6 +134,11 @@ final class Event extends Model implements HasMedia
                         ->where('start_time', '<', $endsAt);
                 });
         });
+    }
+
+    public function scopeNotPassed(Builder $query, ?CarbonInterface $dateTime = null): void
+    {
+        self::applyNotPassedConstraint($query, $dateTime);
     }
 
     public function scopeVisibleOnCalendar(Builder $query, Calendar $calendar, User $user): Builder

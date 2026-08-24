@@ -16,9 +16,9 @@ enum StopLightColor: string implements HasColor, HasLabel
     public function getLabel(): string
     {
         return match ($this) {
-            self::Green => 'Green',
-            self::Yellow => 'Yellow',
-            self::Red => 'Red',
+            self::Green => 'GREEN',
+            self::Yellow => 'YELLOW',
+            self::Red => 'RED',
         };
     }
 

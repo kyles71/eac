@@ -183,13 +183,19 @@ it('uses radio buttons to manage attendance on a single course event', function 
         ->assertSee('Late')
         ->assertSee('Excused absence')
         ->assertSee('Unexcused absence')
+        ->assertSee('Attendance notes are private')
+        ->assertActionVisible(TestAction::make('emailAttendance')->table())
+        ->callAction(TestAction::make('editAttendanceNotes')->table($enrollment), data: [
+            'notes' => 'Arrived late',
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified('Attendance note saved')
         ->call(
             'updateTableColumnState',
             'attendance_status',
             (string) $enrollment->id,
             AttendanceStatus::Late->value,
         )
-        ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Arrived late')
         ->assertHasNoErrors();
 
     $attendance = EventAttendee::query()
@@ -455,16 +461,12 @@ it('keeps concluded course attendance viewable and read only for teachers', func
 
     expect($courseAttendance->instance()->getMountedAction()?->getModalSubmitAction())->toBeNull();
 
-    livewire(ViewEvent::class, ['record' => $event->id])
+    $eventNotesAction = TestAction::make('editAttendanceNotes')->table($enrollment);
+    $eventAttendance = livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
         ->assertCanSeeTableRecords([$enrollment])
         ->assertTableColumnExists(
             'attendance_status',
-            fn (Column $column): bool => $column->isDisabled(),
-            $enrollment,
-        )
-        ->assertTableColumnExists(
-            'notes',
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
@@ -474,7 +476,16 @@ it('keeps concluded course attendance viewable and read only for teachers', func
             (string) $enrollment->id,
             AttendanceStatus::Present->value,
         )
-        ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Changed note');
+        ->assertActionVisible($eventNotesAction)
+        ->mountAction($eventNotesAction)
+        ->assertActionDataSet(['notes' => 'Historical note'])
+        ->assertSchemaComponentExists(
+            'notes',
+            'mountedActionSchema0',
+            fn (Textarea $textarea): bool => $textarea->isDisabled(),
+        );
+
+    expect($eventAttendance->instance()->getMountedAction()?->getModalSubmitAction())->toBeNull();
 
     expect($attendance->refresh()->status)->toBeNull()
         ->and($attendance->notes)->toBe('Historical note')
@@ -591,15 +602,11 @@ it('renders attendance and notes as read only without event update permission', 
 
     expect($courseAttendance->instance()->getMountedAction()?->getModalSubmitAction())->toBeNull();
 
-    livewire(ViewEvent::class, ['record' => $event->id])
+    $eventNotesAction = TestAction::make('editAttendanceNotes')->table($enrollment);
+    $eventAttendance = livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
         ->assertTableColumnExists(
             'attendance_status',
-            fn (Column $column): bool => $column->isDisabled(),
-            $enrollment,
-        )
-        ->assertTableColumnExists(
-            'notes',
             fn (Column $column): bool => $column->isDisabled(),
             $enrollment,
         )
@@ -609,7 +616,16 @@ it('renders attendance and notes as read only without event update permission', 
             (string) $enrollment->id,
             AttendanceStatus::Present->value,
         )
-        ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Should not save');
+        ->assertActionVisible($eventNotesAction)
+        ->mountAction($eventNotesAction)
+        ->assertActionDataSet(['notes' => 'Read-only note'])
+        ->assertSchemaComponentExists(
+            'notes',
+            'mountedActionSchema0',
+            fn (Textarea $textarea): bool => $textarea->isDisabled(),
+        );
+
+    expect($eventAttendance->instance()->getMountedAction()?->getModalSubmitAction())->toBeNull();
 
     expect($attendance->refresh()->status)->toBeNull()
         ->and($attendance->notes)->toBe('Read-only note');

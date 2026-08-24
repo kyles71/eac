@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Students\Tables;
 
 use App\Filament\Actions\StudentContactActionGroup;
 use App\Models\Student;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\SpatieTagsColumn;
@@ -61,7 +62,9 @@ final class StudentsTable
             ])
             ->defaultSort('last_name')
             ->recordActions([
-                StudentContactActionGroup::make(fn (Student $record): Student => $record),
+                ActionGroup::make(StudentContactActionGroup::actions(
+                    fn (Student $record): Student => $record,
+                )),
             ], RecordActionsPosition::BeforeCells)
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -12,13 +12,13 @@ final class StudentStopLightMessageEmailType extends AbstractStudentCommunicatio
     {
         return new EmailTypeDefinition(
             key: 'student-stop-light-message',
-            names: ['en' => 'Student Stop Light Message'],
-            description: 'Sent by staff when recording a red, yellow, or green stop-light communication for a student.',
+            names: ['en' => 'Student Stoplight Note'],
+            description: 'Sent by staff when recording a red, yellow, or green Stoplight note for a student.',
             category: 'administrative',
-            subjects: ['en' => '{{ stop_light.color }} stop light message for {{ student.full_name }} — {{ communication.date }}'],
+            subjects: ['en' => '{{ stop_light.color }} Stoplight Note for {{ student.first_name }} - {{ event.context_name }}'],
             bodies: ['en' => <<<'HTML'
                 <p>Hello,</p>
-                <p>A <strong>{{ stop_light.color }}</strong> stop light message has been recorded for {{ student.full_name }}.</p>
+                <p>A <strong>{{ stop_light.color }}</strong> Stoplight note has been recorded for {{ student.full_name }}.</p>
                 <p><strong>Date:</strong> {{ communication.date }}</p>
                 <p><strong>Event:</strong> {{ event.name }}</p>
                 <p><strong>Teacher:</strong> {{ teacher.full_name }}</p>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\StudentCommunications\Tables;
 
+use App\Enums\FirstAidType;
 use App\Enums\StopLightColor;
 use App\Enums\StudentCommunicationType;
 use App\Models\StudentCommunication;
@@ -23,10 +24,13 @@ final class StudentCommunicationsTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['author', 'event']))
             ->columns([
                 TextColumn::make('type')
+                    ->label('Note Type')
                     ->badge()
                     ->sortable(),
-                TextColumn::make('stop_light_color')
-                    ->label('Color')
+                TextColumn::make('communication_type')
+                    ->label('Type')
+                    ->state(fn (StudentCommunication $record): ?string => $record->first_aid_type?->getLabel()
+                        ?? $record->stop_light_color?->getLabel())
                     ->badge()
                     ->placeholder('-'),
                 TextColumn::make('occurred_at')
@@ -56,8 +60,11 @@ final class StudentCommunicationsTable
                 SelectFilter::make('type')
                     ->options(StudentCommunicationType::class),
                 SelectFilter::make('stop_light_color')
-                    ->label('Stop Light Color')
+                    ->label('Stoplight Color')
                     ->options(StopLightColor::class),
+                SelectFilter::make('first_aid_type')
+                    ->label('First Aid Type')
+                    ->options(FirstAidType::class),
             ])
             ->defaultSort('occurred_at', 'desc')
             ->recordActions([

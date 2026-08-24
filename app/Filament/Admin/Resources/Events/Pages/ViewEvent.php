@@ -13,13 +13,17 @@ use App\Models\Event;
 use App\Models\Student;
 use App\Services\EventAttendanceService;
 use App\Services\EventEmailRecipientsService;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -50,6 +54,7 @@ final class ViewEvent extends ViewRecord implements HasTable
         return $table
             ->query($this->attendanceQuery())
             ->heading($this->attendanceHeading())
+            ->description('Attendance notes are private. Only owners, staff, and teachers can view them; parents and students cannot.')
             ->columns([
                 TextColumn::make('attendance_student_name')
                     ->label('Student')
@@ -61,20 +66,30 @@ final class ViewEvent extends ViewRecord implements HasTable
                         ->recordStudentAttendanceStatus($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
                         ->setRecordStudentAttendanceStatus($this->event(), $record, $state)),
-                TextInputColumn::make('notes')
+                TextColumn::make('notes')
                     ->label('Notes')
-                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
                     ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->event(), $record))
-                    ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
-                        ->setRecordStudentNotes($this->event(), $record, $state)),
+                    ->placeholder('No notes')
+                    ->wrap()
+                    ->limit(60),
             ])
             ->recordActions([
+                ActionGroup::make([
+                    $this->attendanceNotesAction(),
+                ])
+                    ->label('Attendance Notes')
+                    ->icon(Heroicon::OutlinedDocumentText),
                 StudentContactActionGroup::make(
                     student: fn (Model $record): Student => $this->attendanceStudent($record),
                     event: fn (): Event => $this->event(),
                 )
                     ->visible(fn (Model $record): bool => $this->canEmailAttendanceRecord($record)),
             ], RecordActionsPosition::BeforeCells)
+            ->headerActions([
+                SendEmailAction::make('emailAttendance')
+                    ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')
+                    ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event())),
+            ])
             ->paginated(false);
     }
 
@@ -112,6 +127,38 @@ final class ViewEvent extends ViewRecord implements HasTable
         }
 
         return $student;
+    }
+
+    private function attendanceNotesAction(): Action
+    {
+        return Action::make('editAttendanceNotes')
+            ->label('Attendance Notes')
+            ->icon(Heroicon::OutlinedDocumentText)
+            ->authorize(fn (Model $record): bool => Gate::allows('view', $this->event())
+                && $this->attendance()->studentForAttendanceRecord($record) instanceof Student)
+            ->modalHeading(fn (Model $record): string => 'Attendance Notes: '.$this->attendanceStudent($record)->fullName)
+            ->modalDescription('This note is private. Only owners, staff, and teachers can view it; parents and students cannot.')
+            ->modalWidth('lg')
+            ->modalSubmitAction(fn (Action $action): Action|false => Gate::allows('updateAttendance', $this->event()) ? $action : false)
+            ->modalCancelActionLabel(fn (): string => Gate::allows('updateAttendance', $this->event()) ? 'Cancel' : 'Close')
+            ->form([
+                Textarea::make('notes')
+                    ->label('Notes')
+                    ->helperText('Private — not visible to parents or students.')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
+                    ->rows(6),
+            ])
+            ->fillForm(fn (Model $record): array => [
+                'notes' => $this->attendance()->recordStudentNotes($this->event(), $record),
+            ])
+            ->action(function (array $data, Model $record): void {
+                $this->attendance()->setRecordStudentNotes($this->event(), $record, $data['notes'] ?? null);
+
+                Notification::make()
+                    ->title('Attendance note saved')
+                    ->success()
+                    ->send();
+            });
     }
 
     private function canEmailAttendanceRecord(Model $record): bool

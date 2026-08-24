@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Actions;
 
 use App\Actions\Students\SendStudentCommunication;
+use App\Enums\FirstAidType;
 use App\Enums\StopLightColor;
 use App\Enums\StudentCommunicationType;
 use App\Models\Event;
@@ -21,6 +22,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
@@ -39,11 +41,13 @@ final class SendStudentCommunicationAction extends BaseEmailAction
         $this
             ->label(fn (): string => match ($this->getCommunicationType()) {
                 StudentCommunicationType::FirstAid => 'First Aid Note',
-                StudentCommunicationType::StopLight => 'Stop Light Message',
+                StudentCommunicationType::StopLight => 'Stoplight Note',
+                StudentCommunicationType::CustomEmail => throw new LogicException('Custom emails use a separate action.'),
             })
             ->icon(fn (): Heroicon => match ($this->getCommunicationType()) {
                 StudentCommunicationType::FirstAid => Heroicon::OutlinedPlusCircle,
                 StudentCommunicationType::StopLight => Heroicon::OutlinedExclamationTriangle,
+                StudentCommunicationType::CustomEmail => throw new LogicException('Custom emails use a separate action.'),
             })
             ->authorize(fn (): bool => Gate::allows('Send:Email')
                 && Gate::allows('create', StudentCommunication::class))
@@ -73,12 +77,27 @@ final class SendStudentCommunicationAction extends BaseEmailAction
                         }
                     }),
                 Select::make('stop_light_color')
-                    ->label('Stop Light Color')
+                    ->label('Stoplight Color')
+                    ->helperText(new HtmlString(
+                        '<strong>GREEN Stoplight</strong> = Exceptional / positive behaviors exhibited or important new skill(s) achieved! '
+                        .'<strong>YELLOW Stoplight</strong> = First or second time of issues (behavioral or otherwise) during class. '
+                        .'<strong>RED Stoplight</strong> = Significant and/or repeated issues (behavioral or otherwise) during class.'
+                    ))
                     ->options(StopLightColor::class)
                     ->required(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::StopLight)
                     ->visible(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::StopLight),
+                Select::make('first_aid_type')
+                    ->label('Type')
+                    ->options(FirstAidType::class)
+                    ->required(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::FirstAid)
+                    ->visible(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::FirstAid),
                 Textarea::make('note')
                     ->label('Note')
+                    ->helperText(fn (): string => match ($this->getCommunicationType()) {
+                        StudentCommunicationType::FirstAid => 'Enter any notes you would like parent(s) to see related to this First Aid note. Why is dancer receiving this note? What specific actions were taken during class related to the first aid or injury? Any messages for dancer or parent? Any follow-up you would like on the parent’s end?',
+                        StudentCommunicationType::StopLight => 'Enter any notes you would like parent(s) to see related to this Stoplight note. Why is dancer receiving this note? Any encouraging messages for the dancer? Any follow-up you would like on the parent’s end?',
+                        StudentCommunicationType::CustomEmail => '',
+                    })
                     ->rows(6)
                     ->required()
                     ->columnSpanFull(),
@@ -98,6 +117,7 @@ final class SendStudentCommunicationAction extends BaseEmailAction
                     type: $this->getCommunicationType(),
                     occurredAt: (string) ($data['occurred_at'] ?? ''),
                     event: $this->getFixedEvent() ?? $this->findEvent($data['event_id'] ?? null, fail: true),
+                    firstAidType: $this->normalizeFirstAidType($data['first_aid_type'] ?? null),
                     stopLightColor: $this->normalizeStopLightColor($data['stop_light_color'] ?? null),
                     note: (string) ($data['note'] ?? ''),
                     recipientEmails: $recipients,
@@ -148,6 +168,15 @@ final class SendStudentCommunicationAction extends BaseEmailAction
         }
 
         return is_string($color) ? StopLightColor::tryFrom($color) : null;
+    }
+
+    private function normalizeFirstAidType(mixed $type): ?FirstAidType
+    {
+        if ($type instanceof FirstAidType) {
+            return $type;
+        }
+
+        return is_string($type) ? FirstAidType::tryFrom($type) : null;
     }
 
     private function getStudent(): Student

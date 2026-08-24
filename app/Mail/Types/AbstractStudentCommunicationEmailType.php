@@ -12,7 +12,7 @@ abstract class AbstractStudentCommunicationEmailType implements EmailTypeContrac
     /**
      * @return list<Token>
      */
-    protected function tokens(bool $includeStopLightColor = false): array
+    protected function tokens(bool $includeStopLightColor = false, bool $includeFirstAidType = false): array
     {
         $tokens = [
             new Token('app.name', 'Application name', example: 'EAC'),
@@ -23,6 +23,7 @@ abstract class AbstractStudentCommunicationEmailType implements EmailTypeContrac
             new Token('event.starts_at', 'Related event start date and time', required: false, fallback: '', example: 'July 31, 2026 6:00 PM EDT'),
             new Token('event.ends_at', 'Related event end date and time', required: false, fallback: '', example: 'July 31, 2026 7:00 PM EDT'),
             new Token('event.course_name', 'Related event course name', required: false, fallback: '', example: 'Ballet 2'),
+            new Token('event.context_name', 'Related course or event name', example: 'Ballet 2'),
             new Token('teacher.first_name', 'Teacher first name', example: 'Jamie'),
             new Token('teacher.full_name', 'Teacher full name', example: 'Jamie Teacher'),
             new Token('teacher.email', 'Teacher email address', example: 'jamie@example.com'),
@@ -31,7 +32,11 @@ abstract class AbstractStudentCommunicationEmailType implements EmailTypeContrac
         ];
 
         if ($includeStopLightColor) {
-            $tokens[] = new Token('stop_light.color', 'Selected stop-light color', example: 'Yellow');
+            $tokens[] = new Token('stop_light.color', 'Selected Stoplight color', example: 'YELLOW');
+        }
+
+        if ($includeFirstAidType) {
+            $tokens[] = new Token('first_aid.type', 'Selected First Aid type', example: 'INJURY');
         }
 
         return $tokens;

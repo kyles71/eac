@@ -8,6 +8,7 @@ use App\Enums\StudentCommunicationType;
 use App\Models\Event;
 use App\Models\Student;
 use Closure;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Support\Icons\Heroicon;
 
@@ -15,10 +16,20 @@ final readonly class StudentContactActionGroup
 {
     public static function make(Student|Closure $student, Event|Closure|null $event = null): ActionGroup
     {
-        return ActionGroup::make([
+        return ActionGroup::make(self::actions($student, $event))
+            ->label('Contact Student')
+            ->icon(Heroicon::OutlinedEnvelope);
+    }
+
+    /**
+     * @return array<Action>
+     */
+    public static function actions(Student|Closure $student, Event|Closure|null $event = null): array
+    {
+        return [
             SendEmailAction::make()
                 ->label('Custom Email')
-                ->to($student),
+                ->forStudent($student, $event),
             SendStudentCommunicationAction::make('sendFirstAidNote')
                 ->student($student)
                 ->event($event)
@@ -27,8 +38,6 @@ final readonly class StudentContactActionGroup
                 ->student($student)
                 ->event($event)
                 ->communicationType(StudentCommunicationType::StopLight),
-        ])
-            ->label('Contact Student')
-            ->icon(Heroicon::OutlinedEnvelope);
+        ];
     }
 }

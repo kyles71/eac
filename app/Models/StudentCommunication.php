@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FirstAidType;
 use App\Enums\StopLightColor;
 use App\Enums\StudentCommunicationType;
 use Database\Factories\StudentCommunicationFactory;
@@ -22,6 +23,7 @@ final class StudentCommunication extends Model
         'event_id' => 'integer',
         'author_id' => 'integer',
         'type' => StudentCommunicationType::class,
+        'first_aid_type' => FirstAidType::class,
         'stop_light_color' => StopLightColor::class,
         'occurred_at' => 'datetime',
         'recipient_emails' => 'array',

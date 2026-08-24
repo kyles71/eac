@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Actions\Students;
 
 use App\Actions\Mail\QueueManagedEmail;
+use App\Enums\FirstAidType;
 use App\Enums\StopLightColor;
 use App\Enums\StudentCommunicationType;
 use App\Models\Event;
 use App\Models\Student;
 use App\Models\StudentCommunication;
 use App\Models\User;
+use App\Notifications\StudentNoteSent;
 use App\Services\Mail\StudentCommunicationContentService;
 use App\Services\StudentCommunicationEventService;
 use Carbon\CarbonImmutable;
@@ -38,6 +40,7 @@ final readonly class SendStudentCommunication
         StudentCommunicationType $type,
         CarbonInterface|string $occurredAt,
         ?Event $event,
+        ?FirstAidType $firstAidType,
         ?StopLightColor $stopLightColor,
         string $note,
         array $recipientEmails,
@@ -63,6 +66,14 @@ final readonly class SendStudentCommunication
             throw new InvalidArgumentException('A stop-light color is required.');
         }
 
+        if ($type === StudentCommunicationType::FirstAid && ! $firstAidType instanceof FirstAidType) {
+            throw new InvalidArgumentException('A first aid type is required.');
+        }
+
+        if ($type === StudentCommunicationType::CustomEmail) {
+            throw new InvalidArgumentException('Custom emails must use the custom email action.');
+        }
+
         if (! app(MailManager::class)->isEnabled($type->emailTypeKey())) {
             return null;
         }
@@ -77,6 +88,7 @@ final readonly class SendStudentCommunication
             $type,
             $occurredAt,
             $event,
+            $firstAidType,
             $stopLightColor,
             $note,
             $recipientEmails,
@@ -86,6 +98,7 @@ final readonly class SendStudentCommunication
                 'event_id' => $event?->id,
                 'author_id' => $author->id,
                 'type' => $type,
+                'first_aid_type' => $type === StudentCommunicationType::FirstAid ? $firstAidType : null,
                 'stop_light_color' => $type === StudentCommunicationType::StopLight ? $stopLightColor : null,
                 'occurred_at' => $occurredAt,
                 'note' => $note,
@@ -93,18 +106,32 @@ final readonly class SendStudentCommunication
                 'queued_at' => now(),
             ]);
             $payload = $this->content->for($communication);
+            $rendered = app(MailManager::class)->render(
+                emailTypeKey: $type->emailTypeKey(),
+                tokens: $payload['tokens'],
+                slots: $payload['slots'],
+            );
+            $communication->update(['subject' => $rendered->subject]);
 
-            foreach ($recipientEmails as $recipientEmail) {
+            foreach ($recipientEmails as $index => $recipientEmail) {
                 if (! $this->managedEmail->handle(
                     recipients: $recipientEmail,
                     emailTypeKey: $type->emailTypeKey(),
                     tokens: $payload['tokens'],
                     slots: $payload['slots'],
                     mailer: 'handcrafted',
+                    archiveTo: $index === 0
+                        ? config('mail.mailers.handcrafted.archive_to', [])
+                        : [],
                 )) {
                     throw new DomainException('The communication email template is disabled.');
                 }
             }
+
+            $student->user?->notify(new StudentNoteSent(
+                studentCommunicationId: $communication->id,
+                subject: $rendered->subject,
+            ));
 
             return $communication;
         });

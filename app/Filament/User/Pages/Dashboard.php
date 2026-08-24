@@ -12,6 +12,7 @@ use App\Filament\User\Resources\Students\StudentResource;
 use App\Filament\User\Widgets\ComingUp;
 use App\Filament\User\Widgets\NeedsAttention;
 use App\Filament\User\Widgets\NextPayment;
+use App\Filament\User\Widgets\RecentStudentNotes;
 use Filament\Actions\Action;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Support\Icons\Heroicon;
@@ -33,6 +34,7 @@ final class Dashboard extends BaseDashboard
     {
         return [
             NeedsAttention::class,
+            RecentStudentNotes::class,
             MessagesFromEac::class,
             QuickLinks::class,
             ComingUp::class,

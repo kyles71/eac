@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Students\Pages;
 
-use App\Enums\StopLightColor;
 use App\Enums\StudentNoteType;
 use App\Filament\Actions\StudentContactActionGroup;
 use App\Filament\Admin\Resources\StaffNotes\Schemas\StaffNoteForm;
@@ -77,6 +76,7 @@ final class ViewStudent extends ViewRecord implements HasTable
             ))
             ->columns([
                 TextColumn::make('type')
+                    ->label('Note Type')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => StudentNoteType::from($state)->getLabel())
                     ->color(fn (string $state): string => StudentNoteType::from($state)->getColor())
@@ -90,11 +90,10 @@ final class ViewStudent extends ViewRecord implements HasTable
                 TextColumn::make('author')
                     ->placeholder('-')
                     ->sortable(),
-                TextColumn::make('stop_light_color')
-                    ->label('Color')
+                TextColumn::make('communication_type')
+                    ->label('Type')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): ?string => StopLightColor::tryFrom((string) $state)?->getLabel())
-                    ->color(fn (?string $state): string => StopLightColor::tryFrom((string) $state)?->getColor() ?? 'gray')
+                    ->color(fn (array $record): string => (string) ($record['communication_type_color'] ?? 'gray'))
                     ->placeholder('-'),
                 TextColumn::make('note')
                     ->wrap()
@@ -165,6 +164,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                     ->columns(2)
                     ->schema([
                         TextEntry::make('type')
+                            ->label('Note Type')
                             ->badge()
                             ->formatStateUsing(fn (string $state): string => StudentNoteType::from($state)->getLabel())
                             ->color(fn (string $state): string => StudentNoteType::from($state)->getColor()),
@@ -174,15 +174,17 @@ final class ViewStudent extends ViewRecord implements HasTable
                             ->placeholder('No event selected'),
                         TextEntry::make('author')
                             ->placeholder('Not recorded'),
-                        TextEntry::make('stop_light_color')
-                            ->label('Stop Light Color')
+                        TextEntry::make('communication_type')
+                            ->label('Type')
                             ->badge()
-                            ->formatStateUsing(fn (?string $state): ?string => StopLightColor::tryFrom((string) $state)?->getLabel())
-                            ->color(fn (?string $state): string => StopLightColor::tryFrom((string) $state)?->getColor() ?? 'gray')
-                            ->visible(fn (array $record): bool => filled($record['stop_light_color'] ?? null)),
+                            ->color(fn (array $record): string => (string) ($record['communication_type_color'] ?? 'gray'))
+                            ->visible(fn (array $record): bool => filled($record['communication_type'] ?? null)),
                         TextEntry::make('queued_at')
                             ->label('Queued')
                             ->visible(fn (array $record): bool => filled($record['queued_at'] ?? null)),
+                        TextEntry::make('subject')
+                            ->columnSpanFull()
+                            ->visible(fn (array $record): bool => filled($record['subject'] ?? null)),
                         TextEntry::make('note')
                             ->columnSpanFull(),
                         TextEntry::make('recipient_emails')
@@ -286,8 +288,9 @@ final class ViewStudent extends ViewRecord implements HasTable
                         $record['date'],
                         $record['event'],
                         $record['author'],
+                        $record['subject'],
                         $record['note'],
-                        $record['stop_light_color'],
+                        $record['communication_type'],
                     ]))),
                     $needle,
                 ));

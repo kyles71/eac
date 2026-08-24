@@ -50,6 +50,7 @@ final class CourseAttendance extends ViewRecord implements HasTable
     {
         return $table
             ->query($this->attendanceRosterQuery())
+            ->description('Attendance notes are private. Only owners, staff, and teachers can view them; parents and students cannot.')
             ->searchable(false)
             ->reorderableColumns(false)
             ->recordTitleAttribute('student.full_name')
@@ -137,12 +138,14 @@ final class CourseAttendance extends ViewRecord implements HasTable
             ->icon(Heroicon::OutlinedDocumentText)
             ->authorize(fn (): bool => Gate::allows('view', $event))
             ->modalHeading(fn (Enrollment $record): string => 'Attendance Notes: '.$record->student->fullName)
+            ->modalDescription('This note is private. Only owners, staff, and teachers can view it; parents and students cannot.')
             ->modalWidth('lg')
             ->modalSubmitAction(fn (Action $action): Action|false => Gate::allows('updateAttendance', $event) ? $action : false)
             ->modalCancelActionLabel(fn (): string => Gate::allows('updateAttendance', $event) ? 'Cancel' : 'Close')
             ->form([
                 Textarea::make('notes')
                     ->label('Notes')
+                    ->helperText('Private — not visible to parents or students.')
                     ->disabled(fn (): bool => Gate::denies('updateAttendance', $event))
                     ->rows(6),
             ])

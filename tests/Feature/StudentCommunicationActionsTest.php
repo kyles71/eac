@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\FirstAidType;
 use App\Enums\StopLightColor;
 use App\Enums\StudentCommunicationType;
 use App\Filament\Admin\Resources\Events\Pages\ViewEvent;
@@ -19,6 +20,10 @@ use App\Services\StudentNotesService;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Schemas\Components\Text;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
 
@@ -62,10 +67,35 @@ it('uses the shared recipient picker to save and queue a first aid note', functi
     $this->actingAs($owner);
 
     livewire(ViewStudent::class, ['record' => $student->id])
+        ->mountAction('sendFirstAidNote')
+        ->assertSchemaComponentExists(
+            'first_aid_type',
+            'mountedActionSchema0',
+            fn (Select $select): bool => $select->getOptions() === [
+                FirstAidType::FirstAid->value => 'FIRST AID',
+                FirstAidType::Injury->value => 'INJURY',
+                FirstAidType::Medicine->value => 'MEDICINE',
+            ],
+        )
+        ->assertSchemaComponentExists(
+            'note',
+            'mountedActionSchema0',
+            function (Textarea $textarea): bool {
+                $helper = $textarea->getChildSchema(Textarea::BELOW_CONTENT_SCHEMA_KEY)?->getComponents()[0] ?? null;
+
+                return $helper instanceof Text
+                    && str_contains(
+                        (string) $helper->getContent(),
+                        'What specific actions were taken during class related to the first aid or injury?',
+                    );
+            },
+        )
+        ->unmountAction()
         ->callAction('sendFirstAidNote', data: [
             'to' => ["student:{$student->id}"],
             'occurred_at' => '2026-08-06 18:30:00',
             'event_id' => null,
+            'first_aid_type' => FirstAidType::Injury,
             'note' => 'First aid details.',
         ])
         ->assertHasNoActionErrors()
@@ -77,9 +107,10 @@ it('uses the shared recipient picker to save and queue a first aid note', functi
         'family@example.com',
         'dancer@example.com',
         'guardian@example.com',
-    ])->and($communication->occurred_at
-        ->timezone((string) config('app.display_timezone'))
-        ->toDateTimeString())->toBe('2026-08-06 18:30:00');
+    ])->and($communication->first_aid_type)->toBe(FirstAidType::Injury)
+        ->and($communication->occurred_at
+            ->timezone((string) config('app.display_timezone'))
+            ->toDateTimeString())->toBe('2026-08-06 18:30:00');
     Mail::assertQueued(ManagedMail::class, 3);
 });
 
@@ -92,6 +123,38 @@ it('accepts the enum state produced by the stop light color select', function ()
     $this->actingAs($owner);
 
     livewire(ViewStudent::class, ['record' => $student->id])
+        ->mountAction('sendStopLightMessage')
+        ->assertSchemaComponentExists(
+            'stop_light_color',
+            'mountedActionSchema0',
+            function (Select $select): bool {
+                $helper = $select->getChildSchema(Select::BELOW_CONTENT_SCHEMA_KEY)?->getComponents()[0] ?? null;
+                $helperText = $helper instanceof Text ? $helper->getContent() : null;
+                $helperText = $helperText instanceof Htmlable ? $helperText->toHtml() : (string) $helperText;
+
+                return $select->getOptions() === [
+                    StopLightColor::Green->value => 'GREEN',
+                    StopLightColor::Yellow->value => 'YELLOW',
+                    StopLightColor::Red->value => 'RED',
+                ] && str_contains($helperText, 'GREEN Stoplight')
+                    && str_contains($helperText, 'YELLOW Stoplight')
+                    && str_contains($helperText, 'RED Stoplight');
+            },
+        )
+        ->assertSchemaComponentExists(
+            'note',
+            'mountedActionSchema0',
+            function (Textarea $textarea): bool {
+                $helper = $textarea->getChildSchema(Textarea::BELOW_CONTENT_SCHEMA_KEY)?->getComponents()[0] ?? null;
+
+                return $helper instanceof Text
+                    && str_contains(
+                        (string) $helper->getContent(),
+                        'Enter any notes you would like parent(s) to see related to this Stoplight note.',
+                    );
+            },
+        )
+        ->unmountAction()
         ->callAction('sendStopLightMessage', data: [
             'to' => ["student:{$student->id}"],
             'occurred_at' => '2026-08-07 17:45:00',
@@ -110,6 +173,7 @@ it('accepts the enum state produced by the stop light color select', function ()
 });
 
 it('adds all three contact actions to event attendance with the event locked', function (): void {
+    $this->travelTo(CarbonImmutable::parse('2026-08-05 12:00:00', (string) config('app.display_timezone')));
     $teacher = User::factory()->isTeacher()->create();
     $course = Course::factory()->create();
     $course->teachers()->attach($teacher);
@@ -139,6 +203,47 @@ it('adds all three contact actions to event attendance with the event locked', f
             'event_id' => $event->id,
             'occurred_at' => '2026-08-05 23:00',
         ]);
+});
+
+it('records a custom email sent from event attendance in the student history', function (): void {
+    Mail::fake();
+    $teacher = User::factory()->isTeacher()->create();
+    $course = Course::factory()->create();
+    $course->teachers()->attach($teacher);
+    $student = Student::factory()->create();
+    $enrollment = Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $student->user_id,
+    ]);
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+
+    $this->actingAs($teacher);
+
+    livewire(ViewEvent::class, ['record' => $event->id])
+        ->loadTable()
+        ->callAction(TestAction::make('sendEmail')->table($enrollment), data: [
+            'to' => ["student:{$student->id}"],
+            'subject' => 'Private class follow-up',
+            'body' => 'Please review today’s class notes.',
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified('Email queued');
+
+    $communication = StudentCommunication::query()->sole();
+    $history = app(StudentNotesService::class)
+        ->records($student, $teacher)
+        ->get("student_communication:{$communication->id}");
+
+    expect($communication->type)->toBe(StudentCommunicationType::CustomEmail)
+        ->and($communication->event?->is($event))->toBeTrue()
+        ->and($communication->subject)->toBe('Private class follow-up')
+        ->and($history['type'])->toBe('custom_email')
+        ->and($history['subject'])->toBe('Private class follow-up')
+        ->and($history['note'])->toBe('Please review today’s class notes.');
 });
 
 it('defaults the communication time to now when no event is selected', function (): void {
@@ -186,6 +291,7 @@ it('updates the communication time to the selected events end time', function ()
 });
 
 it('falls back to an events start time when it has no end time', function (): void {
+    $this->travelTo(CarbonImmutable::parse('2026-08-05 12:00:00', (string) config('app.display_timezone')));
     $teacher = User::factory()->isTeacher()->create();
     $course = Course::factory()->create();
     $course->teachers()->attach($teacher);

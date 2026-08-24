@@ -77,8 +77,8 @@ it('scopes due installments', function () {
 });
 
 it('scopes retryable installments', function () {
-    Installment::factory()->failed(1)->create(['due_date' => now()]);
-    Installment::factory()->failed(2)->create(['due_date' => now()]);
+    Installment::factory()->failed(1)->dueToday()->create();
+    Installment::factory()->failed(2)->dueToday()->create();
     Installment::factory()->overdue()->create(); // retry_count = 3, should not be retryable
 
     expect(Installment::query()->retryable()->count())->toBe(2);

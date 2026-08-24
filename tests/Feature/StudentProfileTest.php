@@ -24,6 +24,7 @@ use App\Services\StudentProfileService;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Tables\Columns\TextColumn;
 
 use function Pest\Livewire\livewire;
 
@@ -168,6 +169,7 @@ it('combines attendance, staff, first aid, and stop light notes into one filtera
     $stopLight = StudentCommunication::factory()->for($student)->create([
         'author_id' => $owner->id,
         'type' => StudentCommunicationType::StopLight,
+        'first_aid_type' => null,
         'stop_light_color' => StopLightColor::Yellow,
         'note' => 'Stop light context',
     ]);
@@ -186,10 +188,16 @@ it('combines attendance, staff, first aid, and stop light notes into one filtera
             StudentNoteType::Staff->value,
             StudentNoteType::FirstAid->value,
             StudentNoteType::StopLight->value,
-        );
+        )
+        ->and($firstAidRecord['communication_type'])->toBe('FIRST AID')
+        ->and($stopLightRecord['communication_type'])->toBe('YELLOW');
 
     livewire(ViewStudent::class, ['record' => $student->id])
         ->loadTable()
+        ->assertTableColumnExists(
+            'communication_type',
+            fn (TextColumn $column): bool => $column->getLabel() === 'Type',
+        )
         ->assertCanSeeTableRecords([
             $attendanceRecord['__key'],
             $staffRecord['__key'],

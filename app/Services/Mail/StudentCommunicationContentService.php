@@ -30,10 +30,14 @@ final readonly class StudentCommunicationContentService
                     ->format('F j, Y g:i A T'),
                 'communication.note' => $communication->note,
                 'communication.type' => $communication->type->getLabel(),
+                'first_aid.type' => $communication->first_aid_type?->getLabel() ?? '',
                 'event.name' => $event instanceof Event ? $event->name : 'No event selected',
                 'event.starts_at' => $event?->start_time?->setTimezone($displayTimezone)->format('F j, Y g:i A T') ?? '',
                 'event.ends_at' => $event?->end_time?->setTimezone($displayTimezone)->format('F j, Y g:i A T') ?? '',
                 'event.course_name' => $event?->course instanceof Course ? $event->course->name : '',
+                'event.context_name' => $event?->course instanceof Course
+                    ? $event->course->name
+                    : ($event?->name ?? 'No course selected'),
                 'teacher.first_name' => $author instanceof User ? $author->first_name : '',
                 'teacher.full_name' => $author instanceof User ? $author->full_name : '',
                 'teacher.email' => $author instanceof User ? $author->email : '',
