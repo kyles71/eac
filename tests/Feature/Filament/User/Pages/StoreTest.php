@@ -7,13 +7,18 @@ use App\Enums\StoreView;
 use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Pages\Store;
 use App\Models\CartItem;
+use App\Models\CompetitionSeason;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\Enrollment;
 use App\Models\GiftCardType;
 use App\Models\ManagedBanner;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
+use App\Models\Student;
 use App\Services\UserBannerRenderHookRegistrarService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -51,19 +56,25 @@ it('keeps scoped managed banners visible after the store table loads', function 
         ->assertSee('Store table notice');
 });
 
-it('defaults to list view', function () {
+it('defaults new users to card view', function () {
     $component = livewire(Store::class);
 
-    expect($component->instance()->storeView)->toBe(StoreView::List)
-        ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
-        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
+    expect($component->instance()->storeView)->toBe(StoreView::Cards)
+        ->and($component->instance()->getTable()->getContentGrid())->toBe([
+            'default' => 1,
+            'md' => 2,
+            'xl' => 3,
+        ])
+        ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::Cards);
 
     $component
-        ->assertActionDisabled(TestAction::make('listView')->table())
-        ->assertActionEnabled(TestAction::make('cardView')->table());
+        ->assertActionEnabled(TestAction::make('listView')->table())
+        ->assertActionDisabled(TestAction::make('cardView')->table());
 });
 
 it('switches to card view and persists the preference', function () {
+    auth()->user()->update(['store_view' => StoreView::List]);
+
     $component = livewire(Store::class)
         ->callAction(TestAction::make('cardView')->table());
 
@@ -90,6 +101,19 @@ it('switches back to list view and persists the preference', function () {
     expect($component->instance()->storeView)->toBe(StoreView::List)
         ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
         ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
+});
+
+it('keeps list view for an existing user who selected it', function () {
+    auth()->user()->update(['store_view' => StoreView::List]);
+
+    $component = livewire(Store::class);
+
+    expect($component->instance()->storeView)->toBe(StoreView::List)
+        ->and($component->instance()->getTable()->getContentGrid())->toBeNull();
+
+    $component
+        ->assertActionDisabled(TestAction::make('listView')->table())
+        ->assertActionEnabled(TestAction::make('cardView')->table());
 });
 
 it('shows the first storefront image in card view', function () {
@@ -174,10 +198,8 @@ it('displays early access products to directly granted users', function () {
 
 it('does not display products that require an unpurchased enrollment', function () {
     $requiredCourse = Course::factory()->create();
-    $restrictedProduct = Product::factory()->create([
-        'requires_course_id' => $requiredCourse->id,
-        'price' => 5000,
-    ]);
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
 
     livewire(Store::class)
         ->loadTable()
@@ -187,10 +209,8 @@ it('does not display products that require an unpurchased enrollment', function 
 
 it('displays products that require an already purchased enrollment', function () {
     $requiredCourse = Course::factory()->create();
-    $restrictedProduct = Product::factory()->create([
-        'requires_course_id' => $requiredCourse->id,
-        'price' => 5000,
-    ]);
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($requiredCourse);
 
     Enrollment::factory()->create([
         'course_id' => $requiredCourse->id,
@@ -200,6 +220,27 @@ it('displays products that require an already purchased enrollment', function ()
     livewire(Store::class)
         ->loadTable()
         ->assertCanSeeTableRecords([$this->product, $restrictedProduct]);
+});
+
+it('only displays a team restricted product to members of a required team', function () {
+    $season = CompetitionSeason::factory()->current()->create();
+    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCompetitionTeams()->attach($requiredTeam);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanNotSeeTableRecords([$restrictedProduct]);
+
+    Student::factory()
+        ->for(auth()->user())
+        ->create()
+        ->competitionTeams()
+        ->attach($requiredTeam);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$restrictedProduct]);
 });
 
 it('has required columns', function (string $column) {
@@ -218,6 +259,7 @@ it('does not search or sort by computed available spots', function () {
 it('shows the full description in a tooltip when the table value is truncated', function () {
     $description = 'This is a longer store description that should stay compact in the table but be visible in full on hover.';
 
+    auth()->user()->update(['store_view' => StoreView::List]);
     $this->product->update(['description' => $description]);
 
     livewire(Store::class)
@@ -327,6 +369,36 @@ it('asks purchaser questions in the table add to cart modal and stores the answe
     ]);
 });
 
+it('stores digit-only select answers from the table add to cart modal', function (): void {
+    $question = ProductQuestion::factory()
+        ->for($this->product)
+        ->required()
+        ->select(['4', '6', 'YXS'])
+        ->create([
+            'question' => 'Jacket size',
+        ]);
+
+    livewire(Store::class)
+        ->mountAction(TestAction::make('addToCart')->table($this->product->refresh()))
+        ->fillForm([
+            'question_answers' => [
+                1 => ["question_{$question->id}" => '6'],
+            ],
+        ])
+        ->callMountedAction()
+        ->assertHasNoFormErrors()
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()
+        ->where('user_id', auth()->id())
+        ->where('product_id', $this->product->id)
+        ->firstOrFail();
+
+    expect($cartItem->storedQuestionAnswers())->toBe([
+        1 => ["question_{$question->id}" => '6'],
+    ]);
+});
+
 it('shows custom gift card amount and purchaser questions in the same table modal', function (): void {
     $giftCardType = GiftCardType::factory()
         ->denomination(5000)
@@ -362,4 +434,28 @@ it('keeps product navigation and quick add available in card view', function () 
         ->where('user_id', auth()->id())
         ->where('product_id', $this->product->id)
         ->value('quantity'))->toBe(1);
+});
+
+it('lets a family add its held seat when public capacity is sold out', function (): void {
+    $hold = CourseHold::factory()->create([
+        'user_id' => auth()->id(),
+        'expires_at' => now()->addDays(2),
+    ]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $hold->id,
+        'course_id' => $this->course->id,
+        'locked_unit_price' => 4_000,
+    ]);
+    Enrollment::factory(4)->create(['course_id' => $this->course->id]);
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertActionEnabled(TestAction::make('addToCart')->table($this->product))
+        ->callAction(TestAction::make('addToCart')->table($this->product))
+        ->assertNotified('Added to cart');
+
+    $cartItem = CartItem::query()->where('user_id', auth()->id())->sole();
+
+    expect($cartItem->course_hold_id)->toBe($hold->id)
+        ->and($cartItem->held_unit_price)->toBe(4_000);
 });

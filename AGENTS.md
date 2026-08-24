@@ -295,6 +295,8 @@ Action::make('updateEmail')
 
 </code-snippet>
 
+For admin resources, prefer Create and Edit actions in slideovers on the list and view pages instead of dedicated create or edit pages. The application configures these actions as slideovers globally, so only register separate pages when the workflow explicitly requires them.
+
 ### Testing
 
 Testing setup (requires `pestphp/pest-plugin-livewire` in `composer.json`):

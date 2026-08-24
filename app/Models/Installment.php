@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class Installment extends Model
 {
@@ -34,13 +35,19 @@ final class Installment extends Model
         return $this->belongsTo(PaymentPlan::class);
     }
 
+    /** @return HasMany<InstallmentDueDateAdjustment, $this> */
+    public function dueDateAdjustments(): HasMany
+    {
+        return $this->hasMany(InstallmentDueDateAdjustment::class);
+    }
+
     /**
      * Scope to installments that are due (due date <= today and still pending).
      */
     public function scopeDue(Builder $query): void
     {
         $query->where('status', InstallmentStatus::Pending)
-            ->whereDate('due_date', '<=', now());
+            ->whereDate('due_date', '<=', self::todayInDisplayTimezone());
     }
 
     /**
@@ -63,6 +70,7 @@ final class Installment extends Model
 
         $query->where('status', InstallmentStatus::Failed)
             ->where('retry_count', '<', 3)
+            ->whereDate('due_date', '<=', self::todayInDisplayTimezone())
             ->where(function (Builder $query) use ($startOfToday): void {
                 $query
                     ->whereNull('last_attempted_at')
@@ -118,5 +126,12 @@ final class Installment extends Model
             'last_failure_code' => $failureCode,
             'stripe_payment_intent_id' => $stripePaymentIntentId,
         ]);
+    }
+
+    private static function todayInDisplayTimezone(): string
+    {
+        return now()
+            ->setTimezone((string) config('app.display_timezone', config('app.timezone')))
+            ->toDateString();
     }
 }

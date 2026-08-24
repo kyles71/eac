@@ -6,9 +6,9 @@ use App\Actions\Store\CompleteOrder;
 use App\Contracts\StripeServiceContract;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
-use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Gear;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Order;
@@ -358,9 +358,9 @@ it('marks course order items as fulfilled after completion', function () {
     expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
 });
 
-it('leaves costume order items as pending for manual fulfillment', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+it('leaves gear order items as pending for manual fulfillment', function () {
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create(['price' => 3000]);
 
     $order = Order::factory()->create([
         'user_id' => $this->user->id,
@@ -371,7 +371,7 @@ it('leaves costume order items as pending for manual fulfillment', function () {
 
     $orderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
-        'product_id' => $costumeProduct->id,
+        'product_id' => $gearProduct->id,
         'quantity' => 1,
         'unit_price' => 3000,
         'total_price' => 3000,
@@ -420,9 +420,9 @@ it('leaves standalone order items as pending for manual fulfillment', function (
     expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
 });
 
-it('handles mixed cart with course costume and standalone products', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+it('handles mixed cart with course gear and standalone products', function () {
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create(['price' => 3000]);
     $standaloneProduct = Product::factory()->standalone()->create(['price' => 2000]);
 
     $order = Order::factory()->create([
@@ -440,9 +440,9 @@ it('handles mixed cart with course costume and standalone products', function ()
         'total_price' => 5000,
     ]);
 
-    $costumeOrderItem = OrderItem::factory()->create([
+    $gearOrderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
-        'product_id' => $costumeProduct->id,
+        'product_id' => $gearProduct->id,
         'quantity' => 1,
         'unit_price' => 3000,
         'total_price' => 3000,
@@ -469,7 +469,7 @@ it('handles mixed cart with course costume and standalone products', function ()
     expect($courseOrderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
     expect(Enrollment::query()->where('course_id', $this->course->id)->count())->toBe(1);
 
-    // Costume and standalone items should remain pending
-    expect($costumeOrderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
+    // Gear and standalone items should remain pending
+    expect($gearOrderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
     expect($standaloneOrderItem->refresh()->status)->toBe(OrderItemStatus::Pending);
 });

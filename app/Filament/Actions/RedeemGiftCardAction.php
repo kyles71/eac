@@ -6,6 +6,8 @@ namespace App\Filament\Actions;
 
 use App\Actions\Store\RedeemGiftCard;
 use App\Models\GiftCard;
+use App\Models\User;
+use App\Services\StoreCodeAttemptLimiter;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -31,9 +33,23 @@ final class RedeemGiftCardAction extends Action
                     ->placeholder('Enter your gift card code'),
             ])
             ->action(function (array $data): void {
+                /** @var User $user */
+                $user = auth()->user();
+                $attemptLimiter = app(StoreCodeAttemptLimiter::class);
+
+                if ($attemptLimiter->hasTooManyAttempts($user)) {
+                    Notification::make()
+                        ->title('Too many code attempts')
+                        ->body("Try again in {$attemptLimiter->secondsUntilAvailable($user)} seconds.")
+                        ->warning()
+                        ->send();
+
+                    return;
+                }
+
                 try {
                     $action = new RedeemGiftCard;
-                    $giftCard = $action->handle($data['code'], auth()->user());
+                    $giftCard = $action->handle($data['code'], $user);
 
                     $this->evaluate(
                         $this->afterSuccessfulRedemption,
@@ -47,6 +63,8 @@ final class RedeemGiftCardAction extends Action
                         ->success()
                         ->send();
                 } catch (InvalidArgumentException $e) {
+                    $attemptLimiter->recordFailure($user);
+
                     Notification::make()
                         ->title('Invalid gift card')
                         ->body($e->getMessage())

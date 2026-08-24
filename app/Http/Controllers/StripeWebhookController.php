@@ -66,10 +66,14 @@ final class StripeWebhookController
             ->where('stripe_payment_intent_id', $paymentIntent->id)
             ->first();
 
-        if ($order !== null && $order->status === OrderStatus::Processing) {
-            $order->update(['status' => OrderStatus::Failed]);
+        $returnedToPending = $order !== null
+            && Order::query()
+                ->whereKey($order->id)
+                ->where('status', OrderStatus::Processing)
+                ->update(['status' => OrderStatus::Pending]) === 1;
 
-            Log::info("Order #{$order->id} marked as failed due to payment intent failure.", [
+        if ($returnedToPending) {
+            Log::info("Order #{$order->id} returned to pending after a failed payment attempt.", [
                 'payment_intent_id' => $paymentIntent->id,
             ]);
         }
@@ -119,11 +123,11 @@ final class StripeWebhookController
             return response()->json(['message' => 'Payment intent does not match order']);
         }
 
-        if (! in_array($order->status, [OrderStatus::Processing, OrderStatus::Completed], true)) {
+        if (! in_array($order->status, [OrderStatus::Pending, OrderStatus::Processing, OrderStatus::Completed], true)) {
             return response()->json(['message' => 'Order cannot be processed']);
         }
 
-        if ($order->status === OrderStatus::Processing) {
+        if (in_array($order->status, [OrderStatus::Pending, OrderStatus::Processing], true)) {
             $this->completeOrder->handle($order);
         }
 

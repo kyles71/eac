@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Pages;
 
+use App\Actions\CourseHolds\AddCourseHoldToCart;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
+use App\Models\CompetitionTeam;
 use App\Models\Course;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\Product;
 use App\Support\Filament\CourseStaffPresenter;
 use App\Support\Filament\CustomGiftCardAmountField;
@@ -44,7 +48,12 @@ final class ProductDetails extends Page
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        $product->loadMissing(['media', 'productable', 'requiresCourse']);
+        $product->loadMissing([
+            'media',
+            'productable',
+            'requiredCourses',
+            'requiredCompetitionTeams.season',
+        ]);
         $product->loadMorph('productable', [
             Course::class => ['events', 'teachers.media'],
         ]);
@@ -130,15 +139,28 @@ final class ProductDetails extends Page
                     /** @var \App\Models\User $user */
                     $user = auth()->user();
 
-                    $addToCart = new AddToCart;
-                    $addToCart->handle(
-                        $user,
-                        $this->product,
-                        customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($this->product, $data),
-                        questionAnswers: is_array($data['question_answers'] ?? null)
-                            ? $data['question_answers']
-                            : [],
-                    );
+                    $hold = $this->firstActiveHold();
+
+                    if ($hold !== null && $this->product->productable instanceof Course) {
+                        app(AddCourseHoldToCart::class)->handle(
+                            $user,
+                            $hold,
+                            [$this->product->productable->id => 1],
+                            [$this->product->productable->id => is_array($data['question_answers'] ?? null)
+                                ? $data['question_answers']
+                                : []],
+                        );
+                    } else {
+                        $addToCart = new AddToCart;
+                        $addToCart->handle(
+                            $user,
+                            $this->product,
+                            customGiftCardAmount: CustomGiftCardAmountField::amountFromActionData($this->product, $data),
+                            questionAnswers: is_array($data['question_answers'] ?? null)
+                                ? $data['question_answers']
+                                : [],
+                        );
+                    }
 
                     $this->dispatch('refresh-sidebar');
 
@@ -223,10 +245,27 @@ final class ProductDetails extends Page
                 );
         }
 
-        if ($product->requiresCourse !== null) {
-            $details[] = TextEntry::make('requires_course')
-                ->label('Requires Enrollment In')
-                ->state($product->requiresCourse->name);
+        if ($this->heldSeatCount() > 0) {
+            $details[] = TextEntry::make('held_for_user')
+                ->label('Held for You')
+                ->state($this->heldSeatCount().' '.str('seat')->plural($this->heldSeatCount()).' reserved at the held price')
+                ->badge()
+                ->color('warning');
+        }
+
+        if ($product->requiredCourses->isNotEmpty()) {
+            $details[] = TextEntry::make('required_courses')
+                ->label('Requires Enrollment In At Least One Of')
+                ->state($product->requiredCourses->sortBy('name')->pluck('name')->join(', '));
+        }
+
+        if ($product->requiredCompetitionTeams->isNotEmpty()) {
+            $details[] = TextEntry::make('required_competition_teams')
+                ->label('Requires Membership In At Least One Of')
+                ->state($product->requiredCompetitionTeams
+                    ->sortBy(fn (CompetitionTeam $team): string => $team->season->name.' '.$team->name)
+                    ->map(fn (CompetitionTeam $team): string => "{$team->season->name}: {$team->name}")
+                    ->join(', '));
         }
 
         $details[] = Actions::make([
@@ -241,6 +280,36 @@ final class ProductDetails extends Page
     private function isSoldOut(): bool
     {
         return $this->product?->productable instanceof HasCapacity
-            && $this->product->productable->getAvailableCapacity() <= 0;
+            && $this->product->productable->getAvailableCapacity() <= 0
+            && $this->heldSeatCount() <= 0;
+    }
+
+    private function heldSeatCount(): int
+    {
+        if (! $this->product?->productable instanceof Course) {
+            return 0;
+        }
+
+        return CourseHoldSeat::query()
+            ->where('course_id', $this->product->productable->id)
+            ->whereHas('hold', fn ($query) => $query->where('user_id', auth()->id()))
+            ->claimable()
+            ->count();
+    }
+
+    private function firstActiveHold(): ?CourseHold
+    {
+        if (! $this->product?->productable instanceof Course) {
+            return null;
+        }
+
+        return CourseHold::query()
+            ->where('user_id', auth()->id())
+            ->whereHas('seats', fn ($query) => $query
+                ->where('course_id', $this->product->productable->id)
+                ->claimable())
+            ->current()
+            ->orderBy('expires_at')
+            ->first();
     }
 }

@@ -8,6 +8,8 @@ use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
 use App\Models\CartItem;
 use App\Models\Course;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\CreditGrant;
 use App\Models\DiscountCode;
 use App\Models\GiftCard;
@@ -48,6 +50,43 @@ it('displays cart items in the table for the authenticated user', function () {
     livewire(Cart::class)
         ->loadTable()
         ->assertCanSeeTableRecords([$cartItem]);
+});
+
+it('hides the hold expiration column without an active held cart item', function (): void {
+    $expiredHold = CourseHold::factory()->create([
+        'user_id' => auth()->id(),
+        'expires_at' => now()->subMinute(),
+    ]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $expiredHold->id,
+        'course_id' => $this->course->id,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'course_hold_id' => $expiredHold->id,
+    ]);
+
+    livewire(Cart::class)
+        ->loadTable()
+        ->assertTableColumnHidden('hold_expiration');
+});
+
+it('shows the hold expiration column for an active held cart item', function (): void {
+    $activeHold = CourseHold::factory()->create(['user_id' => auth()->id()]);
+    CourseHoldSeat::factory()->create([
+        'course_hold_id' => $activeHold->id,
+        'course_id' => $this->course->id,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'course_hold_id' => $activeHold->id,
+    ]);
+
+    livewire(Cart::class)
+        ->loadTable()
+        ->assertTableColumnVisible('hold_expiration');
 });
 
 it("displays each unit's product details beneath the product name", function (): void {
@@ -314,6 +353,65 @@ it('shows error for invalid promo code', function () {
         ->assertNotified('Invalid code');
 });
 
+it('blocks a sixth failed code attempt until the cooldown expires', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $discountCode = DiscountCode::factory()->percentage(20)->create();
+    $cart = livewire(Cart::class);
+
+    foreach (range(1, 5) as $attempt) {
+        $cart
+            ->set('code', "INVALID_CODE_{$attempt}")
+            ->call('applyCode')
+            ->assertSet('appliedDiscountCodeId', null)
+            ->assertNotified('Invalid code');
+    }
+
+    $cart
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
+        ->assertSet('appliedDiscountCodeId', null)
+        ->assertNotified('Too many code attempts');
+
+    $this->travel(61)->seconds();
+
+    livewire(Cart::class)
+        ->set('code', $discountCode->code)
+        ->call('applyCode')
+        ->assertSet('appliedDiscountCodeId', $discountCode->id)
+        ->assertNotified('Discount applied');
+});
+
+it('does not count empty or successful code submissions as failures', function () {
+    CartItem::factory()->create([
+        'user_id' => auth()->id(),
+        'product_id' => $this->product->id,
+        'quantity' => 1,
+    ]);
+
+    $discountCodes = DiscountCode::factory()->count(6)->percentage(20)->create();
+    $cart = livewire(Cart::class);
+
+    foreach (range(1, 6) as $attempt) {
+        $cart
+            ->set('code', '   ')
+            ->call('applyCode')
+            ->assertNotified('Invalid code');
+    }
+
+    foreach ($discountCodes as $discountCode) {
+        $cart
+            ->set('code', $discountCode->code)
+            ->call('applyCode')
+            ->assertSet('appliedDiscountCodeId', $discountCode->id)
+            ->assertNotified('Discount applied');
+    }
+});
+
 it('can remove an applied discount', function () {
     CartItem::factory()->create([
         'user_id' => auth()->id(),
@@ -432,7 +530,7 @@ it('filters payment plan templates by product type and line total', function () 
     ]);
 
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 12000,
         'number_of_installments' => 4,
@@ -511,7 +609,7 @@ it('shows templates that are eligible for at least one item in a mixed cart', fu
     ]);
 
     PaymentPlanTemplate::factory()->create([
-        'product_type' => ProductType::Costume,
+        'product_type' => ProductType::Gear,
         'min_price' => 1000,
         'max_price' => 10000,
         'number_of_installments' => 4,

@@ -24,17 +24,20 @@ Each feature or fix remains independently releasable even when dev contains seve
 feature branch created from master
         |
         v
+complete dev PR notes + apply reviewed decision
+        |
+        v
 merge-commit PR into dev --> automatic dev deployment
                                       |
                                       v
                          draft PR into master created
-                         + update-note template added
+                         + notes and decision transferred
                                       |
                          QA fixes stay on feature branch
                          and are merged into dev again
                                       |
                                       v
-                         approve note and merge to master
+                         review copied note and merge to master
                                       |
                                       v
                          automatic production deployment
@@ -113,7 +116,7 @@ Keep each branch focused on one production outcome. Do not branch from `dev` bec
 
 ### 3. Open the dev pull request
 
-Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Merge the dev PR with a merge commit and wait for the automatic dev deployment.
+Open a normal PR from the feature branch into `dev`. Do not open the master PR yet. Complete the user-facing and operational note blocks in the dev PR, review them, and apply exactly one of `updates-approved` or `skip-updates`. The trusted `updates-note` check revalidates description edits without removing the decision label, but removes `updates-approved` when feature commits change. Merge with a merge commit only after the decision is valid, then wait for the automatic dev deployment.
 
 If GitHub reports conflicts because another feature is already on `dev`, do not update the clean feature branch with `dev`. Follow [Feature B conflicts with Feature A already on dev](#feature-b-conflicts-with-feature-a-already-on-dev) and resolve a local merge directly on `dev`.
 
@@ -122,11 +125,13 @@ After that deployment succeeds, the trusted **Create master draft after dev depl
 1. Finds the dev PR that produced the deployed merge commit. For a direct conflict-resolution merge, it traces the merge commit's second parent back to the original dev PR.
 2. Verifies the latest clean feature head is contained in that deployment.
 3. Rejects a branch that appears to contain a merge from `dev` or another unreleased branch.
-4. Creates a draft PR from the same feature branch into `master`, or updates its deployment metadata when it already exists.
-5. Preserves the manually written update note when a later dev deployment refreshes the metadata.
-6. Publishes a failing `updates-note` status until a person completes and approves or explicitly skips the note.
+4. Copies the marked user-facing and operational note blocks from the dev PR into a new draft PR from the same feature branch into `master`.
+5. Backfills those blocks when an existing master draft still contains placeholders, while preserving valid notes already reviewed or edited on the master PR.
+6. Creates or updates the master PR's deployment metadata.
+7. Carries a valid `updates-approved` or `skip-updates` decision into a newly created master draft and publishes the corresponding `updates-note` status.
+8. Leaves a new master draft unapproved with a failing status when the dev PR has no valid decision.
 
-The master PR is the canonical production and update-note record. Write the note manually from the tested behavior and keep it understandable to non-technical staff. Automation validates the format and approval state but does not write or approve the note.
+Write and review the note in the dev PR from the tested behavior and keep it understandable to non-technical staff. The automation carries both the note and that explicit human decision into the new master draft, which becomes the canonical production and update-note record. Automation validates and transfers the decision but never infers approval merely because text is present.
 
 Complete and review these sections in the PR body:
 
@@ -135,7 +140,7 @@ Complete and review these sections in the PR body:
 - Concrete dev testing focus.
 - Operational, migration, configuration, monitoring, and smoke-test notes.
 
-Apply exactly one label before production merge:
+Apply exactly one decision label before merging the initial dev PR:
 
 - `updates-approved` after the note has been reviewed.
 - `skip-updates` for changes that should not appear on the Updates page.
@@ -144,7 +149,7 @@ Apply exactly one label before production merge:
 
 Do not use `skip-deployment` for application code, Composer or npm dependencies, built assets, migrations, seeders, environment or configuration expectations, queues, schedules, worker behavior, or anything else the servers must receive. A manual **Deploy dev branch** run always deploys regardless of labels. When a dev deployment is skipped, the master-draft automation does not claim that commit was tested or update its deployment metadata.
 
-A successful follow-up dev deployment removes `updates-approved`, updates the deployment metadata, and preserves the manually written note. Edit the note if the tested behavior changed, then review and reapply `updates-approved`.
+A successful follow-up dev deployment updates the deployment metadata, preserves the manually written master note, and removes `updates-approved` from the existing master draft even when the follow-up dev PR was approved. Edit the master note if the tested behavior changed, then review and reapply `updates-approved`. The initial decision is transferred only when the master draft is first created.
 
 ### 4. QA on dev
 
@@ -169,7 +174,7 @@ Keep fixes on the original feature branch:
 3. Merge it with a merge commit and wait for the dev deployment.
 4. Repeat the affected QA checks.
 5. Confirm the automation updated the existing master PR deployment record and removed `updates-approved`.
-6. Edit the master PR note if needed and reapply `updates-approved`.
+6. Edit the master PR note if needed and reapply `updates-approved`; follow-up dev labels are not automatically transferred to an existing master draft.
 
 The open master PR updates automatically as the feature branch changes. Do not create a replacement master PR.
 
@@ -199,6 +204,8 @@ A push to `master` starts the production workflow. Unless the merged source PR h
 For a `skip-deployment` PR, the production deployment, tag, and draft Release are all skipped because no server state changed.
 
 If no approved update-note block is available, the workflow adds no user-facing placeholder or warning; the deployment metadata and generated technical changelog remain. The required `updates-note` check should make this exceptional unless the included PRs intentionally use `skip-updates`.
+
+If GitHub note collection fails because of missing permissions, configuration, or an API error, draft Release creation stops instead of silently creating an incomplete Release. The production tag remains attached to the successfully deployed commit. Correct the automation failure and rerun the failed release job; it reuses that tag and creates the complete draft. A successful collection with no notes still creates a technical-only draft when all included PRs intentionally use `skip-updates`.
 
 Complete the production smoke tests:
 
@@ -262,13 +269,13 @@ For both `master` and `dev`:
 - Require pull requests with zero required approvals for the solo-developer workflow.
 - Do not require linear history.
 - Block force pushes and branch deletion.
+- Require the stable `updates-note` status check after it has completed successfully on that target branch at least once.
 
 For `dev`, add **Repository administrators** to the ruleset bypass list with **Always allow** so the owner can push a local conflict-resolution merge. Do not select **For pull requests only** for this bypass. Continue using PRs for every conflict-free dev merge.
 
 For `master` also require:
 
 - Conversation resolution.
-- The stable `updates-note` status check after it has completed successfully at least once.
 - Existing CI checks once their stable job names are available.
 
 ### GitHub Environments
@@ -294,13 +301,13 @@ Create these labels exactly:
 - `skip-updates`
 - `skip-deployment`
 
-In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The automation creates draft PRs but never approves its own update notes.
+In **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. The automation creates draft PRs and transfers an explicit human decision from the dev PR, but never invents or self-approves update-note content.
 
-GitHub may place CI runs triggered by a `GITHUB_TOKEN`-created PR into an approval-required state. If the master draft shows an **Approve workflows** banner, a repository user with write access must approve those runs. The automation publishes the `updates-note` commit status directly, so its initial failing state does not depend on that generated PR event running.
+GitHub may place CI runs triggered by a `GITHUB_TOKEN`-created PR into an approval-required state. If the master draft shows an **Approve workflows** banner, a repository user with write access must approve those runs. The automation publishes the `updates-note` commit status directly, so the transferred decision is validated without depending on a generated PR event.
 
 The write-capable `workflow_run` and `pull_request_target` jobs check out automation from the default branch. Keep them limited to trusted scripts and do not change them to execute code from a pull-request head.
 
-For the bootstrap PR that introduces this workflow, merge and deploy it to dev, then manually open its draft PR into `master` because the `workflow_run` workflow does not become active until it exists on the default branch. Manually replace the template placeholders with reviewed note blocks if necessary. Add `updates-note` to the master ruleset only after that stable commit status has completed at least once.
+For the bootstrap PR that introduces this workflow, merge and deploy it to dev, then manually open its draft PR into `master` because the `workflow_run` workflow does not become active until it exists on the default branch. Manually replace the template placeholders with reviewed note blocks if necessary. Add `updates-note` to each branch ruleset only after that stable commit status has completed successfully on the corresponding target branch at least once.
 
 For the private GitHub feed, create a fine-grained token restricted to `kyles71/eac` with read-only access to Contents, Pull Requests, and Deployments. Add these values to the shared `.env` on both servers:
 
@@ -318,9 +325,9 @@ Run `php artisan config:clear` after changing these values outside a deployment.
 Use the same selective path for a hotfix:
 
 1. Branch from current `master`.
-2. Open and merge the PR into `dev`.
-3. Wait for the successful dev deployment and automatically created draft master PR.
-4. Approve its update note or explicitly skip it.
+2. Open the PR into `dev`, complete its notes, and apply `updates-approved` or `skip-updates` after review.
+3. Merge it into `dev` and wait for the successful deployment and automatically created draft master PR.
+4. Confirm the note and decision were transferred.
 5. Merge the hotfix PR into `master`.
 6. Smoke-test production and publish the corrective Release.
 7. Merge current `master` into any waiting feature branches, redeploy them to dev, and retest affected behavior.

@@ -3,7 +3,15 @@
 ## User-facing update
 
 <!-- eac-update-note:start -->
-<!-- Write a friendly title, short summary, Highlights list, and Testing focus list here. Follow the format in docs/RELEASE_WORKFLOW.md, then apply updates-approved after review. -->
+### Release Notes
+
+A concise one or two sentence summary of the PR.
+
+#### Highlights
+- List out the updates here
+
+#### Testing focus
+- Notes for the tester
 <!-- eac-update-note:end -->
 
 ## Operational notes

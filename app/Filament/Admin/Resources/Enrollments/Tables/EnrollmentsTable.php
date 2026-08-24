@@ -4,14 +4,23 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Enrollments\Tables;
 
+use App\Actions\CourseHolds\ConvertEnrollmentToCourseHold;
+use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Enrollment;
 use App\Models\Student;
+use App\Models\User;
+use App\Rules\FutureDisplayDateTime;
 use Carbon\CarbonInterface;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -110,6 +119,40 @@ final class EnrollmentsTable
                                     return $record->user->students()->create($data)->getKey();
                                 }),
                         ]),
+                    Action::make('convertToHold')
+                        ->label('Convert to Hold')
+                        ->icon(Heroicon::OutlinedTicket)
+                        ->color('warning')
+                        ->visible(fn (Enrollment $record): bool => $record->order_item_id === null)
+                        ->schema([
+                            DateTimePicker::make('expires_at')
+                                ->label('Hold Expires At')
+                                ->timezone((string) config('app.display_timezone', config('app.timezone')))
+                                ->rules([new FutureDisplayDateTime])
+                                ->required(),
+                            Textarea::make('notes')->rows(3),
+                        ])
+                        ->action(function (Enrollment $record, array $data): void {
+                            /** @var User|null $admin */
+                            $admin = auth()->user();
+                            $hold = app(ConvertEnrollmentToCourseHold::class)->handle(
+                                enrollment: $record,
+                                expiresAt: \Carbon\Carbon::parse((string) $data['expires_at']),
+                                createdBy: $admin,
+                                notes: $data['notes'] ?? null,
+                            );
+
+                            Notification::make()
+                                ->title('Enrollment converted to a class hold')
+                                ->body('The assigned student and current class price were preserved.')
+                                ->actions([
+                                    Action::make('viewHold')
+                                        ->label('View Hold')
+                                        ->url(CourseHoldResource::getUrl('view', ['record' => $hold])),
+                                ])
+                                ->success()
+                                ->send();
+                        }),
                 ]),
             ]);
     }

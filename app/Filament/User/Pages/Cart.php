@@ -12,11 +12,14 @@ use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\CartItem;
+use App\Models\CourseHold;
 use App\Models\DiscountCode;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\CreditLedgerService;
 use App\Services\ProductQuestionAnswerService;
+use App\Services\StoreCodeAttemptLimiter;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdown;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
@@ -168,7 +171,7 @@ final class Cart extends Page implements HasTable
     {
         return CartItem::query()
             ->where('user_id', auth()->id())
-            ->with(['product.productable', 'product.questions'])
+            ->with(['product.productable', 'product.questions', 'courseHold'])
             ->get();
     }
 
@@ -207,7 +210,7 @@ final class Cart extends Page implements HasTable
             return $this->paymentPlanBreakdown->restrictedCreditAmount;
         }
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
         $items = $this->cartItems->map(fn (CartItem $cartItem): array => [
             'product' => $this->productForCartItem($cartItem),
@@ -439,6 +442,21 @@ final class Cart extends Page implements HasTable
 
     public function applyCode(): void
     {
+        /** @var User $user */
+        $user = auth()->user();
+        $code = mb_trim($this->code);
+        $attemptLimiter = app(StoreCodeAttemptLimiter::class);
+
+        if ($code !== '' && $attemptLimiter->hasTooManyAttempts($user)) {
+            Notification::make()
+                ->title('Too many code attempts')
+                ->body("Try again in {$attemptLimiter->secondsUntilAvailable($user)} seconds.")
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         try {
             $applyCode = new ApplyCode;
 
@@ -449,7 +467,7 @@ final class Cart extends Page implements HasTable
 
             $result = $applyCode->handle(
                 $this->code,
-                auth()->user(),
+                $user,
                 $this->subtotal,
                 $productIds,
             );
@@ -476,6 +494,10 @@ final class Cart extends Page implements HasTable
                     ->send();
             }
         } catch (InvalidArgumentException $e) {
+            if ($code !== '') {
+                $attemptLimiter->recordFailure($user);
+            }
+
             Notification::make()
                 ->title('Invalid code')
                 ->body($e->getMessage())
@@ -601,7 +623,7 @@ final class Cart extends Page implements HasTable
                         ? DiscountCode::query()->find($this->appliedDiscountCodeId)
                         : null;
 
-                    /** @var \App\Models\User $user */
+                    /** @var User $user */
                     $user = auth()->user();
                     $creditToApply = $this->useCredit ? $this->getPreviewStoreCreditBalance() : 0;
 
@@ -692,7 +714,7 @@ final class Cart extends Page implements HasTable
             ->query(
                 CartItem::query()
                     ->where('user_id', auth()->id())
-                    ->with(['product.productable', 'product.questions'])
+                    ->with(['product.productable', 'product.questions', 'courseHold'])
             )
             ->columns([
                 TextColumn::make('product.name')
@@ -715,6 +737,7 @@ final class Cart extends Page implements HasTable
                 TextColumn::make('unit_price')
                     ->label('Price')
                     ->state(fn (CartItem $record): string => $record->formattedEffectiveUnitPrice())
+                    ->description(fn (CartItem $record): ?string => $record->course_hold_id !== null ? 'Held price' : null)
                     ->toggleable(false)
                     ->searchable(false)
                     ->sortable(false),
@@ -728,6 +751,18 @@ final class Cart extends Page implements HasTable
                     ->label('Total')
                     ->state(fn (CartItem $record): string => $record->formattedLineTotal())
                     ->toggleable(false)
+                    ->searchable(false)
+                    ->sortable(false),
+                TextColumn::make('hold_expiration')
+                    ->label('Hold Expires')
+                    ->state(fn (CartItem $record): mixed => $record->courseHold?->expires_at)
+                    ->dateTime()
+                    ->placeholder('—')
+                    ->visible(fn (): bool => CartItem::query()
+                        ->where('user_id', auth()->id())
+                        ->whereIn('course_hold_id', CourseHold::query()->current()->select('id'))
+                        ->exists())
+                    ->toggleable()
                     ->searchable(false)
                     ->sortable(false),
             ])
@@ -883,7 +918,7 @@ final class Cart extends Page implements HasTable
 
     private function getPreviewStoreCreditBalance(): int
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         return app(CreditLedgerService::class)->previewUnrestrictedBalance($user);
@@ -891,7 +926,7 @@ final class Cart extends Page implements HasTable
 
     private function paymentPlanBreakdownForTemplate(PaymentPlanTemplate $template): PaymentPlanBreakdown
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         $calculator = app(PaymentPlanBreakdownCalculator::class);

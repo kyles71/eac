@@ -8,6 +8,7 @@ use App\Enums\DashboardAudience;
 use App\Enums\ProductAvailabilityStatus;
 use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
+use App\Models\CompetitionTeam;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
@@ -49,7 +50,6 @@ final class ProductInfolist
                     ]),
                 Section::make('Availability')
                     ->columns(2)
-                    ->columnSpanFull()
                     ->schema([
                         TextEntry::make('available_from')
                             ->dateTime()
@@ -75,6 +75,31 @@ final class ProductInfolist
                             ->columns(2)
                             ->columnSpanFull(),
                     ]),
+                Section::make('Purchase Eligibility')
+                    ->columns(2)
+                    ->schema([
+                        TextEntry::make('required_courses')
+                            ->label('Requires Enrollment In At Least One Of')
+                            ->state(fn (Product $record): array => $record->requiredCourses()
+                                ->orderBy('name')
+                                ->pluck('name')
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder('None'),
+                        TextEntry::make('required_competition_teams')
+                            ->label('Requires Membership In At Least One Of')
+                            ->state(fn (Product $record): array => $record->requiredCompetitionTeams()
+                                ->with('season')
+                                ->get()
+                                ->sortBy(fn (CompetitionTeam $team): string => $team->season->name.' '.$team->name)
+                                ->map(fn (CompetitionTeam $team): string => "{$team->season->name}: {$team->name} ({$team->season->status()})")
+                                ->values()
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder('None'),
+                    ]),
                 Section::make('Linked Item')
                     ->columns(2)
                     ->columnSpanFull()
@@ -91,9 +116,6 @@ final class ProductInfolist
                             ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')
                             ->color(fn (bool $state): string => $state ? 'success' : 'gray')
                             ->visible(fn (Product $record): bool => $record->productable !== null),
-                        TextEntry::make('requiresCourse.name')
-                            ->label('Requires Enrollment In')
-                            ->placeholder('None'),
                         TextEntry::make('order_items_count')
                             ->label('Times Ordered')
                             ->state(fn (Product $record): int => $record->orderItems()->count()),

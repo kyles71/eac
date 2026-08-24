@@ -35,6 +35,7 @@ final class OrderFactory extends Factory
             'payment_plan_restricted_credit_applied' => 0,
             'payment_plan_credit_applied' => 0,
             'stripe_payment_intent_id' => null,
+            'hold_checkout_expires_at' => null,
             'payment_plan_template_id' => null,
             'payment_plan_terms_version_id' => null,
             'cart_items_cleared_at' => null,

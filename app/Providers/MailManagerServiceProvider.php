@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Mail\Types\AbandonedCartReminderEmailType;
+use App\Mail\Types\CourseHoldChangedEmailType;
+use App\Mail\Types\CourseHoldCreatedEmailType;
+use App\Mail\Types\CourseHoldExpiredEmailType;
+use App\Mail\Types\CourseHoldExpiringEmailType;
 use App\Mail\Types\EventCancellationEmailType;
 use App\Mail\Types\EventReminderEmailType;
 use App\Mail\Types\GiftCardAssignedRedemptionEmailType;
@@ -16,6 +20,7 @@ use App\Mail\Types\OpenEnrollmentReminderEmailType;
 use App\Mail\Types\OrderReceiptEmailType;
 use App\Mail\Types\PasswordResetEmailType;
 use App\Mail\Types\PastDueInstallmentEmailType;
+use App\Mail\Types\PaymentPlanScheduleAdjustedEmailType;
 use App\Mail\Types\ProductPurchaseNotificationEmailType;
 use App\Mail\Types\StudentFirstAidNoteEmailType;
 use App\Mail\Types\StudentStopLightMessageEmailType;
@@ -40,6 +45,10 @@ final class MailManagerServiceProvider extends ServiceProvider
     {
         FilamentMailManager::registerEmailTypes([
             AbandonedCartReminderEmailType::class,
+            CourseHoldChangedEmailType::class,
+            CourseHoldCreatedEmailType::class,
+            CourseHoldExpiredEmailType::class,
+            CourseHoldExpiringEmailType::class,
             EventCancellationEmailType::class,
             EventReminderEmailType::class,
             GiftCardAssignedRedemptionEmailType::class,
@@ -50,6 +59,7 @@ final class MailManagerServiceProvider extends ServiceProvider
             OrderReceiptEmailType::class,
             OpenEnrollmentReminderEmailType::class,
             PastDueInstallmentEmailType::class,
+            PaymentPlanScheduleAdjustedEmailType::class,
             ProductPurchaseNotificationEmailType::class,
             StudentFirstAidNoteEmailType::class,
             StudentStopLightMessageEmailType::class,

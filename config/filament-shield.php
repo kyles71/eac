@@ -7,7 +7,7 @@ use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
-use App\Filament\Admin\Resources\Costumes\CostumeResource;
+use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
@@ -17,6 +17,7 @@ use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Forms\FormResource;
 use App\Filament\Admin\Resources\FormUsers\FormUserResource;
+use App\Filament\Admin\Resources\Gear\GearResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
@@ -204,8 +205,11 @@ return [
             CompetitionTeamResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
-            CostumeResource::class => [
+            GearResource::class => [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CourseHoldResource::class => [
+                'viewAny', 'view', 'create', 'update',
             ],
             CourseResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
@@ -253,7 +257,7 @@ return [
                 'viewAny', 'view',
             ],
             PaymentPlanResource::class => [
-                'viewAny', 'view',
+                'viewAny', 'view', 'adjustDueDates',
             ],
             PaymentPlanTemplateResource::class => [
                 'viewAny', 'create', 'update',
