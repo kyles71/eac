@@ -5,8 +5,10 @@ declare(strict_types=1);
 use App\Actions\Store\ProcessInstallments;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Models\Installment;
 use App\Models\Order;
+use App\Models\OrderRefund;
 use App\Models\PaymentPlan;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
@@ -343,4 +345,22 @@ it('marks as failed when missing stripe credentials for auto-charge', function (
 
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Failed);
+});
+
+it('does not charge installments while their cancellation refund is in flight', function (): void {
+    $order = Order::factory()->completed()->create();
+    $plan = PaymentPlan::factory()->create(['order_id' => $order->id]);
+    $installment = Installment::factory()->dueToday()->create([
+        'payment_plan_id' => $plan->id,
+    ]);
+    OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'cancel_remaining_installments' => true,
+        'status' => OrderRefundStatus::Pending,
+    ]);
+
+    $this->mockStripe->shouldNotReceive('chargePaymentMethod');
+
+    expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(0)
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Pending);
 });

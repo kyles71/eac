@@ -8,6 +8,7 @@ use App\Actions\Store\SendOrderReceipt;
 use App\Actions\Store\UpdatePaymentPlanPaymentMethod;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanStatus;
 use App\Filament\Actions\RedeemGiftCardAction;
@@ -15,6 +16,7 @@ use App\Filament\Shared\Schemas\ProductQuestionAnswerSchema;
 use App\Models\GiftCard;
 use App\Models\Installment;
 use App\Models\Order;
+use App\Models\OrderRefund;
 use App\Models\PaymentPlan;
 use App\Models\User;
 use App\Services\DashboardAccountSummaryService;
@@ -329,7 +331,14 @@ final class Billing extends Page
         $orders = Order::query()
             ->where('user_id', auth()->id())
             ->where('status', '!=', OrderStatus::Cancelled)
-            ->with(['orderItems.product', 'orderItems.questionAnswers', 'discountCode'])
+            ->with([
+                'orderItems.product',
+                'orderItems.questionAnswers',
+                'discountCode',
+                'refunds' => fn ($query) => $query
+                    ->where('status', OrderRefundStatus::Succeeded)
+                    ->latest('completed_at'),
+            ])
             ->latest()
             ->get();
 
@@ -370,6 +379,9 @@ final class Billing extends Page
                         ]),
                     Actions::make([
                         $this->receiptAction($order),
+                        ...$order->refunds
+                            ->map(fn (OrderRefund $refund): Action => $this->refundReceiptAction($refund))
+                            ->all(),
                         $this->resendReceiptAction($order),
                     ]),
                 ])
@@ -410,6 +422,62 @@ final class Billing extends Page
                         ->send();
                 }
             });
+    }
+
+    private function refundReceiptAction(OrderRefund $refund): Action
+    {
+        return Action::make("refund_receipt_{$refund->id}")
+            ->label("View Refund Receipt #{$refund->id}")
+            ->icon(Heroicon::OutlinedArrowUturnLeft)
+            ->modalHeading("Refund Receipt #{$refund->id}")
+            ->schema($this->refundReceiptSchema($refund))
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Close');
+    }
+
+    /**
+     * @return array<\Filament\Schemas\Components\Component>
+     */
+    private function refundReceiptSchema(OrderRefund $refund): array
+    {
+        $refund->loadMissing('order');
+        $order = $refund->order;
+        $amountCollected = $order->capturedStripeAmount();
+        $totalRefunded = $order->successfulRefundAmount();
+
+        return [
+            Grid::make()
+                ->columns(2)
+                ->schema([
+                    TextEntry::make("refund_{$refund->id}_order")
+                        ->label('Order')
+                        ->state("#{$order->id}"),
+                    TextEntry::make("refund_{$refund->id}_date")
+                        ->label('Refund Date')
+                        ->state($refund->completed_at)
+                        ->dateTime('M j, Y g:i A')
+                        ->timezone($this->displayTimezone()),
+                    TextEntry::make("refund_{$refund->id}_amount")
+                        ->label('Refund Amount')
+                        ->state($refund->formattedAmount()),
+                    TextEntry::make("refund_{$refund->id}_status")
+                        ->label('Status')
+                        ->state($refund->status)
+                        ->badge(),
+                    TextEntry::make("refund_{$refund->id}_order_total")
+                        ->label('Original Order Total')
+                        ->state($order->formattedTotal()),
+                    TextEntry::make("refund_{$refund->id}_amount_collected")
+                        ->label('Amount Collected')
+                        ->state(format_money($amountCollected)),
+                    TextEntry::make("refund_{$refund->id}_total_refunded")
+                        ->label('Total Refunded')
+                        ->state(format_money($totalRefunded)),
+                    TextEntry::make("refund_{$refund->id}_net_paid")
+                        ->label('Net Paid')
+                        ->state(format_money(max(0, $amountCollected - $totalRefunded))),
+                ]),
+        ];
     }
 
     /**
@@ -632,7 +700,8 @@ final class Billing extends Page
                                         ->date('M j, Y'),
                                     TextEntry::make("installment_{$installment->id}_status")
                                         ->label('Status')
-                                        ->state($installment->status)
+                                        ->state($installment->paymentStatusLabel())
+                                        ->color($installment->paymentStatusColor())
                                         ->badge(),
                                     TextEntry::make("installment_{$installment->id}_paid")
                                         ->label('Paid At')
