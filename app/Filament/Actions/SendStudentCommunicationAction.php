@@ -143,6 +143,7 @@ final class SendStudentCommunicationAction extends BaseEmailAction
     {
         $this->student = $student;
         $this->to($student);
+        $this->permitStudentRecipient($student);
 
         return $this;
     }
@@ -238,6 +239,12 @@ final class SendStudentCommunicationAction extends BaseEmailAction
     {
         if (blank($eventId)) {
             return null;
+        }
+
+        $fixedEvent = $this->getFixedEvent();
+
+        if ($fixedEvent instanceof Event && (int) $eventId === $fixedEvent->id) {
+            return $fixedEvent;
         }
 
         return $fail

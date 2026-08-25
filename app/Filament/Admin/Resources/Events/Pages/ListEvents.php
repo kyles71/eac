@@ -8,12 +8,19 @@ use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Livewire\Attributes\On;
 
 final class ListEvents extends ListRecords
 {
     use HasRecurring;
 
     protected static string $resource = EventResource::class;
+
+    #[On('event-substitution-updated')]
+    public function refreshEventsTable(): void
+    {
+        $this->flushCachedTableRecords();
+    }
 
     protected function getHeaderActions(): array
     {

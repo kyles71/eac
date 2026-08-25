@@ -20,7 +20,7 @@ final class EventPolicy
     public function view(User $authUser, Event $event): bool
     {
         return $authUser->can('View:Event')
-            && $event->isAccessibleToAdminUser($authUser);
+            && $event->isViewableByAdminUser($authUser);
     }
 
     public function create(User $authUser): bool
@@ -34,8 +34,29 @@ final class EventPolicy
             && $event->isAccessibleToAdminUser($authUser);
     }
 
+    public function viewSubstituteDetails(User $authUser, Event $event): bool
+    {
+        return $event->substitute_teacher_id === $authUser->id;
+    }
+
+    public function recordSubstituteAttendance(User $authUser, Event $event): bool
+    {
+        return $this->viewSubstituteDetails($authUser, $event) && ! $event->isCancelled();
+    }
+
+    public function requestSubstituteRelease(User $authUser, Event $event): bool
+    {
+        return $this->viewSubstituteDetails($authUser, $event)
+            && ! $event->isCancelled()
+            && ! $event->isCompletedAt();
+    }
+
     public function updateAttendance(User $authUser, Event $event): bool
     {
+        if ($this->recordSubstituteAttendance($authUser, $event)) {
+            return true;
+        }
+
         if (! $this->update($authUser, $event)) {
             return false;
         }

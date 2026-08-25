@@ -7,6 +7,7 @@ namespace App\Filament\Shared\Widgets;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -232,9 +233,10 @@ final class CalendarWidget extends FullCalendarWidget
             EditAction::make()
                 ->authorize('update')
                 ->visible(fn (Event $record): bool => ! $record->isCancelled()),
+            EventSubstituteActions::manage(fn (): ?string => $this->fullEventUrl()),
             $cancelEventAction,
             Action::make('viewFullEvent')
-                ->label('View Full Event')
+                ->label('View Event')
                 ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                 ->color('gray')
                 ->visible(fn (): bool => $this->canViewFullEvent())

@@ -6,6 +6,7 @@ use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
 use App\Filament\Admin\Resources\DashboardQuickLinks\DashboardQuickLinkResource;
 use App\Filament\Admin\Resources\DiscountCodes\DiscountCodeResource;
+use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Gear\GearResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
@@ -16,9 +17,12 @@ use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResou
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Models\Calendar;
+use App\Models\Course;
+use App\Models\Event;
 use App\Models\LegalDocument;
 use App\Models\PaymentPlanTemplate;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Filament\GlobalSearch\GlobalSearchResult;
 use Filament\Livewire\GlobalSearch;
 
@@ -57,3 +61,17 @@ it('can global search for users', function (string $attribute): void {
             expect($result->title)->toBe($record->fullName);
         });
 })->with(UserResource::getGloballySearchableAttributes());
+
+it('can global search for an event assigned to a confirmed substitute', function (): void {
+    Filament::setCurrentPanel('admin');
+    $teacher = User::factory()->isTeacher()->create();
+    $event = Event::factory()->create([
+        'course_id' => Course::factory(),
+        'substitute_teacher_id' => $teacher->id,
+    ]);
+    $event->update(['name' => 'Kinderballet Substitute Assignment']);
+
+    $this->actingAs($teacher);
+
+    expect(EventResource::getGlobalSearchResults('Kinderballet'))->toHaveCount(1);
+});
