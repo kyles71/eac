@@ -16,6 +16,10 @@ final readonly class UnassignStudentFromEnrollmentAction
             throw new InvalidArgumentException('This enrollment does not belong to your account.');
         }
 
+        if ($enrollment->isRecurringPrivateLesson()) {
+            throw new InvalidArgumentException('The dancer assigned to a recurring private lesson cannot be removed.');
+        }
+
         if (! $this->canHandle($enrollment, $user)) {
             throw new InvalidArgumentException('This enrollment is too close to the course start date to remove online.');
         }
@@ -28,6 +32,10 @@ final readonly class UnassignStudentFromEnrollmentAction
     public function canHandle(Enrollment $enrollment, User $user): bool
     {
         if ($enrollment->user_id !== $user->id || $enrollment->student_id === null) {
+            return false;
+        }
+
+        if ($enrollment->isRecurringPrivateLesson()) {
             return false;
         }
 

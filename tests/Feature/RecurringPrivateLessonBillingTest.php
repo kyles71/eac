@@ -25,6 +25,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 use Stripe\Refund;
 
 beforeEach(function (): void {
@@ -146,6 +147,43 @@ it('issues unrestricted store credit for the net amount paid without returning p
         ->and($charge->coverage->refresh()->status)->toBe(RecurringPrivateLessonCoverageStatus::Credited)
         ->and($grant->initial_amount)->toBe(4500)
         ->and($grant->hasRestrictions())->toBeFalse();
+
+    Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
+        $rendered = $mail->getRenderedEmail();
+
+        return $mail->emailTypeKey === 'recurring-private-lesson-removed'
+            && str_contains($rendered->html, 'Payment resolution:')
+            && str_contains($rendered->html, '$45.00 in unrestricted store credit was issued');
+    });
+});
+
+it('never issues cancellation credit above the net lesson price', function (): void {
+    $period = $this->series->billingPeriods->first();
+    app(BillRecurringPrivateLessonBillingPeriod::class)->handle($period, $this->owner);
+    $charge = $period->charges()->orderBy('id')->firstOrFail();
+    $discount = DiscountCode::factory()->percentage(25)->create();
+    app(AddToCart::class)->handle($this->household, $charge->product);
+    $order = app(CreateOrder::class)->handle($this->household, $discount);
+    app(CompleteOrder::class)->handle($order);
+    $charge->refresh()->coverage->update([
+        'gross_amount' => 6100,
+        'stripe_amount' => 4600,
+    ]);
+
+    app(RemoveRecurringPrivateLessonCharge::class)->handle(
+        $charge,
+        $this->owner,
+        'Credit for a future lesson',
+        RecurringPrivateLessonResolutionType::Credit,
+    );
+
+    $grant = CreditGrant::query()
+        ->where('source_type', $charge->coverage->getMorphClass())
+        ->where('source_id', $charge->coverage->id)
+        ->sole();
+
+    expect($charge->coverage->netPaidAmount())->toBe(4500)
+        ->and($grant->initial_amount)->toBe(4500);
 });
 
 it('partially refunds only the Stripe amount allocated to a cancelled paid lesson', function (): void {

@@ -127,7 +127,9 @@ final class ChargesRelationManager extends RelationManager
                                 ->minDate(fn (RecurringPrivateLessonCharge $record) => $record->status === RecurringPrivateLessonChargeStatus::Paid
                                     ? now()->startOfMinute()->addMinute()
                                     : now()->addDay()->startOfMinute()->addMinute()),
-                            Textarea::make('reason')->required(),
+                            Textarea::make('reason')
+                                ->helperText('This reason is visible to the dancer/parent.')
+                                ->required(),
                         ])
                         ->visible(fn (RecurringPrivateLessonCharge $record): bool => $this->canManage()
                             && $record->recurringPrivateLesson->status === RecurringPrivateLessonStatus::Active
@@ -171,6 +173,7 @@ final class ChargesRelationManager extends RelationManager
                                 ->visible(fn (RecurringPrivateLessonCharge $record): bool => $record->status === RecurringPrivateLessonChargeStatus::Paid),
                             Textarea::make('reason')
                                 ->label('Removal Reason')
+                                ->helperText('This reason is visible to the dancer/parent.')
                                 ->required(),
                         ])
                         ->visible(fn (RecurringPrivateLessonCharge $record): bool => $this->canManage()

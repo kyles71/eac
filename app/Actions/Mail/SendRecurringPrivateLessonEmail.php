@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Mail;
 
+use App\Enums\RecurringPrivateLessonResolutionType;
 use App\Models\RecurringPrivateLessonBillingPeriod;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Services\Mail\RecurringPrivateLessonContentService;
@@ -72,14 +73,56 @@ final readonly class SendRecurringPrivateLessonEmail
         RecurringPrivateLessonCharge $charge,
         CarbonInterface $previousStartsAt,
         string $reason,
+        ?RecurringPrivateLessonResolutionType $paymentResolution,
+        int $storeCreditAmount,
+        int $stripeRefundAmount,
     ): int {
         $charge->loadMissing('recurringPrivateLesson');
 
         return $this->queueForRecipients(
             $this->recipients->householdAndTeachers($charge->recurringPrivateLesson),
             'recurring-private-lesson-removed',
-            $this->content->forManagedChange($charge, $previousStartsAt, $reason),
+            $this->content->forManagedChange(
+                $charge,
+                $previousStartsAt,
+                $reason,
+                $this->paymentResolutionDescription(
+                    $paymentResolution,
+                    $storeCreditAmount,
+                    $stripeRefundAmount,
+                ),
+            ),
         );
+    }
+
+    private function paymentResolutionDescription(
+        ?RecurringPrivateLessonResolutionType $paymentResolution,
+        int $storeCreditAmount,
+        int $stripeRefundAmount,
+    ): string {
+        if ($paymentResolution === null) {
+            return 'No payment was collected for this lesson.';
+        }
+
+        if ($paymentResolution === RecurringPrivateLessonResolutionType::Credit) {
+            return $storeCreditAmount > 0
+                ? 'Store credit: '.format_money($storeCreditAmount).' in unrestricted store credit was issued.'
+                : 'Store credit: No paid balance was available to credit.';
+        }
+
+        $parts = [];
+
+        if ($stripeRefundAmount > 0) {
+            $parts[] = format_money($stripeRefundAmount).' was refunded to the original payment method';
+        }
+
+        if ($storeCreditAmount > 0) {
+            $parts[] = format_money($storeCreditAmount).' in unrestricted store credit was restored';
+        }
+
+        return $parts === []
+            ? 'Refund: No paid balance was available to refund.'
+            : 'Refund: '.implode(' and ', $parts).'.';
     }
 
     /**

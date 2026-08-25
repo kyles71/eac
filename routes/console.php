@@ -76,6 +76,13 @@ Schedule::command('private-lessons:send-payment-reminders')
     ->name('send-recurring-private-lesson-payment-reminders')
     ->description('Send seven-day and two-day recurring private lesson payment reminders');
 
+Schedule::command('private-lessons:send-billing-summary')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-recurring-private-lesson-billing-summary')
+    ->description('Send next month\'s unbilled recurring private lessons seven days before month-end');
+
 Schedule::command('private-lessons:cancel-unpaid')
     ->everyMinute()
     ->withoutOverlapping()

@@ -58,8 +58,17 @@ final readonly class RemoveRecurringPrivateLessonCharge
         }
 
         $this->validatePaymentResolution($charge->status, $paymentResolution);
+        $storeCreditAmount = 0;
+        $stripeRefundAmount = 0;
 
-        DB::transaction(function () use ($charge, $removedBy, $reason, $paymentResolution): void {
+        DB::transaction(function () use (
+            $charge,
+            $removedBy,
+            $reason,
+            $paymentResolution,
+            &$storeCreditAmount,
+            &$stripeRefundAmount,
+        ): void {
             $lockedCharge = RecurringPrivateLessonCharge::query()
                 ->with(['event', 'product', 'recurringPrivateLesson.user'])
                 ->lockForUpdate()
@@ -95,24 +104,26 @@ final readonly class RemoveRecurringPrivateLessonCharge
                 $coverage = $this->lockedActiveCoverage($lockedCharge);
 
                 if ($paymentResolution === RecurringPrivateLessonResolutionType::Refund) {
-                    $this->refundStripePayment($coverage);
+                    $stripeRefundAmount = $this->refundStripePayment($coverage);
                 }
 
                 if ($paymentResolution === RecurringPrivateLessonResolutionType::Credit) {
+                    $storeCreditAmount = $coverage->netPaidAmount();
                     $this->issuePrivateLessonCredit(
                         $lockedCharge,
                         $coverage,
                         $removedBy,
                         $reason,
-                        $coverage->netPaidAmount(),
+                        $storeCreditAmount,
                     );
                 } else {
+                    $storeCreditAmount = $coverage->restorableCreditAmount();
                     $this->issuePrivateLessonCredit(
                         $lockedCharge,
                         $coverage,
                         $removedBy,
                         $reason,
-                        $coverage->restricted_credit_amount + $coverage->credit_amount,
+                        $storeCreditAmount,
                     );
                 }
 
@@ -142,7 +153,14 @@ final readonly class RemoveRecurringPrivateLessonCharge
             }
         });
 
-        $this->emails->removed($charge, $originalStartsAt, $reason);
+        $this->emails->removed(
+            $charge,
+            $originalStartsAt,
+            $reason,
+            $paymentResolution,
+            $storeCreditAmount,
+            $stripeRefundAmount,
+        );
     }
 
     private function validatePaymentResolution(
@@ -158,14 +176,16 @@ final readonly class RemoveRecurringPrivateLessonCharge
         }
     }
 
-    private function refundStripePayment(RecurringPrivateLessonCoverage $coverage): void
+    private function refundStripePayment(RecurringPrivateLessonCoverage $coverage): int
     {
-        if ($coverage->stripe_amount <= 0) {
-            return;
+        $stripeRefundAmount = $coverage->refundableStripeAmount();
+
+        if ($stripeRefundAmount <= 0) {
+            return 0;
         }
 
         if ($coverage->stripe_refund_id !== null) {
-            return;
+            return $stripeRefundAmount;
         }
 
         $coverage->loadMissing('orderItem.order');
@@ -178,15 +198,17 @@ final readonly class RemoveRecurringPrivateLessonCharge
 
         $refund = $this->stripeService->refundPaymentIntent(
             $paymentIntentId,
-            $coverage->stripe_amount,
+            $stripeRefundAmount,
             idempotencyKey: $this->refundIdempotencyKey($coverage, $paymentIntentId),
         );
 
-        if (! is_string($refund->id) || $refund->id === '') {
+        if (blank($refund->id)) {
             throw new UnexpectedValueException('Stripe did not return a refund identifier.');
         }
 
         $coverage->update(['stripe_refund_id' => $refund->id]);
+
+        return $stripeRefundAmount;
     }
 
     private function refundIdempotencyKey(

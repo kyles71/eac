@@ -6,9 +6,23 @@ namespace App\Mail\Types;
 
 use Kyle\FilamentMailManager\Contracts\EmailTypeContract;
 use Kyle\FilamentMailManager\Data\EmailTypeDefinition;
+use Kyle\FilamentMailManager\Data\Token;
 
 final class RecurringPrivateLessonRemovedEmailType implements EmailTypeContract
 {
+    /** @return list<Token> */
+    public static function tokens(): array
+    {
+        return [
+            ...RecurringPrivateLessonRescheduledEmailType::tokens(),
+            new Token(
+                'lesson.payment_resolution',
+                'Payment resolution for the removed lesson',
+                example: 'Store credit: $60.00 in unrestricted store credit was issued.',
+            ),
+        ];
+    }
+
     public function definition(): EmailTypeDefinition
     {
         return new EmailTypeDefinition(
@@ -20,8 +34,9 @@ final class RecurringPrivateLessonRemovedEmailType implements EmailTypeContract
             bodies: ['en' => <<<'HTML'
                 <p>The {{ course.name }} recurring private lesson for {{ student.full_name }} on {{ lesson.previous_starts_at }} has been removed.</p>
                 <p><strong>Reason:</strong> {{ change.reason }}</p>
+                <p><strong>Payment resolution:</strong> {{ lesson.payment_resolution }}</p>
                 HTML],
-            tokens: RecurringPrivateLessonRescheduledEmailType::tokens(),
+            tokens: self::tokens(),
         );
     }
 }
