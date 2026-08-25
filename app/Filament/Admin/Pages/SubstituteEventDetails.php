@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Pages;
 
 use App\Actions\Events\ManageEventSubstitution;
+use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Course;
 use App\Models\Event;
 use App\Models\User;
@@ -23,7 +24,6 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
@@ -126,13 +126,15 @@ final class SubstituteEventDetails extends Page implements HasTable
                 TextColumn::make('student_name')
                     ->label('Student')
                     ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
-                ToggleColumn::make('attended')
+                AttendanceRadioColumn::make('attendance_status')
+                    ->label('Attendance')
                     ->disabled(fn (): bool => Gate::denies('recordSubstituteAttendance', $this->eventRecord()))
-                    ->state(fn (Model $record): bool => $this->attendance()->recordStudentAttended($this->eventRecord(), $record))
-                    ->updateStateUsing(function (Model $record, mixed $state): bool {
+                    ->state(fn (Model $record): ?string => $this->attendance()
+                        ->recordStudentAttendanceStatus($this->eventRecord(), $record))
+                    ->updateStateUsing(function (Model $record, mixed $state): ?string {
                         Gate::authorize('recordSubstituteAttendance', $this->eventRecord());
 
-                        return $this->attendance()->setRecordStudentAttendance($this->eventRecord(), $record, $state);
+                        return $this->attendance()->setRecordStudentAttendanceStatus($this->eventRecord(), $record, $state);
                     }),
                 TextInputColumn::make('notes')
                     ->disabled(fn (): bool => Gate::denies('recordSubstituteAttendance', $this->eventRecord()))

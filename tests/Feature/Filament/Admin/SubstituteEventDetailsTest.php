@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Enums\AttendanceStatus;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Filament\Admin\Pages\SubstituteEventDetails;
 use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Filament\Admin\Widgets\SubstituteRequestBanners;
+use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
@@ -127,7 +129,19 @@ it('shows lesson plan roster and editable attendance only to the confirmed subst
         ->loadTable()
         ->assertSee('Practice the recital finale.')
         ->assertCanSeeTableRecords([$enrollment])
-        ->call('updateTableColumnState', 'attended', (string) $enrollment->id, true)
+        ->assertTableColumnExists(
+            'attendance_status',
+            fn (AttendanceRadioColumn $column): bool => ! $column->isDisabled(),
+            $enrollment,
+        )
+        ->assertSee('Present')
+        ->assertSee('Late')
+        ->call(
+            'updateTableColumnState',
+            'attendance_status',
+            (string) $enrollment->id,
+            AttendanceStatus::Late->value,
+        )
         ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Arrived late')
         ->assertHasNoErrors();
 
@@ -135,7 +149,7 @@ it('shows lesson plan roster and editable attendance only to the confirmed subst
         ->where('event_id', $event->id)
         ->where('attendee_type', $student->getMorphClass())
         ->where('attendee_id', $student->id)
-        ->where('attended', true)
+        ->where('status', AttendanceStatus::Late->value)
         ->where('notes', 'Arrived late')
         ->exists())->toBeTrue();
 

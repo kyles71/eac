@@ -53,6 +53,10 @@ final class EventPolicy
 
     public function updateAttendance(User $authUser, Event $event): bool
     {
+        if ($this->recordSubstituteAttendance($authUser, $event)) {
+            return true;
+        }
+
         if (! $this->update($authUser, $event)) {
             return false;
         }
