@@ -36,7 +36,7 @@ final class EventSubstituteActions
             ->label(fn (?Event $record): string => self::coverageLabel($event ?? $record))
             ->icon(fn (?Event $record): Heroicon => self::coverageIcon(self::coverageStatus($event ?? $record)))
             ->color(fn (?Event $record): string => self::coverageStatus($event ?? $record)->getColor())
-            ->dropdownWidth(Width::Medium)
+            ->dropdownWidth(Width::ExtraSmall)
             ->button();
     }
 

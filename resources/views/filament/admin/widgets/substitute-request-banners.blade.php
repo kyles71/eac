@@ -9,4 +9,6 @@
             'reviewUrl' => $this->substituteRequestUrl($substituteRequest),
         ])
     @endforeach
+
+    <x-filament-actions::modals />
 </div>

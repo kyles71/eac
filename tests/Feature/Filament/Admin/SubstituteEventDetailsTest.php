@@ -6,6 +6,7 @@ use App\Enums\AttendanceStatus;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Filament\Admin\Pages\SubstituteEventDetails;
 use App\Filament\Admin\Pages\SubstituteRequest;
+use App\Filament\Admin\Resources\Events\Pages\ListEvents;
 use App\Filament\Admin\Widgets\SubstituteRequestBanners;
 use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Course;
@@ -15,6 +16,7 @@ use App\Models\EventAttendee;
 use App\Models\EventSubstituteRequest;
 use App\Models\Student;
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 
@@ -36,7 +38,16 @@ it('shows a global accept and decline banner in the admin panel only', function 
         ->assertSee('Substitute Request')
         ->assertSee($request->event->name)
         ->assertSee('Accept')
-        ->assertSee('Decline');
+        ->assertSee('Decline')
+        ->assertDontSeeHtml('wire:confirm')
+        ->assertActionExists(
+            'acceptSubstituteRequest',
+            fn (Action $action): bool => $action->isConfirmationRequired(),
+        )
+        ->assertActionExists(
+            'declineSubstituteRequest',
+            fn (Action $action): bool => $action->isConfirmationRequired(),
+        );
 
     $this->get('/admin')
         ->assertOk()
@@ -47,6 +58,33 @@ it('shows a global accept and decline banner in the admin panel only', function 
     $this->get('/dancefam')
         ->assertOk()
         ->assertDontSeeHtml('data-substitute-request-banner="'.$request->id.'"');
+});
+
+it('adds an accepted banner request to an already-open events table', function (): void {
+    $teacher = User::factory()->isTeacher()->create();
+    $event = adminSubstituteEvent();
+    $request = EventSubstituteRequest::factory()->create([
+        'event_id' => $event->id,
+        'teacher_id' => $teacher->id,
+    ]);
+    $this->actingAs($teacher);
+
+    $events = livewire(ListEvents::class)
+        ->loadTable()
+        ->assertCanNotSeeTableRecords([$event]);
+
+    livewire(SubstituteRequestBanners::class)
+        ->mountAction('acceptSubstituteRequest', ['requestId' => $request->id])
+        ->assertActionMounted('acceptSubstituteRequest')
+        ->callMountedAction()
+        ->assertNotified('Substitute request accepted')
+        ->assertDispatched('event-substitution-updated');
+
+    expect($event->refresh()->substitute_teacher_id)->toBe($teacher->id);
+
+    $events
+        ->dispatch('event-substitution-updated')
+        ->assertCanSeeTableRecords([$event]);
 });
 
 it('suppresses the current request banner on its review page while retaining other request banners', function (): void {

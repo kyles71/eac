@@ -9,14 +9,22 @@ use App\Enums\EventSubstituteRequestStatus;
 use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Models\EventSubstituteRequest;
 use App\Models\User;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Throwable;
 
-final class SubstituteRequestBanners extends Widget
+final class SubstituteRequestBanners extends Widget implements HasActions, HasSchemas
 {
+    use InteractsWithActions;
+    use InteractsWithSchemas;
+
     public ?int $suppressedRequestId = null;
 
     protected static bool $isLazy = false;
@@ -74,14 +82,40 @@ final class SubstituteRequestBanners extends Widget
             ->get();
     }
 
-    public function acceptSubstituteRequest(int $requestId): void
+    public function acceptSubstituteRequestAction(): Action
     {
-        $this->respondToSubstituteRequest($requestId, true);
+        return Action::make('acceptSubstituteRequest')
+            ->label('Accept')
+            ->color('success')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Accept substitute request?')
+            ->modalDescription('This event will be added to your Events page and calendar.')
+            ->modalSubmitActionLabel('Accept request')
+            ->action(function (array $arguments): void {
+                $this->respondToSubstituteRequest(
+                    (int) ($arguments['requestId'] ?? 0),
+                    true,
+                );
+            });
     }
 
-    public function declineSubstituteRequest(int $requestId): void
+    public function declineSubstituteRequestAction(): Action
     {
-        $this->respondToSubstituteRequest($requestId, false);
+        return Action::make('declineSubstituteRequest')
+            ->label('Decline')
+            ->color('danger')
+            ->size('sm')
+            ->requiresConfirmation()
+            ->modalHeading('Decline substitute request?')
+            ->modalDescription('The requesting teacher will be notified that coverage is still needed.')
+            ->modalSubmitActionLabel('Decline request')
+            ->action(function (array $arguments): void {
+                $this->respondToSubstituteRequest(
+                    (int) ($arguments['requestId'] ?? 0),
+                    false,
+                );
+            });
     }
 
     public function substituteRequestUrl(EventSubstituteRequest $request): string
@@ -113,6 +147,8 @@ final class SubstituteRequestBanners extends Widget
                 ->title($accept ? 'Substitute request accepted' : 'Substitute request declined')
                 ->success()
                 ->send();
+
+            $this->dispatch('event-substitution-updated');
         } catch (Throwable $exception) {
             Notification::make()
                 ->title('Could not respond to substitute request')

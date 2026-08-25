@@ -48,6 +48,22 @@ final class Event extends Model implements HasMedia
         );
     }
 
+    public static function applyAdminViewAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($user): void {
+            $query
+                ->where('substitute_teacher_id', $user->id)
+                ->orWhereHas(
+                    'course.teachers',
+                    fn (Builder $query): Builder => $query->whereKey($user->id),
+                );
+        });
+    }
+
     public static function applyNotPassedConstraint(Builder $query, ?CarbonInterface $dateTime = null): Builder
     {
         $dateTime ??= now();
@@ -225,6 +241,45 @@ final class Event extends Model implements HasMedia
         self::applyNotPassedConstraint($query, $dateTime);
     }
 
+    public function scopeNeedsSubstituteAttention(Builder $query, ?CarbonInterface $dateTime = null): void
+    {
+        $query
+            ->whereNull('cancelled_at')
+            ->whereNotNull('substitute_needed_at')
+            ->whereNull('substitute_teacher_id');
+
+        self::applyNotPassedConstraint($query, $dateTime);
+    }
+
+    /** @param array<int, mixed> $statuses */
+    public function scopeWithSubstituteCoverageStatuses(Builder $query, array $statuses): void
+    {
+        /** @var array<string, EventSubstituteCoverageStatus> $normalizedStatuses */
+        $normalizedStatuses = [];
+
+        foreach ($statuses as $status) {
+            $status = match (true) {
+                $status instanceof EventSubstituteCoverageStatus => $status,
+                is_string($status) => EventSubstituteCoverageStatus::tryFrom($status),
+                default => null,
+            };
+
+            if ($status instanceof EventSubstituteCoverageStatus) {
+                $normalizedStatuses[$status->value] = $status;
+            }
+        }
+
+        if ($normalizedStatuses === []) {
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($normalizedStatuses): void {
+            foreach ($normalizedStatuses as $status) {
+                $query->orWhere(fn (Builder $query): Builder => self::applySubstituteCoverageStatusConstraint($query, $status));
+            }
+        });
+    }
+
     public function scopeVisibleOnCalendar(Builder $query, Calendar $calendar, User $user): Builder
     {
         if (! $calendar->isMyCalendar()) {
@@ -347,6 +402,12 @@ final class Event extends Model implements HasMedia
             ->exists();
     }
 
+    public function isViewableByAdminUser(User $user): bool
+    {
+        return $this->substitute_teacher_id === $user->id
+            || $this->isAccessibleToAdminUser($user);
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('images')
@@ -354,6 +415,43 @@ final class Event extends Model implements HasMedia
 
         $this->addMediaCollection('documents')
             ->useDisk(MediaDisks::private());
+    }
+
+    private static function applySubstituteCoverageStatusConstraint(
+        Builder $query,
+        EventSubstituteCoverageStatus $status,
+    ): Builder {
+        $hasPendingRequest = fn (Builder $query): Builder => $query
+            ->where('status', EventSubstituteRequestStatus::Pending);
+        $hasReleaseRequest = fn (Builder $query): Builder => $query
+            ->where('status', EventSubstituteRequestStatus::Accepted)
+            ->whereNotNull('release_requested_at')
+            ->whereColumn('event_substitute_requests.teacher_id', 'events.substitute_teacher_id');
+
+        return match ($status) {
+            EventSubstituteCoverageStatus::NotNeeded => $query
+                ->whereNull('substitute_teacher_id')
+                ->whereNull('substitute_needed_at')
+                ->whereDoesntHave('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::NeedsSubstitute => $query
+                ->whereNull('substitute_teacher_id')
+                ->whereNotNull('substitute_needed_at')
+                ->whereDoesntHave('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::AwaitingResponse => $query
+                ->whereNull('substitute_teacher_id')
+                ->whereHas('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::Confirmed => $query
+                ->whereNotNull('substitute_teacher_id')
+                ->whereDoesntHave('substituteRequests', $hasReleaseRequest)
+                ->whereDoesntHave('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::ReplacementPending => $query
+                ->whereNotNull('substitute_teacher_id')
+                ->whereDoesntHave('substituteRequests', $hasReleaseRequest)
+                ->whereHas('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::ReleaseRequested => $query
+                ->whereNotNull('substitute_teacher_id')
+                ->whereHas('substituteRequests', $hasReleaseRequest),
+        };
     }
 
     // public function registerMediaConversions(?Media $media = null): void

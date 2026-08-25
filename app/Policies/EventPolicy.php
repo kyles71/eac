@@ -20,7 +20,7 @@ final class EventPolicy
     public function view(User $authUser, Event $event): bool
     {
         return $authUser->can('View:Event')
-            && $event->isAccessibleToAdminUser($authUser);
+            && $event->isViewableByAdminUser($authUser);
     }
 
     public function create(User $authUser): bool

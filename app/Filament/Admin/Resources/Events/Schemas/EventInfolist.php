@@ -13,6 +13,7 @@ use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Gate;
 
 final class EventInfolist
 {
@@ -115,8 +116,9 @@ final class EventInfolist
                             ->contained(false)
                             ->columnSpanFull(),
                     ])
-                    ->visible(fn (Event $record): bool => $record->substitute_needed_at !== null
-                        || $record->substituteRequests()->exists()),
+                    ->visible(fn (Event $record): bool => Gate::allows('update', $record)
+                        && ($record->substitute_needed_at !== null
+                            || $record->substituteRequests()->exists())),
                 Section::make('Cancellation')
                     ->columns(2)
                     ->columnSpanFull()
@@ -131,16 +133,6 @@ final class EventInfolist
                         TextEntry::make('cancellation_reason')
                             ->label('Reason')
                             ->columnSpanFull(),
-                    ]),
-                Section::make('Record')
-                    ->columns(2)
-                    ->collapsed()
-                    ->columnSpanFull()
-                    ->schema([
-                        TextEntry::make('created_at')
-                            ->dateTime(),
-                        TextEntry::make('updated_at')
-                            ->dateTime(),
                     ]),
             ]);
     }

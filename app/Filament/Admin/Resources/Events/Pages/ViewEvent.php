@@ -15,7 +15,6 @@ use App\Models\Student;
 use App\Services\EventAttendanceService;
 use App\Services\EventEmailRecipientsService;
 use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -75,21 +74,19 @@ final class ViewEvent extends ViewRecord implements HasTable
                     ->limit(60),
             ])
             ->recordActions([
-                ActionGroup::make([
-                    $this->attendanceNotesAction(),
-                ])
-                    ->label('Attendance Notes')
-                    ->icon(Heroicon::OutlinedDocumentText),
+                $this->attendanceNotesAction(),
                 StudentContactActionGroup::make(
                     student: fn (Model $record): Student => $this->attendanceStudent($record),
                     event: fn (): Event => $this->event(),
+                    customEmailVisible: fn (Model $record): bool => $this->canViewAttendanceStudent($record),
                 )
-                    ->visible(fn (Model $record): bool => $this->canEmailAttendanceRecord($record)),
+                    ->visible(fn (Model $record): bool => $this->canContactAttendanceRecord($record)),
             ], RecordActionsPosition::BeforeCells)
             ->headerActions([
                 SendEmailAction::make('emailAttendance')
                     ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')
-                    ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event())),
+                    ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event()))
+                    ->visible(fn (): bool => Gate::allows('update', $this->event())),
             ])
             ->paginated(false);
     }
@@ -100,7 +97,8 @@ final class ViewEvent extends ViewRecord implements HasTable
             EventSubstituteActions::group($this->event()),
             SendEmailAction::make()
                 ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')
-                ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event())),
+                ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event()))
+                ->visible(fn (): bool => Gate::allows('update', $this->event())),
             CancelEventAction::make(),
             EditAction::make()
                 ->visible(fn (): bool => ! $this->event()->isCancelled()),
@@ -136,6 +134,7 @@ final class ViewEvent extends ViewRecord implements HasTable
         return Action::make('editAttendanceNotes')
             ->label('Attendance Notes')
             ->icon(Heroicon::OutlinedDocumentText)
+            ->iconButton()
             ->authorize(fn (Model $record): bool => Gate::allows('view', $this->event())
                 && $this->attendance()->studentForAttendanceRecord($record) instanceof Student)
             ->modalHeading(fn (Model $record): string => 'Attendance Notes: '.$this->attendanceStudent($record)->fullName)
@@ -163,7 +162,17 @@ final class ViewEvent extends ViewRecord implements HasTable
             });
     }
 
-    private function canEmailAttendanceRecord(Model $record): bool
+    private function canContactAttendanceRecord(Model $record): bool
+    {
+        $student = $this->attendance()->studentForAttendanceRecord($record);
+
+        return $student instanceof Student
+            && Gate::allows('Send:Email')
+            && ($this->canViewAttendanceStudent($record)
+                || Gate::allows('viewSubstituteDetails', $this->event()));
+    }
+
+    private function canViewAttendanceStudent(Model $record): bool
     {
         $student = $this->attendance()->studentForAttendanceRecord($record);
 

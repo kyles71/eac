@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\StudentCommunicationEventService;
 use App\Services\StudentNotesService;
 use Carbon\CarbonImmutable;
+use Filament\Actions\Action;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -191,7 +192,7 @@ it('adds all three contact actions to event attendance with the event locked', f
 
     $this->actingAs($teacher);
 
-    livewire(ViewEvent::class, ['record' => $event->id])
+    $component = livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
         ->assertActionVisible(TestAction::make('sendEmail')->table($enrollment))
         ->assertActionVisible(TestAction::make('sendFirstAidNote')->table($enrollment))
@@ -203,6 +204,73 @@ it('adds all three contact actions to event attendance with the event locked', f
             'event_id' => $event->id,
             'occurred_at' => '2026-08-05 23:00',
         ]);
+
+    $attendanceAction = $component->instance()->getTable()->getRecordActions()[0];
+
+    expect($attendanceAction)->toBeInstanceOf(Action::class);
+    assert($attendanceAction instanceof Action);
+    expect($attendanceAction->getName())->toBe('editAttendanceNotes');
+});
+
+it('offers event-scoped first aid and stoplight emails to an authorized substitute', function (): void {
+    $teacher = User::factory()->isTeacher()->create();
+    $family = User::factory()->create(['email' => 'substitute-family@example.com']);
+    $student = Student::factory()->for($family)->create();
+    $course = Course::factory()->create();
+    $enrollment = Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $student->user_id,
+    ]);
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'substitute_teacher_id' => $teacher->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $this->actingAs($teacher);
+
+    expect($teacher->can('Send:Email'))->toBeTrue()
+        ->and(app(App\Support\HandcraftedEmailRecipients::class)->resolve(
+            ["student:{$student->id}"],
+            $teacher,
+            $student,
+        ))->toBe(['substitute-family@example.com']);
+
+    $component = livewire(ViewEvent::class, ['record' => $event->id])
+        ->loadTable()
+        ->assertActionHidden(TestAction::make('sendEmail')->table($enrollment))
+        ->assertActionVisible(TestAction::make('sendFirstAidNote')->table($enrollment))
+        ->assertActionVisible(TestAction::make('sendStopLightMessage')->table($enrollment));
+
+    $component
+        ->mountAction(TestAction::make('sendFirstAidNote')->table($enrollment))
+        ->assertActionMounted(TestAction::make('sendFirstAidNote')->table($enrollment))
+        ->assertActionDataSet([
+            'to' => ["student:{$student->id}"],
+            'event_id' => $event->id,
+        ]);
+
+    expect($component->instance()->getMountedAction()?->isDisabled())->toBeFalse()
+        ->and($component->instance()->getMountedAction()?->getActionFunction())->not->toBeNull();
+
+    $component
+        ->unmountAction()
+        ->mountAction(TestAction::make('sendStopLightMessage')->table($enrollment))
+        ->assertActionMounted(TestAction::make('sendStopLightMessage')->table($enrollment))
+        ->assertActionDataSet([
+            'to' => ["student:{$student->id}"],
+            'event_id' => $event->id,
+        ]);
+
+    $teacher->roles()->firstOrFail()->revokePermissionTo('Send:Email');
+    $this->actingAs($teacher->refresh());
+
+    expect($teacher->can('Send:Email'))->toBeFalse();
+
+    livewire(ViewEvent::class, ['record' => $event->id])
+        ->loadTable()
+        ->assertActionHidden(TestAction::make('sendFirstAidNote')->table($enrollment))
+        ->assertActionHidden(TestAction::make('sendStopLightMessage')->table($enrollment));
 });
 
 it('records a custom email sent from event attendance in the student history', function (): void {

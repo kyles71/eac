@@ -18,6 +18,8 @@ abstract class BaseEmailAction extends Action
      */
     protected array|Student|User|string|Closure $defaultTo = [];
 
+    protected Student|Closure|null $permittedStudentRecipient = null;
+
     /**
      * @param  array<int, Student|User|string>|Student|User|string|Closure  $to
      */
@@ -42,12 +44,14 @@ abstract class BaseEmailAction extends Action
                 fn (string $search): array => app(HandcraftedEmailRecipients::class)->search(
                     $search,
                     $this->authenticatedUser(),
+                    $this->getPermittedStudentRecipient(),
                 )
             )
             ->getOptionLabelsUsing(
                 fn (array $values): array => app(HandcraftedEmailRecipients::class)->labels(
                     $values,
                     $this->authenticatedUser(),
+                    $this->getPermittedStudentRecipient(),
                 )
             )
             ->default(app(HandcraftedEmailRecipients::class)->defaultValues($this->getDefaultTo()))
@@ -63,7 +67,15 @@ abstract class BaseEmailAction extends Action
         return app(HandcraftedEmailRecipients::class)->resolve(
             $values,
             $this->authenticatedUser(),
+            $this->getPermittedStudentRecipient(),
         );
+    }
+
+    final protected function permitStudentRecipient(Student|Closure $student): static
+    {
+        $this->permittedStudentRecipient = $student;
+
+        return $this;
     }
 
     /**
@@ -81,5 +93,12 @@ abstract class BaseEmailAction extends Action
         $user = auth()->user();
 
         return $user instanceof User ? $user : null;
+    }
+
+    private function getPermittedStudentRecipient(): ?Student
+    {
+        $student = $this->evaluate($this->permittedStudentRecipient);
+
+        return $student instanceof Student ? $student : null;
     }
 }

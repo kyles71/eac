@@ -48,7 +48,7 @@ final class EventResource extends Resource
             return $query->whereRaw('0 = 1');
         }
 
-        return Event::applyAdminAccessConstraint($query, $user);
+        return Event::applyAdminViewAccessConstraint($query, $user);
     }
 
     public static function form(Schema $schema): Schema

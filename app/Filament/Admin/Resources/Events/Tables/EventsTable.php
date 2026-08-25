@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Tables;
 
-use App\Enums\EventSubstituteRequestStatus;
+use App\Enums\EventSubstituteCoverageStatus;
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Admin\Resources\Events\EventResource;
 use App\Models\Event;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -20,6 +21,9 @@ final class EventsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->recordUrl(fn (Event $record): ?string => EventResource::canView($record)
+                ? EventResource::getUrl('view', ['record' => $record])
+                : null)
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),
@@ -62,27 +66,13 @@ final class EventsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                Filter::make('needs_substitute')
-                    ->label('Needs Substitute')
-                    ->query(fn (Builder $query): Builder => $query
-                        ->whereNotNull('substitute_needed_at')
-                        ->whereNull('substitute_teacher_id')
-                        ->whereDoesntHave('substituteRequests', fn (Builder $query): Builder => $query
-                            ->where('status', EventSubstituteRequestStatus::Pending))),
-                Filter::make('pending_substitute')
-                    ->label('Awaiting Substitute Response')
-                    ->query(fn (Builder $query): Builder => $query
-                        ->whereHas('substituteRequests', fn (Builder $query): Builder => $query
-                            ->where('status', EventSubstituteRequestStatus::Pending))),
-                Filter::make('confirmed_substitute')
-                    ->label('Confirmed Substitute')
-                    ->query(fn (Builder $query): Builder => $query->whereNotNull('substitute_teacher_id')),
-                Filter::make('substitute_release_requested')
-                    ->label('Substitute Release Requested')
-                    ->query(fn (Builder $query): Builder => $query
-                        ->whereHas('substituteRequests', fn (Builder $query): Builder => $query
-                            ->where('status', EventSubstituteRequestStatus::Accepted)
-                            ->whereNotNull('release_requested_at'))),
+                SelectFilter::make('substitute_coverage')
+                    ->label('Substitute Coverage')
+                    ->multiple()
+                    ->options(EventSubstituteCoverageStatus::class)
+                    ->query(fn (Builder $query, array $data): Builder => $query->withSubstituteCoverageStatuses(
+                        is_array($data['values'] ?? null) ? $data['values'] : [],
+                    )),
             ])
             ->recordActions([
                 ActionGroup::make([

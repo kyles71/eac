@@ -10,22 +10,8 @@
                 <x-filament::button :href="$reviewUrl" tag="a" size="sm" color="gray">
                     Review Details
                 </x-filament::button>
-                <x-filament::button
-                    wire:click="acceptSubstituteRequest({{ $substituteRequest->id }})"
-                    wire:confirm="Accept this substitute request?"
-                    size="sm"
-                    color="success"
-                >
-                    Accept
-                </x-filament::button>
-                <x-filament::button
-                    wire:click="declineSubstituteRequest({{ $substituteRequest->id }})"
-                    wire:confirm="Decline this substitute request?"
-                    size="sm"
-                    color="danger"
-                >
-                    Decline
-                </x-filament::button>
+                {{ ($this->acceptSubstituteRequestAction)(['requestId' => $substituteRequest->id]) }}
+                {{ ($this->declineSubstituteRequestAction)(['requestId' => $substituteRequest->id]) }}
             </div>
         </x-slot>
     </x-filament::callout>

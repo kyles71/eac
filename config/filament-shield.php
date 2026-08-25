@@ -34,6 +34,7 @@ use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
 use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Admin\Widgets\SubstituteRequestBanners;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
@@ -329,6 +330,7 @@ return [
             CalendarWidget::class,
             MessagesFromEac::class,
             QuickLinks::class,
+            SubstituteCoverageReminder::class,
             SubstituteRequestBanners::class,
         ],
     ],

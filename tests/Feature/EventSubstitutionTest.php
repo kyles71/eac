@@ -7,20 +7,28 @@ use App\Actions\Events\ManageEventSubstitution;
 use App\Enums\EventSubstituteCoverageStatus;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Filament\Actions\EventSubstituteActions;
+use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Pages\ListEvents;
 use App\Filament\Admin\Resources\Events\Pages\ViewEvent;
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
+use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
 use App\Models\EventAttendee;
+use App\Models\EventSubstituteRequest;
 use App\Models\User;
+use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Livewire\Livewire;
 
 use function Pest\Livewire\livewire;
 
@@ -117,6 +125,201 @@ it('shows a confirmed assignment on the substitute teacher my calendar even when
         ->visibleOnCalendar($myCalendar, $teacher)
         ->whereKey($event->id)
         ->exists())->toBeTrue();
+});
+
+it('shows confirmed substitute assignments in events and exposes view-only lesson details', function (): void {
+    Filament::setCurrentPanel('admin');
+    $myCalendar = Calendar::query()->where('slug', Calendar::SLUG_MY)->firstOrFail();
+    $course = Course::factory()->create();
+    $event = Event::factory()->create([
+        'name' => 'Kinderballet Substitute Class',
+        'course_id' => $course->id,
+        'details' => 'Practice the recital entrance.',
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $event->update(['name' => 'Kinderballet Substitute Class']);
+    $teacher = User::factory()->isTeacher()->create();
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    $request = app(ManageEventSubstitution::class)->requestSubstitute($event, $teacher, $actor);
+    app(ManageEventSubstitution::class)->respond($request, $teacher, true);
+
+    $this->actingAs($teacher);
+
+    expect(Gate::allows('view', $event->refresh()))->toBeTrue()
+        ->and(Gate::allows('update', $event))->toBeFalse()
+        ->and(Gate::allows('cancel', $event))->toBeFalse();
+
+    livewire(ListEvents::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$event]);
+
+    expect(EventResource::getGlobalSearchEloquentQuery()->whereKey($event)->exists())->toBeTrue()
+        ->and(EventResource::canView($event))->toBeTrue()
+        ->and(EventResource::getGlobalSearchResultUrl($event))->not->toBeNull()
+        ->and(EventResource::getGlobalSearchResults('Kinderballet'))->toHaveCount(1);
+
+    livewire(ViewEvent::class, ['record' => $event->id])
+        ->assertSee('Practice the recital entrance.')
+        ->assertSchemaComponentDoesNotExist('updated_at', 'infolist')
+        ->assertActionHidden(EditAction::class)
+        ->assertActionHidden('sendEmail')
+        ->assertActionHidden(TestAction::make('emailAttendance')->table());
+
+    $eventUrl = EventResource::getUrl('view', ['record' => $event]);
+
+    livewire(CalendarWidget::class)
+        ->call('selectCalendar', $myCalendar->id)
+        ->call('onEventClick', ['id' => $event->id])
+        ->assertActionMounted('view')
+        ->assertSchemaComponentVisible('details', 'mountedActionSchema0')
+        ->assertActionDataSet(fn (array $data): bool => ($data['details'] ?? null) === 'Practice the recital entrance.')
+        ->assertActionVisible('viewSubstituteEventDetails')
+        ->assertActionVisible('viewFullEvent')
+        ->assertActionHasUrl('viewFullEvent', $eventUrl);
+});
+
+it('reminds teachers on the dashboard about classes needing substitute coverage', function (): void {
+    Filament::setCurrentPanel('admin');
+    $teacher = User::factory()->isTeacher()->create();
+    $candidate = User::factory()->isTeacher()->create();
+    $course = Course::factory()->create();
+    $course->teachers()->sync([$teacher->id]);
+    $otherCourse = Course::factory()->create();
+
+    $needsSubstitute = Event::factory()->create([
+        'name' => 'Needs Coverage',
+        'course_id' => $course->id,
+        'substitute_needed_at' => now(),
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $awaitingResponse = Event::factory()->create([
+        'name' => 'Awaiting Coverage',
+        'course_id' => $course->id,
+        'substitute_needed_at' => now(),
+        'start_time' => now()->addDays(2),
+        'end_time' => now()->addDays(2)->addHour(),
+    ]);
+    EventSubstituteRequest::factory()->create([
+        'event_id' => $awaitingResponse->id,
+        'teacher_id' => $candidate->id,
+        'status' => EventSubstituteRequestStatus::Pending,
+    ]);
+    $otherTeacherEvent = Event::factory()->create([
+        'name' => 'Other Teacher Coverage',
+        'course_id' => $otherCourse->id,
+        'substitute_needed_at' => now(),
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $pastEvent = Event::factory()->create([
+        'name' => 'Past Coverage',
+        'course_id' => $course->id,
+        'substitute_needed_at' => now()->subDay(),
+        'start_time' => now()->subHours(2),
+        'end_time' => now()->subHour(),
+    ]);
+    $notNeeded = Event::factory()->create([
+        'name' => 'Coverage Not Needed',
+        'course_id' => $course->id,
+        'start_time' => now()->addDays(3),
+        'end_time' => now()->addDays(3)->addHour(),
+    ]);
+
+    $this->actingAs($teacher);
+
+    expect($needsSubstitute->substituteCoverageStatus())->toBe(EventSubstituteCoverageStatus::NeedsSubstitute)
+        ->and($awaitingResponse->substituteCoverageStatus())->toBe(EventSubstituteCoverageStatus::AwaitingResponse)
+        ->and(SubstituteCoverageReminder::canView())->toBeTrue();
+
+    $this->get(Dashboard::getUrl(panel: 'admin'))
+        ->assertOk()
+        ->assertSeeLivewire(SubstituteCoverageReminder::class)
+        ->assertSeeText('2 Upcoming Classes Need Substitute Coverage')
+        ->assertSeeText('Review Events');
+
+    $query = parse_url((new SubstituteCoverageReminder)->eventsUrl(), PHP_URL_QUERY);
+    expect($query)->toBeString();
+    parse_str($query, $queryParams);
+
+    Livewire::withQueryParams($queryParams)
+        ->test(ListEvents::class)
+        ->loadTable()
+        ->assertSet('tableFilters.substitute_coverage.values', [
+            EventSubstituteCoverageStatus::NeedsSubstitute->value,
+            EventSubstituteCoverageStatus::AwaitingResponse->value,
+        ])
+        ->assertCanSeeTableRecords([$needsSubstitute, $awaitingResponse, $pastEvent])
+        ->assertCanNotSeeTableRecords([$otherTeacherEvent, $notNeeded]);
+});
+
+it('filters events by any of the selected substitute coverage statuses', function (): void {
+    Filament::setCurrentPanel('admin');
+    $teacher = User::factory()->isTeacher()->create();
+    $replacement = User::factory()->isTeacher()->create();
+    $notNeeded = futureSubstituteEvent();
+    $needsSubstitute = futureSubstituteEvent();
+    $needsSubstitute->update(['substitute_needed_at' => now()]);
+    $awaitingResponse = futureSubstituteEvent();
+    EventSubstituteRequest::factory()->create([
+        'event_id' => $awaitingResponse->id,
+        'teacher_id' => $teacher->id,
+    ]);
+    $confirmed = futureSubstituteEvent();
+    $confirmed->update(['substitute_teacher_id' => $teacher->id]);
+    $replacementPending = futureSubstituteEvent();
+    $replacementPending->update(['substitute_teacher_id' => $teacher->id]);
+    EventSubstituteRequest::factory()->create([
+        'event_id' => $replacementPending->id,
+        'teacher_id' => $replacement->id,
+    ]);
+    $releaseRequested = futureSubstituteEvent();
+    $releaseRequested->update(['substitute_teacher_id' => $teacher->id]);
+    EventSubstituteRequest::factory()->accepted()->create([
+        'event_id' => $releaseRequested->id,
+        'teacher_id' => $teacher->id,
+        'release_requested_at' => now(),
+    ]);
+    $events = collect([
+        EventSubstituteCoverageStatus::NotNeeded->value => $notNeeded,
+        EventSubstituteCoverageStatus::NeedsSubstitute->value => $needsSubstitute,
+        EventSubstituteCoverageStatus::AwaitingResponse->value => $awaitingResponse,
+        EventSubstituteCoverageStatus::Confirmed->value => $confirmed,
+        EventSubstituteCoverageStatus::ReplacementPending->value => $replacementPending,
+        EventSubstituteCoverageStatus::ReleaseRequested->value => $releaseRequested,
+    ]);
+
+    foreach ($events as $status => $event) {
+        expect($event->substituteCoverageStatus()->value)->toBe($status)
+            ->and(Event::query()->withSubstituteCoverageStatuses([$status])->pluck('id')->all())
+            ->toBe([$event->id]);
+    }
+
+    $component = livewire(ListEvents::class)->loadTable();
+    $filters = $component->instance()->getTable()->getFilters();
+    $coverageFilter = $filters['substitute_coverage'] ?? null;
+
+    expect($filters)->toHaveCount(1)
+        ->and($coverageFilter)->toBeInstanceOf(SelectFilter::class);
+    assert($coverageFilter instanceof SelectFilter);
+    expect($coverageFilter->isMultiple())->toBeTrue();
+
+    $component
+        ->filterTable('substitute_coverage', [
+            EventSubstituteCoverageStatus::NeedsSubstitute,
+            EventSubstituteCoverageStatus::Confirmed,
+        ])
+        ->assertCanSeeTableRecords([$needsSubstitute, $confirmed])
+        ->assertCanNotSeeTableRecords([
+            $notNeeded,
+            $awaitingResponse,
+            $replacementPending,
+            $releaseRequested,
+        ]);
 });
 
 it('declines a request without filling the coverage need', function (): void {
@@ -271,7 +474,7 @@ it('changes the substitute action group appearance with the coverage state', fun
     expect($group->getLabel())->toBe('Substitute: Not Needed')
         ->and($group->getColor())->toBe('gray')
         ->and($group->getIcon())->toBe(Heroicon::OutlinedAcademicCap)
-        ->and($group->getDropdownWidth())->toBe(Width::Medium);
+        ->and($group->getDropdownWidth())->toBe(Width::ExtraSmall);
 
     app(ManageEventSubstitution::class)->markNeeded($event, $actor);
     $group = EventSubstituteActions::group()->record($event->refresh());
