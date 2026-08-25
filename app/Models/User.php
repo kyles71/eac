@@ -26,7 +26,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Traits\HasRoles;
 use Throwable;
 
@@ -39,7 +38,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, InteractsWithMedia, Notifiable;
 
-    public const array STAFF_ROLE_NAMES = ['owner', 'teacher'];
+    public const array STAFF_ROLE_NAMES = [Role::OWNER, Role::TEACHER];
 
     /**
      * The model's default values for attributes.
@@ -109,6 +108,11 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function isStaffMember(): bool
     {
         return $this->hasAnyRole(self::STAFF_ROLE_NAMES);
+    }
+
+    public function hasCourseRestrictedAdminAccess(): bool
+    {
+        return ! $this->hasAnyRole([Role::SUPER_ADMIN, Role::OWNER]);
     }
 
     /** @return HasMany<Student, $this> */

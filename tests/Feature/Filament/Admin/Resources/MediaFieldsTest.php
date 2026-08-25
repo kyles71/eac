@@ -84,8 +84,8 @@ it('shows media entries on event view page', function () {
 
     livewire(ViewEvent::class, ['record' => $event->id])
         ->assertOk()
-        ->assertSchemaComponentExists('images', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::public()
-            && $entry->getVisibility() === 'public');
+        ->assertSchemaComponentExists('images', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::private()
+            && $entry->getVisibility() === 'private');
 });
 
 it('applies default upload size limits to image fields', function () {

@@ -45,17 +45,31 @@ final class EventForm
                     Select::make('course_id')
                         ->label('Course')
                         ->hidden(fn (): bool => $course_id !== null)
-                        ->relationship('course', 'name')
+                        ->relationship(
+                            'course',
+                            'name',
+                            modifyQueryUsing: fn (Builder $query): Builder => self::scopeCourseOptions($query),
+                        )
                         ->searchable()
                         ->preload()
+                        ->required(fn (): bool => $course_id === null && self::currentUserHasCourseRestrictedAccess())
+                        ->rules([
+                            fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                if (! self::currentUserCanUseCourse($value)) {
+                                    $fail('You may only assign events to courses that you teach.');
+                                }
+                            },
+                        ])
                         ->live(),
                     TextInput::make('focus')
-                        ->label('Focus / Theme'),
+                        ->label('Focus / Theme (Public)'),
                     Textarea::make('description')
                         ->label('Public Description')
                         ->columnSpanFull(),
                     Textarea::make('details')
-                        ->label('Lesson Plan')
+                        ->label('Lesson Plan (Staff Only)')
+                        ->visible(fn (?Event $record): bool => self::canViewPrivateContent($record))
+                        ->dehydrated(fn (?Event $record): bool => self::canViewPrivateContent($record))
                         ->columnSpanFull(),
                 ]),
             Section::make('Schedule')
@@ -121,6 +135,7 @@ final class EventForm
                         ->multiple()
                         ->preload()
                         ->searchable()
+                        ->visible(fn (?Event $record): bool => self::canViewPrivateContent($record))
                         ->options(fn (Get $get): array => self::excludedUserOptions((int) $get('calendar_id')))
                         ->loadStateFromRelationshipsUsing(function (Select $component, ?Event $record): void {
                             $component->state($record?->excludedUsers()
@@ -153,12 +168,13 @@ final class EventForm
                 ->columns(2)
                 ->collapsed()
                 ->columnSpanFull()
+                ->visible(fn (?Event $record): bool => self::canViewPrivateContent($record))
                 ->schema([
                     SpatieMediaLibraryFileUpload::make('images')
                         ->label('Images')
                         ->collection('images')
-                        ->disk(MediaDisks::public())
-                        ->visibility('public')
+                        ->disk(MediaDisks::private())
+                        ->visibility('private')
                         ->multiple()
                         ->reorderable()
                         ->image(),
@@ -201,5 +217,56 @@ final class EventForm
     private static function displayTimezone(): string
     {
         return (string) config('app.display_timezone', config('app.timezone'));
+    }
+
+    private static function canViewPrivateContent(?Event $record): bool
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        return $record instanceof Event
+            ? $user->can('view', $record)
+            : $user->can('Create:Event');
+    }
+
+    private static function currentUserHasCourseRestrictedAccess(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->hasCourseRestrictedAdminAccess();
+    }
+
+    private static function currentUserCanUseCourse(mixed $courseId): bool
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! $user->hasCourseRestrictedAdminAccess()) {
+            return true;
+        }
+
+        if (! is_numeric($courseId)) {
+            return false;
+        }
+
+        return $user->teachingCourses()
+            ->whereKey((int) $courseId)
+            ->exists();
+    }
+
+    private static function scopeCourseOptions(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->whereHas(
+            'teachers',
+            fn (Builder $query): Builder => $query->whereKey($user->id),
+        );
     }
 }

@@ -315,6 +315,7 @@ final class ViewStudent extends ViewRecord implements HasTable
         $studentMorphClass = $student->getMorphClass();
 
         return Event::query()
+            ->notPassed()
             ->whereDoesntHave(
                 'excludedUsers',
                 fn (Builder $query): Builder => $query->whereKey(auth()->id())

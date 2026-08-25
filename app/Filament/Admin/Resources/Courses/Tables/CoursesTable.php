@@ -8,8 +8,7 @@ use App\Filament\Actions\DeleteProductableAction;
 use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\Course;
-use App\Models\Enrollment;
-use App\Models\Student;
+use App\Services\CourseEmailRecipientsService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\SpatieTagsColumn;
@@ -76,7 +75,7 @@ final class CoursesTable
             ->recordActions([
                 ActionGroup::make([
                     SendEmailAction::make()
-                        ->to(fn (Course $record): array => self::emailRecipients($record)),
+                        ->to(fn (Course $record): array => app(CourseEmailRecipientsService::class)->forCourse($record)),
                     DeleteProductableAction::make(),
                 ]),
             ])
@@ -85,28 +84,5 @@ final class CoursesTable
                     DeleteProductableBulkAction::make(),
                 ]),
             ]);
-    }
-
-    /**
-     * @return array<int, Student|string>
-     */
-    private static function emailRecipients(Course $course): array
-    {
-        return Enrollment::query()
-            ->where('course_id', $course->id)
-            ->with(['student', 'user'])
-            ->get()
-            ->flatMap(function (Enrollment $enrollment): array {
-                if ($enrollment->student === null) {
-                    return [$enrollment->user->email];
-                }
-
-                if ($enrollment->student->user_id !== $enrollment->user_id) {
-                    return [$enrollment->student, $enrollment->user->email];
-                }
-
-                return [$enrollment->student];
-            })
-            ->all();
     }
 }

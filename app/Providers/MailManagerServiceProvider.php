@@ -22,6 +22,8 @@ use App\Mail\Types\PasswordResetEmailType;
 use App\Mail\Types\PastDueInstallmentEmailType;
 use App\Mail\Types\PaymentPlanScheduleAdjustedEmailType;
 use App\Mail\Types\ProductPurchaseNotificationEmailType;
+use App\Mail\Types\StudentFirstAidNoteEmailType;
+use App\Mail\Types\StudentStopLightMessageEmailType;
 use App\Mail\Types\VerifyEmailType;
 use App\Mail\Types\WelcomeEmailType;
 use App\Models\User;
@@ -59,6 +61,8 @@ final class MailManagerServiceProvider extends ServiceProvider
             PastDueInstallmentEmailType::class,
             PaymentPlanScheduleAdjustedEmailType::class,
             ProductPurchaseNotificationEmailType::class,
+            StudentFirstAidNoteEmailType::class,
+            StudentStopLightMessageEmailType::class,
             PasswordResetEmailType::class,
             VerifyEmailType::class,
             WelcomeEmailType::class,
