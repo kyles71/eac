@@ -19,6 +19,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Support\Htmlable;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -357,6 +358,58 @@ it('shows direct student event invitations on the courses and events table', fun
         ->assertActionMounted(TestAction::make('viewStudentEventDetails')->table($directInvite))
         ->assertActionDataSet(fn (array $data): bool => $data['name'] === 'Private Rehearsal'
             && $data['course_name'] === null);
+});
+
+it('groups recurring course events while keeping schedule exceptions separate', function (): void {
+    $displayTimezone = (string) config('app.display_timezone', config('app.timezone'));
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $course = Course::factory()->create(['name' => 'Ballet Company']);
+    $firstMeeting = now($displayTimezone)
+        ->addWeek()
+        ->next('Wednesday')
+        ->setTime(18, 0)
+        ->utc();
+    $recurringEvents = collect(range(0, 2))
+        ->map(fn (int $week): Event => Event::factory()->create([
+            'name' => 'Ballet Company',
+            'course_id' => $course->id,
+            'start_time' => $firstMeeting->copy()->addWeeks($week),
+            'end_time' => $firstMeeting->copy()->addWeeks($week)->addHour(),
+        ]));
+    $rescheduledEvent = Event::factory()->create([
+        'name' => 'Ballet Company',
+        'course_id' => $course->id,
+        'start_time' => $firstMeeting->copy()->addDay()->addHours(2),
+        'end_time' => $firstMeeting->copy()->addDay()->addHours(3),
+    ]);
+    $addedEvent = Event::factory()->create([
+        'name' => 'Ballet Company',
+        'course_id' => $course->id,
+        'start_time' => $firstMeeting->copy()->addWeek()->addHours(3),
+        'end_time' => $firstMeeting->copy()->addWeek()->addHours(4),
+    ]);
+
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => auth()->id(),
+    ]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertTableColumnExists(
+            'event_summary',
+            fn (TextColumn $column): bool => $column->getLabel() === 'Event',
+        )
+        ->assertTableColumnExists(
+            'start_time',
+            fn (TextColumn $column): bool => $column->getLabel() === 'Next Meeting Time',
+        )
+        ->assertCanSeeTableRecords([$recurringEvents->first(), $rescheduledEvent, $addedEvent])
+        ->assertCanNotSeeTableRecords($recurringEvents->skip(1))
+        ->assertSee('Ballet Company Class - Wednesdays (2 more)')
+        ->assertSee($firstMeeting->timezone($displayTimezone)->format('M j, Y g:i A'))
+        ->assertSee('Course History')
+        ->assertDontSee('Enrollment History');
 });
 
 it('does not expose private attendance notes on the family student profile', function (): void {
