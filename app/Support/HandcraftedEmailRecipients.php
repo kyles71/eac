@@ -46,7 +46,7 @@ final class HandcraftedEmailRecipients
     /**
      * @return array<string, array<string, string>>
      */
-    public function search(string $search): array
+    public function search(string $search, ?User $sender = null, ?Student $permittedStudent = null): array
     {
         $search = (string) str($search)->squish();
 
@@ -54,7 +54,7 @@ final class HandcraftedEmailRecipients
             return [];
         }
 
-        $students = $this->applyNameSearch(Student::query(), $search)
+        $students = $this->applyNameSearch($this->studentQuery($sender, $permittedStudent), $search)
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->limit(25)
@@ -89,10 +89,10 @@ final class HandcraftedEmailRecipients
      * @param  array<int, mixed>  $values
      * @return array<string, string>
      */
-    public function labels(array $values): array
+    public function labels(array $values, ?User $sender = null, ?Student $permittedStudent = null): array
     {
         $values = $this->stringValues($values);
-        $students = Student::query()
+        $students = $this->studentQuery($sender, $permittedStudent)
             ->whereKey($this->studentIds($values))
             ->get()
             ->keyBy('id');
@@ -127,10 +127,10 @@ final class HandcraftedEmailRecipients
     /**
      * @return array<int, string>
      */
-    public function resolve(mixed $values): array
+    public function resolve(mixed $values, ?User $sender = null, ?Student $permittedStudent = null): array
     {
         $values = $this->stringValues($values);
-        $students = Student::query()
+        $students = $this->studentQuery($sender, $permittedStudent)
             ->with('additionalEmails')
             ->whereKey($this->studentIds($values))
             ->get()
@@ -172,6 +172,28 @@ final class HandcraftedEmailRecipients
         }
 
         return $this->uniqueStrings($emailAddresses, validateEmail: true);
+    }
+
+    /**
+     * @return Builder<Student>
+     */
+    private function studentQuery(?User $sender, ?Student $permittedStudent = null): Builder
+    {
+        $query = Student::query();
+
+        if (! $sender instanceof User) {
+            return $query;
+        }
+
+        if (! $permittedStudent instanceof Student) {
+            return Student::applyAdminAccessConstraint($query, $sender);
+        }
+
+        return $query->where(function (Builder $query) use ($permittedStudent, $sender): void {
+            $query
+                ->whereKey($permittedStudent->getKey())
+                ->orWhere(fn (Builder $query): Builder => Student::applyAdminAccessConstraint($query, $sender));
+        });
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Pages;
 
+use App\Enums\AttendanceStatus;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -17,14 +18,16 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rules\Enum;
 use LogicException;
 
 final class CourseAttendance extends ViewRecord implements HasTable
@@ -47,6 +50,7 @@ final class CourseAttendance extends ViewRecord implements HasTable
     {
         return $table
             ->query($this->attendanceRosterQuery())
+            ->description('Attendance notes are private. Only owners, staff, and teachers can view them; parents and students cannot.')
             ->searchable(false)
             ->reorderableColumns(false)
             ->recordTitleAttribute('student.full_name')
@@ -59,6 +63,13 @@ final class CourseAttendance extends ViewRecord implements HasTable
                 ...$this->eventAttendanceColumns(),
             ])
             ->paginated(false);
+    }
+
+    protected function authorizeAccess(): void
+    {
+        parent::authorizeAccess();
+
+        Gate::authorize('viewAttendance', $this->course());
     }
 
     protected function getHeaderActions(): array
@@ -87,12 +98,18 @@ final class CourseAttendance extends ViewRecord implements HasTable
     {
         return $this->courseEvents()
             ->map(fn (Event $event): ColumnGroup => ColumnGroup::make($this->eventColumnLabel($event), [
-                ToggleColumn::make("attendance_{$event->id}")
-                    ->label('Present')
+                SelectColumn::make("attendance_{$event->id}")
+                    ->label('Status')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $event))
+                    ->options(AttendanceStatus::class)
+                    ->placeholder('Not recorded')
+                    ->selectablePlaceholder()
+                    ->rules(fn (): array => [new Enum(AttendanceStatus::class)])
                     ->toggleable(false)
-                    ->state(fn (Enrollment $record): bool => $this->attendance()->recordStudentAttended($event, $record))
-                    ->updateStateUsing(fn (Enrollment $record, mixed $state): bool => $this->attendance()
-                        ->setRecordStudentAttendance($event, $record, $state)),
+                    ->state(fn (Enrollment $record): ?string => $this->attendance()
+                        ->recordStudentAttendanceStatus($event, $record))
+                    ->updateStateUsing(fn (Enrollment $record, mixed $state): ?string => $this->attendance()
+                        ->setRecordStudentAttendanceStatus($event, $record, $state)),
                 IconColumn::make("attendance_notes_{$event->id}")
                     ->label('Notes')
                     ->toggleable(false)
@@ -103,7 +120,12 @@ final class CourseAttendance extends ViewRecord implements HasTable
                     ->falseColor('gray')
                     ->state(fn (Enrollment $record): bool => filled($this->attendance()
                         ->recordStudentNotes($event, $record)))
-                    ->tooltip(fn (bool $state): string => $state ? 'View/edit notes' : 'Add notes')
+                    ->tooltip(fn (bool $state): string => match (true) {
+                        Gate::denies('updateAttendance', $event) && $state => 'View notes',
+                        Gate::denies('updateAttendance', $event) => 'No notes',
+                        $state => 'View/edit notes',
+                        default => 'Add notes',
+                    })
                     ->action($this->notesAction($event)),
             ]))
             ->all();
@@ -114,11 +136,17 @@ final class CourseAttendance extends ViewRecord implements HasTable
         return Action::make("editAttendanceNotes_{$event->id}")
             ->label('Attendance Notes')
             ->icon(Heroicon::OutlinedDocumentText)
+            ->authorize(fn (): bool => Gate::allows('view', $event))
             ->modalHeading(fn (Enrollment $record): string => 'Attendance Notes: '.$record->student->fullName)
+            ->modalDescription('This note is private. Only owners, staff, and teachers can view it; parents and students cannot.')
             ->modalWidth('lg')
+            ->modalSubmitAction(fn (Action $action): Action|false => Gate::allows('updateAttendance', $event) ? $action : false)
+            ->modalCancelActionLabel(fn (): string => Gate::allows('updateAttendance', $event) ? 'Cancel' : 'Close')
             ->form([
                 Textarea::make('notes')
                     ->label('Notes')
+                    ->helperText('Private — not visible to parents or students.')
+                    ->disabled(fn (): bool => Gate::denies('updateAttendance', $event))
                     ->rows(6),
             ])
             ->fillForm(fn (Model $record): array => [
@@ -139,7 +167,8 @@ final class CourseAttendance extends ViewRecord implements HasTable
             ->orderByRaw('start_time is null')
             ->orderBy('start_time')
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->filter(fn (Event $event): bool => Gate::allows('view', $event));
     }
 
     private function course(): Course

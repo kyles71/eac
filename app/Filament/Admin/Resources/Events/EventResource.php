@@ -74,10 +74,17 @@ final class EventResource extends Resource
         $query = parent::getEloquentQuery();
         $user = auth()->user();
 
-        if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
+        if (! $user instanceof User || ! $user->can('View:Event')) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        Event::applyAdminViewAccessConstraint($query, $user);
+
+        if (! $user->hasAnyRole(['owner', 'super_admin'])) {
             $query->where(function (Builder $query) use ($user): void {
                 $query
                     ->whereNull('course_id')
+                    ->orWhere('substitute_teacher_id', $user->id)
                     ->orWhereHas('course', fn (Builder $query): Builder => $query
                         ->where('is_private', false)
                         ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id)));

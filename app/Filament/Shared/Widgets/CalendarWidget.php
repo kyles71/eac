@@ -7,6 +7,7 @@ namespace App\Filament\Shared\Widgets;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -230,9 +231,10 @@ final class CalendarWidget extends FullCalendarWidget
             EditAction::make()
                 ->authorize('update')
                 ->visible(fn (Event $record): bool => ! $record->isCancelled()),
+            EventSubstituteActions::manage(fn (): ?string => $this->fullEventUrl()),
             $cancelEventAction,
             Action::make('viewFullEvent')
-                ->label('View Full Event')
+                ->label('View Event')
                 ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                 ->color('gray')
                 ->visible(fn (): bool => $this->canViewFullEvent())
@@ -248,14 +250,24 @@ final class CalendarWidget extends FullCalendarWidget
             ->modalHeading(fn (Event $record): string => $record->name);
 
         if ($this->isAdminPanel()) {
-            return $action;
+            return $action->mutateRecordDataUsing(function (array $data, Event $record): array {
+                if (! $this->canViewPrivateEventContent($record)) {
+                    unset($data['details']);
+                }
+
+                return $data;
+            });
         }
 
-        return $action->mutateRecordDataUsing(fn (array $data, Event $record): array => [
-            ...$data,
-            'calendar_name' => $record->calendar?->name,
-            'course_name' => $record->course?->name,
-        ]);
+        return $action->mutateRecordDataUsing(function (array $data, Event $record): array {
+            unset($data['details']);
+
+            return [
+                ...$data,
+                'calendar_name' => $record->calendar?->name,
+                'course_name' => $record->course?->name,
+            ];
+        });
     }
 
     private function selectedCalendar(): ?Calendar
@@ -371,6 +383,13 @@ final class CalendarWidget extends FullCalendarWidget
         $record = $this->getRecord();
 
         return $record instanceof Event && EventResource::canView($record);
+    }
+
+    private function canViewPrivateEventContent(Event $event): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->can('view', $event);
     }
 
     private function fullEventUrl(): ?string

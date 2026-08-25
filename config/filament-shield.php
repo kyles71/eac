@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
@@ -28,8 +29,12 @@ use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResourc
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
 use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
+use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
+use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
+use App\Filament\Admin\Widgets\SubstituteRequestBanners;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Filament\Shared\Pages\Calendar as CalendarPage;
@@ -267,6 +272,9 @@ return [
             RoleResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
+            StaffNoteResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete',
+            ],
             StudentResource::class => [
                 'viewAny', 'view', 'create', 'update', 'deleteAny',
             ],
@@ -276,6 +284,7 @@ return [
         ],
         'exclude' => [
             SentEmailResource::class,
+            StudentCommunicationResource::class,
         ],
     ],
 
@@ -297,6 +306,7 @@ return [
             CalendarPage::class,
             Dashboard::class,
             ManageDashboardAppearance::class,
+            SubstituteRequest::class,
             Updates::class,
         ],
     ],
@@ -320,6 +330,8 @@ return [
             MessagesFromEac::class,
             QuickLinks::class,
             RecurringPrivateLessonAttention::class,
+            SubstituteCoverageReminder::class,
+            SubstituteRequestBanners::class,
         ],
     ],
 
@@ -340,6 +352,7 @@ return [
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
+        'Send:Email' => 'Send Email',
         'View:AppUpdatesPage' => 'View App Updates Page',
     ],
 

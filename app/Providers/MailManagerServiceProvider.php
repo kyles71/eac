@@ -11,6 +11,9 @@ use App\Mail\Types\CourseHoldExpiredEmailType;
 use App\Mail\Types\CourseHoldExpiringEmailType;
 use App\Mail\Types\EventCancellationEmailType;
 use App\Mail\Types\EventReminderEmailType;
+use App\Mail\Types\EventSubstituteRemovedEmailType;
+use App\Mail\Types\EventSubstituteRequestEmailType;
+use App\Mail\Types\EventSubstituteRequestReminderEmailType;
 use App\Mail\Types\GiftCardAssignedRedemptionEmailType;
 use App\Mail\Types\GiftCardDeliveryEmailType;
 use App\Mail\Types\HandcraftedEmailType;
@@ -27,6 +30,8 @@ use App\Mail\Types\RecurringPrivateLessonBillingEmailType;
 use App\Mail\Types\RecurringPrivateLessonPaymentReminderEmailType;
 use App\Mail\Types\RecurringPrivateLessonRemovedEmailType;
 use App\Mail\Types\RecurringPrivateLessonRescheduledEmailType;
+use App\Mail\Types\StudentFirstAidNoteEmailType;
+use App\Mail\Types\StudentStopLightMessageEmailType;
 use App\Mail\Types\VerifyEmailType;
 use App\Mail\Types\WelcomeEmailType;
 use App\Models\User;
@@ -54,6 +59,9 @@ final class MailManagerServiceProvider extends ServiceProvider
             CourseHoldExpiringEmailType::class,
             EventCancellationEmailType::class,
             EventReminderEmailType::class,
+            EventSubstituteRemovedEmailType::class,
+            EventSubstituteRequestEmailType::class,
+            EventSubstituteRequestReminderEmailType::class,
             GiftCardAssignedRedemptionEmailType::class,
             GiftCardDeliveryEmailType::class,
             HandcraftedEmailType::class,
@@ -69,6 +77,8 @@ final class MailManagerServiceProvider extends ServiceProvider
             RecurringPrivateLessonPaymentReminderEmailType::class,
             RecurringPrivateLessonRemovedEmailType::class,
             RecurringPrivateLessonRescheduledEmailType::class,
+            StudentFirstAidNoteEmailType::class,
+            StudentStopLightMessageEmailType::class,
             PasswordResetEmailType::class,
             VerifyEmailType::class,
             WelcomeEmailType::class,

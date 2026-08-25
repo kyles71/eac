@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\DashboardMessages\Pages\CreateDashboardMessage;
 use App\Filament\Admin\Resources\DashboardMessages\Pages\ListDashboardMessages;
 use App\Filament\Admin\Resources\DashboardQuickLinks\Pages\CreateDashboardQuickLink;
 use App\Filament\Admin\Resources\DashboardQuickLinks\Pages\ListDashboardQuickLinks;
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
@@ -172,6 +173,7 @@ it('offers searchable navigable user panel destinations dynamically', function (
 it('uses shared communication widgets and calendar on the admin dashboard', function (): void {
     expect((new AdminDashboard)->getWidgets())->toBe([
         RecurringPrivateLessonAttention::class,
+        SubstituteCoverageReminder::class,
         MessagesFromEac::class,
         QuickLinks::class,
         CalendarWidget::class,
