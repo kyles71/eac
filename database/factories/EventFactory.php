@@ -9,12 +9,13 @@ use App\Models\Event;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/** @extends Factory<Event> */
 final class EventFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.
      *
-     * @var string
+     * @var class-string<Event>
      */
     protected $model = Event::class;
 
@@ -47,7 +48,7 @@ final class EventFactory extends Factory
             }
 
             if ($event->course !== null) {
-                $event->name = $event->course->name . ' Class';
+                $event->name = $event->course->name.' Class';
                 $event->save();
             }
         });

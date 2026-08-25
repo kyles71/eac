@@ -253,16 +253,20 @@ it('exposes the same cancellation action on a course events table', function ():
         'end_time' => now()->addDay()->addHour(),
     ]);
 
-    livewire(EventsRelationManager::class, [
+    $component = livewire(EventsRelationManager::class, [
         'ownerRecord' => $course,
         'pageClass' => ViewCourse::class,
-    ])
-        ->callAction(
-            TestAction::make('cancelEvent')
-                ->table($event)
-                ->arguments(['send_email' => false]),
-            ['reason' => 'Cancelled from course details.'],
-        )
+    ])->loadTable();
+
+    expect($component->instance()->getTable()->getRecordUrl($event))
+        ->toBe(EventResource::getUrl('view', ['record' => $event]));
+
+    $component->callAction(
+        TestAction::make('cancelEvent')
+            ->table($event)
+            ->arguments(['send_email' => false]),
+        ['reason' => 'Cancelled from course details.'],
+    )
         ->assertNotified('Event cancelled without sending email');
 
     expect($event->refresh()->isCancelled())->toBeTrue();

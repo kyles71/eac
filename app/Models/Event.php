@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\EventSubstituteCoverageStatus;
+use App\Enums\EventSubstituteRequestStatus;
 use App\Support\MediaDisks;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,6 +30,8 @@ final class Event extends Model implements HasMedia
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'course_id' => 'integer',
+        'substitute_teacher_id' => 'integer',
+        'substitute_needed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'cancelled_by_user_id' => 'integer',
         'reminder_processed_at' => 'datetime',
@@ -43,6 +47,22 @@ final class Event extends Model implements HasMedia
             'course.teachers',
             fn (Builder $query): Builder => $query->whereKey($user->id),
         );
+    }
+
+    public static function applyAdminViewAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($user): void {
+            $query
+                ->where('substitute_teacher_id', $user->id)
+                ->orWhereHas(
+                    'course.teachers',
+                    fn (Builder $query): Builder => $query->whereKey($user->id),
+                );
+        });
     }
 
     public static function applyNotPassedConstraint(Builder $query, ?CarbonInterface $dateTime = null): Builder
@@ -82,6 +102,86 @@ final class Event extends Model implements HasMedia
     public function recurringPrivateLessonCharge(): HasOne
     {
         return $this->hasOne(RecurringPrivateLessonCharge::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function substituteTeacher(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'substitute_teacher_id');
+    }
+
+    /** @return HasMany<EventSubstituteRequest, $this> */
+    public function substituteRequests(): HasMany
+    {
+        return $this->hasMany(EventSubstituteRequest::class);
+    }
+
+    public function pendingSubstituteRequest(): ?EventSubstituteRequest
+    {
+        return $this->substituteRequests()
+            ->where('status', EventSubstituteRequestStatus::Pending)
+            ->latest('id')
+            ->first();
+    }
+
+    public function currentSubstituteRequest(): ?EventSubstituteRequest
+    {
+        if ($this->substitute_teacher_id === null) {
+            return null;
+        }
+
+        return $this->substituteRequests()
+            ->where('teacher_id', $this->substitute_teacher_id)
+            ->where('status', EventSubstituteRequestStatus::Accepted)
+            ->latest('id')
+            ->first();
+    }
+
+    public function substituteCoverageStatus(): EventSubstituteCoverageStatus
+    {
+        $currentRequest = $this->currentSubstituteRequest();
+        $pendingRequest = $this->pendingSubstituteRequest();
+
+        if ($currentRequest?->hasReleaseRequest()) {
+            return EventSubstituteCoverageStatus::ReleaseRequested;
+        }
+
+        if ($this->substitute_teacher_id !== null && $pendingRequest instanceof EventSubstituteRequest) {
+            return EventSubstituteCoverageStatus::ReplacementPending;
+        }
+
+        if ($this->substitute_teacher_id !== null) {
+            return EventSubstituteCoverageStatus::Confirmed;
+        }
+
+        if ($pendingRequest instanceof EventSubstituteRequest) {
+            return EventSubstituteCoverageStatus::AwaitingResponse;
+        }
+
+        return $this->substitute_needed_at !== null
+            ? EventSubstituteCoverageStatus::NeedsSubstitute
+            : EventSubstituteCoverageStatus::NotNeeded;
+    }
+
+    public function substituteResponseCutoff(): ?CarbonInterface
+    {
+        return $this->end_time ?? $this->start_time;
+    }
+
+    public function canAcceptSubstituteRequestAt(?CarbonInterface $dateTime = null): bool
+    {
+        if ($this->isCancelled() || $this->substituteResponseCutoff() === null) {
+            return false;
+        }
+
+        return ($dateTime ?? now())->lt($this->substituteResponseCutoff());
+    }
+
+    public function isCompletedAt(?CarbonInterface $dateTime = null): bool
+    {
+        $cutoff = $this->substituteResponseCutoff();
+
+        return $cutoff !== null && ($dateTime ?? now())->gte($cutoff);
     }
 
     public function isCancelled(): bool
@@ -148,6 +248,45 @@ final class Event extends Model implements HasMedia
         self::applyNotPassedConstraint($query, $dateTime);
     }
 
+    public function scopeNeedsSubstituteAttention(Builder $query, ?CarbonInterface $dateTime = null): void
+    {
+        $query
+            ->whereNull('cancelled_at')
+            ->whereNotNull('substitute_needed_at')
+            ->whereNull('substitute_teacher_id');
+
+        self::applyNotPassedConstraint($query, $dateTime);
+    }
+
+    /** @param array<int, mixed> $statuses */
+    public function scopeWithSubstituteCoverageStatuses(Builder $query, array $statuses): void
+    {
+        /** @var array<string, EventSubstituteCoverageStatus> $normalizedStatuses */
+        $normalizedStatuses = [];
+
+        foreach ($statuses as $status) {
+            $status = match (true) {
+                $status instanceof EventSubstituteCoverageStatus => $status,
+                is_string($status) => EventSubstituteCoverageStatus::tryFrom($status),
+                default => null,
+            };
+
+            if ($status instanceof EventSubstituteCoverageStatus) {
+                $normalizedStatuses[$status->value] = $status;
+            }
+        }
+
+        if ($normalizedStatuses === []) {
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($normalizedStatuses): void {
+            foreach ($normalizedStatuses as $status) {
+                $query->orWhere(fn (Builder $query): Builder => self::applySubstituteCoverageStatusConstraint($query, $status));
+            }
+        });
+    }
+
     public function scopeVisibleOnCalendar(Builder $query, Calendar $calendar, User $user): Builder
     {
         if (! $user->hasAnyRole(['owner', 'super_admin'])) {
@@ -155,7 +294,8 @@ final class Event extends Model implements HasMedia
 
             $query->where(function (Builder $query) use ($isStaff, $user): void {
                 $query
-                    ->whereNull('course_id')
+                    ->where('substitute_teacher_id', $user->id)
+                    ->orWhereNull('course_id')
                     ->orWhereHas('course', function (Builder $query) use ($isStaff, $user): void {
                         $query
                             ->where('is_private', false)
@@ -177,12 +317,12 @@ final class Event extends Model implements HasMedia
             });
         }
 
-        $query->whereDoesntHave(
-            'excludedUsers',
-            fn (Builder $query): Builder => $query->whereKey($user->id)
-        );
-
         if (! $calendar->isMyCalendar()) {
+            $query->whereDoesntHave(
+                'excludedUsers',
+                fn (Builder $query): Builder => $query->whereKey($user->id)
+            );
+
             return $this->scopeAppliedToCalendar($query, $calendar);
         }
 
@@ -204,34 +344,45 @@ final class Event extends Model implements HasMedia
         return $query
             ->where(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass, $visibleCalendarIds, $visibleCourseCalendarTagIds): void {
                 $query
-                    ->where(function (Builder $query) use ($visibleCalendarIds, $visibleCourseCalendarTagIds): void {
+                    ->where('substitute_teacher_id', $user->id)
+                    ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass, $visibleCalendarIds, $visibleCourseCalendarTagIds): void {
                         $query
-                            ->whereIn('calendar_id', $visibleCalendarIds)
-                            ->where(function (Builder $query) use ($visibleCourseCalendarTagIds): void {
+                            ->whereDoesntHave(
+                                'excludedUsers',
+                                fn (Builder $query): Builder => $query->whereKey($user->id)
+                            )
+                            ->where(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass, $visibleCalendarIds, $visibleCourseCalendarTagIds): void {
                                 $query
-                                    ->whereNull('course_id')
-                                    ->orWhereDoesntHave('course.tags', fn (Builder $query): Builder => $query->where('type', Course::CALENDAR_TAG_TYPE))
+                                    ->where(function (Builder $query) use ($visibleCalendarIds, $visibleCourseCalendarTagIds): void {
+                                        $query
+                                            ->whereIn('calendar_id', $visibleCalendarIds)
+                                            ->where(function (Builder $query) use ($visibleCourseCalendarTagIds): void {
+                                                $query
+                                                    ->whereNull('course_id')
+                                                    ->orWhereDoesntHave('course.tags', fn (Builder $query): Builder => $query->where('type', Course::CALENDAR_TAG_TYPE))
+                                                    ->orWhereHas('course.tags', fn (Builder $query): Builder => $query
+                                                        ->where('type', Course::CALENDAR_TAG_TYPE)
+                                                        ->whereIn('tags.id', $visibleCourseCalendarTagIds));
+                                            });
+                                    })
                                     ->orWhereHas('course.tags', fn (Builder $query): Builder => $query
                                         ->where('type', Course::CALENDAR_TAG_TYPE)
-                                        ->whereIn('tags.id', $visibleCourseCalendarTagIds));
-                            });
-                    })
-                    ->orWhereHas('course.tags', fn (Builder $query): Builder => $query
-                        ->where('type', Course::CALENDAR_TAG_TYPE)
-                        ->whereIn('tags.id', $visibleCourseCalendarTagIds))
-                    ->orWhereHas('course.teachers', fn (Builder $query): Builder => $query->whereKey($user->id))
-                    ->orWhereHas('course.students', fn (Builder $query): Builder => $query->whereIn('students.id', $studentIds))
-                    ->orWhereHas('attendees', function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
-                        $query
-                            ->where(function (Builder $query) use ($user, $userMorphClass): void {
-                                $query
-                                    ->where('attendee_type', $userMorphClass)
-                                    ->where('attendee_id', $user->id);
-                            })
-                            ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass): void {
-                                $query
-                                    ->where('attendee_type', $studentMorphClass)
-                                    ->whereIn('attendee_id', $studentIds);
+                                        ->whereIn('tags.id', $visibleCourseCalendarTagIds))
+                                    ->orWhereHas('course.teachers', fn (Builder $query): Builder => $query->whereKey($user->id))
+                                    ->orWhereHas('course.students', fn (Builder $query): Builder => $query->whereIn('students.id', $studentIds))
+                                    ->orWhereHas('attendees', function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                                        $query
+                                            ->where(function (Builder $query) use ($user, $userMorphClass): void {
+                                                $query
+                                                    ->where('attendee_type', $userMorphClass)
+                                                    ->where('attendee_id', $user->id);
+                                            })
+                                            ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass): void {
+                                                $query
+                                                    ->where('attendee_type', $studentMorphClass)
+                                                    ->whereIn('attendee_id', $studentIds);
+                                            });
+                                    });
                             });
                     });
             });
@@ -286,6 +437,12 @@ final class Event extends Model implements HasMedia
             ->exists();
     }
 
+    public function isViewableByAdminUser(User $user): bool
+    {
+        return $this->substitute_teacher_id === $user->id
+            || $this->isAccessibleToAdminUser($user);
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('images')
@@ -293,6 +450,43 @@ final class Event extends Model implements HasMedia
 
         $this->addMediaCollection('documents')
             ->useDisk(MediaDisks::private());
+    }
+
+    private static function applySubstituteCoverageStatusConstraint(
+        Builder $query,
+        EventSubstituteCoverageStatus $status,
+    ): Builder {
+        $hasPendingRequest = fn (Builder $query): Builder => $query
+            ->where('status', EventSubstituteRequestStatus::Pending);
+        $hasReleaseRequest = fn (Builder $query): Builder => $query
+            ->where('status', EventSubstituteRequestStatus::Accepted)
+            ->whereNotNull('release_requested_at')
+            ->whereColumn('event_substitute_requests.teacher_id', 'events.substitute_teacher_id');
+
+        return match ($status) {
+            EventSubstituteCoverageStatus::NotNeeded => $query
+                ->whereNull('substitute_teacher_id')
+                ->whereNull('substitute_needed_at')
+                ->whereDoesntHave('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::NeedsSubstitute => $query
+                ->whereNull('substitute_teacher_id')
+                ->whereNotNull('substitute_needed_at')
+                ->whereDoesntHave('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::AwaitingResponse => $query
+                ->whereNull('substitute_teacher_id')
+                ->whereHas('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::Confirmed => $query
+                ->whereNotNull('substitute_teacher_id')
+                ->whereDoesntHave('substituteRequests', $hasReleaseRequest)
+                ->whereDoesntHave('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::ReplacementPending => $query
+                ->whereNotNull('substitute_teacher_id')
+                ->whereDoesntHave('substituteRequests', $hasReleaseRequest)
+                ->whereHas('substituteRequests', $hasPendingRequest),
+            EventSubstituteCoverageStatus::ReleaseRequested => $query
+                ->whereNotNull('substitute_teacher_id')
+                ->whereHas('substituteRequests', $hasReleaseRequest),
+        };
     }
 
     // public function registerMediaConversions(?Media $media = null): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Pages;
 
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
@@ -27,6 +28,7 @@ final class Dashboard extends BaseDashboard
     {
         return [
             RecurringPrivateLessonAttention::class,
+            SubstituteCoverageReminder::class,
             MessagesFromEac::class,
             QuickLinks::class,
             CalendarWidget::class,

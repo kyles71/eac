@@ -99,7 +99,8 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
-            return /* $this->hasVerifiedEmail() && */ $this->getAllPermissions()->isNotEmpty();
+            return /* $this->hasVerifiedEmail() && */ $this->hasRole('teacher')
+                || $this->getAllPermissions()->isNotEmpty();
         }
 
         return true;
@@ -149,6 +150,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     {
         return $this->belongsToMany(Event::class, 'event_exclusions')
             ->withTimestamps();
+    }
+
+    /** @return HasMany<Event, $this> */
+    public function substituteEvents(): HasMany
+    {
+        return $this->hasMany(Event::class, 'substitute_teacher_id');
+    }
+
+    /** @return HasMany<EventSubstituteRequest, $this> */
+    public function substituteRequests(): HasMany
+    {
+        return $this->hasMany(EventSubstituteRequest::class, 'teacher_id');
     }
 
     public function forms(): HasMany
