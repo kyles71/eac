@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Pages;
 
 use App\Actions\Events\ManageEventSubstitution;
+use App\Filament\Admin\Resources\Events\EventResource;
 use App\Models\EventSubstituteRequest;
 use App\Models\User;
 use BackedEnum;
@@ -113,7 +114,7 @@ final class SubstituteRequest extends Page
                     app(ManageEventSubstitution::class)->respond($request, $user, true);
                     $request->refresh();
                     Notification::make()->title('Substitute request accepted')->success()->send();
-                    $this->redirect(SubstituteEventDetails::getUrl(['event' => $request->event_id], panel: 'admin'));
+                    $this->redirect(EventResource::getUrl('view', ['record' => $request->event_id], panel: 'admin'));
                 } catch (Throwable $exception) {
                     Notification::make()
                         ->title('Could not accept substitute request')

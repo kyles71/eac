@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Pages\Dashboard;
-use App\Filament\Admin\Pages\SubstituteEventDetails;
 use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
@@ -306,7 +305,6 @@ return [
             CalendarPage::class,
             Dashboard::class,
             ManageDashboardAppearance::class,
-            SubstituteEventDetails::class,
             SubstituteRequest::class,
             Updates::class,
         ],

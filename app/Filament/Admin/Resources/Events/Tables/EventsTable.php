@@ -11,6 +11,7 @@ use App\Models\Event;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -26,6 +27,10 @@ final class EventsTable
                 : null)
             ->columns([
                 TextColumn::make('name')
+                    ->icon(fn (Event $record): ?Heroicon => $record->substitute_teacher_id !== null
+                        ? Heroicon::OutlinedUser
+                        : null)
+                    ->iconColor('success')
                     ->searchable(),
                 TextColumn::make('cancellation_status')
                     ->label('Status')

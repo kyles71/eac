@@ -94,6 +94,7 @@ final class ViewEvent extends ViewRecord implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            EventSubstituteActions::requestRelease(),
             EventSubstituteActions::group($this->event()),
             SendEmailAction::make()
                 ->label(fn (): string => $this->event()->course_id === null ? 'Email Attendees' : 'Email Class')

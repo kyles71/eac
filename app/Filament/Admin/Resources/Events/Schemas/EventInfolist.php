@@ -13,7 +13,9 @@ use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Gate;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 final class EventInfolist
 {
@@ -59,6 +61,20 @@ final class EventInfolist
                             ->visibility('private')
                             // ->conversion('thumb')
                             ->columnSpanFull(),
+                        RepeatableEntry::make('documents')
+                            ->state(fn (Event $record) => $record->getMedia('documents'))
+                            ->schema([
+                                TextEntry::make('file_name')
+                                    ->label('Document')
+                                    ->icon(Heroicon::OutlinedArrowDownTray)
+                                    ->url(fn (Media $record): string => $record->getTemporaryUrl(
+                                        now()->addMinutes((int) config('filament.temporary_file_url_expiry_minutes', 30)),
+                                    ))
+                                    ->openUrlInNewTab(),
+                            ])
+                            ->contained(false)
+                            ->columnSpanFull()
+                            ->visible(fn (Event $record): bool => $record->getMedia('documents')->isNotEmpty()),
                     ]),
                 Section::make('Substitute Coverage')
                     ->columns(2)

@@ -178,6 +178,28 @@ final class EventSubstituteActions
             ->after(self::refreshRecord(...));
     }
 
+    public static function requestRelease(): Action
+    {
+        return Action::make('requestRelease')
+            ->label('I Can No Longer Cover This Event')
+            ->icon(Heroicon::OutlinedUserMinus)
+            ->color('danger')
+            ->authorize('requestSubstituteRelease')
+            ->visible(fn (Event $record): bool => ! $record->currentSubstituteRequest()?->hasReleaseRequest())
+            ->schema([self::reasonField()])
+            ->modalDescription('You remain assigned until staff removes or replaces you.')
+            ->requiresConfirmation()
+            ->action(fn (Event $record, array $data): mixed => self::run(
+                fn (User $user): EventSubstituteRequest => app(ManageEventSubstitution::class)->requestRelease(
+                    $record,
+                    $user,
+                    (string) ($data['reason'] ?? ''),
+                ),
+                'Release requested',
+            ))
+            ->after(self::refreshRecord(...));
+    }
+
     public static function remove(): Action
     {
         return Action::make('removeEventSubstitute')

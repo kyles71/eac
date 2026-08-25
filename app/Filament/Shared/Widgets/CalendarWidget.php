@@ -8,7 +8,6 @@ use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Actions\CancelEventAction;
 use App\Filament\Actions\EventSubstituteActions;
-use App\Filament\Admin\Pages\SubstituteEventDetails;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -235,17 +234,9 @@ final class CalendarWidget extends FullCalendarWidget
                 ->authorize('update')
                 ->visible(fn (Event $record): bool => ! $record->isCancelled()),
             EventSubstituteActions::manage(fn (): ?string => $this->fullEventUrl()),
-            Action::make('viewSubstituteEventDetails')
-                ->label('View Substitute Details')
-                ->icon(Heroicon::OutlinedClipboardDocumentCheck)
-                ->color('primary')
-                ->visible(fn (): bool => $this->isConfirmedSubstitute())
-                ->url(fn (): ?string => ($record = $this->getRecord()) instanceof Event
-                    ? SubstituteEventDetails::getUrl(['event' => $record], panel: 'admin')
-                    : null),
             $cancelEventAction,
             Action::make('viewFullEvent')
-                ->label('View Full Event')
+                ->label('View Event')
                 ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                 ->color('gray')
                 ->visible(fn (): bool => $this->canViewFullEvent())
@@ -394,16 +385,6 @@ final class CalendarWidget extends FullCalendarWidget
         $record = $this->getRecord();
 
         return $record instanceof Event && EventResource::canView($record);
-    }
-
-    private function isConfirmedSubstitute(): bool
-    {
-        $record = $this->getRecord();
-        $user = auth()->user();
-
-        return $record instanceof Event
-            && $user instanceof User
-            && $record->substitute_teacher_id === $user->id;
     }
 
     private function canViewPrivateEventContent(Event $event): bool

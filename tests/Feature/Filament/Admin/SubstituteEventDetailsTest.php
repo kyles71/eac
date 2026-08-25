@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 use App\Enums\AttendanceStatus;
 use App\Enums\EventSubstituteRequestStatus;
-use App\Filament\Admin\Pages\SubstituteEventDetails;
 use App\Filament\Admin\Pages\SubstituteRequest;
+use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Pages\ListEvents;
+use App\Filament\Admin\Resources\Events\Pages\ViewEvent;
 use App\Filament\Admin\Widgets\SubstituteRequestBanners;
 use App\Filament\Tables\Columns\AttendanceRadioColumn;
 use App\Models\Course;
@@ -16,9 +17,12 @@ use App\Models\EventAttendee;
 use App\Models\EventSubstituteRequest;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\MediaDisks;
 use Filament\Actions\Action;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 use function Pest\Livewire\livewire;
 
@@ -139,13 +143,15 @@ it('accepts a request from the review page', function (): void {
 
     livewire(SubstituteRequest::class, ['request' => $request])
         ->callAction('accept')
-        ->assertNotified('Substitute request accepted');
+        ->assertNotified('Substitute request accepted')
+        ->assertRedirect(EventResource::getUrl('view', ['record' => $event], panel: 'admin'));
 
     expect($request->refresh()->status)->toBe(EventSubstituteRequestStatus::Accepted)
         ->and($event->refresh()->substitute_teacher_id)->toBe($teacher->id);
 });
 
-it('shows lesson plan roster and editable attendance only to the confirmed substitute', function (): void {
+it('shows lesson plan documents roster and editable attendance on the event page only to the confirmed substitute', function (): void {
+    Storage::fake(MediaDisks::private());
     $course = Course::factory()->create();
     $student = Student::factory()->create([
         'first_name' => 'Jamie',
@@ -159,13 +165,16 @@ it('shows lesson plan roster and editable attendance only to the confirmed subst
         'course_id' => $course->id,
         'details' => 'Practice the recital finale.',
     ]);
+    $event->addMedia(UploadedFile::fake()->create('recital-finale.pdf', 100, 'application/pdf'))
+        ->toMediaCollection('documents', MediaDisks::private());
     $teacher = User::factory()->isTeacher()->create();
     confirmedSubstituteRequest($event, $teacher);
     $this->actingAs($teacher);
 
-    livewire(SubstituteEventDetails::class, ['event' => $event])
+    livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
         ->assertSee('Practice the recital finale.')
+        ->assertSee('recital-finale.pdf')
         ->assertCanSeeTableRecords([$enrollment])
         ->assertTableColumnExists(
             'attendance_status',
@@ -180,7 +189,9 @@ it('shows lesson plan roster and editable attendance only to the confirmed subst
             (string) $enrollment->id,
             AttendanceStatus::Late->value,
         )
-        ->call('updateTableColumnState', 'notes', (string) $enrollment->id, 'Arrived late')
+        ->callAction(TestAction::make('editAttendanceNotes')->table($enrollment), [
+            'notes' => 'Arrived late',
+        ])
         ->assertHasNoErrors();
 
     expect(EventAttendee::query()
@@ -192,8 +203,11 @@ it('shows lesson plan roster and editable attendance only to the confirmed subst
         ->exists())->toBeTrue();
 
     $this->actingAs(User::factory()->isTeacher()->create())
-        ->get(SubstituteEventDetails::getUrl(['event' => $event], panel: 'admin'))
-        ->assertForbidden();
+        ->get(EventResource::getUrl('view', ['record' => $event], panel: 'admin'))
+        ->assertNotFound();
+
+    $this->get('/admin/substitute-events/'.$event->id)
+        ->assertNotFound();
 });
 
 it('lets a confirmed substitute request release while retaining the assignment', function (): void {
@@ -202,7 +216,7 @@ it('lets a confirmed substitute request release while retaining the assignment',
     $request = confirmedSubstituteRequest($event, $teacher);
     $this->actingAs($teacher);
 
-    livewire(SubstituteEventDetails::class, ['event' => $event])
+    livewire(ViewEvent::class, ['record' => $event->id])
         ->callAction(TestAction::make('requestRelease'), ['reason' => 'Family emergency'])
         ->assertNotified('Release requested');
 

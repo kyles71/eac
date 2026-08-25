@@ -22,8 +22,10 @@ use App\Models\User;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Support\Enums\IconPosition;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
@@ -165,6 +167,7 @@ it('shows confirmed substitute assignments in events and exposes view-only lesso
     livewire(ViewEvent::class, ['record' => $event->id])
         ->assertSee('Practice the recital entrance.')
         ->assertSchemaComponentDoesNotExist('updated_at', 'infolist')
+        ->assertActionVisible('requestRelease')
         ->assertActionHidden(EditAction::class)
         ->assertActionHidden('sendEmail')
         ->assertActionHidden(TestAction::make('emailAttendance')->table());
@@ -177,7 +180,7 @@ it('shows confirmed substitute assignments in events and exposes view-only lesso
         ->assertActionMounted('view')
         ->assertSchemaComponentVisible('details', 'mountedActionSchema0')
         ->assertActionDataSet(fn (array $data): bool => ($data['details'] ?? null) === 'Practice the recital entrance.')
-        ->assertActionVisible('viewSubstituteEventDetails')
+        ->assertActionDoesNotExist('viewSubstituteEventDetails')
         ->assertActionVisible('viewFullEvent')
         ->assertActionHasUrl('viewFullEvent', $eventUrl);
 });
@@ -299,7 +302,19 @@ it('filters events by any of the selected substitute coverage statuses', functio
             ->toBe([$event->id]);
     }
 
-    $component = livewire(ListEvents::class)->loadTable();
+    $component = livewire(ListEvents::class)
+        ->loadTable()
+        ->assertTableColumnExists(
+            'name',
+            fn (TextColumn $column): bool => $column->getIcon($column->getState()) === Heroicon::OutlinedUser
+                && $column->getIconPosition() === IconPosition::Before,
+            $confirmed,
+        )
+        ->assertTableColumnExists(
+            'name',
+            fn (TextColumn $column): bool => $column->getIcon($column->getState()) === null,
+            $notNeeded,
+        );
     $filters = $component->instance()->getTable()->getFilters();
     $coverageFilter = $filters['substitute_coverage'] ?? null;
 
