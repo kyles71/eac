@@ -109,7 +109,7 @@ final class MyEnrollments extends TablePage
                 TextColumn::make('course_starts_at')
                     ->label('Starts')
                     ->state(fn (Enrollment $record): mixed => $record->course?->firstMeetingStartsAt())
-                    ->dateTime('M j, Y g:i A')
+                    ->dateTime()
                     ->sortable(false),
                 TextColumn::make('status')
                     ->state(fn (Enrollment $record): string => EnrollmentStatus::for($record))

@@ -127,7 +127,6 @@ final class EnrollmentsTable
                         ->schema([
                             DateTimePicker::make('expires_at')
                                 ->label('Hold Expires At')
-                                ->timezone((string) config('app.display_timezone', config('app.timezone')))
                                 ->rules([new FutureDisplayDateTime])
                                 ->required(),
                             Textarea::make('notes')->rows(3),

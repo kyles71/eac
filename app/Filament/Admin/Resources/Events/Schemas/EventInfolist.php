@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
 use App\Models\Event;
+use App\Models\EventSubstituteRequest;
 use App\Support\MediaDisks;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Gate;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 final class EventInfolist
 {
@@ -55,7 +61,80 @@ final class EventInfolist
                             ->visibility('private')
                             // ->conversion('thumb')
                             ->columnSpanFull(),
+                        RepeatableEntry::make('documents')
+                            ->state(fn (Event $record) => $record->getMedia('documents'))
+                            ->schema([
+                                TextEntry::make('file_name')
+                                    ->label('Document')
+                                    ->icon(Heroicon::OutlinedArrowDownTray)
+                                    ->url(fn (Media $record): string => $record->getTemporaryUrl(
+                                        now()->addMinutes((int) config('filament.temporary_file_url_expiry_minutes', 30)),
+                                    ))
+                                    ->openUrlInNewTab(),
+                            ])
+                            ->contained(false)
+                            ->columnSpanFull()
+                            ->visible(fn (Event $record): bool => $record->getMedia('documents')->isNotEmpty()),
                     ]),
+                Section::make('Substitute Coverage')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('substitute_coverage_status')
+                            ->label('Status')
+                            ->state(fn (Event $record) => $record->substituteCoverageStatus())
+                            ->badge(),
+                        TextEntry::make('substituteTeacher.fullName')
+                            ->label('Confirmed Substitute')
+                            ->placeholder('None'),
+                        TextEntry::make('pending_substitute')
+                            ->label('Pending Request')
+                            ->state(fn (Event $record): ?string => $record->pendingSubstituteRequest()?->teacher?->fullName)
+                            ->placeholder('None'),
+                        TextEntry::make('substitute_needed_at')
+                            ->label('Coverage Needed Since')
+                            ->dateTime()
+                            ->placeholder('Not marked as needed'),
+                        TextEntry::make('release_reason')
+                            ->label('Release Request')
+                            ->state(fn (Event $record): ?string => $record->currentSubstituteRequest()?->release_reason)
+                            ->placeholder('None')
+                            ->columnSpanFull(),
+                        RepeatableEntry::make('substituteRequests')
+                            ->label('Request History')
+                            ->table([
+                                TableColumn::make('Teacher'),
+                                TableColumn::make('Status'),
+                                TableColumn::make('Requested By'),
+                                TableColumn::make('Requested'),
+                                TableColumn::make('Reason / Note'),
+                            ])
+                            ->schema([
+                                TextEntry::make('teacher.fullName')
+                                    ->label('Teacher')
+                                    ->placeholder('Deleted user'),
+                                TextEntry::make('status')
+                                    ->badge(),
+                                TextEntry::make('requestedBy.fullName')
+                                    ->label('Requested By')
+                                    ->placeholder('Deleted user'),
+                                TextEntry::make('created_at')
+                                    ->label('Requested')
+                                    ->dateTime(),
+                                TextEntry::make('request_summary')
+                                    ->label('Reason / Note')
+                                    ->state(fn (EventSubstituteRequest $record): ?string => $record->release_reason
+                                        ?? $record->response_note
+                                        ?? $record->closure_reason
+                                        ?? $record->request_reason)
+                                    ->placeholder('None'),
+                            ])
+                            ->contained(false)
+                            ->columnSpanFull(),
+                    ])
+                    ->visible(fn (Event $record): bool => Gate::allows('update', $record)
+                        && ($record->substitute_needed_at !== null
+                            || $record->substituteRequests()->exists())),
                 Section::make('Cancellation')
                     ->columns(2)
                     ->columnSpanFull()
@@ -70,16 +149,6 @@ final class EventInfolist
                         TextEntry::make('cancellation_reason')
                             ->label('Reason')
                             ->columnSpanFull(),
-                    ]),
-                Section::make('Record')
-                    ->columns(2)
-                    ->collapsed()
-                    ->columnSpanFull()
-                    ->schema([
-                        TextEntry::make('created_at')
-                            ->dateTime(),
-                        TextEntry::make('updated_at')
-                            ->dateTime(),
                     ]),
             ]);
     }

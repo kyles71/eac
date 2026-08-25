@@ -13,6 +13,7 @@ use App\Models\Form;
 use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
+use App\Models\RecurringPrivateLessonCharge;
 use App\Models\Student;
 use App\Models\User;
 use App\Observers\CourseFormObserver;
@@ -56,6 +57,7 @@ final class AppServiceProvider extends ServiceProvider
         Form::observe(FormObserver::class);
         GiftCardType::observe(ProductableObserver::class);
         Holiday::observe(HolidayObserver::class);
+        RecurringPrivateLessonCharge::observe(ProductableObserver::class);
         Student::observe(StudentObserver::class);
         Gear::observe(ProductableObserver::class);
         User::observe(UserObserver::class);

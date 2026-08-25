@@ -99,7 +99,8 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
-            return /* $this->hasVerifiedEmail() && */ $this->getAllPermissions()->isNotEmpty();
+            return /* $this->hasVerifiedEmail() && */ $this->hasRole('teacher')
+                || $this->getAllPermissions()->isNotEmpty();
         }
 
         return true;
@@ -151,6 +152,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
             ->withTimestamps();
     }
 
+    /** @return HasMany<Event, $this> */
+    public function substituteEvents(): HasMany
+    {
+        return $this->hasMany(Event::class, 'substitute_teacher_id');
+    }
+
+    /** @return HasMany<EventSubstituteRequest, $this> */
+    public function substituteRequests(): HasMany
+    {
+        return $this->hasMany(EventSubstituteRequest::class, 'teacher_id');
+    }
+
     public function forms(): HasMany
     {
         return $this->hasMany(FormUser::class);
@@ -177,9 +190,23 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasManyThrough(PaymentPlan::class, Order::class);
     }
 
+    /** @return HasMany<CartItem, $this> */
     public function cartItems(): HasMany
     {
         return $this->hasMany(CartItem::class);
+    }
+
+    /** @return HasMany<RecurringPrivateLesson, $this> */
+    public function recurringPrivateLessons(): HasMany
+    {
+        return $this->hasMany(RecurringPrivateLesson::class);
+    }
+
+    /** @return BelongsToMany<Product, $this> */
+    public function assignedProducts(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'product_user_assignment')
+            ->withTimestamps();
     }
 
     public function giftCardsPurchased(): HasMany

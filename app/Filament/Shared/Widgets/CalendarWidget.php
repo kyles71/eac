@@ -7,6 +7,7 @@ namespace App\Filament\Shared\Widgets;
 use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -96,11 +97,9 @@ final class CalendarWidget extends FullCalendarWidget
                     TextInput::make('focus')
                         ->label('Focus / Theme'),
                     DateTimePicker::make('start_time')
-                        ->label('Starts At')
-                        ->timezone($this->displayTimezone()),
+                        ->label('Starts At'),
                     DateTimePicker::make('end_time')
-                        ->label('Ends At')
-                        ->timezone($this->displayTimezone()),
+                        ->label('Ends At'),
                     Textarea::make('description')
                         ->label('Description')
                         ->columnSpanFull(),
@@ -232,9 +231,10 @@ final class CalendarWidget extends FullCalendarWidget
             EditAction::make()
                 ->authorize('update')
                 ->visible(fn (Event $record): bool => ! $record->isCancelled()),
+            EventSubstituteActions::manage(fn (): ?string => $this->fullEventUrl()),
             $cancelEventAction,
             Action::make('viewFullEvent')
-                ->label('View Full Event')
+                ->label('View Event')
                 ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
                 ->color('gray')
                 ->visible(fn (): bool => $this->canViewFullEvent())
@@ -403,11 +403,6 @@ final class CalendarWidget extends FullCalendarWidget
         return EventResource::getUrl(name: 'view', parameters: ['record' => $record]);
     }
 
-    private function displayTimezone(): string
-    {
-        return (string) config('app.display_timezone', config('app.timezone'));
-    }
-
     private function cancellationSection(): Section
     {
         return Section::make('Cancellation')
@@ -415,8 +410,7 @@ final class CalendarWidget extends FullCalendarWidget
             ->columns(2)
             ->schema([
                 DateTimePicker::make('cancelled_at')
-                    ->label('Cancelled At')
-                    ->timezone($this->displayTimezone()),
+                    ->label('Cancelled At'),
                 Textarea::make('cancellation_reason')
                     ->label('Reason')
                     ->columnSpanFull(),

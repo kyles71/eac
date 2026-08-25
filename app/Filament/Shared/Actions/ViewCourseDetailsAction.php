@@ -68,8 +68,7 @@ final class ViewCourseDetailsAction
                     TextInput::make('student')
                         ->placeholder('Unassigned'),
                     DateTimePicker::make('starts_at')
-                        ->label('Starts At')
-                        ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                        ->label('Starts At'),
                     TextInput::make('duration'),
                     TextInput::make('meetings')
                         ->label('Class Meetings'),

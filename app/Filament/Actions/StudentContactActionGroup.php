@@ -14,9 +14,12 @@ use Filament\Support\Icons\Heroicon;
 
 final readonly class StudentContactActionGroup
 {
-    public static function make(Student|Closure $student, Event|Closure|null $event = null): ActionGroup
-    {
-        return ActionGroup::make(self::actions($student, $event))
+    public static function make(
+        Student|Closure $student,
+        Event|Closure|null $event = null,
+        bool|Closure $customEmailVisible = true,
+    ): ActionGroup {
+        return ActionGroup::make(self::actions($student, $event, $customEmailVisible))
             ->label('Contact Student')
             ->icon(Heroicon::OutlinedEnvelope);
     }
@@ -24,12 +27,16 @@ final readonly class StudentContactActionGroup
     /**
      * @return array<Action>
      */
-    public static function actions(Student|Closure $student, Event|Closure|null $event = null): array
-    {
+    public static function actions(
+        Student|Closure $student,
+        Event|Closure|null $event = null,
+        bool|Closure $customEmailVisible = true,
+    ): array {
         return [
             SendEmailAction::make()
                 ->label('Custom Email')
-                ->forStudent($student, $event),
+                ->forStudent($student, $event)
+                ->visible($customEmailVisible),
             SendStudentCommunicationAction::make('sendFirstAidNote')
                 ->student($student)
                 ->event($event)

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Events;
 
 use App\Actions\Mail\QueueManagedEmail;
+use App\Enums\EventSubstituteRequestStatus;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\Mail\EventCancellationContentService;
@@ -48,13 +49,27 @@ final readonly class CancelEvent
                 throw new DomainException('Events with an end time can only be cancelled before they end. Events without an end time can only be cancelled before they start.');
             }
 
+            if ($lockedEvent->recurringPrivateLessonCharge()->exists()) {
+                throw new DomainException('Use the recurring private lesson Remove action so paid lessons can be credited or refunded.');
+            }
+
             Gate::forUser($cancelledBy)->authorize('cancel', $lockedEvent);
 
             $lockedEvent->update([
                 'cancellation_reason' => $reason,
                 'cancelled_at' => now(),
                 'cancelled_by_user_id' => $cancelledBy->id,
+                'substitute_needed_at' => null,
             ]);
+
+            $lockedEvent->substituteRequests()
+                ->where('status', EventSubstituteRequestStatus::Pending)
+                ->update([
+                    'status' => EventSubstituteRequestStatus::Withdrawn,
+                    'closed_at' => now(),
+                    'closed_by_user_id' => $cancelledBy->id,
+                    'closure_reason' => 'The event was cancelled.',
+                ]);
 
             if (! $sendEmail) {
                 return 0;

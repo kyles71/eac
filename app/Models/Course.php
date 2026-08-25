@@ -41,6 +41,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'id' => 'integer',
         'semester' => CourseSemester::class,
         'capacity' => 'integer',
+        'is_private' => 'boolean',
         'event_reminder_processed_at' => 'datetime',
     ];
 
@@ -190,6 +191,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return null;
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function teachers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
@@ -218,6 +220,12 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
+    }
+
+    /** @return HasOne<RecurringPrivateLesson, $this> */
+    public function recurringPrivateLesson(): HasOne
+    {
+        return $this->hasOne(RecurringPrivateLesson::class);
     }
 
     /** @return HasMany<CourseHoldSeat, $this> */

@@ -170,7 +170,7 @@ final class CheckoutSuccess extends Page
                             TextEntry::make('date')
                                 ->label('Date')
                                 ->state(fn () => $this->order->created_at)
-                                ->dateTime('M j, Y g:i A'),
+                                ->dateTime(),
                         ])
                         ->columnSpan(fn (): array => $this->hasOrderCourseEnrollments()
                             ? ['default' => 1, 'md' => 1]

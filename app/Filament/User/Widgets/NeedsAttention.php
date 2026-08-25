@@ -6,6 +6,8 @@ namespace App\Filament\User\Widgets;
 
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
+use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Enums\RecurringPrivateLessonStatus;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\HeldClasses;
 use App\Filament\User\Pages\MyEnrollments;
@@ -14,6 +16,7 @@ use App\Models\CourseHold;
 use App\Models\Enrollment;
 use App\Models\FormUser;
 use App\Models\Installment;
+use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
 use Filament\Widgets\Widget;
 
@@ -103,10 +106,38 @@ final class NeedsAttention extends Widget
                 'color' => 'warning',
             ]);
 
+        $privateLessons = RecurringPrivateLessonCharge::query()
+            ->where('status', RecurringPrivateLessonChargeStatus::Billed)
+            ->whereHas('recurringPrivateLesson', fn ($query) => $query
+                ->where('user_id', $user->id)
+                ->where('status', RecurringPrivateLessonStatus::Active))
+            ->whereHas('event', fn ($query) => $query
+                ->whereNull('cancelled_at')
+                ->where('start_time', '>', now()->addDay()))
+            ->with(['event', 'recurringPrivateLesson.student'])
+            ->orderBy(
+                \App\Models\Event::query()
+                    ->select('start_time')
+                    ->whereColumn('events.id', 'recurring_private_lesson_charges.event_id'),
+            )
+            ->get()
+            ->map(fn (RecurringPrivateLessonCharge $charge): array => [
+                'title' => 'Recurring private lesson payment due',
+                'description' => $charge->recurringPrivateLesson->student->displayName()
+                    .' · '.format_money($charge->amount)
+                    .' · '.$charge->event->start_time
+                        ->timezone((string) config('app.display_timezone', config('app.timezone')))
+                        ->format('M j, Y \a\t g:i A'),
+                'url' => Billing::getUrl(['tab' => 'private-lessons']),
+                'action' => 'Review recurring private lessons',
+                'color' => 'warning',
+            ]);
+
         return $installments
             ->concat($forms)
             ->concat($enrollments)
             ->concat($holds)
+            ->concat($privateLessons)
             ->values()
             ->all();
     }

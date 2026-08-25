@@ -359,11 +359,13 @@ it('shows owner calendars through fixed role access', function (string $slug): v
     Calendar::SLUG_STAFF,
 ]);
 
-it('grants admin panel access through admin permissions rather than calendar visibility alone', function (): void {
+it('grants admin panel access to teachers and users with admin permissions', function (): void {
     $owner = User::factory()->isOwner()->create();
+    $teacher = User::factory()->isTeacher()->create();
     $customCalendarUser = User::factory()->create();
 
     expect($owner->canAccessPanel(Filament::getPanel('admin')))->toBeTrue()
+        ->and($teacher->canAccessPanel(Filament::getPanel('admin')))->toBeTrue()
         ->and($owner->canAccessPanel(Filament::getPanel('user')))->toBeTrue()
         ->and($customCalendarUser->canAccessPanel(Filament::getPanel('admin')))->toBeFalse();
 });
@@ -841,7 +843,9 @@ it('opens admin calendar events in the modal with permitted admin actions', func
         ->assertActionMounted('view')
         ->assertActionVisible(EditAction::class)
         ->assertActionVisible('cancelEvent')
+        ->assertActionVisible('manageEventSubstitute')
         ->assertActionVisible('viewFullEvent')
+        ->assertActionHasUrl('manageEventSubstitute', $fullEventUrl)
         ->assertActionHasUrl('viewFullEvent', $fullEventUrl)
         ->assertActionDoesNotExist('addCourseProductToCart')
         ->assertActionDoesNotExist('viewCourseProductInStore');
@@ -862,6 +866,7 @@ it('hides admin calendar edit and full event actions without permission', functi
         ->assertActionMounted('view')
         ->assertActionHidden(EditAction::class)
         ->assertActionHidden('cancelEvent')
+        ->assertActionHidden('manageEventSubstitute')
         ->assertActionHidden('viewFullEvent');
 });
 

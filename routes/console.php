@@ -49,6 +49,12 @@ Schedule::command('events:send-reminders')
     ->name('send-event-reminders')
     ->description('Send reminders for events occurring in two weeks');
 
+Schedule::command('events:send-substitute-request-reminders')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('send-event-substitute-request-reminders')
+    ->description('Remind teachers and staff about unanswered event substitute requests');
+
 Schedule::command('enrollments:send-open-reminders')
     ->dailyAt('08:00')
     ->timezone('America/New_York')
@@ -62,6 +68,19 @@ Schedule::command('cart:send-abandoned-reminders')
     ->withoutOverlapping()
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
+
+Schedule::command('private-lessons:send-payment-reminders')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-recurring-private-lesson-payment-reminders')
+    ->description('Send seven-day and two-day recurring private lesson payment reminders');
+
+Schedule::command('private-lessons:cancel-unpaid')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('cancel-unpaid-recurring-private-lessons')
+    ->description('Cancel unpaid recurring private lessons at the 24-hour cutoff');
 
 Schedule::command('backup:clean', ['--disable-notifications'])
     ->dailyAt('03:10')

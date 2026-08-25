@@ -55,8 +55,7 @@ final class CourseForm
                     ->schema([
                         DateTimePicker::make('start_time')
                             ->label('Starts At')
-                            ->required()
-                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                            ->required(),
                         TextInput::make('duration')
                             ->label('Duration (minutes)')
                             ->required()

@@ -271,7 +271,8 @@ final class Cart extends Page implements HasTable
      */
     public function getPaymentPlanTemplatesProperty(): Collection
     {
-        if ($this->cartItems->isEmpty()) {
+        if ($this->cartItems->isEmpty()
+            || $this->cartItems->contains(fn (CartItem $cartItem): bool => ! $cartItem->product->allows_payment_plan)) {
             return collect();
         }
 
