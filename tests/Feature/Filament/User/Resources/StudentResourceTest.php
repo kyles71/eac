@@ -271,6 +271,8 @@ it('shows current classes and progressively loads past enrollment history', func
 
     $pastMeetingWithoutEnd = now()->subDay()->startOfMinute();
 
+    $pastEvents = [];
+
     foreach (range(1, 6) as $number) {
         $course = Course::factory()->create([
             'name' => "Past Course {$number}",
@@ -278,7 +280,7 @@ it('shows current classes and progressively loads past enrollment history', func
         if ($number === 1) {
             $course->teachers()->sync([$pastTeacher->id]);
         }
-        Event::factory()->create([
+        $pastEvents[] = Event::factory()->create([
             'course_id' => $course->id,
             'start_time' => $number === 1 ? $pastMeetingWithoutEnd : now()->subDays($number),
             'end_time' => $number === 1 ? null : now()->subDays($number)->addHour(),
@@ -292,6 +294,7 @@ it('shows current classes and progressively loads past enrollment history', func
     livewire(ViewStudent::class, ['record' => $student->id])
         ->loadTable()
         ->assertCanSeeTableRecords([$currentEvent])
+        ->assertCanNotSeeTableRecords($pastEvents)
         ->assertSee('Current Ballet')
         ->assertSee('Pearl Primus')
         ->assertSee('Pearl teaches the current class.')
@@ -331,14 +334,14 @@ it('shows direct student event invitations on the courses and events table', fun
     $directInvite = Event::factory()->create([
         'name' => 'Private Rehearsal',
         'course_id' => null,
-        'start_time' => now()->subDay(),
-        'end_time' => now()->subDay()->addHour(),
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
     ]);
     $otherInvite = Event::factory()->create([
         'name' => 'Other Rehearsal',
         'course_id' => null,
-        'start_time' => now()->subDay(),
-        'end_time' => now()->subDay()->addHour(),
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
     ]);
 
     EventAttendee::factory()->forStudent($student)->create(['event_id' => $directInvite->id]);
@@ -354,4 +357,27 @@ it('shows direct student event invitations on the courses and events table', fun
         ->assertActionMounted(TestAction::make('viewStudentEventDetails')->table($directInvite))
         ->assertActionDataSet(fn (array $data): bool => $data['name'] === 'Private Rehearsal'
             && $data['course_name'] === null);
+});
+
+it('does not expose private attendance notes on the family student profile', function (): void {
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $course = Course::factory()->create();
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => auth()->id(),
+    ]);
+    EventAttendee::factory()->forStudent($student)->create([
+        'event_id' => $event->id,
+        'notes' => 'Private staff-only attendance context',
+    ]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertSee($event->name)
+        ->assertDontSee('Private staff-only attendance context');
 });

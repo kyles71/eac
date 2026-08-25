@@ -36,6 +36,33 @@ final class Event extends Model implements HasMedia
         'reminder_processed_at' => 'datetime',
     ];
 
+    public static function applyAdminAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->whereHas(
+            'course.teachers',
+            fn (Builder $query): Builder => $query->whereKey($user->id),
+        );
+    }
+
+    public static function applyNotPassedConstraint(Builder $query, ?CarbonInterface $dateTime = null): Builder
+    {
+        $dateTime ??= now();
+
+        return $query->where(function (Builder $query) use ($dateTime): void {
+            $query
+                ->where('end_time', '>=', $dateTime)
+                ->orWhere(function (Builder $query) use ($dateTime): void {
+                    $query
+                        ->whereNull('end_time')
+                        ->where('start_time', '>=', $dateTime);
+                });
+        });
+    }
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
@@ -160,6 +187,12 @@ final class Event extends Model implements HasMedia
         return $this->hasMany(EventAttendee::class);
     }
 
+    /** @return HasMany<StudentCommunication, $this> */
+    public function studentCommunications(): HasMany
+    {
+        return $this->hasMany(StudentCommunication::class);
+    }
+
     public function excludedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'event_exclusions')
@@ -185,6 +218,11 @@ final class Event extends Model implements HasMedia
                         ->where('start_time', '<', $endsAt);
                 });
         });
+    }
+
+    public function scopeNotPassed(Builder $query, ?CarbonInterface $dateTime = null): void
+    {
+        self::applyNotPassedConstraint($query, $dateTime);
     }
 
     public function scopeVisibleOnCalendar(Builder $query, Calendar $calendar, User $user): Builder
@@ -295,10 +333,24 @@ final class Event extends Model implements HasMedia
         });
     }
 
+    public function isAccessibleToAdminUser(User $user): bool
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return true;
+        }
+
+        return $this->course()
+            ->whereHas(
+                'teachers',
+                fn (Builder $query): Builder => $query->whereKey($user->id),
+            )
+            ->exists();
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('images')
-            ->useDisk(MediaDisks::public());
+            ->useDisk(MediaDisks::private());
 
         $this->addMediaCollection('documents')
             ->useDisk(MediaDisks::private());

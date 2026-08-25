@@ -222,7 +222,9 @@ it('retries failed installments', function () {
     $installment = Installment::factory()->failed(1)->create([
         'payment_plan_id' => $plan->id,
         'amount' => 3333,
-        'due_date' => now()->toDateString(),
+        'due_date' => now()
+            ->setTimezone((string) config('app.display_timezone', config('app.timezone')))
+            ->toDateString(),
     ]);
 
     $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_retry_123', 'status' => 'succeeded']);

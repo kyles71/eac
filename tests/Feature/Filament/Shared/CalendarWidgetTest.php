@@ -32,6 +32,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 use Saade\FilamentFullCalendar\Actions\CreateAction as CalendarCreateAction;
 use Spatie\Tags\Tag;
 
@@ -829,7 +830,7 @@ it('does not add resource urls to calendar feed events', function (): void {
 it('opens admin calendar events in the modal with permitted admin actions', function (): void {
     Filament::setCurrentPanel('admin');
 
-    $user = User::factory()->create();
+    $user = User::factory()->isOwner()->create();
     $user->givePermissionTo(['View:Event', 'Update:Event', 'Cancel:Event']);
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
     $event = standaloneEvent('Admin Modal Event', $calendar);
@@ -872,7 +873,7 @@ it('hides admin calendar edit and full event actions without permission', functi
 it('hides cancellation for a completed event in the admin calendar modal', function (): void {
     Filament::setCurrentPanel('admin');
 
-    $user = User::factory()->create();
+    $user = User::factory()->isOwner()->create();
     $user->givePermissionTo(['View:Event', 'Cancel:Event']);
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
     $event = Event::factory()->create([
@@ -895,7 +896,7 @@ it('cancels an event from the admin calendar modal', function (): void {
     Filament::setCurrentPanel('admin');
     Mail::fake();
 
-    $user = User::factory()->create();
+    $user = User::factory()->isOwner()->create();
     $user->givePermissionTo(['View:Event', 'Cancel:Event']);
     $calendar = calendarBySlug(Calendar::SLUG_EAC);
     $event = standaloneEvent('Cancelled From Calendar', $calendar);
@@ -986,6 +987,112 @@ it('saves direct invitations through the shared people picker', function (): voi
 
     expect($event->attendees()->whereMorphedTo('attendee', $user)->exists())->toBeFalse()
         ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue();
+});
+
+it('scopes people and group picker options to active teaching assignments', function (): void {
+    $teacher = User::factory()->isTeacher()->create();
+    $activeCourse = Course::factory()->create(['name' => 'Active Course']);
+    $activeCourse->teachers()->sync([$teacher->id]);
+    Event::factory()->create([
+        'course_id' => $activeCourse->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $activeUser = User::factory()->create();
+    $activeStudent = Student::factory()->for($activeUser)->create();
+    Enrollment::factory()->withStudent($activeStudent)->create([
+        'course_id' => $activeCourse->id,
+        'user_id' => $activeUser->id,
+    ]);
+
+    $concludedCourse = Course::factory()->create(['name' => 'Concluded Course']);
+    $concludedCourse->teachers()->sync([$teacher->id]);
+    Event::factory()->create([
+        'course_id' => $concludedCourse->id,
+        'start_time' => now()->subDay()->subHour(),
+        'end_time' => now()->subDay(),
+    ]);
+    $concludedUser = User::factory()->create();
+    $concludedStudent = Student::factory()->for($concludedUser)->create();
+    Enrollment::factory()->withStudent($concludedStudent)->create([
+        'course_id' => $concludedCourse->id,
+        'user_id' => $concludedUser->id,
+    ]);
+
+    $otherCourse = Course::factory()->create(['name' => 'Other Course']);
+    Event::factory()->create([
+        'course_id' => $otherCourse->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $otherUser = User::factory()->create();
+    $otherStudent = Student::factory()->for($otherUser)->create();
+    Enrollment::factory()->withStudent($otherStudent)->create([
+        'course_id' => $otherCourse->id,
+        'user_id' => $otherUser->id,
+    ]);
+    $owner = User::factory()->isOwner()->create();
+
+    $this->actingAs($teacher);
+
+    $courseOptions = eventFormComponent('add_course')->getOptions();
+    $studentOptions = eventFormComponent('add_student')->getOptions();
+    $userOptions = eventFormComponent('add_user')->getOptions();
+
+    expect($courseOptions)
+        ->toHaveKey($activeCourse->id)
+        ->not->toHaveKeys([$concludedCourse->id, $otherCourse->id])
+        ->and($studentOptions)
+        ->toHaveKey($activeStudent->id)
+        ->not->toHaveKeys([$concludedStudent->id, $otherStudent->id])
+        ->and($userOptions)
+        ->toHaveKeys([$activeUser->id, $owner->id])
+        ->not->toHaveKeys([$concludedUser->id, $otherUser->id]);
+
+    $this->actingAs($owner);
+
+    expect(eventFormComponent('add_course')->getOptions())
+        ->toHaveKeys([$activeCourse->id, $concludedCourse->id, $otherCourse->id])
+        ->and(eventFormComponent('add_student')->getOptions())
+        ->toHaveKeys([$activeStudent->id, $concludedStudent->id, $otherStudent->id])
+        ->and(eventFormComponent('add_user')->getOptions())
+        ->toHaveKeys([$activeUser->id, $concludedUser->id, $otherUser->id]);
+});
+
+it('rejects inaccessible picker submissions while preserving existing inaccessible invitations', function (): void {
+    $teacher = User::factory()->isTeacher()->create();
+    $course = Course::factory()->create();
+    $course->teachers()->sync([$teacher->id]);
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $student = Student::factory()->create();
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $student->user_id,
+    ]);
+    $unrelatedUser = User::factory()->create();
+    $event = standaloneEvent('Scoped Invitations');
+    EventAttendee::factory()->forUser($unrelatedUser)->create(['event_id' => $event->id]);
+
+    $this->actingAs($teacher);
+
+    expect(fn () => PeopleAndGroupsPicker::saveEventInvitations($event, [[
+        'attendee_type' => $unrelatedUser->getMorphClass(),
+        'attendee_id' => $unrelatedUser->id,
+    ]]))->toThrow(ValidationException::class);
+
+    PeopleAndGroupsPicker::saveEventInvitations($event, [[
+        'attendee_type' => $student->getMorphClass(),
+        'attendee_id' => $student->id,
+    ]]);
+
+    expect($event->attendees()->whereMorphedTo('attendee', $unrelatedUser)->exists())->toBeTrue()
+        ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue()
+        ->and(collect(PeopleAndGroupsPicker::eventInvitationState($event))->pluck('attendee_id')->all())
+        ->toBe([$student->id]);
 });
 
 it('opens user calendar event details as a modal instead of a slideover', function (): void {

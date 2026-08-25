@@ -26,7 +26,16 @@ final class EventInfolist
                     ->schema([
                         TextEntry::make('name'),
                         TextEntry::make('focus')
+                            ->label('Focus / Theme (Public)')
                             ->placeholder('None'),
+                        TextEntry::make('description')
+                            ->label('Public Description')
+                            ->placeholder('None')
+                            ->columnSpanFull(),
+                        TextEntry::make('details')
+                            ->label('Lesson Plan (Staff Only)')
+                            ->placeholder('None')
+                            ->columnSpanFull(),
                         TextEntry::make('course.name')
                             ->label('Course')
                             ->placeholder('None'),
@@ -45,8 +54,8 @@ final class EventInfolist
                     ->schema([
                         SpatieMediaLibraryImageEntry::make('images')
                             ->collection('images')
-                            ->disk(MediaDisks::public())
-                            ->visibility('public')
+                            ->disk(MediaDisks::private())
+                            ->visibility('private')
                             // ->conversion('thumb')
                             ->columnSpanFull(),
                     ]),

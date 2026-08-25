@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace App\Filament\Actions;
 
 use App\Actions\Mail\QueueHandcraftedEmail;
+use App\Actions\Students\SendStudentCustomEmail;
+use App\Models\Event;
 use App\Models\Student;
-use App\Models\User;
-use App\Support\HandcraftedEmailRecipients;
+use App\Models\StudentCommunication;
 use Closure;
-use Filament\Actions\Action;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
+use LogicException;
 
 /**
  * Filament action for composing and queueing handcrafted emails.
@@ -25,12 +25,11 @@ use Filament\Support\Icons\Heroicon;
  *       Textmagic sends archive recipients as a separate message; other mailers receive archive copies by BCC.
  * - withoutArchiveCopy(): Disables archive/self-copy recipients for this action instance.
  */
-final class SendEmailAction extends Action
+final class SendEmailAction extends BaseEmailAction
 {
-    /**
-     * @var array<int, Student|User|string>|Closure
-     */
-    protected array|Closure $defaultTo = [];
+    protected Student|Closure|null $student = null;
+
+    protected Event|Closure|null $studentEvent = null;
 
     /**
      * @var array<int, string>|Closure(): array<int, string>|null
@@ -48,25 +47,10 @@ final class SendEmailAction extends Action
         $this
             ->label('Send Email')
             ->icon(Heroicon::OutlinedEnvelope)
+            ->authorize('Send:Email')
             ->slideOver(false)
             ->schema(fn (): array => [
-                Select::make('to')
-                    ->label('To')
-                    ->multiple()
-                    ->searchable()
-                    ->searchDebounce(500)
-                    ->searchPrompt('Type at least 3 characters to search students or teachers, or enter a complete email address.')
-                    ->searchingMessage('Searching recipients...')
-                    ->noSearchResultsMessage('No matching students, teachers, or email address.')
-                    ->getSearchResultsUsing(
-                        fn (string $search): array => app(HandcraftedEmailRecipients::class)->search($search)
-                    )
-                    ->getOptionLabelsUsing(
-                        fn (array $values): array => app(HandcraftedEmailRecipients::class)->labels($values)
-                    )
-                    ->default(app(HandcraftedEmailRecipients::class)->defaultValues($this->getDefaultTo()))
-                    ->placeholder('Add recipients')
-                    ->required(),
+                $this->recipientSelect(),
                 TextInput::make('subject')
                     ->label('Subject')
                     ->required(),
@@ -89,14 +73,11 @@ final class SendEmailAction extends Action
         return 'sendEmail';
     }
 
-    /**
-     * Set the default recipients shown in the action form.
-     *
-     * @param  array<int, Student|User|string>|Closure  $to
-     */
-    public function to(array|Closure $to): static
+    public function forStudent(Student|Closure $student, Event|Closure|null $event = null): static
     {
-        $this->defaultTo = $to;
+        $this->student = $student;
+        $this->studentEvent = $event;
+        $this->to($student);
 
         return $this;
     }
@@ -125,20 +106,31 @@ final class SendEmailAction extends Action
     }
 
     /**
-     * @return array<int, Student|User|string>
-     */
-    protected function getDefaultTo(): array
-    {
-        return $this->evaluate($this->defaultTo);
-    }
-
-    /**
      * @param  array{to?: mixed, subject?: mixed, body?: mixed}  $data
      */
     private function queueEmails(array $data): bool
     {
+        $recipients = $this->resolveRecipients($data['to'] ?? []);
+        $student = $this->evaluate($this->student);
+
+        if ($student instanceof Student) {
+            $user = $this->authenticatedUser()
+                ?? throw new LogicException('Student emails require an authenticated user.');
+            $event = $this->evaluate($this->studentEvent);
+
+            return app(SendStudentCustomEmail::class)->handle(
+                student: $student,
+                author: $user,
+                event: $event instanceof Event ? $event : null,
+                subject: (string) ($data['subject'] ?? ''),
+                body: (string) ($data['body'] ?? ''),
+                recipientEmails: $recipients,
+                archiveTo: $this->getArchiveTo(),
+            ) instanceof StudentCommunication;
+        }
+
         return app(QueueHandcraftedEmail::class)->handle(
-            recipients: app(HandcraftedEmailRecipients::class)->resolve($data['to'] ?? []),
+            recipients: $recipients,
             subject: (string) ($data['subject'] ?? ''),
             body: (string) ($data['body'] ?? ''),
             deliveryMode: QueueHandcraftedEmail::DELIVERY_MODE_INDIVIDUAL,

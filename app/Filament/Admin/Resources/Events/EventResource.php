@@ -10,12 +10,14 @@ use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Events\Schemas\EventInfolist;
 use App\Filament\Admin\Resources\Events\Tables\EventsTable;
 use App\Models\Event;
+use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class EventResource extends Resource
@@ -35,6 +37,18 @@ final class EventResource extends Resource
         return [
             'name',
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! $user->can('View:Event')) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return Event::applyAdminAccessConstraint($query, $user);
     }
 
     public static function form(Schema $schema): Schema
