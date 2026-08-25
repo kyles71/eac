@@ -45,6 +45,20 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'event_reminder_processed_at' => 'datetime',
     ];
 
+    public static function applyActiveTeachingAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        self::applyNotConcludedConstraint($query, Carbon::now());
+
+        return $query->whereHas(
+            'teachers',
+            fn (Builder $query): Builder => $query->whereKey($user->id),
+        );
+    }
+
     /** @return HasMany<Event, $this> */
     public function events(): HasMany
     {
@@ -359,10 +373,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     {
         $date ??= Carbon::now();
 
-        $query->whereHas(
-            'events',
-            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
-        );
+        self::applyNotConcludedConstraint($query, $date);
     }
 
     public function hasConcluded(?Carbon $date = null): bool
@@ -416,6 +427,14 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
                 $course->attachTag(Calendar::SLUG_EAC, self::CALENDAR_TAG_TYPE);
             }
         });
+    }
+
+    private static function applyNotConcludedConstraint(Builder $query, Carbon $date): Builder
+    {
+        return $query->whereHas(
+            'events',
+            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+        );
     }
 
     private static function applyEventNotPassedConstraint(Builder $query, Carbon $date): Builder

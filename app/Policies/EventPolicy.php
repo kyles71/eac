@@ -29,7 +29,22 @@ final class EventPolicy
 
     public function update(User $authUser, Event $event): bool
     {
-        return $authUser->can('Update:Event') && $this->canManagePrivateEvent($authUser, $event);
+        return $authUser->can('Update:Event')
+            && $event->isAccessibleToAdminUser($authUser)
+            && $this->canManagePrivateEvent($authUser, $event);
+    }
+
+    public function updateAttendance(User $authUser, Event $event): bool
+    {
+        if (! $this->update($authUser, $event)) {
+            return false;
+        }
+
+        if ($event->course_id === null) {
+            return true;
+        }
+
+        return ! $event->course()->firstOrFail()->hasConcluded();
     }
 
     public function cancel(User $authUser, Event $event): bool
@@ -37,6 +52,7 @@ final class EventPolicy
         return $event->canBeCancelledAt()
             && ! $event->recurringPrivateLessonCharge()->exists()
             && $authUser->can('Cancel:Event')
+            && $event->isAccessibleToAdminUser($authUser)
             && $this->canManagePrivateEvent($authUser, $event);
     }
 
@@ -47,7 +63,9 @@ final class EventPolicy
 
     public function delete(User $authUser, Event $event): bool
     {
-        return $authUser->can('DeleteAny:Event') && $this->canManagePrivateEvent($authUser, $event);
+        return $authUser->can('DeleteAny:Event')
+            && $event->isAccessibleToAdminUser($authUser)
+            && $this->canManagePrivateEvent($authUser, $event);
     }
 
     private function canAccessPrivateEvent(User $authUser, Event $event): bool
@@ -59,10 +77,7 @@ final class EventPolicy
                 || $event->course->recurringPrivateLesson->user_id === $authUser->id;
         }
 
-        return $event->course === null
-            || ! $event->course->is_private
-            || $authUser->hasAnyRole(['owner', 'super_admin'])
-            || $event->course->teachers()->whereKey($authUser->id)->exists();
+        return $event->isAccessibleToAdminUser($authUser);
     }
 
     private function canManagePrivateEvent(User $authUser, Event $event): bool

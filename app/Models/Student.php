@@ -20,6 +20,7 @@ use Spatie\Tags\HasTags;
 
 /**
  * @property-read string $fullName
+ * @property-read int $age
  */
 final class Student extends Model
 {
@@ -37,6 +38,18 @@ final class Student extends Model
         'user_id' => 'integer',
         'birthdate' => 'date',
     ];
+
+    public static function applyAdminAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        return $query->whereHas(
+            'courses',
+            fn (Builder $query): Builder => Course::applyActiveTeachingAccessConstraint($query, $user),
+        );
+    }
 
     public function fullName(): Attribute
     {
@@ -120,6 +133,27 @@ final class Student extends Model
     public function additionalEmails(): HasMany
     {
         return $this->hasMany(StudentEmail::class);
+    }
+
+    /** @return HasMany<StaffNote, $this> */
+    public function staffNotes(): HasMany
+    {
+        return $this->hasMany(StaffNote::class);
+    }
+
+    /** @return HasMany<StudentCommunication, $this> */
+    public function studentCommunications(): HasMany
+    {
+        return $this->hasMany(StudentCommunication::class);
+    }
+
+    public function isAccessibleToAdminUser(User $user): bool
+    {
+        return self::applyAdminAccessConstraint(
+            self::query()->whereKey($this->getKey()),
+            $user,
+        )
+            ->exists();
     }
 
     public function medicalWaiverStatus(): MedicalWaiverStatus

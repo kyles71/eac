@@ -10,10 +10,12 @@ use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
 use App\Filament\User\Pages\Dashboard;
+use App\Filament\User\Pages\Messages;
 use App\Filament\User\Pages\Store;
 use App\Filament\User\Widgets\ComingUp;
 use App\Filament\User\Widgets\NeedsAttention;
 use App\Filament\User\Widgets\NextPayment;
+use App\Filament\User\Widgets\RecentStudentNotes;
 use App\Models\Calendar;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
@@ -31,6 +33,7 @@ use App\Models\RecurringPrivateLessonBillingPeriod;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\Student;
 use App\Models\User;
+use App\Notifications\StudentNoteSent;
 use App\Services\DashboardAudienceService;
 use App\Settings\DashboardAppearanceSettings;
 use App\Support\MediaDisks;
@@ -45,10 +48,46 @@ beforeEach(function (): void {
 });
 
 it('keeps the full calendar on the dashboard', function (): void {
-    expect((new Dashboard)->getWidgets())
+    $widgets = (new Dashboard)->getWidgets();
+
+    expect($widgets)
         ->toContain(CalendarWidget::class)
         ->toContain(NextPayment::class)
-        ->not->toContain('App\\Filament\\User\\Widgets\\AccountOverview');
+        ->not->toContain('App\\Filament\\User\\Widgets\\AccountOverview')
+        ->and(array_search(RecentStudentNotes::class, $widgets, true))
+        ->toBeGreaterThan(array_search(NeedsAttention::class, $widgets, true))
+        ->toBeLessThan(array_search(MessagesFromEac::class, $widgets, true));
+});
+
+it('shows dismissible recent student notes and marks viewed notes as read', function (): void {
+    $family = User::factory()->create();
+    $this->actingAs($family);
+
+    expect(RecentStudentNotes::canView())->toBeFalse();
+
+    $family->notify(new StudentNoteSent(42, 'YELLOW Stoplight Note for Avery - Ballet'));
+    $dismissible = $family->unreadNotifications()->sole();
+
+    expect(RecentStudentNotes::canView())->toBeTrue();
+
+    livewire(RecentStudentNotes::class)
+        ->assertSee('Recent Student Notes')
+        ->assertSee('YELLOW Stoplight Note for Avery - Ballet')
+        ->assertSee('View Note')
+        ->assertSee('Dismiss')
+        ->call('dismiss', $dismissible->id);
+
+    expect($dismissible->refresh()->read_at)->not->toBeNull()
+        ->and(RecentStudentNotes::canView())->toBeFalse();
+
+    $family->notify(new StudentNoteSent(43, 'INJURY Note for Avery - Ballet'));
+    $viewable = $family->unreadNotifications()->sole();
+
+    livewire(RecentStudentNotes::class)
+        ->call('viewNote', $viewable->id)
+        ->assertRedirect(Messages::getUrl());
+
+    expect($viewable->refresh()->read_at)->not->toBeNull();
 });
 
 it('only shows needs attention when there are tasks', function (): void {

@@ -39,6 +39,18 @@ final class EventResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! $user->can('View:Event')) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return Event::applyAdminAccessConstraint($query, $user);
+    }
+
     public static function form(Schema $schema): Schema
     {
         return EventForm::configure($schema);
@@ -67,23 +79,5 @@ final class EventResource extends Resource
             'index' => ListEvents::route('/'),
             'view' => ViewEvent::route('/{record}'),
         ];
-    }
-
-    public static function getEloquentQuery(): Builder
-    {
-        $query = parent::getEloquentQuery();
-        $user = auth()->user();
-
-        if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
-            $query->where(function (Builder $query) use ($user): void {
-                $query
-                    ->whereNull('course_id')
-                    ->orWhereHas('course', fn (Builder $query): Builder => $query
-                        ->where('is_private', false)
-                        ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id)));
-            });
-        }
-
-        return $query;
     }
 }

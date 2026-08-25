@@ -22,6 +22,15 @@ final class CoursePolicy
         return $authUser->can('View:Course') && $this->canAccessPrivateCourse($authUser, $course);
     }
 
+    public function viewAttendance(User $authUser, Course $course): bool
+    {
+        return $authUser->can('View:Event')
+            && (
+                ! $authUser->hasCourseRestrictedAdminAccess()
+                || $course->teachers()->whereKey($authUser->id)->exists()
+            );
+    }
+
     public function create(User $authUser): bool
     {
         return $authUser->can('Create:Course');
