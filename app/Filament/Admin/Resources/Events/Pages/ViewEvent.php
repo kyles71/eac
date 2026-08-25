@@ -57,18 +57,18 @@ final class ViewEvent extends ViewRecord implements HasTable
             ->description('Attendance notes are private. Only owners, staff, and teachers can view them; parents and students cannot.')
             ->columns([
                 TextColumn::make('attendance_student_name')
-                    ->label('Student')
-                    ->state(fn (Model $record): string => $this->attendance()->recordStudentName($record)),
+                    ->label('Attendee')
+                    ->state(fn (Model $record): string => $this->attendance()->recordAttendeeName($record)),
                 AttendanceRadioColumn::make('attendance_status')
                     ->label('Attendance')
                     ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
                     ->state(fn (Model $record): ?string => $this->attendance()
-                        ->recordStudentAttendanceStatus($this->event(), $record))
+                        ->recordAttendanceStatus($this->event(), $record))
                     ->updateStateUsing(fn (Model $record, mixed $state): ?string => $this->attendance()
-                        ->setRecordStudentAttendanceStatus($this->event(), $record, $state)),
+                        ->setRecordAttendanceStatus($this->event(), $record, $state)),
                 TextColumn::make('notes')
                     ->label('Notes')
-                    ->state(fn (Model $record): ?string => $this->attendance()->recordStudentNotes($this->event(), $record))
+                    ->state(fn (Model $record): ?string => $this->attendance()->recordAttendanceNotes($this->event(), $record))
                     ->placeholder('No notes')
                     ->wrap()
                     ->limit(60),
@@ -137,8 +137,8 @@ final class ViewEvent extends ViewRecord implements HasTable
             ->icon(Heroicon::OutlinedDocumentText)
             ->iconButton()
             ->authorize(fn (Model $record): bool => Gate::allows('view', $this->event())
-                && $this->attendance()->studentForAttendanceRecord($record) instanceof Student)
-            ->modalHeading(fn (Model $record): string => 'Attendance Notes: '.$this->attendanceStudent($record)->fullName)
+                && $this->attendance()->attendeeForAttendanceRecord($record) !== null)
+            ->modalHeading(fn (Model $record): string => 'Attendance Notes: '.$this->attendance()->recordAttendeeName($record))
             ->modalDescription('This note is private. Only owners, staff, and teachers can view it; parents and students cannot.')
             ->modalWidth('lg')
             ->modalSubmitAction(fn (Action $action): Action|false => Gate::allows('updateAttendance', $this->event()) ? $action : false)
@@ -151,10 +151,10 @@ final class ViewEvent extends ViewRecord implements HasTable
                     ->rows(6),
             ])
             ->fillForm(fn (Model $record): array => [
-                'notes' => $this->attendance()->recordStudentNotes($this->event(), $record),
+                'notes' => $this->attendance()->recordAttendanceNotes($this->event(), $record),
             ])
             ->action(function (array $data, Model $record): void {
-                $this->attendance()->setRecordStudentNotes($this->event(), $record, $data['notes'] ?? null);
+                $this->attendance()->setRecordAttendanceNotes($this->event(), $record, $data['notes'] ?? null);
 
                 Notification::make()
                     ->title('Attendance note saved')
