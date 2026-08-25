@@ -39,6 +39,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
 
@@ -94,7 +95,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                     ->schema([
                         EmbeddedTable::make(),
                     ]),
-                Section::make('Enrollment History')
+                Section::make('Course History')
                     ->columnSpanFull()
                     ->schema([
                         ProgressiveList::make(
@@ -113,19 +114,20 @@ final class ViewStudent extends ViewRecord implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query($this->studentEventsQuery())
+            ->records(fn (): Collection => $this->studentEventRecords())
             ->reorderableColumns(false)
             ->recordTitle(fn (Event $record): string => $record->name)
             ->columns([
-                TextColumn::make('name')
-                    ->label('Event'),
+                TextColumn::make('event_summary')
+                    ->label('Event')
+                    ->state(fn (Event $record): string => $this->studentEventSummary($record)),
                 TextColumn::make('teacher')
                     ->state(fn (Event $record): ?HtmlString => CourseStaffPresenter::render($record->course))
                     ->searchable(false)
                     ->sortable(false)
                     ->placeholder('-'),
                 TextColumn::make('start_time')
-                    ->label('Starts At')
+                    ->label('Next Meeting Time')
                     ->dateTime('M j, Y g:i A')
                     ->timezone((string) config('app.display_timezone', config('app.timezone')))
                     ->searchable(false)
@@ -138,7 +140,6 @@ final class ViewStudent extends ViewRecord implements HasTable
             ])
             ->paginated(false)
             ->searchable(false)
-            ->defaultSort('start_time')
             ->emptyStateHeading('No events')
             ->emptyStateDescription('Assigned classes and direct invitations will appear here.');
     }
@@ -309,6 +310,7 @@ final class ViewStudent extends ViewRecord implements HasTable
         return $course->nextMeetingStartsAt();
     }
 
+    /** @return Builder<Event> */
     private function studentEventsQuery(): Builder
     {
         $student = $this->student();
@@ -330,6 +332,66 @@ final class ViewStudent extends ViewRecord implements HasTable
                         ->where('attendee_id', $student->id));
             })
             ->with(['calendar', 'course.teachers.media']);
+    }
+
+    /**
+     * @return Collection<int, Event>
+     */
+    private function studentEventRecords(): Collection
+    {
+        return $this->studentEventsQuery()
+            ->orderBy('start_time')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (Event $event): string => $this->studentEventGroupingKey($event))
+            ->map(function (Collection $events): Event {
+                /** @var Event $nextEvent */
+                $nextEvent = $events->first();
+
+                $nextEvent->setAttribute('additional_recurring_events_count', $events->count() - 1);
+
+                return $nextEvent;
+            })
+            ->sortBy(fn (Event $event): mixed => $event->start_time)
+            ->values();
+    }
+
+    private function studentEventGroupingKey(Event $event): string
+    {
+        if ($event->course_id === null || ! $event->start_time instanceof CarbonInterface) {
+            return "event:{$event->id}";
+        }
+
+        $localStartTime = $event->start_time
+            ->copy()
+            ->timezone((string) config('app.display_timezone', config('app.timezone')));
+        $durationInSeconds = $event->end_time instanceof CarbonInterface
+            ? $event->start_time->diffInSeconds($event->end_time, true)
+            : null;
+
+        return json_encode([
+            'course_id' => $event->course_id,
+            'name' => $event->name,
+            'weekday' => $localStartTime->dayOfWeek,
+            'time' => $localStartTime->format('H:i:s'),
+            'duration_in_seconds' => $durationInSeconds,
+        ], JSON_THROW_ON_ERROR);
+    }
+
+    private function studentEventSummary(Event $event): string
+    {
+        $additionalEventsCount = (int) $event->getAttribute('additional_recurring_events_count');
+
+        if ($additionalEventsCount === 0 || ! $event->start_time instanceof CarbonInterface) {
+            return $event->name;
+        }
+
+        $weekday = $event->start_time
+            ->copy()
+            ->timezone((string) config('app.display_timezone', config('app.timezone')))
+            ->format('l');
+
+        return "{$event->name} - {$additionalEventsCount} more ".Str::plural($weekday, $additionalEventsCount);
     }
 
     private function viewStudentEventDetailsAction(): ViewAction
