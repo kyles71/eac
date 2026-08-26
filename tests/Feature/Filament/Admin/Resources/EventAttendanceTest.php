@@ -54,6 +54,52 @@ it('shows assigned students as course attendance rows and omits open enrollments
         ->assertCanNotSeeTableRecords([$openEnrollment]);
 });
 
+it('shows invited users and students in standalone event attendance', function (): void {
+    $event = Event::factory()->create([
+        'course_id' => null,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $student = Student::factory()->create([
+        'first_name' => 'Avery',
+        'last_name' => 'Dancer',
+    ]);
+    $user = User::factory()->create([
+        'first_name' => 'Jordan',
+        'last_name' => 'Guardian',
+    ]);
+    $studentInvitation = EventAttendee::factory()->forStudent($student)->create([
+        'event_id' => $event->id,
+        'status' => null,
+        'notes' => null,
+    ]);
+    $userInvitation = EventAttendee::factory()->forUser($user)->create([
+        'event_id' => $event->id,
+        'status' => null,
+        'notes' => null,
+    ]);
+
+    livewire(ViewEvent::class, ['record' => $event->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$studentInvitation, $userInvitation])
+        ->assertTableColumnStateSet('attendance_student_name', 'Avery Dancer', $studentInvitation)
+        ->assertTableColumnStateSet('attendance_student_name', 'Jordan Guardian', $userInvitation)
+        ->call(
+            'updateTableColumnState',
+            'attendance_status',
+            (string) $userInvitation->id,
+            AttendanceStatus::Present->value,
+        )
+        ->assertHasNoErrors()
+        ->callAction(TestAction::make('editAttendanceNotes')->table($userInvitation), data: [
+            'notes' => 'Checked in at the front desk',
+        ])
+        ->assertHasNoActionErrors();
+
+    expect($userInvitation->refresh()->status)->toBe(AttendanceStatus::Present)
+        ->and($userInvitation->notes)->toBe('Checked in at the front desk');
+});
+
 it('records each attendance status from the course attendance matrix', function (): void {
     $course = Course::factory()->create();
     $student = Student::factory()->create();

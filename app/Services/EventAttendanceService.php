@@ -9,6 +9,7 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Student;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -57,7 +58,10 @@ final class EventAttendanceService
         $query = EventAttendee::query()
             ->with('attendee')
             ->where('event_id', $event->id)
-            ->where('attendee_type', (new Student)->getMorphClass());
+            ->whereIn('attendee_type', [
+                (new Student)->getMorphClass(),
+                (new User)->getMorphClass(),
+            ]);
 
         return $query;
     }
@@ -67,24 +71,127 @@ final class EventAttendanceService
         Student $student,
         ?AttendanceStatus $status,
     ): EventAttendee {
-        return $this->attendanceFor($event, $student, [
-            'status' => $status,
-        ]);
+        return $this->setAttendanceStatus($event, $student, $status);
     }
 
     public function setStudentAttendanceNotes(Event $event, Student $student, ?string $notes): EventAttendee
     {
-        return $this->attendanceFor($event, $student, [
-            'notes' => filled($notes) ? $notes : null,
-        ]);
+        return $this->setAttendanceNotes($event, $student, $notes);
     }
 
     public function studentAttendanceStatus(Event $event, Student $student): ?AttendanceStatus
     {
+        return $this->attendanceStatus($event, $student);
+    }
+
+    public function studentNotes(Event $event, Student $student): ?string
+    {
+        return $this->attendanceNotes($event, $student);
+    }
+
+    public function studentForAttendanceRecord(Model $record): ?Student
+    {
+        $attendee = $this->attendeeForAttendanceRecord($record);
+
+        return $attendee instanceof Student ? $attendee : null;
+    }
+
+    public function attendeeForAttendanceRecord(Model $record): Student|User|null
+    {
+        if ($record instanceof Enrollment) {
+            return $record->student;
+        }
+
+        if (
+            $record instanceof EventAttendee
+            && ($record->attendee instanceof Student || $record->attendee instanceof User)
+        ) {
+            return $record->attendee;
+        }
+
+        return null;
+    }
+
+    public function recordAttendeeName(Model $record): string
+    {
+        $attendee = $this->attendeeForAttendanceRecord($record);
+
+        return $attendee instanceof Student || $attendee instanceof User
+            ? $attendee->fullName
+            : 'Unknown Attendee';
+    }
+
+    public function recordAttendanceStatus(Event $event, Model $record): ?string
+    {
+        $attendee = $this->attendeeForAttendanceRecord($record);
+
+        return $attendee instanceof Student || $attendee instanceof User
+            ? $this->attendanceStatus($event, $attendee)?->value
+            : null;
+    }
+
+    public function setRecordAttendanceStatus(Event $event, Model $record, mixed $state): ?string
+    {
+        $attendee = $this->attendeeForAttendanceRecord($record);
+
+        if (! $attendee instanceof Student && ! $attendee instanceof User) {
+            return null;
+        }
+
+        $status = is_string($state) ? AttendanceStatus::tryFrom($state) : null;
+
+        $this->setAttendanceStatus($event, $attendee, $status);
+
+        return $status?->value;
+    }
+
+    public function recordAttendanceNotes(Event $event, Model $record): ?string
+    {
+        $attendee = $this->attendeeForAttendanceRecord($record);
+
+        return $attendee instanceof Student || $attendee instanceof User
+            ? $this->attendanceNotes($event, $attendee)
+            : null;
+    }
+
+    public function setRecordAttendanceNotes(Event $event, Model $record, mixed $state): ?string
+    {
+        $attendee = $this->attendeeForAttendanceRecord($record);
+
+        if (! $attendee instanceof Student && ! $attendee instanceof User) {
+            return null;
+        }
+
+        $notes = is_string($state) ? $state : null;
+
+        $this->setAttendanceNotes($event, $attendee, $notes);
+
+        return filled($notes) ? $notes : null;
+    }
+
+    private function setAttendanceStatus(
+        Event $event,
+        Student|User $attendee,
+        ?AttendanceStatus $status,
+    ): EventAttendee {
+        return $this->attendanceFor($event, $attendee, [
+            'status' => $status,
+        ]);
+    }
+
+    private function setAttendanceNotes(Event $event, Student|User $attendee, ?string $notes): EventAttendee
+    {
+        return $this->attendanceFor($event, $attendee, [
+            'notes' => filled($notes) ? $notes : null,
+        ]);
+    }
+
+    private function attendanceStatus(Event $event, Student|User $attendee): ?AttendanceStatus
+    {
         $status = EventAttendee::query()
             ->where('event_id', $event->id)
-            ->where('attendee_type', $student->getMorphClass())
-            ->where('attendee_id', $student->id)
+            ->where('attendee_type', $attendee->getMorphClass())
+            ->where('attendee_id', $attendee->id)
             ->value('status');
 
         if ($status instanceof AttendanceStatus) {
@@ -94,94 +201,28 @@ final class EventAttendanceService
         return is_string($status) ? AttendanceStatus::tryFrom($status) : null;
     }
 
-    public function studentNotes(Event $event, Student $student): ?string
+    private function attendanceNotes(Event $event, Student|User $attendee): ?string
     {
         $notes = EventAttendee::query()
             ->where('event_id', $event->id)
-            ->where('attendee_type', $student->getMorphClass())
-            ->where('attendee_id', $student->id)
+            ->where('attendee_type', $attendee->getMorphClass())
+            ->where('attendee_id', $attendee->id)
             ->value('notes');
 
         return is_string($notes) ? $notes : null;
     }
 
-    public function studentForAttendanceRecord(Model $record): ?Student
-    {
-        if ($record instanceof Enrollment) {
-            return $record->student;
-        }
-
-        if ($record instanceof EventAttendee && $record->attendee instanceof Student) {
-            return $record->attendee;
-        }
-
-        return null;
-    }
-
-    public function recordStudentName(Model $record): string
-    {
-        $student = $this->studentForAttendanceRecord($record);
-
-        return $student instanceof Student ? $student->fullName : 'Unknown Student';
-    }
-
-    public function recordStudentAttendanceStatus(Event $event, Model $record): ?string
-    {
-        $student = $this->studentForAttendanceRecord($record);
-
-        return $student instanceof Student
-            ? $this->studentAttendanceStatus($event, $student)?->value
-            : null;
-    }
-
-    public function setRecordStudentAttendanceStatus(Event $event, Model $record, mixed $state): ?string
-    {
-        $student = $this->studentForAttendanceRecord($record);
-
-        if (! $student instanceof Student) {
-            return null;
-        }
-
-        $status = is_string($state) ? AttendanceStatus::tryFrom($state) : null;
-
-        $this->setStudentAttendanceStatus($event, $student, $status);
-
-        return $status?->value;
-    }
-
-    public function recordStudentNotes(Event $event, Model $record): ?string
-    {
-        $student = $this->studentForAttendanceRecord($record);
-
-        return $student instanceof Student ? $this->studentNotes($event, $student) : null;
-    }
-
-    public function setRecordStudentNotes(Event $event, Model $record, mixed $state): ?string
-    {
-        $student = $this->studentForAttendanceRecord($record);
-
-        if (! $student instanceof Student) {
-            return null;
-        }
-
-        $notes = is_string($state) ? $state : null;
-
-        $this->setStudentAttendanceNotes($event, $student, $notes);
-
-        return filled($notes) ? $notes : null;
-    }
-
     /**
      * @param  array{status?: AttendanceStatus|null, notes?: string|null}  $values
      */
-    private function attendanceFor(Event $event, Student $student, array $values): EventAttendee
+    private function attendanceFor(Event $event, Student|User $attendee, array $values): EventAttendee
     {
         Gate::authorize('updateAttendance', $event);
 
         $attendance = EventAttendee::query()->firstOrNew([
             'event_id' => $event->id,
-            'attendee_type' => $student->getMorphClass(),
-            'attendee_id' => $student->id,
+            'attendee_type' => $attendee->getMorphClass(),
+            'attendee_id' => $attendee->id,
         ]);
 
         $attendance->forceFill($values);
