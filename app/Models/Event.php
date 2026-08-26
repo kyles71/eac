@@ -54,6 +54,11 @@ final class Event extends Model implements HasMedia
             return $query;
         }
 
+        return self::applyAdminUserViewConstraint($query, $user);
+    }
+
+    public static function applyAdminUserViewConstraint(Builder $query, User $user): Builder
+    {
         return $query->where(function (Builder $query) use ($user): void {
             $query
                 ->where('substitute_teacher_id', $user->id)

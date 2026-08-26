@@ -16,9 +16,7 @@ final class AdminNavigation
 
     public const string Competition = 'Competition';
 
-    public const string Email = 'Email';
-
-    public const string Settings = 'Settings';
+    public const string Tools = 'Tools';
 
     public const int PeopleUsers = 10;
 
@@ -59,6 +57,14 @@ final class AdminNavigation
     public const int CompetitionSeasons = 10;
 
     public const int CompetitionTeams = 20;
+
+    public const int ToolsSettings = 10;
+
+    public const int ToolsMailManager = 20;
+
+    public const int ToolsThemeBuilder = 30;
+
+    public const int ToolsUpdates = 40;
 
     public const int SettingsCalendars = 10;
 
