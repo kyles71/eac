@@ -80,6 +80,25 @@ final class Event extends Model implements HasMedia
         });
     }
 
+    public static function applyPassedConstraint(Builder $query, ?CarbonInterface $dateTime = null): Builder
+    {
+        $dateTime ??= now();
+
+        return $query->where(function (Builder $query) use ($dateTime): void {
+            $query
+                ->where(function (Builder $query) use ($dateTime): void {
+                    $query
+                        ->whereNotNull('end_time')
+                        ->where('end_time', '<', $dateTime);
+                })
+                ->orWhere(function (Builder $query) use ($dateTime): void {
+                    $query
+                        ->whereNull('end_time')
+                        ->where('start_time', '<', $dateTime);
+                });
+        });
+    }
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
@@ -246,6 +265,11 @@ final class Event extends Model implements HasMedia
     public function scopeNotPassed(Builder $query, ?CarbonInterface $dateTime = null): void
     {
         self::applyNotPassedConstraint($query, $dateTime);
+    }
+
+    public function scopePassed(Builder $query, ?CarbonInterface $dateTime = null): void
+    {
+        self::applyPassedConstraint($query, $dateTime);
     }
 
     public function scopeNeedsSubstituteAttention(Builder $query, ?CarbonInterface $dateTime = null): void

@@ -363,6 +363,51 @@ it('shows direct student event invitations on the courses and events table', fun
             && $data['course_name'] === null);
 });
 
+it('moves passed standalone student invitations into course history', function (): void {
+    $displayTimezone = (string) config('app.display_timezone', config('app.timezone'));
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $otherStudent = Student::factory()->create(['user_id' => auth()->id()]);
+    $upcomingEvent = Event::factory()->create([
+        'name' => 'Upcoming Fitting',
+        'course_id' => null,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $pastEvent = Event::factory()->create([
+        'name' => 'Summer Workshop',
+        'course_id' => null,
+        'start_time' => now()->subDays(2),
+        'end_time' => now()->subDays(2)->addHour(),
+    ]);
+    $pastEventWithoutEnd = Event::factory()->create([
+        'name' => 'Costume Pickup',
+        'course_id' => null,
+        'start_time' => now()->subDay()->startOfMinute(),
+        'end_time' => null,
+    ]);
+    $otherPastEvent = Event::factory()->create([
+        'name' => 'Other Student Workshop',
+        'course_id' => null,
+        'start_time' => now()->subDays(3),
+        'end_time' => now()->subDays(3)->addHour(),
+    ]);
+
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $upcomingEvent->id]);
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $pastEvent->id]);
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $pastEventWithoutEnd->id]);
+    EventAttendee::factory()->forStudent($otherStudent)->create(['event_id' => $otherPastEvent->id]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$upcomingEvent])
+        ->assertCanNotSeeTableRecords([$pastEvent, $pastEventWithoutEnd, $otherPastEvent])
+        ->assertSee('Summer Workshop')
+        ->assertSee('Costume Pickup')
+        ->assertSee($pastEvent->end_time->timezone($displayTimezone)->format('M j, Y g:i A'))
+        ->assertSee($pastEventWithoutEnd->start_time->timezone($displayTimezone)->format('M j, Y g:i A'))
+        ->assertDontSee('Other Student Workshop');
+});
+
 it('groups recurring course events while keeping schedule exceptions separate', function (): void {
     $displayTimezone = (string) config('app.display_timezone', config('app.timezone'));
     $student = Student::factory()->create(['user_id' => auth()->id()]);
