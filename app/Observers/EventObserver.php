@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace App\Observers;
 
+use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Models\Event;
+use App\Models\User;
 use App\Services\HolidayConflictService;
 use Illuminate\Validation\ValidationException;
 
 final readonly class EventObserver
 {
-    public function __construct(private HolidayConflictService $holidayConflicts) {}
+    public function __construct(
+        private HolidayConflictService $holidayConflicts,
+        private VoidOrderItemFulfillment $voidOrderItemFulfillment,
+    ) {}
 
     public function saving(Event $event): void
     {
@@ -23,5 +28,16 @@ final readonly class EventObserver
         throw ValidationException::withMessages([
             'start_time' => "This event overlaps the \"{$holiday->name}\" holiday.",
         ]);
+    }
+
+    public function deleting(Event $event): void
+    {
+        $user = auth()->user();
+
+        $this->voidOrderItemFulfillment->forSource(
+            source: $event,
+            voidedBy: $user instanceof User ? $user : null,
+            reason: 'The linked event was deleted.',
+        );
     }
 }

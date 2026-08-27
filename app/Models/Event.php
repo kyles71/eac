@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -225,6 +226,12 @@ final class Event extends Model implements HasMedia
     public function attendees(): HasMany
     {
         return $this->hasMany(EventAttendee::class);
+    }
+
+    /** @return MorphMany<OrderItemFulfillment, $this> */
+    public function orderItemFulfillments(): MorphMany
+    {
+        return $this->morphMany(OrderItemFulfillment::class, 'source');
     }
 
     /** @return HasMany<StudentCommunication, $this> */

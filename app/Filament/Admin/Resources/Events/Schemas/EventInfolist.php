@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Event;
 use App\Models\EventSubstituteRequest;
+use App\Models\Order;
+use App\Models\OrderItemFulfillment;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -76,6 +79,36 @@ final class EventInfolist
                             ->columnSpanFull()
                             ->visible(fn (Event $record): bool => $record->getMedia('documents')->isNotEmpty()),
                     ]),
+                Section::make('Order Fulfillment')
+                    ->columnSpanFull()
+                    ->schema([
+                        RepeatableEntry::make('orderItemFulfillments')
+                            ->hiddenLabel()
+                            ->columns(6)
+                            ->schema([
+                                TextEntry::make('orderItem.order.id')
+                                    ->label('Order #')
+                                    ->url(fn (OrderItemFulfillment $record): string => OrderResource::getUrl('view', [
+                                        'record' => $record->orderItem->order_id,
+                                    ])),
+                                TextEntry::make('orderItem.order.user.full_name')
+                                    ->label('Purchaser'),
+                                TextEntry::make('orderItem.product.name')
+                                    ->label('Product'),
+                                TextEntry::make('unit_number')
+                                    ->label('Unit'),
+                                TextEntry::make('fulfilled_at')
+                                    ->label('Linked At')
+                                    ->dateTime(),
+                                TextEntry::make('link_status')
+                                    ->label('Status')
+                                    ->state(fn (OrderItemFulfillment $record): string => $record->isActive() ? 'Active' : 'Reopened')
+                                    ->badge()
+                                    ->color(fn (OrderItemFulfillment $record): string => $record->isActive() ? 'success' : 'gray'),
+                            ]),
+                    ])
+                    ->visible(fn (Event $record): bool => Gate::allows('viewAny', Order::class)
+                        && $record->orderItemFulfillments()->exists()),
                 Section::make('Substitute Coverage')
                     ->columns(2)
                     ->columnSpanFull()

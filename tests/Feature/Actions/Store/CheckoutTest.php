@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Store\CreateOrder;
 use App\Contracts\StripeServiceContract;
 use App\Enums\CreditTransactionType;
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Enums\ProductType;
@@ -458,6 +459,26 @@ it('leaves standalone order items as pending in zero total order', function () {
 
     $orderItem = OrderItem::query()->where('order_id', $order->id)->first();
     expect($orderItem->status)->toBe(OrderItemStatus::Pending);
+});
+
+it('snapshots the selected fulfillment workflow on the order item', function (): void {
+    $product = Product::factory()->standalone()->create([
+        'price' => 2000,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $product->id,
+        'quantity' => 1,
+    ]);
+
+    $order = app(CreateOrder::class)->handle($this->user);
+    $orderItem = $order->orderItems()->firstOrFail();
+    $product->update(['fulfillment_workflow' => FulfillmentWorkflow::Manual]);
+
+    expect($orderItem->fulfillment_workflow)->toBe(FulfillmentWorkflow::ScheduledEvent)
+        ->and($orderItem->refresh()->fulfillment_workflow)->toBe(FulfillmentWorkflow::ScheduledEvent)
+        ->and($product->refresh()->fulfillment_workflow)->toBe(FulfillmentWorkflow::Manual);
 });
 
 it('marks course items fulfilled and leaves gear items pending in mixed zero total order', function () {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\OrderItemStatus;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -34,6 +35,7 @@ final class OrderItemFactory extends Factory
             'total_price' => $unitPrice * $quantity,
             'custom_gift_card_amount' => 0,
             'status' => OrderItemStatus::Pending,
+            'fulfillment_workflow' => FulfillmentWorkflow::Manual,
             'purchase_notification_requested' => false,
         ];
     }

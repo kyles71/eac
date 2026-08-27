@@ -8,5 +8,6 @@ it('has correct labels', function (OrderItemStatus $status, string $label) {
     expect($status->getLabel())->toBe($label);
 })->with([
     [OrderItemStatus::Pending, 'Pending'],
+    [OrderItemStatus::PartiallyFulfilled, 'Partially Fulfilled'],
     [OrderItemStatus::Fulfilled, 'Fulfilled'],
 ]);
