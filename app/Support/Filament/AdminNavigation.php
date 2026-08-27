@@ -74,6 +74,10 @@ final class AdminNavigation
 
     public const int SettingsHolidays = 40;
 
+    public const int SettingsAcademicTerms = 45;
+
+    public const int SettingsAcademicTermDefaults = 46;
+
     public const int SettingsDashboardMessages = 50;
 
     public const int SettingsDashboardQuickLinks = 60;
