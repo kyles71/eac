@@ -9,9 +9,8 @@ use App\Actions\Students\SendStudentCustomEmail;
 use App\Models\Event;
 use App\Models\Student;
 use App\Models\StudentCommunication;
+use App\Support\Filament\EmailComposer;
 use Closure;
-use Filament\Forms\Components\RichEditor;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use LogicException;
@@ -51,19 +50,8 @@ final class SendEmailAction extends BaseEmailAction
             ->slideOver(false)
             ->schema(fn (): array => [
                 $this->recipientSelect(),
-                TextInput::make('subject')
-                    ->label('Subject')
-                    ->required(),
-                RichEditor::make('body')
-                    ->label('Body')
-                    ->toolbarButtons([
-                        ['bold', 'italic', 'underline', 'strike', 'link'],
-                        ['h2', 'h3', 'blockquote', 'bulletList', 'orderedList'],
-                        ['undo', 'redo'],
-                    ])
-                    ->extraAttributes(['class' => 'fi-mail-manager-rich-editor'])
-                    ->required()
-                    ->columnSpanFull(),
+                EmailComposer::subject(),
+                EmailComposer::body(),
             ])
             ->action(function (array $data): void {
                 $queued = $this->queueEmails($data);

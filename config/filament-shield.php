@@ -35,7 +35,9 @@ use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Admin\Widgets\SubstituteRequestBanners;
+use App\Filament\Clusters\Settings\Pages\AcademicTermDefaults;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
+use App\Filament\Clusters\Settings\Resources\AcademicTerms\AcademicTermResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Filament\Shared\Pages\Calendar as CalendarPage;
 use App\Filament\Shared\Widgets\CalendarWidget;
@@ -282,6 +284,7 @@ return [
             ],
         ],
         'exclude' => [
+            AcademicTermResource::class,
             SentEmailResource::class,
             StudentCommunicationResource::class,
         ],
@@ -302,6 +305,7 @@ return [
         'subject' => 'class',
         'prefix' => 'view',
         'exclude' => [
+            AcademicTermDefaults::class,
             CalendarPage::class,
             Dashboard::class,
             ManageDashboardAppearance::class,

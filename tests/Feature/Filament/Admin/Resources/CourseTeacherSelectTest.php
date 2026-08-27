@@ -6,6 +6,7 @@ use App\Enums\CourseSemester;
 use App\Enums\ScheduleFrequency;
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Schemas\CourseForm;
+use App\Models\AcademicTerm;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -21,6 +22,15 @@ use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Livewire\livewire;
+
+function courseTeacherAcademicTermId(CourseSemester $semester, int $year): int
+{
+    return AcademicTerm::query()
+        ->where('semester', $semester)
+        ->where('year', $year)
+        ->firstOrFail()
+        ->id;
+}
 
 beforeEach(function () {
     Filament::setCurrentPanel('admin');
@@ -95,7 +105,7 @@ it('saves multiple teachers from the course form', function () {
         ->callAction(CreateAction::class, data: [
             'name' => 'Ballet 1',
             'description' => null,
-            'semester' => CourseSemester::WinterSpring->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::WinterSpring, 2026),
             'capacity' => 10,
             'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
             'duration' => 60,
@@ -127,7 +137,7 @@ it('saves selected course calendar tags from the course form', function () {
         ->callAction(CreateAction::class, data: [
             'name' => 'Comp Team',
             'description' => null,
-            'semester' => CourseSemester::Summer->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::Summer, 2026),
             'capacity' => 10,
             'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
             'duration' => 60,
@@ -148,7 +158,7 @@ it('stores general course tags separately from calendar course tags', function (
         ->callAction(CreateAction::class, data: [
             'name' => 'Jazz Technique',
             'description' => null,
-            'semester' => CourseSemester::Fall->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::Fall, 2026),
             'capacity' => 10,
             'start_time' => now()->addWeek()->format('Y-m-d H:i:s'),
             'duration' => 60,
@@ -171,7 +181,7 @@ it('creates a single class event when creating a course that does not repeat', f
         ->callAction(CreateAction::class, data: [
             'name' => 'Tap Basics',
             'description' => 'Foundations and rhythm',
-            'semester' => CourseSemester::Fall->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::Fall, 2027),
             'capacity' => 12,
             'start_time' => '2027-02-03 17:30:00',
             'duration' => 45,
@@ -200,7 +210,7 @@ it('creates recurring class events when creating a course', function (): void {
         ->callAction(CreateAction::class, data: [
             'name' => 'Modern 2',
             'description' => 'Technique and combinations',
-            'semester' => CourseSemester::Fall->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::Fall, 2027),
             'capacity' => 12,
             'start_time' => '2027-01-01 10:00:00',
             'duration' => 90,
@@ -248,7 +258,7 @@ it('skips holiday occurrences when creating recurring class events', function ()
         ->callAction(CreateAction::class, data: [
             'name' => 'Holiday-Aware Modern',
             'description' => null,
-            'semester' => CourseSemester::WinterSpring->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::WinterSpring, 2027),
             'capacity' => 12,
             'start_time' => '2027-01-01 10:00:00',
             'duration' => 60,
@@ -275,7 +285,7 @@ it('includes the repeat through day when creating daily course events', function
         ->callAction(CreateAction::class, data: [
             'name' => 'Ballet Intensive',
             'description' => null,
-            'semester' => CourseSemester::Summer->value,
+            'academic_term_id' => courseTeacherAcademicTermId(CourseSemester::Summer, 2026),
             'capacity' => 12,
             'start_time' => '2026-05-11 20:00:00',
             'duration' => 60,

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -26,6 +27,7 @@ use Spatie\Tags\HasTags;
 
 /**
  * @property-read Product|null $product
+ * @property-read CourseSemester|null $semester
  * @property-read string|null $teacherDisplayName
  */
 final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
@@ -39,7 +41,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
     protected $casts = [
         'id' => 'integer',
-        'semester' => CourseSemester::class,
+        'academic_term_id' => 'integer',
         'capacity' => 'integer',
         'event_reminder_processed_at' => 'datetime',
     ];
@@ -55,6 +57,19 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return $query->whereHas(
             'teachers',
             fn (Builder $query): Builder => $query->whereKey($user->id),
+        );
+    }
+
+    /** @return BelongsTo<AcademicTerm, $this> */
+    public function academicTerm(): BelongsTo
+    {
+        return $this->belongsTo(AcademicTerm::class);
+    }
+
+    public function semester(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?CourseSemester => $this->academicTerm?->semester,
         );
     }
 
@@ -316,7 +331,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         $duration = $this->scheduledDurationMinutes();
 
         return array_filter([
-            'Semester' => $this->semester->getLabel(),
+            'Semester' => $this->academicTerm?->display_name,
             'Start Time' => $this->formattedStorefrontStartTime(),
             'Duration' => $duration !== null ? "{$duration} minutes" : null,
             'Teacher' => $this->teacherDisplayName,
