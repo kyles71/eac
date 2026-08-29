@@ -21,6 +21,9 @@ final class AcademicTermsTable
     {
         return $table
             ->columns([
+                TextColumn::make('academicYear.display_name')
+                    ->label('Academic Year')
+                    ->sortable(),
                 TextColumn::make('display_name')
                     ->label('Term')
                     ->state(fn (AcademicTerm $record): string => $record->display_name),
@@ -47,6 +50,16 @@ final class AcademicTermsTable
                     ->label('Courses')
                     ->counts('courses')
                     ->sortable(),
+                TextColumn::make('target_enrollments')
+                    ->label('Target')
+                    ->numeric()
+                    ->placeholder('Not set')
+                    ->toggleable(),
+                TextColumn::make('stretch_goal_enrollments')
+                    ->label('Stretch Goal')
+                    ->numeric()
+                    ->placeholder('Not set')
+                    ->toggleable(),
             ])
             ->filters([
                 //

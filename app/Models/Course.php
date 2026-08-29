@@ -205,6 +205,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return null;
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function teachers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
@@ -230,6 +231,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return $this->morphOne(Product::class, 'productable');
     }
 
+    /** @return HasMany<Enrollment, $this> */
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -127,11 +129,17 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'AdjustDueDates:PaymentPlan',
             'View:AppUpdatesPage',
             'View:StaffNote',
+            ReportKey::EnrollmentsByTerm->permission(),
+            ReportKey::InstructorHoursSummary->permission(),
+            ReportWidgetKey::EnrollmentCapacityMetrics->permission(),
+            ReportWidgetKey::InstructorOverview->permission(),
         )
         ->and($desired)->not->toContain(
             'ViewAny:StudentCommunication',
             'View:StudentCommunication',
             'Create:StudentCommunication',
+            'View:EnrollmentReports',
+            'View:InstructorReports',
         );
 
     foreach ($desired as $permission) {

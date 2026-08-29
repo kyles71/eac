@@ -6,6 +6,7 @@ namespace App\Filament\Actions;
 
 use App\Actions\Events\ManageEventSubstitution;
 use App\Enums\EventSubstituteCoverageStatus;
+use App\Enums\EventSubstituteRequestReason;
 use App\Models\Event;
 use App\Models\EventSubstituteRequest;
 use App\Models\User;
@@ -15,6 +16,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Throwable;
@@ -88,9 +90,15 @@ final class EventSubstituteActions
                     ->searchable()
                     ->preload()
                     ->required(),
+                Select::make('reason_type')
+                    ->label('Reason')
+                    ->options(EventSubstituteRequestReason::class)
+                    ->live()
+                    ->selectablePlaceholder(false)
+                    ->required(),
                 Textarea::make('reason')
-                    ->label('Reason / Instructions')
-                    ->required(fn (Event $record): bool => $record->substitute_teacher_id !== null)
+                    ->hiddenLabel()
+                    ->visible(fn (Get $get): bool => self::substituteRequestReasonType($get('reason_type')) === EventSubstituteRequestReason::Other)
                     ->maxLength(2000),
             ])
             ->modalDescription('The teacher will receive an email and a portal banner asking them to accept or decline.')
@@ -110,7 +118,7 @@ final class EventSubstituteActions
                         $record,
                         $teacher,
                         $user,
-                        is_string($data['reason'] ?? null) ? $data['reason'] : null,
+                        self::substituteRequestReason($data),
                     ),
                     'Substitute request sent',
                 );
@@ -300,6 +308,33 @@ final class EventSubstituteActions
             ->label($label)
             ->required()
             ->maxLength(2000);
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function substituteRequestReason(array $data): ?string
+    {
+        $reasonType = self::substituteRequestReasonType($data['reason_type'] ?? null);
+
+        if ($reasonType === EventSubstituteRequestReason::Sick) {
+            return $reasonType->getLabel();
+        }
+
+        if ($reasonType !== EventSubstituteRequestReason::Other) {
+            return null;
+        }
+
+        $reason = is_string($data['reason'] ?? null) ? mb_trim($data['reason']) : '';
+
+        return $reason !== '' ? $reason : $reasonType->getLabel();
+    }
+
+    private static function substituteRequestReasonType(mixed $reasonType): ?EventSubstituteRequestReason
+    {
+        if ($reasonType instanceof EventSubstituteRequestReason) {
+            return $reasonType;
+        }
+
+        return is_string($reasonType) ? EventSubstituteRequestReason::tryFrom($reasonType) : null;
     }
 
     private static function coverageIcon(EventSubstituteCoverageStatus $status): Heroicon
