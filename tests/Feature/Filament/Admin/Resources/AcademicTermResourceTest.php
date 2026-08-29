@@ -11,6 +11,8 @@ use App\Models\AcademicTerm;
 use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 
 use function Pest\Livewire\livewire;
@@ -59,4 +61,30 @@ it('creates terms using the recurring default dates', function (): void {
     expect($term->starts_on->toDateString())->toBe('2030-09-01')
         ->and($term->ends_on->toDateString())->toBe('2030-12-31')
         ->and($term->uses_default_dates)->toBeTrue();
+});
+
+it('edits recurring term settings when immutable term fields are not submitted', function (): void {
+    $term = AcademicTerm::factory()->create([
+        'semester' => CourseSemester::Fall,
+        'year' => 2030,
+        'starts_on' => '2030-09-02',
+        'ends_on' => '2030-12-30',
+        'uses_default_dates' => true,
+    ]);
+
+    livewire(ListAcademicTerms::class)
+        ->callAction(TestAction::make(EditAction::class)->table($term), data: [
+            'uses_default_dates' => true,
+            'target_enrollments' => 400,
+            'stretch_goal_enrollments' => 500,
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified();
+
+    $term->refresh();
+
+    expect($term->starts_on->toDateString())->toBe('2030-09-01')
+        ->and($term->ends_on->toDateString())->toBe('2030-12-31')
+        ->and($term->target_enrollments)->toBe(400)
+        ->and($term->stretch_goal_enrollments)->toBe(500);
 });

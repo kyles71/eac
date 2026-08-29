@@ -67,7 +67,7 @@ final class AcademicTermsTable
             ->recordActions([
                 ActionGroup::make([
                     EditAction::make()
-                        ->mutateDataUsing(fn (array $data): array => AcademicTermResource::prepareFormData($data)),
+                        ->mutateDataUsing(fn (array $data, AcademicTerm $record): array => AcademicTermResource::prepareFormData($data, $record)),
                     DeleteAction::make(),
                 ]),
             ])
