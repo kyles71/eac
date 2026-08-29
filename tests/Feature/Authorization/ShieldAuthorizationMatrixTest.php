@@ -29,6 +29,7 @@ use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
 use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Clusters\Settings\Resources\AcademicTerms\AcademicTermResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Models\Role;
 use App\Services\PermissionCatalogSynchronizerService;
@@ -81,6 +82,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         ->and(config('filament-shield.policies.methods'))->toBe([])
         ->and(config('filament-shield.resources.manage'))->toBe($expected)
         ->and(config('filament-shield.resources.exclude'))->toContain(StudentCommunicationResource::class);
+    expect(config('filament-shield.resources.exclude'))->toContain(AcademicTermResource::class);
 
     foreach ($expected as $resource => $abilities) {
         $policy = Gate::getPolicyFor($resource::getModel());

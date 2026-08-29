@@ -27,9 +27,11 @@ final class CoursesTable
                     ->label('Price')
                     ->moneyCents()
                     ->placeholder('No product'),
-                TextColumn::make('semester')
+                TextColumn::make('academic_term')
+                    ->label('Academic Term')
+                    ->state(fn (Course $record): ?string => $record->academicTerm?->display_name)
                     ->badge()
-                    ->sortable(),
+                    ->color(fn (Course $record): ?string => $record->academicTerm?->semester->getColor()),
                 TextColumn::make('capacity')
                     ->numeric()
                     ->sortable(),

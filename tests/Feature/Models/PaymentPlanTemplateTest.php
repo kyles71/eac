@@ -92,8 +92,8 @@ it('calculates installment amounts with no remainder', function () {
 });
 
 it('matches course templates by selected semesters', function () {
-    $fallCourse = Course::factory()->create(['semester' => CourseSemester::Fall]);
-    $summerCourse = Course::factory()->create(['semester' => CourseSemester::Summer]);
+    $fallCourse = Course::factory()->forSemester(CourseSemester::Fall)->create();
+    $summerCourse = Course::factory()->forSemester(CourseSemester::Summer)->create();
 
     $fallProduct = Product::factory()->forCourse($fallCourse)->create(['price' => 5000]);
     $summerProduct = Product::factory()->forCourse($summerCourse)->create(['price' => 5000]);
@@ -110,7 +110,7 @@ it('matches course templates by selected semesters', function () {
 });
 
 it('allows all course semesters when no semester restriction is selected', function () {
-    $course = Course::factory()->create(['semester' => CourseSemester::Summer]);
+    $course = Course::factory()->forSemester(CourseSemester::Summer)->create();
     $product = Product::factory()->forCourse($course)->create(['price' => 5000]);
 
     $template = PaymentPlanTemplate::factory()->create([
