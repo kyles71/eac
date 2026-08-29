@@ -30,7 +30,7 @@ final readonly class EventObserver
         ]);
     }
 
-    public function deleting(Event $event): void
+    public function deleted(Event $event): void
     {
         $user = auth()->user();
 

@@ -12,6 +12,7 @@ use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 
@@ -182,7 +183,7 @@ it('reopens linked fulfillment when its event is cancelled', function (): void {
         ->toBe('Event cancelled: Purchaser needs to reschedule.');
 });
 
-it('reopens linked fulfillment before its event is deleted', function (): void {
+it('reopens linked fulfillment when its event is deleted', function (): void {
     $actor = auth()->user();
     expect($actor)->toBeInstanceOf(User::class);
     $orderItem = OrderItem::factory()->create([
@@ -198,10 +199,38 @@ it('reopens linked fulfillment before its event is deleted', function (): void {
 
     $event->delete();
 
-    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending)
+    expect(Event::query()->whereKey($event->id)->doesntExist())->toBeTrue()
+        ->and($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending)
         ->and($orderItem->activeFulfillments()->count())->toBe(0)
         ->and($orderItem->fulfillments()->firstOrFail()->void_reason)
         ->toBe('The linked event was deleted.');
+});
+
+it('keeps linked fulfillment active when event deletion is cancelled', function (): void {
+    $actor = auth()->user();
+    expect($actor)->toBeInstanceOf(User::class);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => Order::factory()->completed(),
+        'quantity' => 1,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]);
+    $event = Event::factory()->standalone()->create([
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    app(RecordOrderItemFulfillment::class)->handle($orderItem, [1], $actor, $event);
+    $charge = RecurringPrivateLessonCharge::factory()->create(['event_id' => $event->id]);
+    Product::factory()->create([
+        'productable_type' => $charge->getMorphClass(),
+        'productable_id' => $charge->id,
+        'is_active' => true,
+    ]);
+
+    expect($event->delete())->toBeFalse()
+        ->and(Event::query()->whereKey($event->id)->exists())->toBeTrue()
+        ->and($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled)
+        ->and($orderItem->activeFulfillments()->count())->toBe(1)
+        ->and($orderItem->fulfillments()->firstOrFail()->voided_at)->toBeNull();
 });
 
 it('keeps legacy fulfilled items fulfilled without creating audit records', function (): void {
