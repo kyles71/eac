@@ -41,6 +41,7 @@ return new class() extends Migration
                         ],
                         [
                             ...$dates,
+                            ...$this->academicYearAssignment($semester, $year),
                             'uses_default_dates' => true,
                             'created_at' => now(),
                             'updated_at' => now(),
@@ -67,6 +68,7 @@ return new class() extends Migration
                     ],
                     [
                         ...$this->defaultDates($semester, $year),
+                        ...$this->academicYearAssignment($semester, $year),
                         'uses_default_dates' => true,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -132,5 +134,31 @@ return new class() extends Migration
                 'ends_on' => $nextWinterSpringStartsOn->subDay()->toDateString(),
             ],
         };
+    }
+
+    /** @return array{academic_year_id: int}|array{} */
+    private function academicYearAssignment(CourseSemester $semester, int $calendarYear): array
+    {
+        if (! Schema::hasTable('academic_years')
+            || ! Schema::hasColumn('academic_terms', 'academic_year_id')) {
+            return [];
+        }
+
+        $startsInYear = $semester === CourseSemester::Fall
+            ? $calendarYear
+            : $calendarYear - 1;
+        $academicYearId = DB::table('academic_years')
+            ->where('starts_in_year', $startsInYear)
+            ->value('id');
+
+        if ($academicYearId === null) {
+            $academicYearId = DB::table('academic_years')->insertGetId([
+                'starts_in_year' => $startsInYear,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return ['academic_year_id' => (int) $academicYearId];
     }
 };

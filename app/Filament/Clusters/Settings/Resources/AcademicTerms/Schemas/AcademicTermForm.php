@@ -50,6 +50,17 @@ final class AcademicTermForm
                             ->afterOrEqual('starts_on')
                             ->required(fn (Get $get): bool => ! $get('uses_default_dates'))
                             ->visible(fn (Get $get): bool => ! $get('uses_default_dates')),
+                        TextInput::make('target_enrollments')
+                            ->label('Target Enrollment Goal')
+                            ->helperText('Used by the Enrollment Reports dashboard for this term.')
+                            ->numeric()
+                            ->minValue(0),
+                        TextInput::make('stretch_goal_enrollments')
+                            ->label('Stretch Enrollment Goal')
+                            ->helperText('Must be at least the target goal when both are set.')
+                            ->numeric()
+                            ->minValue(0)
+                            ->gte('target_enrollments'),
                     ]),
             ]);
     }

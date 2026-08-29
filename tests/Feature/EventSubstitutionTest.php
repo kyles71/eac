@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Events\CancelEvent;
 use App\Actions\Events\ManageEventSubstitution;
 use App\Enums\EventSubstituteCoverageStatus;
+use App\Enums\EventSubstituteRequestReason;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Admin\Pages\Dashboard;
@@ -22,6 +23,8 @@ use App\Models\User;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Support\Enums\IconPosition;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
@@ -459,13 +462,15 @@ it('manages substitute coverage through explicit admin event actions and table s
         ->assertActionVisible('requestEventSubstitute')
         ->callAction(TestAction::make('requestEventSubstitute'), [
             'teacher_id' => $teacher->id,
+            'reason_type' => EventSubstituteRequestReason::Other->value,
             'reason' => 'Please cover this class.',
         ])
         ->assertNotified('Substitute request sent')
         ->assertActionVisible('resendEventSubstituteRequest')
         ->assertActionVisible('withdrawEventSubstituteRequest');
 
-    expect($event->refresh()->pendingSubstituteRequest()?->teacher_id)->toBe($teacher->id);
+    expect($event->refresh()->pendingSubstituteRequest()?->teacher_id)->toBe($teacher->id)
+        ->and($event->pendingSubstituteRequest()?->request_reason)->toBe('Please cover this class.');
 
     livewire(ListEvents::class)
         ->loadTable()
@@ -475,6 +480,50 @@ it('manages substitute coverage through explicit admin event actions and table s
             EventSubstituteCoverageStatus::AwaitingResponse,
             $event,
         );
+});
+
+it('records the selected substitute reason and only shows optional details for other', function (): void {
+    Filament::setCurrentPanel('admin');
+    Mail::fake();
+    $sickEvent = futureSubstituteEvent();
+    $otherEvent = futureSubstituteEvent();
+    $sickTeacher = User::factory()->isTeacher()->create();
+    $otherTeacher = User::factory()->isTeacher()->create();
+
+    livewire(ViewEvent::class, ['record' => $otherEvent->id])
+        ->mountAction('requestEventSubstitute')
+        ->assertSchemaComponentExists(
+            'reason_type',
+            'mountedActionSchema0',
+            fn (Select $select): bool => $select->getOptions() === [
+                EventSubstituteRequestReason::Sick->value => 'Sick',
+                EventSubstituteRequestReason::Other->value => 'Other',
+            ] && $select->isRequired(),
+        )
+        ->assertSchemaComponentHidden('reason', 'mountedActionSchema0')
+        ->setActionData([
+            'teacher_id' => $otherTeacher->id,
+            'reason_type' => EventSubstituteRequestReason::Other->value,
+        ])
+        ->assertSchemaComponentVisible('reason', 'mountedActionSchema0')
+        ->assertSchemaComponentExists(
+            'reason',
+            'mountedActionSchema0',
+            fn (Textarea $textarea): bool => ! $textarea->isRequired(),
+        )
+        ->callMountedAction()
+        ->assertNotified('Substitute request sent');
+
+    livewire(ViewEvent::class, ['record' => $sickEvent->id])
+        ->callAction('requestEventSubstitute', [
+            'teacher_id' => $sickTeacher->id,
+            'reason_type' => EventSubstituteRequestReason::Sick->value,
+            'reason' => 'This hidden detail should not be saved.',
+        ])
+        ->assertNotified('Substitute request sent');
+
+    expect($otherEvent->refresh()->pendingSubstituteRequest()?->request_reason)->toBe('Other')
+        ->and($sickEvent->refresh()->pendingSubstituteRequest()?->request_reason)->toBe('Sick');
 });
 
 it('changes the substitute action group appearance with the coverage state', function (): void {
