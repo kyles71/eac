@@ -22,7 +22,8 @@ use LogicException;
  * - to(array|Closure $to): Sets the default recipients shown in the modal.
  * - archiveTo(array|Closure|null $recipients): Overrides the configured archive/self-copy recipients.
  *       Textmagic sends archive recipients as a separate message; other mailers receive archive copies by BCC.
- * - withoutArchiveCopy(): Disables archive/self-copy recipients for this action instance.
+ * - withoutArchiveCopy(): Disables configured archive recipients for this action instance.
+ *       The authenticated sender still receives a copy.
  */
 final class SendEmailAction extends BaseEmailAction
 {
@@ -90,7 +91,7 @@ final class SendEmailAction extends BaseEmailAction
     }
 
     /**
-     * Disable archive/self-copy recipients for this action instance.
+     * Disable configured archive recipients while retaining the authenticated sender copy.
      */
     public function withoutArchiveCopy(): static
     {
@@ -132,20 +133,43 @@ final class SendEmailAction extends BaseEmailAction
         );
     }
 
-    private function getArchiveTo(): mixed
+    /**
+     * @return array<int, mixed>
+     */
+    private function getArchiveTo(): array
     {
-        if (! $this->archiveCopyEnabled) {
+        $recipients = [];
+
+        if ($this->archiveCopyEnabled) {
+            $recipients = $this->normalizeArchiveRecipients(
+                $this->hasArchiveToOverride
+                    ? $this->evaluate($this->archiveTo)
+                    : config('mail.mailers.handcrafted.archive_to', []),
+            );
+        }
+
+        $sender = $this->authenticatedUser();
+
+        if ($sender !== null) {
+            $recipients[] = $sender->email;
+        }
+
+        return $recipients;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function normalizeArchiveRecipients(mixed $recipients): array
+    {
+        if (is_string($recipients)) {
+            return str_getcsv($recipients, escape: '');
+        }
+
+        if ($recipients === null) {
             return [];
         }
 
-        if ($this->hasArchiveToOverride) {
-            if ($this->archiveTo === null) {
-                return [];
-            }
-
-            return $this->evaluate($this->archiveTo);
-        }
-
-        return config('mail.mailers.handcrafted.archive_to', []);
+        return is_array($recipients) ? $recipients : [$recipients];
     }
 }
