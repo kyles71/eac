@@ -268,4 +268,13 @@
         font-size: 1.5rem;
         text-align: center;
     }
+
+    .filament-fullcalendar .fc-list-sticky .fc-list-day>th {
+        background-color: var(--color-white);
+        z-index: 1;
+    }
+
+    .dark .filament-fullcalendar .fc-list-sticky .fc-list-day>th {
+        background-color: var(--color-gray-900);
+    }
 }
