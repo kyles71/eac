@@ -23,7 +23,7 @@ it('collects and edits add-time purchaser answers from the store and cart', func
         ->assertSee('Competition Jacket')
         ->click('Add to Cart')
         ->assertSee('Dancer name')
-        ->fill("mountedActionSchema0.question_answers.1.question_{$question->id}", 'Avery')
+        ->fill("[id=\"mountedActionSchema0.question_answers.1.question_{$question->id}\"]", 'Avery')
         ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Added to cart')
         ->assertNoJavaScriptErrors();
@@ -35,7 +35,7 @@ it('collects and edits add-time purchaser answers from the store and cart', func
         ->assertSee('Avery')
         ->click('Edit Details')
         ->assertSee('Dancer name')
-        ->fill("mountedActionSchema0.question_answers.1.question_{$question->id}", 'Taylor')
+        ->fill("[id=\"mountedActionSchema0.question_answers.1.question_{$question->id}\"]", 'Taylor')
         ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Purchaser answers updated')
         ->assertNoJavaScriptErrors();
@@ -63,7 +63,7 @@ it('collects add-time purchaser answers from product details', function (): void
         ->assertSee('Competition Shirt')
         ->click('Add to Cart')
         ->assertSee('Shirt name')
-        ->fill("mountedActionSchema0.question_answers.1.question_{$question->id}", 'Jordan')
+        ->fill("[id=\"mountedActionSchema0.question_answers.1.question_{$question->id}\"]", 'Jordan')
         ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Added to cart')
         ->assertNoJavaScriptErrors();

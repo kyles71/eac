@@ -281,7 +281,7 @@ it('registers the expired class hold managed email', function (): void {
         'course_hold.expires_at' => 'August 5, 2026 at 5:00 PM',
     ]);
 
-    expect($definition->name('en'))->toBe('Your EAC Dance Class Hold Has Expired')
+    expect($definition->name('en'))->toBe('Class Hold Expired')
         ->and($definition->subject('en'))->toBe('Your EAC Dance Class Hold Has Expired')
         ->and($definition->body('en'))->toContain('{{ course_hold.expires_at }}')
         ->and($rendered->subject)->toBe('Your EAC Dance Class Hold Has Expired')

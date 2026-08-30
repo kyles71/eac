@@ -19,7 +19,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\CreditLedgerService;
 use App\Services\ProductQuestionAnswerService;
-use App\Services\StoreCodeAttemptLimiter;
+use App\Services\StoreCodeAttemptLimiterService;
 use App\Support\LegalDocuments\PaymentPlanTerms;
 use App\Support\PaymentPlans\PaymentPlanBreakdown;
 use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
@@ -446,7 +446,7 @@ final class Cart extends Page implements HasTable
         /** @var User $user */
         $user = auth()->user();
         $code = mb_trim($this->code);
-        $attemptLimiter = app(StoreCodeAttemptLimiter::class);
+        $attemptLimiter = app(StoreCodeAttemptLimiterService::class);
 
         if ($code !== '' && $attemptLimiter->hasTooManyAttempts($user)) {
             Notification::make()
