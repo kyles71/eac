@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Models\FormUser;
 use Carbon\CarbonInterface;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentTimezone;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 
@@ -20,6 +23,14 @@ it('uses the same default datetime display format for tables and infolists', fun
 
     expect(Schema::make()->getDefaultDateTimeDisplayFormat())->toBe('M j, Y g:i A')
         ->and(Table::make($tableLivewire)->getDefaultDateTimeDisplayFormat())->toBe('M j, Y g:i A');
+});
+
+it('applies the display timezone to Filament datetime components by default', function (): void {
+    $displayTimezone = config('app.display_timezone');
+
+    expect(DateTimePicker::make('starts_at')->getTimezone())->toBe($displayTimezone)
+        ->and(TextColumn::make('starts_at')->dateTime()->getTimezone())->toBe($displayTimezone)
+        ->and(TextEntry::make('starts_at')->dateTime()->getTimezone())->toBe($displayTimezone);
 });
 
 it('casts form signature dates as dates instead of datetimes', function (): void {

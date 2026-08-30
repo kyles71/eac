@@ -34,6 +34,11 @@ final class StudentPolicy
             && $student->isAccessibleToAdminUser($authUser);
     }
 
+    public function delete(User $authUser, Student $student): bool
+    {
+        return $authUser->can('DeleteAny:Student') && $student->canBeDeleted();
+    }
+
     public function deleteAny(User $authUser): bool
     {
         return $authUser->can('DeleteAny:Student');

@@ -255,13 +255,13 @@ final class ProductDetails extends Page
 
         if ($product->requiredCourses->isNotEmpty()) {
             $details[] = TextEntry::make('required_courses')
-                ->label('Requires Enrollment In At Least One Of')
+                ->label('Requires Enrollment In Any Of')
                 ->state($product->requiredCourses->sortBy('name')->pluck('name')->join(', '));
         }
 
         if ($product->requiredCompetitionTeams->isNotEmpty()) {
             $details[] = TextEntry::make('required_competition_teams')
-                ->label('Requires Membership In At Least One Of')
+                ->label('Requires Membership In Any Of')
                 ->state($product->requiredCompetitionTeams
                     ->sortBy(fn (CompetitionTeam $team): string => $team->season->name.' '.$team->name)
                     ->map(fn (CompetitionTeam $team): string => "{$team->season->name}: {$team->name}")

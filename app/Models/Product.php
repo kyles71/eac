@@ -30,6 +30,8 @@ final class Product extends Model implements HasMedia
         'id' => 'integer',
         'price' => 'integer',
         'is_active' => 'boolean',
+        'is_store_listed' => 'boolean',
+        'allows_payment_plan' => 'boolean',
         'include_productable_images' => 'boolean',
         'send_purchase_notification' => 'boolean',
         'available_from' => 'datetime',
@@ -69,6 +71,13 @@ final class Product extends Model implements HasMedia
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /** @return BelongsToMany<User, $this> */
+    public function assignedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'product_user_assignment')
+            ->withTimestamps();
     }
 
     /** @return HasMany<ProductQuestion, $this> */

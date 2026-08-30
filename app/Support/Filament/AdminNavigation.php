@@ -30,6 +30,8 @@ final class AdminNavigation
 
     public const int ScheduleCourses = 10;
 
+    public const int ScheduleRecurringPrivateLessons = 15;
+
     public const int ScheduleEvents = 20;
 
     public const int ScheduleEnrollments = 30;

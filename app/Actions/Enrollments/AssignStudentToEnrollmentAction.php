@@ -21,6 +21,10 @@ final readonly class AssignStudentToEnrollmentAction
             throw new InvalidArgumentException('This student does not belong to your account.');
         }
 
+        if ($enrollment->isRecurringPrivateLesson()) {
+            throw new InvalidArgumentException('The dancer assigned to a recurring private lesson cannot be changed.');
+        }
+
         if ($enrollment->student_id !== null && ! $this->canChangeAssignedStudent($enrollment)) {
             throw new InvalidArgumentException('This enrollment is too close to the course start date to change online.');
         }
@@ -32,6 +36,10 @@ final readonly class AssignStudentToEnrollmentAction
 
     public function canChangeAssignedStudent(Enrollment $enrollment): bool
     {
+        if ($enrollment->isRecurringPrivateLesson()) {
+            return false;
+        }
+
         if ($enrollment->student_id === null) {
             return true;
         }
