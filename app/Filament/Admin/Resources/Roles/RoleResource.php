@@ -31,18 +31,17 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Override;
-use UnitEnum;
 
 final class RoleResource extends ShieldRoleResource
 {
     #[Override]
-    public static function getNavigationGroup(): string|UnitEnum|null
+    public static function getNavigationGroup(): string
     {
         return AdminNavigation::PeopleAndAccess;
     }
 
     #[Override]
-    public static function getNavigationSort(): ?int
+    public static function getNavigationSort(): int
     {
         return AdminNavigation::PeopleRoles;
     }
@@ -77,6 +76,7 @@ final class RoleResource extends ShieldRoleResource
                     ->schema([
                         PermissionCheckboxList::make('permission_ids')
                             ->hiddenLabel()
+                            ->descriptionAboveSearch(PermissionCheckboxList::standardAbilityHelpText())
                             ->options(fn (): array => app(AccessManagerService::class)
                                 ->manageablePermissions(self::actor())
                                 ->pluck('name', 'id')

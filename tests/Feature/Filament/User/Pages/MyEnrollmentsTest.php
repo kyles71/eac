@@ -114,9 +114,7 @@ it('can remove a student from an enrollment beyond the configured cutoff', funct
     config(['app.enrollment_unassign_cutoff_days' => 7]);
 
     $student = Student::factory()->create(['user_id' => auth()->id()]);
-    $course = Course::factory()->create([
-        'semester' => CourseSemester::Fall,
-    ]);
+    $course = Course::factory()->forSemester(CourseSemester::Fall)->create();
     Event::factory()->create([
         'course_id' => $course->id,
         'start_time' => now()->addDays(8),
@@ -142,9 +140,7 @@ it('does not allow removing a student inside the configured cutoff', function ()
     config(['app.enrollment_unassign_cutoff_days' => 7]);
 
     $student = Student::factory()->create(['user_id' => auth()->id()]);
-    $course = Course::factory()->create([
-        'semester' => CourseSemester::Fall,
-    ]);
+    $course = Course::factory()->forSemester(CourseSemester::Fall)->create();
     Event::factory()->create([
         'course_id' => $course->id,
         'start_time' => now()->addDays(6),
@@ -166,9 +162,7 @@ it('does not allow removing a student inside the configured cutoff', function ()
 it('groups current classes by semester and moves concluded classes to past', function () {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
 
-    $winterCourse = Course::factory()->create([
-        'semester' => CourseSemester::WinterSpring,
-    ]);
+    $winterCourse = Course::factory()->forSemester(CourseSemester::WinterSpring)->create();
     Event::factory()->create([
         'course_id' => $winterCourse->id,
         'start_time' => now()->subWeek(),
@@ -186,9 +180,7 @@ it('groups current classes by semester and moves concluded classes to past', fun
             'user_id' => auth()->id(),
         ]);
 
-    $summerCourse = Course::factory()->create([
-        'semester' => CourseSemester::Summer,
-    ]);
+    $summerCourse = Course::factory()->forSemester(CourseSemester::Summer)->create();
     Event::factory()->create([
         'course_id' => $summerCourse->id,
         'start_time' => now()->addMonth(),
@@ -201,9 +193,7 @@ it('groups current classes by semester and moves concluded classes to past', fun
             'user_id' => auth()->id(),
         ]);
 
-    $concludedCourse = Course::factory()->create([
-        'semester' => CourseSemester::WinterSpring,
-    ]);
+    $concludedCourse = Course::factory()->forSemester(CourseSemester::WinterSpring)->create();
     Event::factory()->create([
         'course_id' => $concludedCourse->id,
         'start_time' => now()->subWeek(),
@@ -240,9 +230,7 @@ it('groups current classes by semester and moves concluded classes to past', fun
 });
 
 it('does not show assignment actions after a class has concluded', function () {
-    $course = Course::factory()->create([
-        'semester' => CourseSemester::Fall,
-    ]);
+    $course = Course::factory()->forSemester(CourseSemester::Fall)->create();
     Event::factory()->create([
         'course_id' => $course->id,
         'start_time' => now()->subWeek(),
@@ -266,10 +254,9 @@ it('opens course details from a course row without calendar widget actions', fun
         'last_name' => 'Dunham',
         'staff_bio' => 'Katherine teaches dance history.',
     ]);
-    $course = Course::factory()->create([
+    $course = Course::factory()->forSemester(CourseSemester::Fall)->create([
         'name' => 'Tap Details',
         'description' => 'Bring tap shoes.',
-        'semester' => CourseSemester::Fall,
     ]);
     $course->teachers()->sync([$teacher->id]);
     Event::factory()->create([
@@ -296,7 +283,7 @@ it('opens course details from a course row without calendar widget actions', fun
                 && str_contains($state->toHtml(), 'Katherine teaches dance history.');
         })
         ->assertActionDataSet(fn (array $data): bool => $data['name'] === $course->name
-            && $data['semester'] === CourseSemester::Fall->getLabel()
+            && $data['semester'] === $course->academicTerm->display_name
             && $data['student'] === $student->fullName
             && $data['duration'] === '75 minutes'
             && $data['meetings'] === 1

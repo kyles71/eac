@@ -23,8 +23,11 @@ final class CourseInfolist
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('name'),
-                        TextEntry::make('semester')
-                            ->badge(),
+                        TextEntry::make('academic_term')
+                            ->label('Academic Term')
+                            ->state(fn (Course $record): ?string => $record->academicTerm?->display_name)
+                            ->badge()
+                            ->color(fn (Course $record): ?string => $record->academicTerm?->semester->getColor()),
                         TextEntry::make('product.price')
                             ->label('Price')
                             ->moneyCents('No product linked'),

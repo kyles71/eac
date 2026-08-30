@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Filament\Actions\ManageUserAccessAction;
 use App\Filament\Admin\Resources\DashboardQuickLinks\Pages\ListDashboardQuickLinks;
 use App\Filament\Admin\Resources\Roles\Pages\CreateRole;
@@ -114,12 +116,18 @@ it('offers list and resource-grouped card views for role and direct permissions'
         1 => 'Update:Calendar',
         2 => 'ViewAny:Calendar',
         3 => 'Manage:UserAccess',
+        4 => ReportKey::EnrollmentsByTerm->permission(),
+        5 => ReportWidgetKey::InstructorOverview->permission(),
     ]);
 
     expect($field->getGroupedOptions())->toBe([
         'Calendar' => [
             1 => 'Update',
             2 => 'View Any',
+        ],
+        'Reports' => [
+            4 => 'Enrollments By Term',
+            5 => 'Instructor Overview Widget',
         ],
         'User Access' => [
             3 => 'Manage',
@@ -131,7 +139,8 @@ it('offers list and resource-grouped card views for role and direct permissions'
         ->assertSeeHtml("permissionView: 'cards'")
         ->assertSeeHtml('x-data="checkboxListFormComponent({')
         ->assertSee('List')
-        ->assertSee('Cards');
+        ->assertSee('Cards')
+        ->assertSee(PermissionCheckboxList::standardAbilityHelpText());
 
     $target = User::factory()->create();
 
@@ -142,7 +151,8 @@ it('offers list and resource-grouped card views for role and direct permissions'
             'permissions',
             'mountedActionSchema0',
             fn ($component): bool => $component instanceof PermissionCheckboxList
-                && $component->getDescriptionAboveSearch() === 'These permissions apply in addition to permissions inherited from roles.',
+                && $component->getDescriptionAboveSearch() === 'These permissions apply in addition to permissions inherited from roles. '
+                    .PermissionCheckboxList::standardAbilityHelpText(),
         );
 });
 

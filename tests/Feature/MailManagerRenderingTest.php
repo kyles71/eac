@@ -248,3 +248,16 @@ it('renders freeform handcrafted email body line breaks as safe html', function 
         ->toContain('<p>Line three &lt;unsafe&gt;</p>')
         ->not->toContain('<unsafe>');
 });
+
+it('renders sanitized rich text in freeform handcrafted emails', function (): void {
+    $rendered = (new HandcraftedEmail(
+        emailSubject: 'Class update',
+        emailBody: '<h2>Important update</h2><p>Please <strong>review</strong> this.</p><script>alert("unsafe")</script>',
+    ))->getRenderedEmail();
+
+    expect($rendered->html)
+        ->toContain('<h2>Important update</h2>')
+        ->toContain('<p>Please <strong>review</strong> this.</p>')
+        ->not->toContain('<script>')
+        ->not->toContain('alert("unsafe")');
+});

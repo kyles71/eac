@@ -6,6 +6,7 @@ use App\Enums\CourseSemester;
 use App\Enums\CreditTransactionType;
 use App\Enums\ProductType;
 use App\Filament\User\Pages\Cart;
+use App\Models\AcademicTerm;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\CourseHold;
@@ -722,7 +723,9 @@ it('applies discounts and store credit to payment plan items first in the order 
 });
 
 it('filters course payment plan templates by semester', function () {
-    $this->course->update(['semester' => CourseSemester::Fall]);
+    $fallTerm = AcademicTerm::factory()->forSemester(CourseSemester::Fall, 2035)->create();
+    $this->course->academicTerm()->associate($fallTerm);
+    $this->course->save();
 
     CartItem::factory()->create([
         'user_id' => auth()->id(),

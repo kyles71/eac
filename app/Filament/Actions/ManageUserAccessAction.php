@@ -45,7 +45,10 @@ final class ManageUserAccessAction extends Action
                     ->columns(2),
                 PermissionCheckboxList::make('permissions')
                     ->label('Direct Permissions')
-                    ->descriptionAboveSearch('These permissions apply in addition to permissions inherited from roles.')
+                    ->descriptionAboveSearch(
+                        'These permissions apply in addition to permissions inherited from roles. '
+                        .PermissionCheckboxList::standardAbilityHelpText(),
+                    )
                     ->options(fn (): array => app(AccessManagerService::class)
                         ->manageablePermissions($this->actor())
                         ->pluck('name', 'id')

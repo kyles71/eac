@@ -334,7 +334,7 @@ final class ViewStudent extends ViewRecord implements HasTable
 
         return [
             'course' => $course->name,
-            'semester' => $course->semester->getLabel(),
+            'semester' => $course->academicTerm->display_name,
             'teacher' => CourseStaffPresenter::render($course),
             'status' => $status,
             'starts_at' => $this->enrollmentMeetingTime($enrollment)

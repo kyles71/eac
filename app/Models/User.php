@@ -135,6 +135,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(Enrollment::class);
     }
 
+    /** @return HasMany<SavedReportView, $this> */
+    public function savedReportViews(): HasMany
+    {
+        return $this->hasMany(SavedReportView::class);
+    }
+
+    /** @return HasMany<ReportExport, $this> */
+    public function reportExports(): HasMany
+    {
+        return $this->hasMany(ReportExport::class);
+    }
+
     /** @return HasMany<CourseHold, $this> */
     public function courseHolds(): HasMany
     {

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Models\Role;
 use App\Services\PermissionCatalogSynchronizerService;
 use Illuminate\Database\Seeder;
 use RuntimeException;
+use Spatie\Permission\Contracts\Permission as PermissionContract;
 use Spatie\Permission\Models\Permission;
 
 final class ShieldSeeder extends Seeder
@@ -35,6 +38,17 @@ final class ShieldSeeder extends Seeder
             Permission::findByName('ViewAny:StaffNote', 'web'),
             Permission::findByName('ViewAny:Student', 'web'),
             Permission::findByName('View:AppUpdatesPage', 'web'),
+            ...array_map(
+                fn (ReportKey $report): PermissionContract => Permission::findByName($report->permission(), 'web'),
+                ReportKey::cases(),
+            ),
+            ...array_map(
+                fn (ReportWidgetKey $widget): PermissionContract => Permission::findByName($widget->permission(), 'web'),
+                array_values(array_filter(
+                    ReportWidgetKey::cases(),
+                    fn (ReportWidgetKey $widget): bool => $widget->hasDedicatedPermission(),
+                )),
+            ),
         ]);
         $teacher->givePermissionTo([
             Permission::findByName('Create:StaffNote', 'web'),
@@ -48,6 +62,21 @@ final class ShieldSeeder extends Seeder
             Permission::findByName('ViewAny:Event', 'web'),
             Permission::findByName('ViewAny:StaffNote', 'web'),
             Permission::findByName('ViewAny:Student', 'web'),
+            ...array_map(
+                fn (ReportKey $report): PermissionContract => Permission::findByName($report->permission(), 'web'),
+                array_values(array_filter(
+                    ReportKey::cases(),
+                    fn (ReportKey $report): bool => $report->availableToTeachersByDefault(),
+                )),
+            ),
+            ...array_map(
+                fn (ReportWidgetKey $widget): PermissionContract => Permission::findByName($widget->permission(), 'web'),
+                array_values(array_filter(
+                    ReportWidgetKey::cases(),
+                    fn (ReportWidgetKey $widget): bool => $widget->hasDedicatedPermission()
+                        && $widget->availableToTeachersByDefault(),
+                )),
+            ),
         ]);
 
         $this->command->info('Shield seeding completed.');

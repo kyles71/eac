@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
-use App\Enums\CourseSemester;
 use App\Enums\FormTypes;
 use App\Enums\ScheduleFrequency;
+use App\Models\AcademicTerm;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Form;
@@ -37,10 +37,19 @@ final class CourseForm
                     ->schema([
                         TextInput::make('name')
                             ->required(),
-                        Select::make('semester')
-                            ->options(CourseSemester::class)
-                            ->required()
-                            ->default(CourseSemester::Fall->value),
+                        Select::make('academic_term_id')
+                            ->label('Academic Term')
+                            ->relationship(
+                                name: 'academicTerm',
+                                titleAttribute: 'year',
+                                modifyQueryUsing: fn (Builder $query): Builder => $query
+                                    ->orderByDesc('year')
+                                    ->orderBy('starts_on'),
+                            )
+                            ->getOptionLabelFromRecordUsing(fn (AcademicTerm $record): string => $record->display_name)
+                            ->searchable(['semester', 'year'])
+                            ->preload()
+                            ->required(),
                         TextInput::make('capacity')
                             ->required()
                             ->numeric()
