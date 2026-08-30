@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\HasCapacity;
-use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
 use App\Enums\CourseSemester;
 use App\Support\MediaDisks;
@@ -30,7 +30,7 @@ use Spatie\Tags\HasTags;
  * @property-read CourseSemester|null $semester
  * @property-read string|null $teacherDisplayName
  */
-final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
+final class Course extends Model implements AutomaticallyFulfillsOrderItems, HasCapacity, HasMedia, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
     use HasFactory, HasTags, InteractsWithMedia;

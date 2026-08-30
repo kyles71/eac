@@ -134,6 +134,7 @@ final class CreateOrder
                         'unit_price' => $unitPrice,
                         'total_price' => $totalPrice,
                         'custom_gift_card_amount' => $cartItem->custom_gift_card_amount,
+                        'fulfillment_workflow' => $product->fulfillmentWorkflow(),
                         'purchase_notification_requested' => $product->send_purchase_notification,
                     ],
                     'question_answers' => $this->productQuestionAnswers->orderRows(

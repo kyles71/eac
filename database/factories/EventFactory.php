@@ -53,4 +53,12 @@ final class EventFactory extends Factory
             }
         });
     }
+
+    public function standalone(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'name' => fake()->sentence(3),
+            'course_id' => null,
+        ]);
+    }
 }

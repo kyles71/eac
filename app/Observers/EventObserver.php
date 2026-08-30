@@ -10,6 +10,8 @@ use App\Enums\RecurringPrivateLessonChargeStatus;
 use App\Models\Event;
 use App\Models\RecurringPrivateLesson;
 use App\Models\RecurringPrivateLessonCharge;
+use App\Models\User;
+use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Services\HolidayConflictService;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +21,7 @@ final readonly class EventObserver
         private HolidayConflictService $holidayConflicts,
         private SynchronizeRecurringPrivateLessonCharges $synchronizeCharges,
         private HandleRecurringPrivateLessonEventCancellation $handleCancellation,
+        private VoidOrderItemFulfillment $voidOrderItemFulfillment,
     ) {}
 
     public function saving(Event $event): void
@@ -90,5 +93,16 @@ final readonly class EventObserver
         if ($recurringPrivateLesson instanceof RecurringPrivateLesson) {
             $this->synchronizeCharges->handle($recurringPrivateLesson);
         }
+    }
+
+    public function deleted(Event $event): void
+    {
+        $user = auth()->user();
+
+        $this->voidOrderItemFulfillment->forSource(
+            source: $event,
+            voidedBy: $user instanceof User ? $user : null,
+            reason: 'The linked event was deleted.',
+        );
     }
 }
