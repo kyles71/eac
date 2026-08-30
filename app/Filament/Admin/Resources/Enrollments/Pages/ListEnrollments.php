@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Enrollments\Pages;
 
+use App\Filament\Actions\EmailCurrentEnrolleesAction;
 use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Models\Enrollment;
 use Carbon\Carbon;
@@ -40,6 +41,7 @@ final class ListEnrollments extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            EmailCurrentEnrolleesAction::make(),
             CreateAction::make(),
         ];
     }

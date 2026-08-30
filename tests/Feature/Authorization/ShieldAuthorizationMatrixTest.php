@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
-use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
@@ -16,6 +17,7 @@ use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Forms\FormResource;
 use App\Filament\Admin\Resources\FormUsers\FormUserResource;
+use App\Filament\Admin\Resources\Gear\GearResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
@@ -25,8 +27,11 @@ use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
+use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
+use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Clusters\Settings\Resources\AcademicTerms\AcademicTermResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Models\Role;
 use App\Services\PermissionCatalogSynchronizerService;
@@ -48,7 +53,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         CalendarResource::class => $fiveAbilities,
         CompetitionSeasonResource::class => $sixAbilities,
         CompetitionTeamResource::class => $sixAbilities,
-        CostumeResource::class => $fiveAbilities,
+        GearResource::class => $fiveAbilities,
         CourseHoldResource::class => ['viewAny', 'view', 'create', 'update'],
         CourseResource::class => $sixAbilities,
         CreditGrantResource::class => ['viewAny', 'view', 'create', 'revoke'],
@@ -64,11 +69,12 @@ it('uses the exact strict authorization resource matrix', function (): void {
         HolidayResource::class => $fiveAbilities,
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
-        OrderResource::class => ['viewAny', 'view'],
-        PaymentPlanResource::class => ['viewAny', 'view'],
+        OrderResource::class => ['viewAny', 'view', 'refund'],
+        PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
         RoleResource::class => $sixAbilities,
+        StaffNoteResource::class => ['viewAny', 'view', 'create', 'update', 'delete'],
         StudentResource::class => ['viewAny', 'view', 'create', 'update', 'deleteAny'],
         UserResource::class => $sixAbilities,
     ];
@@ -76,7 +82,9 @@ it('uses the exact strict authorization resource matrix', function (): void {
     expect(Filament::getPanel('admin')->isAuthorizationStrict())->toBeTrue()
         ->and(config('filament-shield.policies.merge'))->toBeFalse()
         ->and(config('filament-shield.policies.methods'))->toBe([])
-        ->and(config('filament-shield.resources.manage'))->toBe($expected);
+        ->and(config('filament-shield.resources.manage'))->toBe($expected)
+        ->and(config('filament-shield.resources.exclude'))->toContain(StudentCommunicationResource::class);
+    expect(config('filament-shield.resources.exclude'))->toContain(AcademicTermResource::class);
 
     foreach ($expected as $resource => $abilities) {
         $policy = Gate::getPolicyFor($resource::getModel());
@@ -117,7 +125,21 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Manage:ThemeBuilder',
             'Manage:UserAccess',
             'Publish:LegalDocument',
+            'Send:Email',
+            'AdjustDueDates:PaymentPlan',
             'View:AppUpdatesPage',
+            'View:StaffNote',
+            ReportKey::EnrollmentsByTerm->permission(),
+            ReportKey::InstructorHoursSummary->permission(),
+            ReportWidgetKey::EnrollmentCapacityMetrics->permission(),
+            ReportWidgetKey::InstructorOverview->permission(),
+        )
+        ->and($desired)->not->toContain(
+            'ViewAny:StudentCommunication',
+            'View:StudentCommunication',
+            'Create:StudentCommunication',
+            'View:EnrollmentReports',
+            'View:InstructorReports',
         );
 
     foreach ($desired as $permission) {

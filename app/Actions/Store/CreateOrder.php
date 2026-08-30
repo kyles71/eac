@@ -287,7 +287,7 @@ final class CreateOrder
     private function cartItemUnavailableMessage(Product $product, ProductAvailabilityStatus $availability): string
     {
         return match ($availability) {
-            ProductAvailabilityStatus::EnrollmentRequired => "\"{$product->name}\" requires an existing course enrollment.",
+            ProductAvailabilityStatus::EligibilityRequired => "\"{$product->name}\" requires qualifying course enrollment and/or competition team membership.",
             ProductAvailabilityStatus::InvalidPrice => "\"{$product->name}\" does not have a valid price.",
             ProductAvailabilityStatus::Scheduled => "\"{$product->name}\" is not available yet.",
             ProductAvailabilityStatus::Expired => "\"{$product->name}\" is no longer available for purchase.",

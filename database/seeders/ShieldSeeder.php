@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Models\Role;
 use App\Services\PermissionCatalogSynchronizerService;
 use Illuminate\Database\Seeder;
 use RuntimeException;
+use Spatie\Permission\Contracts\Permission as PermissionContract;
 use Spatie\Permission\Models\Permission;
 
 final class ShieldSeeder extends Seeder
@@ -15,18 +18,68 @@ final class ShieldSeeder extends Seeder
     public function run(PermissionCatalogSynchronizerService $synchronizer): void
     {
         $superAdmin = $this->role(Role::SUPER_ADMIN, Role::SUPER_ADMIN_WEIGHT);
-        $owner = $this->role('owner', Role::OWNER_WEIGHT);
-        $this->role('teacher', Role::TEACHER_WEIGHT);
+        $owner = $this->role(Role::OWNER, Role::OWNER_WEIGHT);
+        $teacher = $this->role(Role::TEACHER, Role::TEACHER_WEIGHT);
 
         $synchronizer->sync();
 
         $superAdmin->refresh();
-        $owner->syncPermissions([
+        $owner->givePermissionTo([
+            Permission::findByName('Create:StaffNote', 'web'),
+            Permission::findByName('Delete:StaffNote', 'web'),
             Permission::findByName('Manage:DashboardAppearance', 'web'),
+            Permission::findByName('Send:Email', 'web'),
+            Permission::findByName('Update:Event', 'web'),
+            Permission::findByName('Update:StaffNote', 'web'),
+            Permission::findByName('View:Event', 'web'),
+            Permission::findByName('View:StaffNote', 'web'),
+            Permission::findByName('View:Student', 'web'),
+            Permission::findByName('ViewAny:Event', 'web'),
+            Permission::findByName('ViewAny:StaffNote', 'web'),
+            Permission::findByName('ViewAny:Student', 'web'),
             Permission::findByName('View:AppUpdatesPage', 'web'),
+            ...array_map(
+                fn (ReportKey $report): PermissionContract => Permission::findByName($report->permission(), 'web'),
+                ReportKey::cases(),
+            ),
+            ...array_map(
+                fn (ReportWidgetKey $widget): PermissionContract => Permission::findByName($widget->permission(), 'web'),
+                array_values(array_filter(
+                    ReportWidgetKey::cases(),
+                    fn (ReportWidgetKey $widget): bool => $widget->hasDedicatedPermission(),
+                )),
+            ),
+        ]);
+        $teacher->givePermissionTo([
+            Permission::findByName('Create:StaffNote', 'web'),
+            Permission::findByName('Delete:StaffNote', 'web'),
+            Permission::findByName('Send:Email', 'web'),
+            Permission::findByName('Update:Event', 'web'),
+            Permission::findByName('Update:StaffNote', 'web'),
+            Permission::findByName('View:Event', 'web'),
+            Permission::findByName('View:StaffNote', 'web'),
+            Permission::findByName('View:Student', 'web'),
+            Permission::findByName('ViewAny:Event', 'web'),
+            Permission::findByName('ViewAny:StaffNote', 'web'),
+            Permission::findByName('ViewAny:Student', 'web'),
+            ...array_map(
+                fn (ReportKey $report): PermissionContract => Permission::findByName($report->permission(), 'web'),
+                array_values(array_filter(
+                    ReportKey::cases(),
+                    fn (ReportKey $report): bool => $report->availableToTeachersByDefault(),
+                )),
+            ),
+            ...array_map(
+                fn (ReportWidgetKey $widget): PermissionContract => Permission::findByName($widget->permission(), 'web'),
+                array_values(array_filter(
+                    ReportWidgetKey::cases(),
+                    fn (ReportWidgetKey $widget): bool => $widget->hasDedicatedPermission()
+                        && $widget->availableToTeachersByDefault(),
+                )),
+            ),
         ]);
 
-        $this->command?->info('Shield seeding completed.');
+        $this->command->info('Shield seeding completed.');
     }
 
     private function role(string $name, int $weight): Role

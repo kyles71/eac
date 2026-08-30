@@ -5,8 +5,8 @@ declare(strict_types=1);
 use App\Enums\CreditGrantStatus;
 use App\Enums\CreditTransactionType;
 use App\Enums\ProductType;
-use App\Models\Costume;
 use App\Models\CreditGrant;
+use App\Models\Gear;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
@@ -41,28 +41,28 @@ it('issues an auditable grant', function () {
 
 it('applies product type and specific product restrictions together', function () {
     $user = User::factory()->create();
-    $allowedCostume = Product::factory()->for(Costume::factory(), 'productable')->create();
-    $otherCostume = Product::factory()->for(Costume::factory(), 'productable')->create();
+    $allowedGear = Product::factory()->for(Gear::factory(), 'productable')->create();
+    $otherGear = Product::factory()->for(Gear::factory(), 'productable')->create();
     $grant = CreditGrant::factory()
         ->for($user)
-        ->restrictedTo(ProductType::Costume)
+        ->restrictedTo(ProductType::Gear)
         ->create(['has_product_restrictions' => true]);
-    $grant->products()->attach($allowedCostume);
+    $grant->products()->attach($allowedGear);
 
-    expect($grant->appliesToProduct($allowedCostume))->toBeTrue()
-        ->and($grant->appliesToProduct($otherCostume))->toBeFalse()
+    expect($grant->appliesToProduct($allowedGear))->toBeTrue()
+        ->and($grant->appliesToProduct($otherGear))->toBeFalse()
         ->and($user->availableStoreCreditBalance())->toBe(0)
         ->and($user->availableRestrictedCreditBalance())->toBe($grant->remaining_amount);
 });
 
 it('does not become unrestricted when a specifically allowed product is deleted', function () {
     $user = User::factory()->create();
-    $allowedProduct = Product::factory()->for(Costume::factory(), 'productable')->create();
-    $otherProduct = Product::factory()->for(Costume::factory(), 'productable')->create();
+    $allowedProduct = Product::factory()->for(Gear::factory(), 'productable')->create();
+    $otherProduct = Product::factory()->for(Gear::factory(), 'productable')->create();
     $grant = app(CreditLedgerService::class)->issue(
         recipient: $user,
         amount: 2500,
-        description: 'Costume credit',
+        description: 'Gear credit',
         productIds: [$allowedProduct->id],
     );
 

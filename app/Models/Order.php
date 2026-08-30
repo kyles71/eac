@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -70,6 +72,12 @@ final class Order extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /** @return HasMany<OrderRefund, $this> */
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(OrderRefund::class)->latest();
     }
 
     /** @return HasOne<PaymentPlan, $this> */
@@ -178,6 +186,131 @@ final class Order extends Model
         $amounts = $this->paymentPlanTemplate->installmentAmounts($this->paymentPlanInstallmentTotal());
 
         return $this->payInFullAmount() + $amounts['first'];
+    }
+
+    public function capturedStripeAmount(): int
+    {
+        $checkoutAmount = $this->stripe_payment_intent_id === null
+            ? 0
+            : $this->amountPaidAtCheckout();
+
+        if ($this->paymentPlan === null) {
+            return $checkoutAmount;
+        }
+
+        $installmentAmount = (int) $this->paymentPlan->installments()
+            ->where('status', InstallmentStatus::Paid)
+            ->whereNotNull('stripe_payment_intent_id')
+            ->when(
+                $this->stripe_payment_intent_id !== null,
+                fn ($query) => $query->where('stripe_payment_intent_id', '!=', $this->stripe_payment_intent_id),
+            )
+            ->sum('amount');
+
+        return $checkoutAmount + $installmentAmount;
+    }
+
+    public function successfulRefundAmount(): int
+    {
+        return (int) OrderRefundPayment::query()
+            ->whereHas('orderRefund', fn ($query) => $query->where('order_id', $this->id))
+            ->where('status', OrderRefundPaymentStatus::Succeeded)
+            ->sum('amount');
+    }
+
+    public function reservedRefundAmount(): int
+    {
+        return (int) OrderRefundPayment::query()
+            ->whereHas('orderRefund', fn ($query) => $query->where('order_id', $this->id))
+            ->whereIn('status', [
+                OrderRefundPaymentStatus::Processing,
+                OrderRefundPaymentStatus::Pending,
+                OrderRefundPaymentStatus::RequiresAction,
+                OrderRefundPaymentStatus::Succeeded,
+            ])
+            ->sum('amount');
+    }
+
+    public function refundableAmount(): int
+    {
+        return max(0, $this->capturedStripeAmount() - $this->reservedRefundAmount());
+    }
+
+    public function formattedRefundableAmount(): string
+    {
+        return format_money($this->refundableAmount());
+    }
+
+    public function hasChargeableInstallments(): bool
+    {
+        return $this->paymentPlan?->installments()
+            ->whereIn('status', [
+                InstallmentStatus::Pending,
+                InstallmentStatus::Failed,
+                InstallmentStatus::Overdue,
+            ])
+            ->exists() ?? false;
+    }
+
+    /**
+     * @return list<array{payment_intent_id: string, amount: int}>
+     */
+    public function refundablePaymentSources(): array
+    {
+        $reservedByPaymentIntent = OrderRefundPayment::query()
+            ->whereHas('orderRefund', fn ($query) => $query->where('order_id', $this->id))
+            ->whereIn('status', [
+                OrderRefundPaymentStatus::Processing,
+                OrderRefundPaymentStatus::Pending,
+                OrderRefundPaymentStatus::RequiresAction,
+                OrderRefundPaymentStatus::Succeeded,
+            ])
+            ->selectRaw('stripe_payment_intent_id, SUM(amount) as reserved_amount')
+            ->groupBy('stripe_payment_intent_id')
+            ->pluck('reserved_amount', 'stripe_payment_intent_id');
+
+        $sources = [];
+
+        if ($this->paymentPlan !== null) {
+            $installments = $this->paymentPlan->installments()
+                ->where('status', InstallmentStatus::Paid)
+                ->whereNotNull('stripe_payment_intent_id')
+                ->when(
+                    $this->stripe_payment_intent_id !== null,
+                    fn ($query) => $query->where('stripe_payment_intent_id', '!=', $this->stripe_payment_intent_id),
+                )
+                ->orderByDesc('paid_at')
+                ->orderByDesc('id')
+                ->get();
+
+            /** @var Installment $installment */
+            foreach ($installments as $installment) {
+                $paymentIntentId = $installment->stripe_payment_intent_id;
+
+                if (! is_string($paymentIntentId)) {
+                    continue;
+                }
+
+                $amount = max(0, $installment->amount - (int) ($reservedByPaymentIntent[$paymentIntentId] ?? 0));
+
+                if ($amount > 0) {
+                    $sources[] = ['payment_intent_id' => $paymentIntentId, 'amount' => $amount];
+                }
+            }
+        }
+
+        if ($this->stripe_payment_intent_id !== null) {
+            $amount = max(
+                0,
+                $this->amountPaidAtCheckout() - (int) ($reservedByPaymentIntent[$this->stripe_payment_intent_id] ?? 0),
+            );
+
+            if ($amount > 0) {
+                $sources[] = ['payment_intent_id' => $this->stripe_payment_intent_id, 'amount' => $amount];
+            }
+        }
+
+        return $sources;
     }
 
     /**

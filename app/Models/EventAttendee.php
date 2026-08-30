@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\AttendanceStatus;
 use Database\Factories\EventAttendeeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,9 +20,10 @@ final class EventAttendee extends Model
         'id' => 'integer',
         'event_id' => 'integer',
         'attendee_id' => 'integer',
-        'attended' => 'boolean',
+        'status' => AttendanceStatus::class,
     ];
 
+    /** @return BelongsTo<Event, $this> */
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);

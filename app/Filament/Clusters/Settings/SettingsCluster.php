@@ -15,9 +15,9 @@ final class SettingsCluster extends Cluster
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
-    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Settings;
+    protected static UnitEnum|string|null $navigationGroup = AdminNavigation::Tools;
 
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = AdminNavigation::ToolsSettings;
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Start;
 }

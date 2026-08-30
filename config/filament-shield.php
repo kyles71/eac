@@ -2,12 +2,33 @@
 
 declare(strict_types=1);
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Pages\Reports\ClassAttendanceReport;
+use App\Filament\Admin\Pages\Reports\ClassRosters;
+use App\Filament\Admin\Pages\Reports\ClassSafetyRoster;
+use App\Filament\Admin\Pages\Reports\CompetitionAttendanceReport;
+use App\Filament\Admin\Pages\Reports\CompetitionEmailList;
+use App\Filament\Admin\Pages\Reports\CompetitionEnrollments;
+use App\Filament\Admin\Pages\Reports\EmergencyTextsByCourse;
+use App\Filament\Admin\Pages\Reports\EnrollmentReports;
+use App\Filament\Admin\Pages\Reports\EnrollmentsByTerm;
+use App\Filament\Admin\Pages\Reports\InstructorClassAssignments;
+use App\Filament\Admin\Pages\Reports\InstructorHoursSummary;
+use App\Filament\Admin\Pages\Reports\InstructorReports;
+use App\Filament\Admin\Pages\Reports\InstructorSchedule;
+use App\Filament\Admin\Pages\Reports\InstructorSubReport;
+use App\Filament\Admin\Pages\Reports\InstructorTeachingSchedule;
+use App\Filament\Admin\Pages\Reports\OverallAttendanceReport;
+use App\Filament\Admin\Pages\Reports\SubstituteCoverage;
+use App\Filament\Admin\Pages\Reports\TermEmailList;
+use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
+use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
-use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
@@ -18,6 +39,7 @@ use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Forms\FormResource;
 use App\Filament\Admin\Resources\FormUsers\FormUserResource;
+use App\Filament\Admin\Resources\Gear\GearResource;
 use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
@@ -28,9 +50,19 @@ use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResourc
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
 use App\Filament\Admin\Resources\SentEmails\SentEmailResource;
+use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
+use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Admin\Widgets\Reports\CapacityMetricChart;
+use App\Filament\Admin\Widgets\Reports\EnrollmentOverview;
+use App\Filament\Admin\Widgets\Reports\InstructorOverview;
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
+use App\Filament\Admin\Widgets\SubstituteRequestBanners;
+use App\Filament\Clusters\Settings\Pages\AcademicTermDefaults;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
+use App\Filament\Clusters\Settings\Pages\ReportingSettingsPage;
+use App\Filament\Clusters\Settings\Resources\AcademicTerms\AcademicTermResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Filament\Shared\Pages\Calendar as CalendarPage;
 use App\Filament\Shared\Widgets\CalendarWidget;
@@ -203,7 +235,7 @@ return [
             CompetitionTeamResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
-            CostumeResource::class => [
+            GearResource::class => [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
             CourseHoldResource::class => [
@@ -252,10 +284,10 @@ return [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
             OrderResource::class => [
-                'viewAny', 'view',
+                'viewAny', 'view', 'refund',
             ],
             PaymentPlanResource::class => [
-                'viewAny', 'view',
+                'viewAny', 'view', 'adjustDueDates',
             ],
             PaymentPlanTemplateResource::class => [
                 'viewAny', 'create', 'update',
@@ -266,6 +298,9 @@ return [
             RoleResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
+            StaffNoteResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete',
+            ],
             StudentResource::class => [
                 'viewAny', 'view', 'create', 'update', 'deleteAny',
             ],
@@ -274,7 +309,9 @@ return [
             ],
         ],
         'exclude' => [
+            AcademicTermResource::class,
             SentEmailResource::class,
+            StudentCommunicationResource::class,
         ],
     ],
 
@@ -293,10 +330,32 @@ return [
         'subject' => 'class',
         'prefix' => 'view',
         'exclude' => [
+            AcademicTermDefaults::class,
             CalendarPage::class,
             Dashboard::class,
             ManageDashboardAppearance::class,
+            SubstituteRequest::class,
             Updates::class,
+            EnrollmentReports::class,
+            EnrollmentsByTerm::class,
+            TotalEnrollmentsByClass::class,
+            CompetitionEnrollments::class,
+            TermEmailList::class,
+            CompetitionEmailList::class,
+            InstructorReports::class,
+            InstructorClassAssignments::class,
+            InstructorTeachingSchedule::class,
+            InstructorHoursSummary::class,
+            SubstituteCoverage::class,
+            ClassRosters::class,
+            InstructorSchedule::class,
+            ClassSafetyRoster::class,
+            EmergencyTextsByCourse::class,
+            ClassAttendanceReport::class,
+            CompetitionAttendanceReport::class,
+            OverallAttendanceReport::class,
+            InstructorSubReport::class,
+            ReportingSettingsPage::class,
         ],
     ],
 
@@ -316,8 +375,13 @@ return [
         'prefix' => 'view',
         'exclude' => [
             CalendarWidget::class,
+            CapacityMetricChart::class,
+            EnrollmentOverview::class,
+            InstructorOverview::class,
             MessagesFromEac::class,
             QuickLinks::class,
+            SubstituteCoverageReminder::class,
+            SubstituteRequestBanners::class,
         ],
     ],
 
@@ -338,7 +402,10 @@ return [
         'Manage:ThemeBuilder' => 'Manage Theme Builder',
         'Manage:UserAccess' => 'Manage User Access',
         'Revoke:CreditGrant' => 'Revoke Store Credit',
+        'Send:Email' => 'Send Email',
         'View:AppUpdatesPage' => 'View App Updates Page',
+        ...ReportKey::permissionOptions(),
+        ...ReportWidgetKey::dedicatedPermissionOptions(),
     ],
 
     /*

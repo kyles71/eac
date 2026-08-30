@@ -13,6 +13,11 @@ final class PermissionCheckboxList extends CheckboxList
 
     protected ?string $descriptionAboveSearch = null;
 
+    public static function standardAbilityHelpText(): string
+    {
+        return 'View Any allows access to a resource list, while View allows access to an individual record. Delete Any allows bulk deletion from a list, while Delete allows deleting one record. These permissions are independent, so grant both when a role needs both actions.';
+    }
+
     public function descriptionAboveSearch(?string $description): static
     {
         $this->descriptionAboveSearch = $description;

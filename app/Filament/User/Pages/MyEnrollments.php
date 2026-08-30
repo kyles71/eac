@@ -90,7 +90,7 @@ final class MyEnrollments extends TablePage
             ->query(
                 Enrollment::query()
                     ->where('user_id', auth()->id())
-                    ->with(['course.events', 'course.teachers.media', 'student'])
+                    ->with(['course.academicTerm', 'course.events', 'course.teachers.media', 'student'])
             )
             ->recordTitle(fn (Enrollment $record): string => $record->course->name)
             ->columns([
@@ -98,10 +98,11 @@ final class MyEnrollments extends TablePage
                     ->label('Course')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('course.semester')
-                    ->label('Semester')
+                TextColumn::make('academic_term')
+                    ->label('Academic Term')
+                    ->state(fn (Enrollment $record): ?string => $record->course?->academicTerm?->display_name)
                     ->badge()
-                    ->sortable(),
+                    ->color(fn (Enrollment $record): ?string => $record->course?->academicTerm?->semester->getColor()),
                 TextColumn::make('student.fullName')
                     ->label('Student')
                     ->placeholder('Unassigned')

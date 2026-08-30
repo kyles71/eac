@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -26,6 +27,7 @@ use Spatie\Tags\HasTags;
 
 /**
  * @property-read Product|null $product
+ * @property-read CourseSemester|null $semester
  * @property-read string|null $teacherDisplayName
  */
 final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
@@ -39,10 +41,37 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
 
     protected $casts = [
         'id' => 'integer',
-        'semester' => CourseSemester::class,
+        'academic_term_id' => 'integer',
         'capacity' => 'integer',
         'event_reminder_processed_at' => 'datetime',
     ];
+
+    public static function applyActiveTeachingAccessConstraint(Builder $query, User $user): Builder
+    {
+        if (! $user->hasCourseRestrictedAdminAccess()) {
+            return $query;
+        }
+
+        self::applyNotConcludedConstraint($query, Carbon::now());
+
+        return $query->whereHas(
+            'teachers',
+            fn (Builder $query): Builder => $query->whereKey($user->id),
+        );
+    }
+
+    /** @return BelongsTo<AcademicTerm, $this> */
+    public function academicTerm(): BelongsTo
+    {
+        return $this->belongsTo(AcademicTerm::class);
+    }
+
+    public function semester(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?CourseSemester => $this->academicTerm?->semester,
+        );
+    }
 
     /** @return HasMany<Event, $this> */
     public function events(): HasMany
@@ -176,6 +205,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return null;
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function teachers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
@@ -201,6 +231,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         return $this->morphOne(Product::class, 'productable');
     }
 
+    /** @return HasMany<Enrollment, $this> */
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
@@ -302,7 +333,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         $duration = $this->scheduledDurationMinutes();
 
         return array_filter([
-            'Semester' => $this->semester->getLabel(),
+            'Semester' => $this->academicTerm?->display_name,
             'Start Time' => $this->formattedStorefrontStartTime(),
             'Duration' => $duration !== null ? "{$duration} minutes" : null,
             'Teacher' => $this->teacherDisplayName,
@@ -351,10 +382,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     {
         $date ??= Carbon::now();
 
-        $query->whereHas(
-            'events',
-            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
-        );
+        self::applyNotConcludedConstraint($query, $date);
     }
 
     public function hasConcluded(?Carbon $date = null): bool
@@ -408,6 +436,14 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
                 $course->attachTag(Calendar::SLUG_EAC, self::CALENDAR_TAG_TYPE);
             }
         });
+    }
+
+    private static function applyNotConcludedConstraint(Builder $query, Carbon $date): Builder
+    {
+        return $query->whereHas(
+            'events',
+            fn (Builder $query): Builder => self::applyEventNotPassedConstraint($query, $date)
+        );
     }
 
     private static function applyEventNotPassedConstraint(Builder $query, Carbon $date): Builder

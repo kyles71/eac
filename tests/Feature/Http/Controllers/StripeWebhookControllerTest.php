@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderItemStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
 use App\Http\Controllers\StripeWebhookController;
 use App\Models\CartItem;
+use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
+use App\Models\OrderRefundPayment;
 use App\Models\PaymentPlan;
 use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
@@ -143,13 +150,31 @@ it('handles unrecognized event types gracefully', function () {
     expect($response->getData(true))->toBe(['message' => 'Unhandled event type']);
 });
 
-it('handles payment intent failed webhook', function () {
+it('keeps an order and its claimed course seats retryable after a failed payment attempt', function () {
     $user = User::factory()->create();
+    $courseProduct = Product::factory()->forCourse()->create(['price' => 5000]);
+    $courseHold = CourseHold::factory()->create(['user_id' => $user->id]);
 
     $order = Order::factory()->create([
         'user_id' => $user->id,
         'status' => OrderStatus::Processing,
         'stripe_payment_intent_id' => 'pi_test_failed',
+    ]);
+
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $courseProduct->id,
+        'course_hold_id' => $courseHold->id,
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+    ]);
+
+    $claimedSeat = CourseHoldSeat::factory()->create([
+        'course_hold_id' => $courseHold->id,
+        'course_id' => $courseProduct->productable_id,
+        'claimed_order_item_id' => $orderItem->id,
+        'locked_unit_price' => 5000,
     ]);
 
     $event = new Stripe\Event;
@@ -174,7 +199,88 @@ it('handles payment intent failed webhook', function () {
     $response = $controller($request);
 
     expect($response->getStatusCode())->toBe(200);
-    expect($order->refresh()->status)->toBe(OrderStatus::Failed);
+    expect($order->refresh()->status)->toBe(OrderStatus::Pending)
+        ->and($claimedSeat->refresh()->claimed_order_item_id)->toBe($orderItem->id);
+});
+
+it('completes an order when 3DS authentication fails before the same payment intent succeeds', function () {
+    $user = User::factory()->create();
+    $courseProduct = Product::factory()->forCourse()->create(['price' => 28900]);
+
+    $order = Order::factory()->create([
+        'user_id' => $user->id,
+        'status' => OrderStatus::Processing,
+        'subtotal' => 28900,
+        'total' => 28900,
+        'stripe_payment_intent_id' => 'pi_test_3ds_retry',
+    ]);
+
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'product_id' => $courseProduct->id,
+        'quantity' => 1,
+        'unit_price' => 28900,
+        'total_price' => 28900,
+    ]);
+
+    CartItem::factory()->create([
+        'user_id' => $user->id,
+        'product_id' => $courseProduct->id,
+        'quantity' => 1,
+    ]);
+
+    $failedEvent = new Stripe\Event;
+    $failedEvent->type = 'payment_intent.payment_failed';
+    $failedEvent->data = (object) [
+        'object' => (object) [
+            'id' => 'pi_test_3ds_retry',
+            'last_payment_error' => (object) [
+                'code' => 'payment_intent_authentication_failure',
+            ],
+            'metadata' => (object) [
+                'order_id' => (string) $order->id,
+            ],
+        ],
+    ];
+
+    $succeededEvent = new Stripe\Event;
+    $succeededEvent->type = 'payment_intent.succeeded';
+    $succeededEvent->data = (object) [
+        'object' => (object) [
+            'id' => 'pi_test_3ds_retry',
+            'payment_method' => 'pm_test_3ds_retry',
+            'customer' => 'cus_test_3ds_retry',
+            'metadata' => (object) [
+                'order_id' => (string) $order->id,
+            ],
+        ],
+    ];
+
+    $mockStripeService = Mockery::mock(StripeServiceContract::class);
+    $mockStripeService->shouldReceive('constructWebhookEvent')
+        ->twice()
+        ->andReturn($failedEvent, $succeededEvent);
+    $this->app->instance(StripeServiceContract::class, $mockStripeService);
+
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    $controller = app(StripeWebhookController::class);
+
+    expect($controller($request)->getData(true))->toBe(['message' => 'Payment failure handled'])
+        ->and($order->refresh()->status)->toBe(OrderStatus::Pending);
+
+    expect($controller($request)->getData(true))->toBe(['message' => 'Order processed'])
+        ->and($order->refresh()->status)->toBe(OrderStatus::Completed)
+        ->and($order->cart_items_cleared_at)->not->toBeNull()
+        ->and($order->receipt_queued_at)->not->toBeNull()
+        ->and($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled)
+        ->and($orderItem->enrollments()->count())->toBe(1)
+        ->and(CartItem::query()->where('user_id', $user->id)->count())->toBe(0);
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-receipt'
+        && $mail->hasTo($user->email));
 });
 
 it('handles payment_intent.succeeded without order or installment metadata gracefully', function () {
@@ -563,3 +669,63 @@ it('ignores invoice webhooks for payment plans', function (string $eventType) {
     'paid invoice' => 'invoice.paid',
     'failed invoice' => 'invoice.payment_failed',
 ]);
+
+it('reconciles successful refund updates idempotently', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 5000,
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_refund_webhook',
+    ]);
+    $refund = OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 5000,
+        'status' => OrderRefundStatus::Pending,
+    ]);
+    $payment = OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'stripe_payment_intent_id' => 'pi_refund_webhook',
+        'stripe_refund_id' => 're_webhook',
+        'amount' => 5000,
+        'status' => OrderRefundPaymentStatus::Pending,
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'refund.updated';
+    $event->data = (object) [
+        'object' => (object) [
+            'id' => 're_webhook',
+            'status' => 'succeeded',
+            'failure_reason' => null,
+            'metadata' => (object) [
+                'order_refund_payment_id' => (string) $payment->id,
+            ],
+        ],
+    ];
+    $staleEvent = clone $event;
+    $staleEvent->type = 'refund.created';
+    $staleEvent->data = (object) [
+        'object' => (object) [
+            'id' => 're_webhook',
+            'status' => 'pending',
+            'failure_reason' => null,
+            'metadata' => (object) [
+                'order_refund_payment_id' => (string) $payment->id,
+            ],
+        ],
+    ];
+
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $stripe->shouldReceive('constructWebhookEvent')->twice()->andReturn($event, $staleEvent);
+    $this->app->instance(StripeServiceContract::class, $stripe);
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    expect(app(StripeWebhookController::class)($request)->getData(true))
+        ->toBe(['message' => 'Refund status processed'])
+        ->and(app(StripeWebhookController::class)($request)->getData(true))
+        ->toBe(['message' => 'Refund status processed'])
+        ->and($payment->refresh()->status)->toBe(OrderRefundPaymentStatus::Succeeded)
+        ->and($refund->refresh()->status)->toBe(OrderRefundStatus::Succeeded)
+        ->and($order->refresh()->status)->toBe(OrderStatus::Refunded);
+});

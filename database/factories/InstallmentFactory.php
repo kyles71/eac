@@ -74,7 +74,9 @@ final class InstallmentFactory extends Factory
     public function dueToday(): static
     {
         return $this->state(fn (array $attributes): array => [
-            'due_date' => now()->toDateString(),
+            'due_date' => now()
+                ->setTimezone((string) config('app.display_timezone', config('app.timezone')))
+                ->toDateString(),
         ]);
     }
 
@@ -84,7 +86,10 @@ final class InstallmentFactory extends Factory
     public function pastDue(): static
     {
         return $this->state(fn (array $attributes): array => [
-            'due_date' => now()->subDays(5)->toDateString(),
+            'due_date' => now()
+                ->setTimezone((string) config('app.display_timezone', config('app.timezone')))
+                ->subDays(5)
+                ->toDateString(),
         ]);
     }
 }

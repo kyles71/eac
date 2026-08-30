@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use Filament\Forms\Components\RichEditor\RichContentRenderer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Kyle\FilamentMailManager\Data\RenderedEmail;
 use Kyle\FilamentMailManager\Mail\ManagedMailable;
@@ -37,6 +38,11 @@ final class HandcraftedEmail extends ManagedMailable implements ShouldQueue
     private function formattedEmailBody(): string
     {
         $body = str_replace(["\r\n", "\r"], "\n", mb_trim($this->emailBody));
+
+        if ($this->containsRichTextMarkup($body)) {
+            return RichContentRenderer::make($body)->toHtml();
+        }
+
         $body = preg_replace("/\n[ \t]*\n/u", "\n\n", $body) ?? $body;
         $paragraphs = preg_split("/\n{2,}/u", $body) ?: [];
         $html = '';
@@ -55,5 +61,10 @@ final class HandcraftedEmail extends ManagedMailable implements ShouldQueue
         }
 
         return $html;
+    }
+
+    private function containsRichTextMarkup(string $body): bool
+    {
+        return preg_match('/<(?:p|h[2-3]|blockquote|ul|ol)\b/iu', $body) === 1;
     }
 }

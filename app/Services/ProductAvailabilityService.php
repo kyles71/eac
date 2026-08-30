@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\DashboardAudience;
 use App\Enums\ProductAvailabilityStatus;
+use App\Models\CompetitionSeason;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\User;
@@ -36,15 +37,15 @@ final readonly class ProductAvailabilityService
                 return ProductAvailabilityStatus::Scheduled;
             }
 
-            if (! $this->hasRequiredEnrollment($product, $user)) {
-                return ProductAvailabilityStatus::EnrollmentRequired;
+            if (! $this->hasRequiredPurchaseEligibility($product, $user, $at)) {
+                return ProductAvailabilityStatus::EligibilityRequired;
             }
 
             return ProductAvailabilityStatus::EarlyAccess;
         }
 
-        if ($user !== null && ! $this->hasRequiredEnrollment($product, $user)) {
-            return ProductAvailabilityStatus::EnrollmentRequired;
+        if ($user !== null && ! $this->hasRequiredPurchaseEligibility($product, $user, $at)) {
+            return ProductAvailabilityStatus::EligibilityRequired;
         }
 
         return ProductAvailabilityStatus::Available;
@@ -120,9 +121,10 @@ final readonly class ProductAvailabilityService
                     });
             })
             ->where(function (Builder $query) use ($user): void {
-                $query
-                    ->whereNull('requires_course_id')
-                    ->orWhereIn('requires_course_id', $user->enrollments()->select('course_id'));
+                $this->applyRequiredCourseEligibilityToQuery($query, $user);
+            })
+            ->where(function (Builder $query) use ($at, $user): void {
+                $this->applyRequiredCompetitionTeamEligibilityToQuery($query, $user, $at);
             });
     }
 
@@ -172,7 +174,7 @@ final readonly class ProductAvailabilityService
                     ->whereNull('available_until')
                     ->orWhere('available_until', '>', $at))
                 ->whereHas('earlyAccessWindows', fn (Builder $query): Builder => $this->activeWindowQuery($query, $at)),
-            ProductAvailabilityStatus::EnrollmentRequired => $query,
+            ProductAvailabilityStatus::EligibilityRequired => $query,
         };
     }
 
@@ -272,14 +274,84 @@ final readonly class ProductAvailabilityService
         });
     }
 
-    private function hasRequiredEnrollment(Product $product, User $user): bool
+    private function applyRequiredCourseEligibilityToQuery(Builder $query, User $user): Builder
     {
-        if ($product->requires_course_id === null) {
+        return $query
+            ->whereDoesntHave('requiredCourses')
+            ->orWhereHas(
+                'requiredCourses',
+                fn (Builder $query): Builder => $query
+                    ->whereIn('courses.id', $user->enrollments()->select('course_id')),
+            );
+    }
+
+    private function applyRequiredCompetitionTeamEligibilityToQuery(
+        Builder $query,
+        User $user,
+        CarbonInterface $at,
+    ): Builder {
+        return $query
+            ->whereDoesntHave('requiredCompetitionTeams')
+            ->orWhereHas(
+                'requiredCompetitionTeams',
+                fn (Builder $query): Builder => $this->applyMatchingCompetitionTeamToQuery($query, $user, $at),
+            );
+    }
+
+    private function applyMatchingCompetitionTeamToQuery(
+        Builder $query,
+        User $user,
+        CarbonInterface $at,
+    ): Builder {
+        return $query
+            ->whereHas(
+                'season',
+                fn (Builder $query): Builder => CompetitionSeason::constrainToNotEnded($query, $at),
+            )
+            ->where(function (Builder $query) use ($user): void {
+                $query
+                    ->whereHas(
+                        'staff',
+                        fn (Builder $query): Builder => $query->whereKey($user->getKey()),
+                    )
+                    ->orWhereHas(
+                        'students',
+                        fn (Builder $query): Builder => $query->where('students.user_id', $user->getKey()),
+                    );
+            });
+    }
+
+    private function hasRequiredPurchaseEligibility(
+        Product $product,
+        User $user,
+        CarbonInterface $at,
+    ): bool {
+        return $this->hasRequiredCourseEnrollment($product, $user)
+            && $this->hasRequiredCompetitionTeamMembership($product, $user, $at);
+    }
+
+    private function hasRequiredCourseEnrollment(Product $product, User $user): bool
+    {
+        if ($product->requiredCourses()->doesntExist()) {
             return true;
         }
 
-        return $user->enrollments()
-            ->where('course_id', $product->requires_course_id)
+        return $product->requiredCourses()
+            ->whereIn('courses.id', $user->enrollments()->select('course_id'))
+            ->exists();
+    }
+
+    private function hasRequiredCompetitionTeamMembership(
+        Product $product,
+        User $user,
+        CarbonInterface $at,
+    ): bool {
+        if ($product->requiredCompetitionTeams()->doesntExist()) {
+            return true;
+        }
+
+        return $product->requiredCompetitionTeams()
+            ->where(fn (Builder $query): Builder => $this->applyMatchingCompetitionTeamToQuery($query, $user, $at))
             ->exists();
     }
 

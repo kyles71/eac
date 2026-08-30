@@ -8,6 +8,7 @@ use Stripe\Customer;
 use Stripe\CustomerSession;
 use Stripe\PaymentIntent;
 use Stripe\PaymentMethod;
+use Stripe\Refund;
 use Stripe\StripeClient;
 
 it('creates a new payment intent without preassigning a saved payment method', function () {
@@ -109,6 +110,53 @@ it('makes an attached payment method redisplayable', function () {
     expect($paymentMethods->updatedWith)->toBe([
         'paymentMethodId' => 'pm_plan',
         'params' => ['allow_redisplay' => 'always'],
+    ]);
+});
+
+it('creates an idempotent partial refund with private identifiers only', function (): void {
+    $refunds = new class
+    {
+        /** @var array<string, mixed> */
+        public array $createdWith = [];
+
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, mixed>  $options
+         */
+        public function create(array $params, array $options): Refund
+        {
+            $this->createdWith = $params;
+            $this->requestOptions = $options;
+
+            return Refund::constructFrom(['id' => 're_test', 'status' => 'succeeded']);
+        }
+    };
+
+    $service = new StripeService(stripeClientForTest(['refunds' => $refunds]));
+
+    $service->refundPaymentIntent(
+        paymentIntentId: 'pi_test',
+        amount: 2500,
+        metadata: [
+            'order_id' => '123',
+            'order_refund_id' => '456',
+        ],
+        idempotencyKey: 'order-refund-payment-789',
+    );
+
+    expect($refunds->createdWith)->toBe([
+        'payment_intent' => 'pi_test',
+        'amount' => 2500,
+        'metadata' => [
+            'order_id' => '123',
+            'order_refund_id' => '456',
+        ],
+    ])->and($refunds->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
+        'idempotency_key' => 'order-refund-payment-789',
     ]);
 });
 

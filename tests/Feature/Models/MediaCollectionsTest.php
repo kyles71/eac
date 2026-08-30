@@ -2,13 +2,15 @@
 
 declare(strict_types=1);
 
-use App\Models\Costume;
+use App\Actions\Events\ReportLegacyPublicEventMedia;
 use App\Models\Course;
 use App\Models\Event;
+use App\Models\Gear;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
@@ -16,25 +18,25 @@ beforeEach(function () {
     Storage::fake('local');
 });
 
-it('registers media collections on Costume', function () {
-    $costume = Costume::factory()->create();
+it('registers media collections on Gear', function () {
+    $gear = Gear::factory()->create();
 
-    $costume->addMedia(UploadedFile::fake()->image('photo.jpg'))
+    $gear->addMedia(UploadedFile::fake()->image('photo.jpg'))
         ->toMediaCollection('images');
 
-    expect($costume->getMedia('images'))->toHaveCount(1)
-        ->and($costume->getFirstMedia('images')->disk)->toBe(MediaDisks::public());
+    expect($gear->getMedia('images'))->toHaveCount(1)
+        ->and($gear->getFirstMedia('images')->disk)->toBe(MediaDisks::public());
 });
 
-it('allows multiple images on Costume', function () {
-    $costume = Costume::factory()->create();
+it('allows multiple images on Gear', function () {
+    $gear = Gear::factory()->create();
 
-    $costume->addMedia(UploadedFile::fake()->image('photo1.jpg'))
+    $gear->addMedia(UploadedFile::fake()->image('photo1.jpg'))
         ->toMediaCollection('images');
-    $costume->addMedia(UploadedFile::fake()->image('photo2.jpg'))
+    $gear->addMedia(UploadedFile::fake()->image('photo2.jpg'))
         ->toMediaCollection('images');
 
-    expect($costume->getMedia('images'))->toHaveCount(2);
+    expect($gear->getMedia('images'))->toHaveCount(2);
 });
 
 it('registers media collections on Event', function () {
@@ -46,9 +48,38 @@ it('registers media collections on Event', function () {
         ->toMediaCollection('documents');
 
     expect($event->getMedia('images'))->toHaveCount(1)
-        ->and($event->getFirstMedia('images')->disk)->toBe(MediaDisks::public())
+        ->and($event->getFirstMedia('images')->disk)->toBe(MediaDisks::private())
         ->and($event->getMedia('documents'))->toHaveCount(1)
         ->and($event->getFirstMedia('documents')->disk)->toBe(MediaDisks::private());
+});
+
+it('reports legacy public event media without moving or deleting it', function (): void {
+    Exceptions::fake(RuntimeException::class);
+    $event = Event::factory()->create();
+    $media = $event
+        ->addMedia(UploadedFile::fake()->image('legacy-event.jpg'))
+        ->toMediaCollection('images', MediaDisks::public());
+
+    expect(app(ReportLegacyPublicEventMedia::class)->handle())->toBe(1)
+        ->and($media->refresh()->disk)->toBe(MediaDisks::public())
+        ->and($event->getMedia('images'))->toHaveCount(1);
+
+    Exceptions::assertReported(
+        fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), "Media: #{$media->id} event:{$event->id}")
+            && str_contains($exception->getMessage(), 'must be moved manually'),
+    );
+});
+
+it('does not report event media already stored privately', function (): void {
+    Exceptions::fake(RuntimeException::class);
+    $event = Event::factory()->create();
+    $event
+        ->addMedia(UploadedFile::fake()->image('private-event.jpg'))
+        ->toMediaCollection('images');
+
+    expect(app(ReportLegacyPublicEventMedia::class)->handle())->toBe(0);
+
+    Exceptions::assertNothingReported();
 });
 
 it('registers media collections on Product', function () {

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Filament\Admin\Pages\Dashboard;
+use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -20,8 +22,13 @@ use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\SettingsCluster;
 use App\Filament\Shared\Pages\Calendar;
+use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use Filament\Facades\Filament;
+use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationItem;
+use Kyle\FilamentMailManager\Filament\Clusters\MailManager\MailManagerCluster;
+use Kyle\FilamentThemeBuilder\Pages\ThemeBuilder;
 
 beforeEach(function (): void {
     Filament::setCurrentPanel('admin');
@@ -57,10 +64,52 @@ it('keeps workflow resource ordering explicit', function (): void {
         ->and(PaymentPlanResource::getNavigationSort())->toBe(AdminNavigation::BillingPaymentPlans);
 });
 
-it('keeps settings resources inside the settings cluster', function (): void {
-    expect(SettingsCluster::getNavigationGroup())->toBe(AdminNavigation::Settings)
+it('groups administrative tools together', function (): void {
+    $navigationGroupLabels = collect(Filament::getCurrentPanel()->getNavigationGroups())
+        ->map(fn (NavigationGroup|string $group): ?string => $group instanceof NavigationGroup
+            ? $group->getLabel()
+            : $group)
+        ->all();
+
+    expect($navigationGroupLabels)
+        ->toContain(AdminNavigation::Tools)
+        ->not->toContain('Settings', 'Email')
+        ->and(SettingsCluster::getNavigationGroup())->toBe(AdminNavigation::Tools)
+        ->and(SettingsCluster::getNavigationSort())->toBe(AdminNavigation::ToolsSettings)
+        ->and(ThemeBuilder::getNavigationGroup())->toBe(AdminNavigation::Tools)
+        ->and(ThemeBuilder::getNavigationSort())->toBe(AdminNavigation::ToolsThemeBuilder)
+        ->and(Updates::getNavigationGroup())->toBe(AdminNavigation::Tools)
+        ->and(Updates::getNavigationSort())->toBe(AdminNavigation::ToolsUpdates)
+        ->and(MailManagerCluster::getNavigationGroup())->toBe(AdminNavigation::Tools)
+        ->and(MailManagerCluster::getNavigationSort())->toBe(AdminNavigation::ToolsMailManager)
         ->and(CalendarResource::getCluster())->toBe(SettingsCluster::class)
         ->and(CalendarResource::getNavigationSort())->toBe(AdminNavigation::SettingsCalendars);
+
+    $this->get(Dashboard::getUrl(panel: 'admin'))->assertOk();
+
+    $navigation = Filament::getCurrentPanel()->getNavigation();
+
+    $renderedNavigationGroupLabels = collect($navigation)->map(
+        fn (NavigationGroup $group): ?string => $group->getLabel(),
+    )->all();
+
+    expect($renderedNavigationGroupLabels)->toContain(AdminNavigation::Tools);
+
+    $toolsGroup = collect($navigation)
+        ->first(fn (NavigationGroup $group): bool => $group->getLabel() === AdminNavigation::Tools);
+
+    expect($toolsGroup)->toBeInstanceOf(NavigationGroup::class);
+    assert($toolsGroup instanceof NavigationGroup);
+
+    expect(collect($toolsGroup->getItems())
+        ->map(fn (NavigationItem $item): string => $item->getKey())
+        ->values()
+        ->all())->toBe([
+            SettingsCluster::class,
+            MailManagerCluster::class,
+            ThemeBuilder::class,
+            Updates::class,
+        ]);
 });
 
 it('groups the shared calendar only in the admin panel', function (): void {
@@ -71,6 +120,25 @@ it('groups the shared calendar only in the admin panel', function (): void {
 
     expect(Calendar::getNavigationGroup())->toBeNull()
         ->and(Calendar::getNavigationSort())->toBeNull();
+});
+
+it('keeps mail manager in tools when it is the only visible tool', function (): void {
+    $user = User::factory()->create();
+    $user->givePermissionTo('Manage:MailManager');
+    $this->actingAs($user);
+
+    $this->get(Dashboard::getUrl(panel: 'admin'))->assertOk();
+
+    $toolsGroup = collect(Filament::getCurrentPanel()->getNavigation())
+        ->first(fn (NavigationGroup $group): bool => $group->getLabel() === AdminNavigation::Tools);
+
+    expect($toolsGroup)->toBeInstanceOf(NavigationGroup::class);
+    assert($toolsGroup instanceof NavigationGroup);
+
+    expect(collect($toolsGroup->getItems())
+        ->map(fn (NavigationItem $item): string => $item->getKey())
+        ->values()
+        ->all())->toBe([MailManagerCluster::class]);
 });
 
 it('uses admin-friendly labels for renamed resources', function (): void {

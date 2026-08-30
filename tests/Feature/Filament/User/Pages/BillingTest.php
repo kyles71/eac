@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanStatus;
 use App\Enums\ProductType;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\BillingCreditGrantsTable;
+use App\Filament\User\Pages\Cart;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\GiftCard;
@@ -17,6 +20,8 @@ use App\Models\Installment;
 use App\Models\LegalDocumentVersion;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
+use App\Models\OrderRefundPayment;
 use App\Models\PaymentPlan;
 use App\Models\Product;
 use App\Models\ProductQuestionAnswer;
@@ -61,6 +66,62 @@ it('shows only the authenticated users orders', function () {
     livewire(Billing::class)
         ->assertSee("Order #{$order->id}")
         ->assertDontSee("Order #{$otherOrder->id}");
+});
+
+it('never shows internal refund reasons to the customer', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'total' => 5000,
+    ]);
+    OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'reason' => 'PRIVATE ADMIN REFUND NOTE',
+    ]);
+
+    livewire(Billing::class)
+        ->assertSee("Order #{$order->id}")
+        ->assertDontSee('PRIVATE ADMIN REFUND NOTE');
+});
+
+it('shows successful refund receipts without the internal reason', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+        'subtotal' => 10000,
+        'total' => 10000,
+    ]);
+    $refund = OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 2500,
+        'reason' => 'PRIVATE ADMIN REFUND NOTE',
+        'status' => OrderRefundStatus::Succeeded,
+        'completed_at' => now(),
+    ]);
+    OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'amount' => 2500,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+
+    livewire(Billing::class)
+        ->assertSee("View Refund Receipt #{$refund->id}")
+        ->assertDontSee('PRIVATE ADMIN REFUND NOTE');
+
+    $component = livewire(Billing::class);
+    $method = new ReflectionMethod(Billing::class, 'refundReceiptSchema');
+    $method->setAccessible(true);
+    $schema = Schema::make($component->instance())
+        ->components($method->invoke($component->instance(), $refund));
+    $entries = collect($schema->getFlatComponents(withHidden: true))
+        ->filter(fn ($component): bool => $component instanceof \Filament\Infolists\Components\TextEntry);
+
+    expect($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Refund Amount'
+        && $entry->getState() === '$25.00'))->toBeTrue()
+        ->and($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Original Order Total'
+            && $entry->getState() === '$100.00'))->toBeTrue()
+        ->and($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Amount Collected'
+            && $entry->getState() === '$100.00'))->toBeTrue()
+        ->and($entries->contains(fn ($entry): bool => $entry->getLabel() === 'Net Paid'
+            && $entry->getState() === '$75.00'))->toBeTrue();
 });
 
 it('resends a completed order receipt from billing', function () {
@@ -280,6 +341,48 @@ it('refreshes the credits tab after redeeming a store gift card', function () {
         ->assertDontSee('No store credit')
         ->assertSee('$50.00')
         ->assertSee('Redeemed gift card STORE-CARD-50');
+});
+
+it('shares failed code attempts between the cart and billing', function () {
+    $giftCard = GiftCard::factory()->amount(5000)->create();
+
+    foreach (range(1, 3) as $attempt) {
+        livewire(Cart::class)
+            ->set('code', "INVALID_CART_CODE_{$attempt}")
+            ->call('applyCode')
+            ->assertNotified('Invalid code');
+    }
+
+    foreach (range(4, 5) as $attempt) {
+        livewire(Billing::class)
+            ->callAction(
+                TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+                ['code' => "INVALID_BILLING_CODE_{$attempt}"],
+            )
+            ->assertNotified('Invalid gift card');
+    }
+
+    livewire(Billing::class)
+        ->callAction(
+            TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+            ['code' => $giftCard->code],
+        )
+        ->assertNotified('Too many code attempts');
+
+    expect($giftCard->refresh()->isRedeemed())->toBeFalse()
+        ->and(auth()->user()->refresh()->credit_balance)->toBe(0);
+
+    $this->travel(61)->seconds();
+
+    livewire(Billing::class)
+        ->callAction(
+            TestAction::make('redeemGiftCard')->schemaComponent(true, 'content'),
+            ['code' => $giftCard->code],
+        )
+        ->assertNotified('Gift card redeemed!');
+
+    expect($giftCard->refresh()->isRedeemed())->toBeTrue()
+        ->and(auth()->user()->refresh()->credit_balance)->toBe(5000);
 });
 
 it('refreshes the credits tab after redeeming a limited use gift card', function () {
@@ -775,6 +878,28 @@ it('shows the assigned card and payment method actions on active plans', functio
         ->and($optionsMethod->invoke($component->instance()))->toBe([
             'pm_new' => 'Visa ending in 4242 Exp 12/30',
         ]);
+});
+
+it('shows revised installment due dates in the customer billing schedule', function (): void {
+    $order = Order::factory()->completed()->create([
+        'user_id' => auth()->id(),
+    ]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+    ]);
+    Installment::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'due_date' => '2026-08-12',
+        'status' => InstallmentStatus::Pending,
+    ]);
+
+    livewire(Billing::class)
+        ->mountAction(
+            TestAction::make("installments_{$plan->id}")
+                ->schemaComponent(true, 'content')
+        )
+        ->assertMountedActionModalSee('Aug 12, 2026');
 });
 
 it('changes the saved payment method for one active plan', function () {

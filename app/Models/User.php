@@ -26,7 +26,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Traits\HasRoles;
 use Throwable;
 
@@ -39,7 +38,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, InteractsWithMedia, Notifiable;
 
-    public const array STAFF_ROLE_NAMES = ['owner', 'teacher'];
+    public const array STAFF_ROLE_NAMES = [Role::OWNER, Role::TEACHER];
 
     /**
      * The model's default values for attributes.
@@ -47,7 +46,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'store_view' => StoreView::List->value,
+        'store_view' => StoreView::Cards->value,
     ];
 
     /**
@@ -89,7 +88,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     {
         $storeView = $this->getAttribute('store_view');
 
-        return $storeView instanceof StoreView ? $storeView : StoreView::List;
+        return $storeView instanceof StoreView ? $storeView : StoreView::Cards;
     }
 
     public function getStaffPhotoUrl(): ?string
@@ -100,7 +99,8 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
-            return /* $this->hasVerifiedEmail() && */ $this->getAllPermissions()->isNotEmpty();
+            return /* $this->hasVerifiedEmail() && */ $this->hasRole('teacher')
+                || $this->getAllPermissions()->isNotEmpty();
         }
 
         return true;
@@ -109,6 +109,11 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function isStaffMember(): bool
     {
         return $this->hasAnyRole(self::STAFF_ROLE_NAMES);
+    }
+
+    public function hasCourseRestrictedAdminAccess(): bool
+    {
+        return ! $this->hasAnyRole([Role::SUPER_ADMIN, Role::OWNER]);
     }
 
     /** @return HasMany<Student, $this> */
@@ -130,6 +135,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(Enrollment::class);
     }
 
+    /** @return HasMany<SavedReportView, $this> */
+    public function savedReportViews(): HasMany
+    {
+        return $this->hasMany(SavedReportView::class);
+    }
+
+    /** @return HasMany<ReportExport, $this> */
+    public function reportExports(): HasMany
+    {
+        return $this->hasMany(ReportExport::class);
+    }
+
     /** @return HasMany<CourseHold, $this> */
     public function courseHolds(): HasMany
     {
@@ -145,6 +162,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     {
         return $this->belongsToMany(Event::class, 'event_exclusions')
             ->withTimestamps();
+    }
+
+    /** @return HasMany<Event, $this> */
+    public function substituteEvents(): HasMany
+    {
+        return $this->hasMany(Event::class, 'substitute_teacher_id');
+    }
+
+    /** @return HasMany<EventSubstituteRequest, $this> */
+    public function substituteRequests(): HasMany
+    {
+        return $this->hasMany(EventSubstituteRequest::class, 'teacher_id');
     }
 
     public function formAssignments(): MorphMany

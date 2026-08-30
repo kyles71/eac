@@ -15,7 +15,7 @@ enum ProductAvailabilityStatus: string implements HasColor, HasLabel
     case InvalidPrice = 'invalid_price';
     case Scheduled = 'scheduled';
     case Expired = 'expired';
-    case EnrollmentRequired = 'enrollment_required';
+    case EligibilityRequired = 'eligibility_required';
 
     /**
      * @return array<string, string>
@@ -23,7 +23,7 @@ enum ProductAvailabilityStatus: string implements HasColor, HasLabel
     public static function adminOptions(): array
     {
         return collect(self::cases())
-            ->reject(fn (self $status): bool => $status === self::EnrollmentRequired)
+            ->reject(fn (self $status): bool => $status === self::EligibilityRequired)
             ->mapWithKeys(fn (self $status): array => [$status->value => $status->getLabel()])
             ->all();
     }
@@ -37,7 +37,7 @@ enum ProductAvailabilityStatus: string implements HasColor, HasLabel
             self::InvalidPrice => 'Invalid Price',
             self::Scheduled => 'Scheduled',
             self::Expired => 'Expired',
-            self::EnrollmentRequired => 'Enrollment Required',
+            self::EligibilityRequired => 'Eligibility Required',
         };
     }
 
@@ -47,7 +47,7 @@ enum ProductAvailabilityStatus: string implements HasColor, HasLabel
             self::Available => 'success',
             self::EarlyAccess => 'info',
             self::Scheduled => 'warning',
-            self::Draft, self::InvalidPrice, self::Expired, self::EnrollmentRequired => 'danger',
+            self::Draft, self::InvalidPrice, self::Expired, self::EligibilityRequired => 'danger',
         };
     }
 
@@ -64,7 +64,7 @@ enum ProductAvailabilityStatus: string implements HasColor, HasLabel
             self::InvalidPrice => 'This product does not have a valid price.',
             self::Scheduled => 'This product is not available yet.',
             self::Expired => 'This product is no longer available for purchase.',
-            self::EnrollmentRequired => 'This product requires an existing course enrollment.',
+            self::EligibilityRequired => 'This product requires qualifying course enrollment and/or competition team membership.',
         };
     }
 }

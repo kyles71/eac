@@ -40,12 +40,14 @@ final class ProcessInstallments
         // Get due installments (pending + due date <= today)
         $dueInstallments = Installment::query()
             ->due()
+            ->notBlockedByRefundCancellation()
             ->with('paymentPlan.order.user')
             ->get();
 
         // Get retryable installments (failed + retry_count < 3)
         $retryableInstallments = Installment::query()
             ->retryable()
+            ->notBlockedByRefundCancellation()
             ->with('paymentPlan.order.user')
             ->get();
 

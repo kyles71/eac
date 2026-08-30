@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Models\Course;
+use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Student;
 use App\Models\StudentEmail;
 use App\Models\User;
@@ -82,4 +85,48 @@ it('resolves teacher tokens but rejects non-teacher user tokens', function (): v
         "teacher:{$teacher->id}",
         "teacher:{$nonTeacher->id}",
     ]))->toBe(['teacher@example.com']);
+});
+
+it('limits teacher student searches, labels, and token resolution to assigned courses', function (): void {
+    $teacher = User::factory()->isTeacher()->create();
+    $course = Course::factory()->create();
+    $course->teachers()->sync([$teacher->id]);
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $accessibleUser = User::factory()->create(['email' => 'accessible@example.com']);
+    $accessibleStudent = Student::factory()->for($accessibleUser)->create([
+        'first_name' => 'Scoped',
+        'last_name' => 'Accessible',
+    ]);
+    Enrollment::factory()->withStudent($accessibleStudent)->create([
+        'course_id' => $course->id,
+        'user_id' => $accessibleUser->id,
+    ]);
+    $unrelatedUser = User::factory()->create(['email' => 'unrelated@example.com']);
+    $unrelatedStudent = Student::factory()->for($unrelatedUser)->create([
+        'first_name' => 'Scoped',
+        'last_name' => 'Unrelated',
+    ]);
+
+    $recipients = app(HandcraftedEmailRecipients::class);
+    $searchResults = $recipients->search('Scoped', $teacher);
+
+    expect($searchResults['Students'])
+        ->toHaveKey("student:{$accessibleStudent->id}", 'Scoped Accessible')
+        ->not->toHaveKey("student:{$unrelatedStudent->id}")
+        ->and($recipients->labels([
+            "student:{$accessibleStudent->id}",
+            "student:{$unrelatedStudent->id}",
+        ], $teacher))
+        ->toBe([
+            "student:{$accessibleStudent->id}" => 'Scoped Accessible',
+        ])
+        ->and($recipients->resolve([
+            "student:{$accessibleStudent->id}",
+            "student:{$unrelatedStudent->id}",
+        ], $teacher))
+        ->toBe(['accessible@example.com']);
 });

@@ -11,7 +11,6 @@ use App\Models\Calendar;
 use App\Models\CartItem;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
-use App\Models\Costume;
 use App\Models\Course;
 use App\Models\DashboardMessage;
 use App\Models\DashboardQuickLink;
@@ -23,6 +22,7 @@ use App\Models\EventAttendee;
 use App\Models\Form;
 use App\Models\FormAssignment;
 use App\Models\FormResponse;
+use App\Models\Gear;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
@@ -61,6 +61,7 @@ final class DatabaseSeeder extends Seeder
     {
         $this->call([
             ShieldSeeder::class,
+            AcademicTermSeeder::class,
         ]);
 
         $this->seedSystemCalendars();
@@ -211,7 +212,7 @@ final class DatabaseSeeder extends Seeder
                 ->create(['name' => 'Flexible Class Gift Card']),
         ]);
 
-        $costumes = Costume::factory(5)->create();
+        $gear = Gear::factory(5)->create();
 
         $planTemplates = collect([
             PaymentPlanTemplate::factory()->create(['name' => 'Monthly 3-Pay']),
@@ -259,11 +260,11 @@ final class DatabaseSeeder extends Seeder
 
         $giftCardProducts = $giftCardTypes->map(fn (GiftCardType $type) => Product::factory()->forGiftCardType($type)->create());
 
-        $costumeProducts = $costumes->map(fn (Costume $costume) => Product::factory()->forCostume($costume)->create());
+        $gearProducts = $gear->map(fn (Gear $gear) => Product::factory()->forGear($gear)->create());
 
         $standaloneProducts = Product::factory(2)->standalone()->create();
 
-        $allProducts = $courseProducts->merge($giftCardProducts)->merge($costumeProducts)->merge($standaloneProducts);
+        $allProducts = $courseProducts->merge($giftCardProducts)->merge($gearProducts)->merge($standaloneProducts);
 
         $this->seedProductImages($allProducts);
 

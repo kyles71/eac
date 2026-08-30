@@ -12,6 +12,7 @@ enum OrderStatus: string implements HasColor, HasLabel
     case Pending = 'Pending';
     case Processing = 'Processing';
     case Completed = 'Completed';
+    case PartiallyRefunded = 'Partially Refunded';
     case Failed = 'Failed';
     case Refunded = 'Refunded';
     case Cancelled = 'Cancelled';
@@ -27,6 +28,7 @@ enum OrderStatus: string implements HasColor, HasLabel
             self::Completed => 'success',
             self::Pending => 'warning',
             self::Processing => 'info',
+            self::PartiallyRefunded => 'warning',
             self::Failed => 'danger',
             self::Refunded => 'gray',
             self::Cancelled => 'gray',

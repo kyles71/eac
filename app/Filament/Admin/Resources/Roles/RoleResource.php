@@ -76,6 +76,7 @@ final class RoleResource extends ShieldRoleResource
                     ->schema([
                         PermissionCheckboxList::make('permission_ids')
                             ->hiddenLabel()
+                            ->descriptionAboveSearch(PermissionCheckboxList::standardAbilityHelpText())
                             ->options(fn (): array => app(AccessManagerService::class)
                                 ->manageablePermissions(self::actor())
                                 ->pluck('name', 'id')

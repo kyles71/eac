@@ -13,7 +13,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Collection;
@@ -32,7 +32,6 @@ final class Product extends Model implements HasMedia
         'is_active' => 'boolean',
         'include_productable_images' => 'boolean',
         'send_purchase_notification' => 'boolean',
-        'requires_course_id' => 'integer',
         'available_from' => 'datetime',
         'available_until' => 'datetime',
     ];
@@ -42,10 +41,18 @@ final class Product extends Model implements HasMedia
         return $this->morphTo();
     }
 
-    /** @return BelongsTo<Course, $this> */
-    public function requiresCourse(): BelongsTo
+    /** @return BelongsToMany<Course, $this> */
+    public function requiredCourses(): BelongsToMany
     {
-        return $this->belongsTo(Course::class, 'requires_course_id');
+        return $this->belongsToMany(Course::class, 'course_product_requirement')
+            ->withTimestamps();
+    }
+
+    /** @return BelongsToMany<CompetitionTeam, $this> */
+    public function requiredCompetitionTeams(): BelongsToMany
+    {
+        return $this->belongsToMany(CompetitionTeam::class, 'competition_team_product_requirement')
+            ->withTimestamps();
     }
 
     /** @return HasMany<ProductEarlyAccessWindow, $this> */

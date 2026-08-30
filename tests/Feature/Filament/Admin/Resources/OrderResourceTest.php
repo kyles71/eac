@@ -2,17 +2,19 @@
 
 declare(strict_types=1);
 
+use App\Contracts\StripeServiceContract;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderStatus;
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
-use App\Models\Costume;
+use App\Models\Gear;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductQuestionAnswer;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Stripe\Refund;
 
 use function Pest\Livewire\livewire;
 
@@ -108,14 +110,14 @@ it('can search orders by customer name', function () {
 });
 
 it('can mark order items as fulfilled via ViewOrder action', function () {
-    $costume = Costume::factory()->create();
-    $costumeProduct = Product::factory()->forCostume($costume)->create(['price' => 3000]);
+    $gear = Gear::factory()->create();
+    $gearProduct = Product::factory()->forGear($gear)->create(['price' => 3000]);
 
     $order = Order::factory()->completed()->create();
 
     $orderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
-        'product_id' => $costumeProduct->id,
+        'product_id' => $gearProduct->id,
         'quantity' => 1,
         'unit_price' => 3000,
         'total_price' => 3000,
@@ -145,4 +147,60 @@ it('does not show mark fulfilled action when no pending items exist', function (
         'record' => $order->id,
     ])
         ->assertActionHidden('markFulfilled');
+});
+
+it('can issue a partial refund with a private reason', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 10000,
+        'total' => 10000,
+        'stripe_payment_intent_id' => 'pi_admin_refund',
+    ]);
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $stripe->shouldReceive('refundPaymentIntent')
+        ->once()
+        ->andReturn(Refund::constructFrom([
+            'id' => 're_admin_refund',
+            'status' => 'succeeded',
+            'failure_reason' => null,
+        ]));
+    $this->app->instance(StripeServiceContract::class, $stripe);
+
+    livewire(ViewOrder::class, ['record' => $order->id])
+        ->callAction('refund', data: [
+            'amount' => '25.00',
+            'reason' => 'Customer requested a partial adjustment.',
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Refund completed');
+
+    expect($order->refresh()->status)->toBe(OrderStatus::PartiallyRefunded)
+        ->and($order->refunds()->first()->amount)->toBe(2500)
+        ->and($order->refunds()->first()->reason)->toBe('Customer requested a partial adjustment.');
+});
+
+it('requires an internal reason before issuing a refund', function (): void {
+    $order = Order::factory()->completed()->create([
+        'total' => 5000,
+        'stripe_payment_intent_id' => 'pi_reason_required',
+    ]);
+
+    livewire(ViewOrder::class, ['record' => $order->id])
+        ->callAction('refund', data: [
+            'amount' => '25.00',
+            'reason' => null,
+        ])
+        ->assertHasFormErrors(['reason' => 'required']);
+});
+
+it('requires the dedicated refund order permission', function (): void {
+    $order = Order::factory()->completed()->create();
+    $viewer = User::factory()->create();
+    $viewer->givePermissionTo(['View:Order']);
+
+    expect($viewer->can('view', $order))->toBeTrue()
+        ->and($viewer->can('refund', $order))->toBeFalse();
+
+    $viewer->givePermissionTo('Refund:Order');
+
+    expect($viewer->can('refund', $order))->toBeTrue();
 });

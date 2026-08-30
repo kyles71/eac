@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\PaymentPlans\Pages;
 
 use App\Enums\InstallmentStatus;
+use App\Filament\Actions\AdjustPaymentPlanDueDatesAction;
 use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Models\Installment;
 use Filament\Actions\Action;
@@ -23,6 +24,7 @@ final class ViewPaymentPlan extends ViewRecord
         $record = $this->getRecord();
 
         return [
+            AdjustPaymentPlanDueDatesAction::make(),
             Action::make('markInstallmentPaid')
                 ->label('Mark Installment Paid')
                 ->icon(Heroicon::OutlinedCheckCircle)

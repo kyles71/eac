@@ -20,6 +20,9 @@ final readonly class EventCancellationRecipientsService
         $excludedUserIds = $event->excludedUsers()->pluck('users.id')->all();
         $emails = [];
 
+        $event->loadMissing('substituteTeacher');
+        $this->addUser($emails, $event->substituteTeacher);
+
         if ($event->course_id !== null) {
             $enrollments = Enrollment::query()
                 ->with(['user', 'student.user', 'student.additionalEmails'])

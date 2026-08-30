@@ -214,7 +214,7 @@ final class CreditLedgerService
         return $totalApplied;
     }
 
-    public function restoreOrder(Order $order): int
+    public function restoreOrder(Order $order, ?string $description = null): int
     {
         $movements = CreditTransaction::query()
             ->where('reference_type', $order->getMorphClass())
@@ -247,7 +247,7 @@ final class CreditLedgerService
                 amount: $amountToRestore,
                 type: CreditTransactionType::Refund,
                 reference: $order,
-                description: "Restored credit from cancelled order #{$order->id}",
+                description: $description ?? "Restored credit from cancelled order #{$order->id}",
             );
 
             $totalRestored += $amountToRestore;

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\StoreView;
 use App\Filament\User\Pages\Auth\Register;
 use App\Models\LegalDocument;
 use App\Models\LegalDocumentVersion;
@@ -36,6 +37,7 @@ it('allows registration without a terms agreement when portal terms do not exist
 
     assertDatabaseHas(User::class, [
         'email' => 'register@example.com',
+        'store_view' => StoreView::Cards->value,
     ]);
 });
 

@@ -12,6 +12,10 @@ use Spatie\Permission\Models\Role as SpatieRole;
  */
 final class Role extends SpatieRole
 {
+    public const string OWNER = 'owner';
+
+    public const string TEACHER = 'teacher';
+
     public const int SUPER_ADMIN_WEIGHT = 100;
 
     public const int OWNER_WEIGHT = 50;

@@ -14,6 +14,7 @@ use App\Models\StudentEmail;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\RichEditor;
 use Illuminate\Support\Facades\Mail;
 
 use function Pest\Livewire\livewire;
@@ -107,6 +108,26 @@ it('does not offer a per-email layout selection', function (): void {
         ->mountAction(TestAction::make('sendEmail')->table($user))
         ->assertSchemaComponentDoesNotExist('layout_mode', 'mountedActionSchema0')
         ->assertSchemaComponentDoesNotExist('layout_id', 'mountedActionSchema0');
+});
+
+it('uses the mail manager rich editor configuration for the email body', function (): void {
+    $user = User::factory()->create();
+
+    livewire(ListUsers::class)
+        ->loadTable()
+        ->mountAction(TestAction::make('sendEmail')->table($user))
+        ->assertSchemaComponentExists('body', 'mountedActionSchema0', function ($component): bool {
+            return $component instanceof RichEditor
+                && $component->getToolbarButtons() === [
+                    ['bold', 'italic', 'underline', 'strike', 'link'],
+                    ['h2', 'h3', 'blockquote', 'bulletList', 'orderedList'],
+                    ['undo', 'redo'],
+                ]
+                && str_contains(
+                    (string) ($component->getExtraAttributes()['class'] ?? ''),
+                    'fi-mail-manager-rich-editor',
+                );
+        });
 });
 
 it('queues one private email to every address associated with a student', function (): void {

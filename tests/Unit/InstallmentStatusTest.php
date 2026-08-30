@@ -11,4 +11,5 @@ it('has correct labels', function (InstallmentStatus $status, string $label) {
     [InstallmentStatus::Paid, 'Paid'],
     [InstallmentStatus::Failed, 'Failed'],
     [InstallmentStatus::Overdue, 'Overdue'],
+    [InstallmentStatus::Cancelled, 'Cancelled'],
 ]);

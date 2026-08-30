@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 final class PaymentPlan extends Model
 {
@@ -40,6 +41,12 @@ final class PaymentPlan extends Model
     public function installments(): HasMany
     {
         return $this->hasMany(Installment::class);
+    }
+
+    public function dueDateAdjustments(): HasManyThrough
+    {
+        return $this->hasManyThrough(InstallmentDueDateAdjustment::class, Installment::class)
+            ->latest('installment_due_date_adjustments.created_at');
     }
 
     /**

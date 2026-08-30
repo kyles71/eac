@@ -32,7 +32,7 @@ final class EnrollmentsTable
     {
         return $table
             ->query(fn () => Enrollment::query()
-                ->with(['course.events', 'student', 'user'])
+                ->with(['course.academicTerm', 'course.events', 'student', 'user'])
                 ->when($only_my_enrollments, function ($query): void {
                     $query->where('user_id', auth()->id());
                 })
@@ -43,9 +43,11 @@ final class EnrollmentsTable
                     ->label('Course')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('course.semester')
-                    ->label('Semester')
+                TextColumn::make('academic_term')
+                    ->label('Academic Term')
+                    ->state(fn (Enrollment $record): ?string => $record->course?->academicTerm?->display_name)
                     ->badge()
+                    ->color(fn (Enrollment $record): ?string => $record->course?->academicTerm?->semester->getColor())
                     ->toggleable(),
                 TextColumn::make('next_class')
                     ->label('Next Class')

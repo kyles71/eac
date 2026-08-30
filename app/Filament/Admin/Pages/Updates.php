@@ -6,11 +6,13 @@ namespace App\Filament\Admin\Pages;
 
 use App\Models\User;
 use App\Services\Updates\UpdatesFeedService;
+use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use UnitEnum;
 
 final class Updates extends Page
 {
@@ -19,7 +21,9 @@ final class Updates extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMegaphone;
 
-    protected static ?int $navigationSort = 5;
+    protected static string|UnitEnum|null $navigationGroup = AdminNavigation::Tools;
+
+    protected static ?int $navigationSort = AdminNavigation::ToolsUpdates;
 
     protected static ?string $title = 'Updates';
 

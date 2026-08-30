@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Enums\DashboardAudience;
-use App\Models\Costume;
 use App\Models\Course;
+use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
@@ -32,7 +32,6 @@ final class ProductFactory extends Factory
             'is_active' => true,
             'include_productable_images' => false,
             'send_purchase_notification' => false,
-            'requires_course_id' => null,
             'available_from' => null,
             'available_until' => null,
             'productable_type' => null,
@@ -109,17 +108,17 @@ final class ProductFactory extends Factory
     }
 
     /**
-     * Create a product linked to a Costume.
+     * Create a product linked to Gear.
      */
-    public function forCostume(?Costume $costume = null): static
+    public function forGear(?Gear $gear = null): static
     {
-        return $this->state(function (array $attributes) use ($costume): array {
-            $costume ??= Costume::factory()->create();
+        return $this->state(function (array $attributes) use ($gear): array {
+            $gear ??= Gear::factory()->create();
 
             return [
-                'name' => $costume->name,
-                'productable_type' => Costume::class,
-                'productable_id' => $costume->id,
+                'name' => $gear->name,
+                'productable_type' => Gear::class,
+                'productable_id' => $gear->id,
             ];
         });
     }

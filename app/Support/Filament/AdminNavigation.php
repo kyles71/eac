@@ -16,9 +16,9 @@ final class AdminNavigation
 
     public const string Competition = 'Competition';
 
-    public const string Email = 'Email';
+    public const string Reports = 'Reports';
 
-    public const string Settings = 'Settings';
+    public const string Tools = 'Tools';
 
     public const int PeopleUsers = 10;
 
@@ -40,7 +40,7 @@ final class AdminNavigation
 
     public const int StoreProducts = 10;
 
-    public const int StoreCostumes = 20;
+    public const int StoreGear = 20;
 
     public const int StoreGiftCardTypes = 30;
 
@@ -60,6 +60,18 @@ final class AdminNavigation
 
     public const int CompetitionTeams = 20;
 
+    public const int ReportsEnrollment = 10;
+
+    public const int ReportsInstructor = 20;
+
+    public const int ToolsSettings = 10;
+
+    public const int ToolsMailManager = 20;
+
+    public const int ToolsThemeBuilder = 30;
+
+    public const int ToolsUpdates = 40;
+
     public const int SettingsCalendars = 10;
 
     public const int SettingsForms = 20;
@@ -67,6 +79,12 @@ final class AdminNavigation
     public const int SettingsLegalDocuments = 30;
 
     public const int SettingsHolidays = 40;
+
+    public const int SettingsAcademicTerms = 45;
+
+    public const int SettingsAcademicTermDefaults = 46;
+
+    public const int SettingsReporting = 47;
 
     public const int SettingsDashboardMessages = 50;
 

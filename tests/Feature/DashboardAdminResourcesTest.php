@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\DashboardMessages\Pages\CreateDashboardMessage;
 use App\Filament\Admin\Resources\DashboardMessages\Pages\ListDashboardMessages;
 use App\Filament\Admin\Resources\DashboardQuickLinks\Pages\CreateDashboardQuickLink;
 use App\Filament\Admin\Resources\DashboardQuickLinks\Pages\ListDashboardQuickLinks;
+use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
@@ -38,7 +39,7 @@ beforeEach(function (): void {
 it('manages dashboard messages from settings', function (): void {
     livewire(CreateDashboardMessage::class)
         ->fillForm([
-            'message' => 'Costume orders due Monday.',
+            'message' => 'Gear orders due Monday.',
             'audience' => DashboardAudience::Semester->value,
             'published_at' => now()->subMinute(),
             'expires_at' => now()->addWeek(),
@@ -48,7 +49,7 @@ it('manages dashboard messages from settings', function (): void {
         ->assertNotified();
 
     assertDatabaseHas(DashboardMessage::class, [
-        'message' => 'Costume orders due Monday.',
+        'message' => 'Gear orders due Monday.',
         'audience' => DashboardAudience::Semester->value,
     ]);
 
@@ -170,6 +171,7 @@ it('offers searchable navigable user panel destinations dynamically', function (
 
 it('uses shared communication widgets and calendar on the admin dashboard', function (): void {
     expect((new AdminDashboard)->getWidgets())->toBe([
+        SubstituteCoverageReminder::class,
         MessagesFromEac::class,
         QuickLinks::class,
         CalendarWidget::class,

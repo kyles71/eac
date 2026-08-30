@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
+use App\Models\Installment;
 use App\Models\PaymentPlan;
 use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
@@ -33,6 +34,16 @@ enum PaymentPlanStatus: string implements HasColor, HasLabel
 
         if ($paymentPlan->isFullyPaid()) {
             return self::Paid;
+        }
+
+        $outstandingInstallments = $paymentPlan->installments->reject(
+            fn (Installment $installment): bool => $installment->status === InstallmentStatus::Paid,
+        );
+
+        if ($outstandingInstallments->isNotEmpty() && $outstandingInstallments->every(
+            fn (Installment $installment): bool => $installment->status === InstallmentStatus::Cancelled,
+        )) {
+            return self::Cancelled;
         }
 
         if ($paymentPlan->installments->contains('status', InstallmentStatus::Overdue)) {

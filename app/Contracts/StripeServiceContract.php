@@ -60,7 +60,15 @@ interface StripeServiceContract
 
     public function constructWebhookEvent(string $payload, string $signature): Event;
 
-    public function refundPaymentIntent(string $paymentIntentId, ?int $amount = null): Refund;
+    /**
+     * @param  array<string, string>  $metadata
+     */
+    public function refundPaymentIntent(
+        string $paymentIntentId,
+        ?int $amount = null,
+        array $metadata = [],
+        ?string $idempotencyKey = null,
+    ): Refund;
 
     public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent;
 

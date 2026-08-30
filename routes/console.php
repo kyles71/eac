@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('installments:process')
-    ->dailyAt('00:01')
+    ->dailyAt('10:00')
     ->timezone('America/New_York')
     ->name('process-installments')
     ->description('Process due and retryable payment plan installments');
@@ -15,6 +15,20 @@ Schedule::command('orders:cancel-abandoned')
     ->timezone('America/New_York')
     ->name('cancel-abandoned-orders')
     ->description('Cancel pending orders abandoned for more than 24 hours');
+
+Schedule::command('academic-terms:sync')
+    ->dailyAt('00:05')
+    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+    ->withoutOverlapping()
+    ->name('sync-academic-terms')
+    ->description('Ensure current and upcoming academic terms exist');
+
+Schedule::command('reports:prune-exports')
+    ->dailyAt('00:20')
+    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+    ->withoutOverlapping()
+    ->name('prune-report-exports')
+    ->description('Delete expired private report export files and records');
 
 Schedule::command('course-holds:cancel-expired-checkouts')
     ->everyMinute()
@@ -48,6 +62,12 @@ Schedule::command('events:send-reminders')
     ->withoutOverlapping()
     ->name('send-event-reminders')
     ->description('Send reminders for events occurring in two weeks');
+
+Schedule::command('events:send-substitute-request-reminders')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('send-event-substitute-request-reminders')
+    ->description('Remind teachers and staff about unanswered event substitute requests');
 
 Schedule::command('enrollments:send-open-reminders')
     ->dailyAt('08:00')

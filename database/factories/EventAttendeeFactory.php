@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\AttendanceStatus;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Student;
@@ -19,7 +20,7 @@ final class EventAttendeeFactory extends Factory
             'event_id' => Event::factory(),
             'attendee_type' => (new Student)->getMorphClass(),
             'attendee_id' => Student::factory(),
-            'attended' => fake()->boolean(),
+            'status' => fake()->optional()->randomElement(AttendanceStatus::cases()),
             'notes' => fake()->optional()->sentence(),
         ];
     }

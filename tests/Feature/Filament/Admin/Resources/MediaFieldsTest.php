@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
 use App\Filament\Admin\Resources\Courses\Pages\ViewCourse;
 use App\Filament\Admin\Resources\Events\Pages\ViewEvent;
+use App\Filament\Admin\Resources\Gear\Pages\ListGear;
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
@@ -27,8 +27,8 @@ beforeEach(function () {
     Filament::setCurrentPanel('admin');
 });
 
-it('has images column on costumes table', function () {
-    livewire(ListCostumes::class)
+it('has images column on gear table', function () {
+    livewire(ListGear::class)
         ->assertTableColumnExists('images', fn (SpatieMediaLibraryImageColumn $column): bool => $column->getDiskName() === MediaDisks::public()
             && $column->getVisibility() === 'public');
 });
@@ -84,14 +84,14 @@ it('shows media entries on event view page', function () {
 
     livewire(ViewEvent::class, ['record' => $event->id])
         ->assertOk()
-        ->assertSchemaComponentExists('images', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::public()
-            && $entry->getVisibility() === 'public');
+        ->assertSchemaComponentExists('images', 'infolist', fn (SpatieMediaLibraryImageEntry $entry): bool => $entry->getDiskName() === MediaDisks::private()
+            && $entry->getVisibility() === 'private');
 });
 
 it('applies default upload size limits to image fields', function () {
     $teacherRole = Role::findOrCreate('teacher');
 
-    livewire(ListCostumes::class)
+    livewire(ListGear::class)
         ->mountAction(CreateAction::class)
         ->assertSchemaComponentExists('images', null, fn (SpatieMediaLibraryFileUpload $field): bool => $field->getMaxSize() === config('app.file_uploads.max_size_kilobytes'));
 

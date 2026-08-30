@@ -19,6 +19,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Support\Htmlable;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -271,6 +272,8 @@ it('shows current classes and progressively loads past enrollment history', func
 
     $pastMeetingWithoutEnd = now()->subDay()->startOfMinute();
 
+    $pastEvents = [];
+
     foreach (range(1, 6) as $number) {
         $course = Course::factory()->create([
             'name' => "Past Course {$number}",
@@ -278,7 +281,7 @@ it('shows current classes and progressively loads past enrollment history', func
         if ($number === 1) {
             $course->teachers()->sync([$pastTeacher->id]);
         }
-        Event::factory()->create([
+        $pastEvents[] = Event::factory()->create([
             'course_id' => $course->id,
             'start_time' => $number === 1 ? $pastMeetingWithoutEnd : now()->subDays($number),
             'end_time' => $number === 1 ? null : now()->subDays($number)->addHour(),
@@ -292,6 +295,7 @@ it('shows current classes and progressively loads past enrollment history', func
     livewire(ViewStudent::class, ['record' => $student->id])
         ->loadTable()
         ->assertCanSeeTableRecords([$currentEvent])
+        ->assertCanNotSeeTableRecords($pastEvents)
         ->assertSee('Current Ballet')
         ->assertSee('Pearl Primus')
         ->assertSee('Pearl teaches the current class.')
@@ -331,14 +335,14 @@ it('shows direct student event invitations on the courses and events table', fun
     $directInvite = Event::factory()->create([
         'name' => 'Private Rehearsal',
         'course_id' => null,
-        'start_time' => now()->subDay(),
-        'end_time' => now()->subDay()->addHour(),
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
     ]);
     $otherInvite = Event::factory()->create([
         'name' => 'Other Rehearsal',
         'course_id' => null,
-        'start_time' => now()->subDay(),
-        'end_time' => now()->subDay()->addHour(),
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
     ]);
 
     EventAttendee::factory()->forStudent($student)->create(['event_id' => $directInvite->id]);
@@ -354,4 +358,124 @@ it('shows direct student event invitations on the courses and events table', fun
         ->assertActionMounted(TestAction::make('viewStudentEventDetails')->table($directInvite))
         ->assertActionDataSet(fn (array $data): bool => $data['name'] === 'Private Rehearsal'
             && $data['course_name'] === null);
+});
+
+it('moves passed standalone student invitations into course history', function (): void {
+    $displayTimezone = (string) config('app.display_timezone', config('app.timezone'));
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $otherStudent = Student::factory()->create(['user_id' => auth()->id()]);
+    $upcomingEvent = Event::factory()->create([
+        'name' => 'Upcoming Fitting',
+        'course_id' => null,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $pastEvent = Event::factory()->create([
+        'name' => 'Summer Workshop',
+        'course_id' => null,
+        'start_time' => now()->subDays(2),
+        'end_time' => now()->subDays(2)->addHour(),
+    ]);
+    $pastEventWithoutEnd = Event::factory()->create([
+        'name' => 'Costume Pickup',
+        'course_id' => null,
+        'start_time' => now()->subDay()->startOfMinute(),
+        'end_time' => null,
+    ]);
+    $otherPastEvent = Event::factory()->create([
+        'name' => 'Other Student Workshop',
+        'course_id' => null,
+        'start_time' => now()->subDays(3),
+        'end_time' => now()->subDays(3)->addHour(),
+    ]);
+
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $upcomingEvent->id]);
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $pastEvent->id]);
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $pastEventWithoutEnd->id]);
+    EventAttendee::factory()->forStudent($otherStudent)->create(['event_id' => $otherPastEvent->id]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$upcomingEvent])
+        ->assertCanNotSeeTableRecords([$pastEvent, $pastEventWithoutEnd, $otherPastEvent])
+        ->assertSee('Summer Workshop')
+        ->assertSee('Costume Pickup')
+        ->assertSee($pastEvent->end_time->timezone($displayTimezone)->format('M j, Y g:i A'))
+        ->assertSee($pastEventWithoutEnd->start_time->timezone($displayTimezone)->format('M j, Y g:i A'))
+        ->assertDontSee('Other Student Workshop');
+});
+
+it('groups recurring course events while keeping schedule exceptions separate', function (): void {
+    $displayTimezone = (string) config('app.display_timezone', config('app.timezone'));
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $course = Course::factory()->create(['name' => 'Ballet Company']);
+    $firstMeeting = now($displayTimezone)
+        ->addWeek()
+        ->next('Wednesday')
+        ->setTime(18, 0)
+        ->utc();
+    $recurringEvents = collect(range(0, 2))
+        ->map(fn (int $week): Event => Event::factory()->create([
+            'name' => 'Ballet Company',
+            'course_id' => $course->id,
+            'start_time' => $firstMeeting->copy()->addWeeks($week),
+            'end_time' => $firstMeeting->copy()->addWeeks($week)->addHour(),
+        ]));
+    $rescheduledEvent = Event::factory()->create([
+        'name' => 'Ballet Company',
+        'course_id' => $course->id,
+        'start_time' => $firstMeeting->copy()->addDay()->addHours(2),
+        'end_time' => $firstMeeting->copy()->addDay()->addHours(3),
+    ]);
+    $addedEvent = Event::factory()->create([
+        'name' => 'Ballet Company',
+        'course_id' => $course->id,
+        'start_time' => $firstMeeting->copy()->addWeek()->addHours(3),
+        'end_time' => $firstMeeting->copy()->addWeek()->addHours(4),
+    ]);
+
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => auth()->id(),
+    ]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertTableColumnExists(
+            'event_summary',
+            fn (TextColumn $column): bool => $column->getLabel() === 'Event',
+        )
+        ->assertTableColumnExists(
+            'start_time',
+            fn (TextColumn $column): bool => $column->getLabel() === 'Next Meeting Time',
+        )
+        ->assertCanSeeTableRecords([$recurringEvents->first(), $rescheduledEvent, $addedEvent])
+        ->assertCanNotSeeTableRecords($recurringEvents->skip(1))
+        ->assertSee('Ballet Company Class - Wednesdays (2 more)')
+        ->assertSee($firstMeeting->timezone($displayTimezone)->format('M j, Y g:i A'))
+        ->assertSee('Course History')
+        ->assertDontSee('Enrollment History');
+});
+
+it('does not expose private attendance notes on the family student profile', function (): void {
+    $student = Student::factory()->create(['user_id' => auth()->id()]);
+    $course = Course::factory()->create();
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => auth()->id(),
+    ]);
+    EventAttendee::factory()->forStudent($student)->create([
+        'event_id' => $event->id,
+        'notes' => 'Private staff-only attendance context',
+    ]);
+
+    livewire(ViewStudent::class, ['record' => $student->id])
+        ->loadTable()
+        ->assertSee($event->name)
+        ->assertDontSee('Private staff-only attendance context');
 });

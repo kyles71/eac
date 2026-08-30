@@ -80,7 +80,10 @@ final class Enrollment extends Model
         return $query->whereHas(
             'course',
             fn (Builder $query): Builder => self::applyCourseNotConcludedConstraint(
-                $query->where('semester', $semester->value),
+                $query->whereHas(
+                    'academicTerm',
+                    fn (Builder $query): Builder => $query->where('semester', $semester->value),
+                ),
                 $date,
             )
         );
@@ -172,14 +175,6 @@ final class Enrollment extends Model
 
     private static function applyEventNotPassedConstraint(Builder $query, Carbon $date): Builder
     {
-        return $query->where(function (Builder $query) use ($date): void {
-            $query
-                ->where('end_time', '>=', $date)
-                ->orWhere(function (Builder $query) use ($date): void {
-                    $query
-                        ->whereNull('end_time')
-                        ->where('start_time', '>=', $date);
-                });
-        });
+        return Event::applyNotPassedConstraint($query, $date);
     }
 }
