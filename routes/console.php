@@ -83,6 +83,26 @@ Schedule::command('cart:send-abandoned-reminders')
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
 
+Schedule::command('private-lessons:send-payment-reminders')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-recurring-private-lesson-payment-reminders')
+    ->description('Send seven-day and two-day recurring private lesson payment reminders');
+
+Schedule::command('private-lessons:send-billing-summary')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-recurring-private-lesson-billing-summary')
+    ->description('Send next month\'s unbilled recurring private lessons seven days before month-end');
+
+Schedule::command('private-lessons:cancel-unpaid')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('cancel-unpaid-recurring-private-lessons')
+    ->description('Cancel unpaid recurring private lessons at the 24-hour cutoff');
+
 Schedule::command('backup:clean', ['--disable-notifications'])
     ->dailyAt('03:10')
     ->timezone('America/New_York')

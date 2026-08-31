@@ -70,6 +70,10 @@ final class PaymentPlanTemplate extends Model
     {
         $product->loadMissing('productable');
 
+        if (! $product->allows_payment_plan) {
+            return false;
+        }
+
         $productType = ProductType::fromProductableType($product->productable_type);
 
         if (! in_array($this->product_type, [ProductType::Any, $productType], true)) {

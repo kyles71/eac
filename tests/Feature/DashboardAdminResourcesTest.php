@@ -13,6 +13,7 @@ use App\Filament\Clusters\Settings\Pages\ManageDashboardAppearance;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
+use App\Filament\Shared\Widgets\RecurringPrivateLessonAttention;
 use App\Filament\User\Pages\Checkout;
 use App\Filament\User\Pages\MyEnrollments;
 use App\Filament\User\Resources\Students\StudentResource;
@@ -171,6 +172,7 @@ it('offers searchable navigable user panel destinations dynamically', function (
 
 it('uses shared communication widgets and calendar on the admin dashboard', function (): void {
     expect((new AdminDashboard)->getWidgets())->toBe([
+        RecurringPrivateLessonAttention::class,
         SubstituteCoverageReminder::class,
         MessagesFromEac::class,
         QuickLinks::class,
