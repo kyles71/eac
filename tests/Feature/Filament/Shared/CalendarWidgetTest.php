@@ -1223,15 +1223,18 @@ it('stacks the calendar toolbar controls on mobile screens', function (): void {
         ->toContain('min-height: 2.75rem');
 });
 
-it('keeps mobile list date headers opaque as each sticky header replaces the previous one', function (): void {
+it('keeps list date headers opaque on all screen sizes as each sticky header replaces the previous one', function (): void {
     $theme = file_get_contents(resource_path('css/filament/global-theme.css'));
+    [$globalStyles, $mobileStyles] = explode('@media (max-width: 639px)', $theme, 2);
 
-    expect($theme)
+    expect($globalStyles)
         ->toContain('.filament-fullcalendar .fc-list-sticky .fc-list-day>th')
         ->toContain('background-color: var(--color-white)')
         ->toContain('.dark .filament-fullcalendar .fc-list-sticky .fc-list-day>th')
         ->toContain('background-color: var(--color-gray-900)')
-        ->toContain('z-index: 1');
+        ->toContain('z-index: 1')
+        ->and($mobileStyles)
+        ->not->toContain('.fc-list-sticky');
 });
 
 function fetchCalendarEvents(

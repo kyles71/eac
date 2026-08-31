@@ -72,13 +72,18 @@ final readonly class CreateRecurringPrivateLesson
             throw new InvalidArgumentException('The repeat-through date must be on or after the first lesson.');
         }
 
+        $academicTerm = AcademicTerm::query()
+            ->where('semester', $semester)
+            ->where('year', $firstStart->year)
+            ->firstOrFail();
+
         return DB::transaction(function () use (
+            $academicTerm,
             $household,
             $student,
             $teacherIds,
             $name,
             $description,
-            $semester,
             $lessonPrice,
             $firstStart,
             $durationMinutes,
