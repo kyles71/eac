@@ -27,6 +27,7 @@ final readonly class OrderReceiptContentService
             'costume' => false,
             'gear' => false,
             'gift-card' => false,
+            'recurring-private-lesson' => false,
             'standalone' => false,
         ];
 
@@ -43,6 +44,7 @@ final readonly class OrderReceiptContentService
             $condition = match ($productType) {
                 ProductType::Course => 'course',
                 ProductType::GiftCardType => 'gift-card',
+                ProductType::RecurringPrivateLesson => 'recurring-private-lesson',
                 ProductType::Standalone => 'standalone',
                 ProductType::Any => null,
             };

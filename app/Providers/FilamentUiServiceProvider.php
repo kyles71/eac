@@ -29,6 +29,12 @@ use Illuminate\Support\ServiceProvider;
 
 final class FilamentUiServiceProvider extends ServiceProvider
 {
+    private const string DATE_DISPLAY_FORMAT = 'M j, Y';
+
+    private const string DATE_TIME_DISPLAY_FORMAT = 'M j, Y g:i A';
+
+    private const string TIME_DISPLAY_FORMAT = 'g:i A';
+
     /**
      * Register services.
      */
@@ -42,8 +48,9 @@ final class FilamentUiServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $displayTimezone = config('app.display_timezone');
+        $displayTimezone = config('app.display_timezone', config('app.timezone', 'UTC'));
 
+        // Used by all Filament date-time pickers, table columns, and infolist entries by default.
         FilamentTimezone::set(is_string($displayTimezone) ? $displayTimezone : 'UTC');
 
         // When a field has multiple words like "due_date", the label changes from "Due date" to "Due Date".
@@ -163,7 +170,9 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->deferLoading()
                 ->reorderableColumns()
                 // ->columnManagerColumns(2)
-                ->defaultDateTimeDisplayFormat('M j, Y g:i A')
+                ->defaultDateDisplayFormat(self::DATE_DISPLAY_FORMAT)
+                ->defaultDateTimeDisplayFormat(self::DATE_TIME_DISPLAY_FORMAT)
+                ->defaultTimeDisplayFormat(self::TIME_DISPLAY_FORMAT)
                 ->columnManagerApplyAction(self::configureColumnManagerApplyAction(...))
                 ->columnManagerTriggerAction(self::configureColumnManagerTrigger(...))
                 ->filtersApplyAction(self::configureFiltersApplyAction(...))
@@ -183,9 +192,9 @@ final class FilamentUiServiceProvider extends ServiceProvider
         // use your preferred date displays
         Schema::configureUsing(function (Schema $schema) {
             return $schema
-                ->defaultDateDisplayFormat('M j, Y')
-                ->defaultDateTimeDisplayFormat('M j, Y g:i A')
-                ->defaultTimeDisplayFormat('g:i A');
+                ->defaultDateDisplayFormat(self::DATE_DISPLAY_FORMAT)
+                ->defaultDateTimeDisplayFormat(self::DATE_TIME_DISPLAY_FORMAT)
+                ->defaultTimeDisplayFormat(self::TIME_DISPLAY_FORMAT);
         });
     }
 

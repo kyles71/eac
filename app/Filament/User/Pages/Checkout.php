@@ -9,6 +9,9 @@ use App\Enums\OrderStatus;
 use App\Filament\Shared\Schemas\OrderSummarySchema;
 use App\Models\Order;
 use App\Models\PaymentPlan;
+use App\Models\Product;
+use App\Models\User;
+use App\Services\ProductAvailabilityService;
 use App\Services\ProductQuestionAnswerService;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -59,6 +62,12 @@ final class Checkout extends Page
             return;
         }
 
+        if (! $this->orderProductsArePurchasable()) {
+            $this->rejectUnavailableOrder();
+
+            return;
+        }
+
         $this->createPaymentIntent();
         $this->createCustomerSession();
     }
@@ -66,11 +75,21 @@ final class Checkout extends Page
     /**
      * Mark the order as processing before Stripe payment confirmation.
      */
-    public function markOrderProcessing(): void
+    public function markOrderProcessing(): bool
     {
-        if ($this->order !== null && $this->order->status === OrderStatus::Pending) {
-            $this->order->update(['status' => OrderStatus::Processing]);
+        if ($this->order === null || $this->order->status !== OrderStatus::Pending) {
+            return false;
         }
+
+        if (! $this->orderProductsArePurchasable()) {
+            $this->rejectUnavailableOrder();
+
+            return false;
+        }
+
+        $this->order->update(['status' => OrderStatus::Processing]);
+
+        return true;
     }
 
     /**
@@ -131,7 +150,7 @@ final class Checkout extends Page
         /** @var StripeServiceContract $stripeService */
         $stripeService = app(StripeServiceContract::class);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         $template = $this->order->paymentPlanTemplate;
@@ -157,9 +176,48 @@ final class Checkout extends Page
         $this->clientSecret = $paymentIntent->client_secret;
     }
 
+    private function orderProductsArePurchasable(): bool
+    {
+        if ($this->order === null) {
+            return false;
+        }
+
+        /** @var User $user */
+        $user = auth()->user();
+        $this->order->loadMissing('orderItems.product.productable');
+
+        foreach ($this->order->orderItems as $orderItem) {
+            /** @var Product $product */
+            $product = $orderItem->product;
+            $availability = app(ProductAvailabilityService::class)->resultFor($product, $user);
+
+            if ($availability->isPurchasable()) {
+                continue;
+            }
+
+            Notification::make()
+                ->title('Checkout unavailable')
+                ->body($availability->message($product->name))
+                ->danger()
+                ->send();
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function rejectUnavailableOrder(): void
+    {
+        $this->order = null;
+        $this->clientSecret = null;
+        $this->customerSessionClientSecret = null;
+        $this->redirect(Cart::getUrl());
+    }
+
     private function createCustomerSession(): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         if ($user->stripe_id === null) {
@@ -212,7 +270,7 @@ final class Checkout extends Page
 
         foreach ($this->order->orderItems as $item) {
             /** @var \App\Models\OrderItem $item */
-            /** @var \App\Models\Product $product */
+            /** @var Product $product */
             $product = $item->product;
             $displayUnits = app(ProductQuestionAnswerService::class)->orderDisplayUnits($item);
 

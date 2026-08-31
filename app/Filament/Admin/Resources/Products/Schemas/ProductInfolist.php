@@ -12,6 +12,7 @@ use App\Models\CompetitionTeam;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
+use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\SpatieMediaLibraryImageEntry;
@@ -75,11 +76,12 @@ final class ProductInfolist
                             ->columns(2)
                             ->columnSpanFull(),
                     ]),
-                Section::make('Purchase Eligibility')
-                    ->columns(2)
+                Section::make('Purchase Audience')
+                    ->description('Customers must meet each configured group requirement. Specific Users qualify as overrides. An empty audience is available to everyone while its store schedule is open.')
+                    ->columns(3)
                     ->schema([
                         TextEntry::make('required_courses')
-                            ->label('Requires Enrollment In At Least One Of')
+                            ->label('Courses')
                             ->state(fn (Product $record): array => $record->requiredCourses()
                                 ->orderBy('name')
                                 ->pluck('name')
@@ -88,13 +90,26 @@ final class ProductInfolist
                             ->bulleted()
                             ->placeholder('None'),
                         TextEntry::make('required_competition_teams')
-                            ->label('Requires Membership In At Least One Of')
+                            ->label('Competition Teams')
                             ->state(fn (Product $record): array => $record->requiredCompetitionTeams()
                                 ->with('season')
                                 ->get()
                                 ->sortBy(fn (CompetitionTeam $team): string => $team->season->name.' '.$team->name)
                                 ->map(fn (CompetitionTeam $team): string => "{$team->season->name}: {$team->name} ({$team->season->status()})")
                                 ->values()
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder('None'),
+                        TextEntry::make('assigned_users')
+                            ->label('Specific Users')
+                            ->state(fn (Product $record): array => $record->assignedUsers()
+                                ->orderBy('first_name')
+                                ->orderBy('last_name')
+                                ->get()
+                                ->map(fn (User $user): string => filled($user->email)
+                                    ? "{$user->fullName} ({$user->email})"
+                                    : $user->fullName)
                                 ->all())
                             ->listWithLineBreaks()
                             ->bulleted()

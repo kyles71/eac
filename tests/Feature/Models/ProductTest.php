@@ -244,7 +244,7 @@ it('accepts enrollment in any required course', function () {
 
 it('accepts required competition team membership through a student household or staff assignment', function () {
     $season = CompetitionSeason::factory()->current()->create();
-    $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $requiredTeams = CompetitionTeam::factory(2)->for($season, 'season')->create();
     $unrelatedTeam = CompetitionTeam::factory()->for($season, 'season')->create();
     $familyUser = User::factory()->create();
     $staffUser = User::factory()->isTeacher()->create();
@@ -252,10 +252,10 @@ it('accepts required competition team membership through a student household or 
     $familyStudent = Student::factory()->for($familyUser)->create();
     $unrelatedStudent = Student::factory()->for($unrelatedUser)->create();
     $product = Product::factory()->create();
-    $product->requiredCompetitionTeams()->attach($requiredTeam);
+    $product->requiredCompetitionTeams()->attach($requiredTeams);
 
-    $familyStudent->competitionTeams()->attach($requiredTeam);
-    $requiredTeam->staff()->attach($staffUser);
+    $familyStudent->competitionTeams()->attach($requiredTeams->last());
+    $requiredTeams->first()->staff()->attach($staffUser);
     $unrelatedStudent->competitionTeams()->attach($unrelatedTeam);
 
     expect($product->canBePurchasedBy($familyUser))->toBeTrue()
@@ -303,34 +303,66 @@ it('allows upcoming team members and stops eligibility when the selected season 
     }
 });
 
-it('requires a match in both course and competition team categories when both are configured', function () {
+it('requires every configured group category unless the user is directly assigned', function () {
     $season = CompetitionSeason::factory()->current()->create();
     $requiredCourse = Course::factory()->create();
     $requiredTeam = CompetitionTeam::factory()->for($season, 'season')->create();
     $courseOnlyUser = User::factory()->create();
     $teamOnlyUser = User::factory()->create();
-    $eligibleUser = User::factory()->create();
+    $groupEligibleUser = User::factory()->create();
+    $directOnlyUsers = User::factory(2)->create();
+    $unrelatedUser = User::factory()->create();
     $product = Product::factory()->create();
     $product->requiredCourses()->attach($requiredCourse);
     $product->requiredCompetitionTeams()->attach($requiredTeam);
+    $product->assignedUsers()->attach($directOnlyUsers);
 
     Enrollment::factory()->create([
         'course_id' => $requiredCourse->id,
         'user_id' => $courseOnlyUser->id,
     ]);
-    Student::factory()->for($teamOnlyUser)->create()->competitionTeams()->attach($requiredTeam);
     Enrollment::factory()->create([
         'course_id' => $requiredCourse->id,
-        'user_id' => $eligibleUser->id,
+        'user_id' => $groupEligibleUser->id,
     ]);
-    Student::factory()->for($eligibleUser)->create()->competitionTeams()->attach($requiredTeam);
+    Student::factory()->for($teamOnlyUser)->create()->competitionTeams()->attach($requiredTeam);
+    Student::factory()->for($groupEligibleUser)->create()->competitionTeams()->attach($requiredTeam);
 
-    expect($product->canBePurchasedBy($courseOnlyUser))->toBeFalse()
-        ->and($product->canBePurchasedBy($teamOnlyUser))->toBeFalse()
-        ->and($product->canBePurchasedBy($eligibleUser))->toBeTrue()
-        ->and(Product::query()->visibleTo($courseOnlyUser)->pluck('id')->all())->not->toContain($product->id)
-        ->and(Product::query()->visibleTo($teamOnlyUser)->pluck('id')->all())->not->toContain($product->id)
-        ->and(Product::query()->visibleTo($eligibleUser)->pluck('id')->all())->toContain($product->id);
+    foreach ([$groupEligibleUser, ...$directOnlyUsers->all()] as $qualifiedUser) {
+        expect($product->canBePurchasedBy($qualifiedUser))->toBeTrue()
+            ->and(Product::query()->visibleTo($qualifiedUser)->whereKey($product)->exists())->toBeTrue();
+    }
+
+    foreach ([$courseOnlyUser, $teamOnlyUser, $unrelatedUser] as $unqualifiedUser) {
+        expect($product->canBePurchasedBy($unqualifiedUser))->toBeFalse()
+            ->and($product->availabilityFor($unqualifiedUser))->toBe(ProductAvailabilityStatus::EligibilityRequired)
+            ->and(Product::query()->visibleTo($unqualifiedUser)->whereKey($product)->exists())->toBeFalse();
+    }
+});
+
+it('limits a direct-user-only audience to directly assigned users', function () {
+    $directlyAssignedUser = User::factory()->create();
+    $unrelatedUser = User::factory()->create();
+    $product = Product::factory()->create();
+    $product->assignedUsers()->attach($directlyAssignedUser);
+
+    expect($product->canBePurchasedBy($directlyAssignedUser))->toBeTrue()
+        ->and(Product::query()->visibleTo($directlyAssignedUser)->whereKey($product)->exists())->toBeTrue()
+        ->and($product->canBePurchasedBy($unrelatedUser))->toBeFalse()
+        ->and($product->availabilityFor($unrelatedUser))->toBe(ProductAvailabilityStatus::EligibilityRequired)
+        ->and(Product::query()->visibleTo($unrelatedUser)->whereKey($product)->exists())->toBeFalse();
+});
+
+it('keeps direct Product audiences separate from early access scheduling', function () {
+    $directlyAssignedUser = User::factory()->create();
+    $product = Product::factory()
+        ->availableFrom(now()->addDay())
+        ->create(['price' => 5000]);
+    $product->assignedUsers()->attach($directlyAssignedUser);
+
+    expect($product->canBePurchasedBy($directlyAssignedUser))->toBeFalse()
+        ->and($product->availabilityFor($directlyAssignedUser))->toBe(ProductAvailabilityStatus::Scheduled)
+        ->and(Product::query()->visibleTo($directlyAssignedUser)->whereKey($product)->exists())->toBeFalse();
 });
 
 it('evaluates scheduled product availability boundaries', function () {

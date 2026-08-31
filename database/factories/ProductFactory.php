@@ -30,6 +30,8 @@ final class ProductFactory extends Factory
             'description' => fake()->sentence(),
             'price' => fake()->randomElement([2500, 5000, 7500, 10000, 12500, 15000]),
             'is_active' => true,
+            'is_store_listed' => true,
+            'allows_payment_plan' => true,
             'include_productable_images' => false,
             'send_purchase_notification' => false,
             'available_from' => null,

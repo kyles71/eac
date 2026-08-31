@@ -13,12 +13,14 @@ use App\Filament\Admin\Resources\Courses\Schemas\CourseForm;
 use App\Filament\Admin\Resources\Courses\Schemas\CourseInfolist;
 use App\Filament\Admin\Resources\Courses\Tables\CoursesTable;
 use App\Models\Course;
+use App\Models\User;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class CourseResource extends Resource
@@ -70,5 +72,21 @@ final class CourseResource extends Resource
             'view' => ViewCourse::route('/{record}'),
             'attendance' => CourseAttendance::route('/{record}/attendance'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
+            $query->where(function (Builder $query) use ($user): void {
+                $query
+                    ->where('is_private', false)
+                    ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id));
+            });
+        }
+
+        return $query;
     }
 }

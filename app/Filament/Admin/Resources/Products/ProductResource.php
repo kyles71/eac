@@ -11,12 +11,14 @@ use App\Filament\Admin\Resources\Products\Schemas\ProductInfolist;
 use App\Filament\Admin\Resources\Products\Tables\ProductsTable;
 use App\Models\GiftCardType;
 use App\Models\Product;
+use App\Models\RecurringPrivateLessonCharge;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class ProductResource extends Resource
@@ -93,5 +95,15 @@ final class ProductResource extends Resource
             'index' => ListProducts::route('/'),
             'view' => ViewProduct::route('/{record}'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('productable_type')
+                    ->orWhere('productable_type', '!=', RecurringPrivateLessonCharge::class);
+            });
     }
 }

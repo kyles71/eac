@@ -39,7 +39,7 @@ final class Messages extends TablePage
             ->columns([
                 TextColumn::make('sent_at')
                     ->label('Sent')
-                    ->dateTime('M j, Y g:i A', timezone: (string) config('app.display_timezone', config('app.timezone')))
+                    ->dateTime()
                     ->sortable(),
                 TextColumn::make('subject')
                     ->searchable()

@@ -60,8 +60,13 @@ it('updates only upcoming default-backed terms when recurring settings change', 
         ->where('semester', CourseSemester::Summer)
         ->where('year', 2027)
         ->firstOrFail();
+    $summer2026 = AcademicTerm::query()
+        ->where('semester', CourseSemester::Summer)
+        ->where('year', 2026)
+        ->firstOrFail();
 
     expect($fall->refresh()->starts_on->toDateString())->toBe('2026-09-10')
+        ->and($summer2026->starts_on->toDateString())->toBe('2026-06-01')
         ->and($summer2027->starts_on->toDateString())->toBe('2027-06-15')
         ->and($summer2027->ends_on->toDateString())->toBe('2027-09-14');
 });

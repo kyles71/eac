@@ -27,6 +27,7 @@ final class OrderReceiptEmailType implements EmailTypeContract
                 {{ conditional.course }}
                 {{ conditional.gear }}
                 {{ conditional.gift-card }}
+                {{ conditional.recurring-private-lesson }}
                 {{ conditional.standalone }}
                 HTML],
             tokens: [
@@ -61,6 +62,12 @@ final class OrderReceiptEmailType implements EmailTypeContract
                     label: 'Gift card purchase content',
                     contents: ['en' => '<p>Your gift card details will be delivered separately.</p>'],
                     description: 'Shown when the order contains at least one gift card.',
+                ),
+                new ConditionalSection(
+                    key: 'recurring-private-lesson',
+                    label: 'Recurring private lesson content',
+                    contents: ['en' => '<p>Your lesson payment is confirmed. Your recurring private lesson schedule remains available in Billing.</p>'],
+                    description: 'Shown when the order contains at least one recurring private lesson.',
                 ),
                 new ConditionalSection(
                     key: 'standalone',

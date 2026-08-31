@@ -78,7 +78,8 @@ it('shows purchase eligibility controls for every product type', function (?stri
 
     $component
         ->assertSchemaComponentVisible('requiredCourses')
-        ->assertSchemaComponentVisible('requiredCompetitionTeams');
+        ->assertSchemaComponentVisible('requiredCompetitionTeams')
+        ->assertSchemaComponentVisible('assignedUsers');
 })->with([
     'standalone' => null,
     'course' => Course::class,
@@ -90,6 +91,7 @@ it('can configure multiple required courses and competition teams', function () 
     $courses = Course::factory(2)->create();
     $season = CompetitionSeason::factory()->current()->create(['name' => '2026 Competition Season']);
     $teams = CompetitionTeam::factory(2)->for($season, 'season')->create();
+    $specificUsers = User::factory(2)->create();
 
     livewire(ListProducts::class)
         ->mountAction(CreateAction::class)
@@ -102,6 +104,7 @@ it('can configure multiple required courses and competition teams', function () 
             'productable_id' => null,
             'requiredCourses' => $courses->modelKeys(),
             'requiredCompetitionTeams' => $teams->modelKeys(),
+            'assignedUsers' => $specificUsers->modelKeys(),
         ])
         ->callMountedAction()
         ->assertHasNoActionErrors()
@@ -112,12 +115,16 @@ it('can configure multiple required courses and competition teams', function () 
     expect($product->requiredCourses()->pluck('courses.id')->sort()->values()->all())
         ->toBe($courses->modelKeys())
         ->and($product->requiredCompetitionTeams()->pluck('competition_teams.id')->sort()->values()->all())
-        ->toBe($teams->modelKeys());
+        ->toBe($teams->modelKeys())
+        ->and($product->assignedUsers()->pluck('users.id')->sort()->values()->all())
+        ->toBe($specificUsers->modelKeys());
 
     livewire(ViewProduct::class, ['record' => $product->id])
         ->assertSee($courses->first()->name)
         ->assertSee($courses->last()->name)
-        ->assertSee('2026 Competition Season');
+        ->assertSee('2026 Competition Season')
+        ->assertSee($specificUsers->first()->fullName)
+        ->assertSee($specificUsers->last()->fullName);
 });
 
 it('offers current and future teams while retaining a selected ended team on edit', function () {

@@ -21,10 +21,10 @@ it('can create a new user', function () {
     visit('/admin/users')
         ->click('New User')
         ->assertSee('Create User')
-        ->fill('mountedActionSchema0.first_name', $user->first_name)
-        ->fill('mountedActionSchema0.last_name', $user->last_name)
-        ->fill('mountedActionSchema0.email', $user->email)
-        ->fill('mountedActionSchema0.password', 'password')
+        ->fill('[id="mountedActionSchema0.first_name"]', $user->first_name)
+        ->fill('[id="mountedActionSchema0.last_name"]', $user->last_name)
+        ->fill('[id="mountedActionSchema0.email"]', $user->email)
+        ->fill('[id="mountedActionSchema0.password"]', 'password')
         ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Created');
 
@@ -42,8 +42,8 @@ it('can edit an existing user', function () {
     visit("/admin/users/{$existingUser->id}")
         ->click('Edit')
         ->assertSee('Save')
-        ->fill('mountedActionSchema0.first_name', $newData->first_name)
-        ->fill('mountedActionSchema0.last_name', $newData->last_name)
+        ->fill('[id="mountedActionSchema0.first_name"]', $newData->first_name)
+        ->fill('[id="mountedActionSchema0.last_name"]', $newData->last_name)
         ->click('.fi-modal-window .fi-ac-btn-action[type=submit]')
         ->assertSee('Saved');
 
@@ -109,14 +109,14 @@ it('shows reactive password requirements while creating a user', function (): vo
             JS))->toBe('none');
 
     $page
-        ->fill('mountedActionSchema0.password', 'short')
-        ->keys('mountedActionSchema0.password', 'Tab');
+        ->fill('[id="mountedActionSchema0.password"]', 'short')
+        ->keys('[id="mountedActionSchema0.password"]', 'Tab');
 
     expect($page->script(<<<'JS'
         document.querySelector('[data-password-requirement="minimum-length"]').classList.contains('text-danger-600')
         JS))->toBeTrue();
 
-    $page->fill('mountedActionSchema0.password', 'long-enough');
+    $page->fill('[id="mountedActionSchema0.password"]', 'long-enough');
 
     expect($page->script(<<<'JS'
         document.querySelector('[data-password-requirement="minimum-length"]').classList.contains('text-success-600')
@@ -153,7 +153,7 @@ it('persists table columns and their order across browser sessions', function ()
 
     $page = visit('/admin/courses?tab=all')
         ->click('Columns')
-        ->check('.fi-ta-col-manager input[id="column-created_at"]');
+        ->check('.fi-ta-col-manager input[id$="-created_at"]');
 
     $page->script(<<<'JS'
         (() => {
@@ -216,7 +216,9 @@ it('temporarily collapses the theme builder sidebar and restores its previous st
         Alpine.store('sidebar').open()
         Livewire.navigate('/admin/theme-builder')
         JS);
-    $page->assertSee('Live Preview');
+    $page
+        ->assertSee('Live Preview')
+        ->wait(0.1);
 
     expect($page->script(<<<'JS'
         ({
@@ -231,7 +233,9 @@ it('temporarily collapses the theme builder sidebar and restores its previous st
     $page->script(<<<'JS'
         Livewire.navigate('/admin/users')
         JS);
-    $page->assertSee('New User');
+    $page
+        ->assertSee('New User')
+        ->wait(0.1);
 
     expect($page->script("Alpine.store('sidebar').isOpen"))->toBeTrue();
 
@@ -239,8 +243,9 @@ it('temporarily collapses the theme builder sidebar and restores its previous st
         Alpine.store('sidebar').close()
         Livewire.navigate('/admin/theme-builder')
         JS);
-    $page->assertSee('Live Preview');
-    $page->wait(0.1);
+    $page
+        ->assertSee('Live Preview')
+        ->wait(0.1);
 
     expect($page->script("Alpine.store('sidebar').isOpen"))->toBeFalse();
 
@@ -248,7 +253,9 @@ it('temporarily collapses the theme builder sidebar and restores its previous st
         Alpine.store('sidebar').open()
         Livewire.navigate('/admin/users')
         JS);
-    $page->assertSee('New User');
+    $page
+        ->assertSee('New User')
+        ->wait(0.1);
 
     expect($page->script("Alpine.store('sidebar').isOpen"))->toBeFalse();
 });

@@ -20,7 +20,8 @@ final class EventPolicy
     public function view(User $authUser, Event $event): bool
     {
         return $authUser->can('View:Event')
-            && $event->isViewableByAdminUser($authUser);
+            && $event->isViewableByAdminUser($authUser)
+            && $this->canAccessPrivateEvent($authUser, $event);
     }
 
     public function create(User $authUser): bool
@@ -31,7 +32,8 @@ final class EventPolicy
     public function update(User $authUser, Event $event): bool
     {
         return $authUser->can('Update:Event')
-            && $event->isAccessibleToAdminUser($authUser);
+            && $event->isAccessibleToAdminUser($authUser)
+            && $this->canManagePrivateEvent($authUser, $event);
     }
 
     public function viewSubstituteDetails(User $authUser, Event $event): bool
@@ -71,12 +73,46 @@ final class EventPolicy
     public function cancel(User $authUser, Event $event): bool
     {
         return $event->canBeCancelledAt()
+            && ! $event->recurringPrivateLessonCharge()->exists()
             && $authUser->can('Cancel:Event')
-            && $event->isAccessibleToAdminUser($authUser);
+            && $event->isAccessibleToAdminUser($authUser)
+            && $this->canManagePrivateEvent($authUser, $event);
     }
 
     public function deleteAny(User $authUser): bool
     {
         return $authUser->can('DeleteAny:Event');
+    }
+
+    public function delete(User $authUser, Event $event): bool
+    {
+        return $authUser->can('DeleteAny:Event')
+            && $event->isAccessibleToAdminUser($authUser)
+            && $this->canManagePrivateEvent($authUser, $event);
+    }
+
+    private function canAccessPrivateEvent(User $authUser, Event $event): bool
+    {
+        if ($event->substitute_teacher_id === $authUser->id) {
+            return true;
+        }
+
+        $event->loadMissing('course.recurringPrivateLesson');
+
+        if ($event->course?->recurringPrivateLesson !== null) {
+            return $authUser->hasAnyRole(['teacher', 'owner', 'super_admin'])
+                || $event->course->recurringPrivateLesson->user_id === $authUser->id;
+        }
+
+        return $event->isAccessibleToAdminUser($authUser);
+    }
+
+    private function canManagePrivateEvent(User $authUser, Event $event): bool
+    {
+        $event->loadMissing('course');
+
+        return $event->course === null
+            || ! $event->course->is_private
+            || $authUser->hasAnyRole(['owner', 'super_admin']);
     }
 }

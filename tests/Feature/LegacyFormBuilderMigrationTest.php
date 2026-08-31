@@ -50,6 +50,7 @@ afterEach(function (): void {
     }
 
     File::delete(storage_path('app/private/backups/test-form-builder-snapshot.sql'));
+    File::delete(storage_path('app/private/backups/pre-form-builder-20260715-120000.sql'));
     File::delete(storage_path('app/private/backups/pre-form-builder-20260715-120000.sqlite'));
     File::delete(storage_path('framework/testing/legacy-form-snapshot-source.sqlite'));
 });
@@ -317,16 +318,21 @@ it('requires an unchanged fresh snapshot before writing destination data', funct
 it('creates a private checksummed cutover snapshot manifest', function (): void {
     Carbon::setTestNow('2026-07-15 12:00:00 UTC');
     createProductionLegacyFormFixture();
-    $sourcePath = storage_path('framework/testing/legacy-form-snapshot-source.sqlite');
-    File::ensureDirectoryExists(dirname($sourcePath));
-    File::put($sourcePath, 'non-empty sqlite snapshot source');
-    config(['database.connections.sqlite.database' => $sourcePath]);
+    $driver = DB::connection()->getDriverName();
+
+    if ($driver === 'sqlite') {
+        $sourcePath = storage_path('framework/testing/legacy-form-snapshot-source.sqlite');
+        File::ensureDirectoryExists(dirname($sourcePath));
+        File::put($sourcePath, 'non-empty sqlite snapshot source');
+        config(['database.connections.sqlite.database' => $sourcePath]);
+    }
 
     $this->artisan('forms:legacy-snapshot')->assertSuccessful();
 
     $snapshot = app(LegacyCutoverSnapshot::class);
     $manifest = json_decode(File::get($snapshot->manifestPath()), true, flags: JSON_THROW_ON_ERROR);
-    $snapshotPath = storage_path('app/private/backups/pre-form-builder-20260715-120000.sqlite');
+    $snapshotExtension = $driver === 'sqlite' ? 'sqlite' : 'sql';
+    $snapshotPath = storage_path("app/private/backups/pre-form-builder-20260715-120000.{$snapshotExtension}");
 
     expect($manifest)->toBeArray()
         ->and($manifest['snapshot_path'])->toBe($snapshotPath)

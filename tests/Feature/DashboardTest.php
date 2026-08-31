@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\DashboardAudience;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
+use App\Enums\RecurringPrivateLessonChargeStatus;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
@@ -27,12 +28,16 @@ use App\Models\Holiday;
 use App\Models\Installment;
 use App\Models\Order;
 use App\Models\PaymentPlan;
+use App\Models\RecurringPrivateLesson;
+use App\Models\RecurringPrivateLessonBillingPeriod;
+use App\Models\RecurringPrivateLessonCharge;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\StudentNoteSent;
 use App\Services\DashboardAudienceService;
 use App\Settings\DashboardAppearanceSettings;
 use App\Support\MediaDisks;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Storage;
 
@@ -110,6 +115,40 @@ it('only shows needs attention when there are tasks', function (): void {
     $this->get(Dashboard::getUrl())
         ->assertOk()
         ->assertSeeLivewire(NeedsAttention::class);
+});
+
+it('shows recurring private lesson attention times in the display timezone', function (): void {
+    $this->travelTo(CarbonImmutable::parse('2026-08-01 09:00', 'America/Detroit'));
+    $household = User::factory()->create();
+    $student = Student::factory()->for($household)->create();
+    $course = Course::factory()->create();
+    $event = Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => CarbonImmutable::parse('2026-08-10 21:00', 'UTC'),
+        'end_time' => CarbonImmutable::parse('2026-08-10 22:00', 'UTC'),
+    ]);
+    $series = RecurringPrivateLesson::factory()
+        ->for($course)
+        ->for($household)
+        ->for($student)
+        ->create();
+    $billingPeriod = RecurringPrivateLessonBillingPeriod::factory()->for($series)->create();
+    RecurringPrivateLessonCharge::factory()
+        ->for($series)
+        ->for($billingPeriod, 'billingPeriod')
+        ->for($event)
+        ->create([
+            'status' => RecurringPrivateLessonChargeStatus::Billed,
+            'amount' => 6000,
+        ]);
+    $this->actingAs($household);
+
+    $task = collect((new NeedsAttention)->tasks())
+        ->firstWhere('title', 'Recurring private lesson payment due');
+
+    expect($task)->not->toBeNull()
+        ->and($task['description'])->toContain('Aug 10, 2026 at 5:00 PM')
+        ->not->toContain('Aug 10, 2026 at 9:00 PM');
 });
 
 it('resolves inherited dashboard audiences for families teachers and owners', function (): void {

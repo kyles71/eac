@@ -96,6 +96,20 @@ final readonly class AcademicTermService
         };
     }
 
+    public function findOverlappingTermForDefaultDates(
+        CourseSemester $semester,
+        int $year,
+        ?AcademicTerm $except = null,
+    ): ?AcademicTerm {
+        $dates = $this->defaultDates($semester, $year);
+
+        return AcademicTerm::query()
+            ->when($except?->exists, fn ($query) => $query->whereKeyNot($except->getKey()))
+            ->whereDate('starts_on', '<=', $dates['ends_on'])
+            ->whereDate('ends_on', '>=', $dates['starts_on'])
+            ->first();
+    }
+
     /** @return list<array{CourseSemester, int}> */
     private function termYearsForAcademicYear(int $startsInYear): array
     {

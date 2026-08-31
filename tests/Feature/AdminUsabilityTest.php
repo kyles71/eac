@@ -254,6 +254,15 @@ it('provides a floating synchronized scrollbar and sticky left action cells for 
         ->toContain('inset-inline-start: 0');
 });
 
+it('keeps widget layout wrappers transparent on every page', function (): void {
+    $theme = file_get_contents(resource_path('css/filament/global-theme.css'));
+
+    expect($theme)
+        ->toContain('.fi-page .fi-wi-widget')
+        ->toContain('background: transparent')
+        ->toContain('box-shadow: none');
+});
+
 it('defaults the calendar to list month on mobile and month grid on larger screens', function (): void {
     $view = file_get_contents(resource_path('views/filament/shared/widgets/calendar-widget.blade.php'));
 

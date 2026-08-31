@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Enrollments\Schemas;
 use App\Filament\Admin\Resources\Courses\RelationManagers\EnrollmentsRelationManager;
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Student;
+use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -26,7 +27,17 @@ final class EnrollmentForm
                         Select::make('course_id')
                             ->label('Course')
                             ->hidden(fn ($livewire): bool => $livewire instanceof EnrollmentsRelationManager)
-                            ->relationship('course', 'name')
+                            ->relationship('course', 'name', function (Builder $query): void {
+                                $user = auth()->user();
+
+                                if ($user instanceof User && ! $user->hasAnyRole(['owner', 'super_admin'])) {
+                                    $query->where(function (Builder $query) use ($user): void {
+                                        $query
+                                            ->where('is_private', false)
+                                            ->orWhereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id));
+                                    });
+                                }
+                            })
                             ->required(),
                         Select::make('user_id')
                             ->label('Parent / User')

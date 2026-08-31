@@ -255,13 +255,13 @@ final class ProductDetails extends Page
 
         if ($product->requiredCourses->isNotEmpty()) {
             $details[] = TextEntry::make('required_courses')
-                ->label('Requires Enrollment In At Least One Of')
+                ->label('Requires Enrollment In Any Of')
                 ->state($product->requiredCourses->sortBy('name')->pluck('name')->join(', '));
         }
 
         if ($product->requiredCompetitionTeams->isNotEmpty()) {
             $details[] = TextEntry::make('required_competition_teams')
-                ->label('Requires Membership In At Least One Of')
+                ->label('Requires Membership In Any Of')
                 ->state($product->requiredCompetitionTeams
                     ->sortBy(fn (CompetitionTeam $team): string => $team->season->name.' '.$team->name)
                     ->map(fn (CompetitionTeam $team): string => "{$team->season->name}: {$team->name}")
@@ -290,11 +290,11 @@ final class ProductDetails extends Page
             return 0;
         }
 
-        return CourseHoldSeat::query()
+        $query = CourseHoldSeat::query()
             ->where('course_id', $this->product->productable->id)
-            ->whereHas('hold', fn ($query) => $query->where('user_id', auth()->id()))
-            ->claimable()
-            ->count();
+            ->whereHas('hold', fn ($query) => $query->where('user_id', auth()->id()));
+
+        return CourseHoldSeat::applyClaimableConstraint($query)->count();
     }
 
     private function firstActiveHold(): ?CourseHold
@@ -305,10 +305,10 @@ final class ProductDetails extends Page
 
         return CourseHold::query()
             ->where('user_id', auth()->id())
-            ->whereHas('seats', fn ($query) => $query
-                ->where('course_id', $this->product->productable->id)
-                ->claimable())
-            ->current()
+            ->whereHas('seats', fn ($query) => CourseHoldSeat::applyClaimableConstraint(
+                $query->where('course_id', $this->product->productable->id),
+            ))
+            ->tap(fn ($query) => CourseHold::applyCurrentConstraint($query))
             ->orderBy('expires_at')
             ->first();
     }

@@ -7,7 +7,7 @@ namespace App\Filament\Actions;
 use App\Actions\Store\RedeemGiftCard;
 use App\Models\GiftCard;
 use App\Models\User;
-use App\Services\StoreCodeAttemptLimiter;
+use App\Services\StoreCodeAttemptLimiterService;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
@@ -35,7 +35,7 @@ final class RedeemGiftCardAction extends Action
             ->action(function (array $data): void {
                 /** @var User $user */
                 $user = auth()->user();
-                $attemptLimiter = app(StoreCodeAttemptLimiter::class);
+                $attemptLimiter = app(StoreCodeAttemptLimiterService::class);
 
                 if ($attemptLimiter->hasTooManyAttempts($user)) {
                     Notification::make()

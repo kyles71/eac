@@ -243,6 +243,17 @@ it('only displays a team restricted product to members of a required team', func
         ->assertCanSeeTableRecords([$restrictedProduct]);
 });
 
+it('displays a Product when direct assignment overrides group restrictions', function () {
+    $unmatchedCourse = Course::factory()->create();
+    $restrictedProduct = Product::factory()->create(['price' => 5000]);
+    $restrictedProduct->requiredCourses()->attach($unmatchedCourse);
+    $restrictedProduct->assignedUsers()->attach(auth()->user());
+
+    livewire(Store::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$restrictedProduct]);
+});
+
 it('has required columns', function (string $column) {
     livewire(Store::class)
         ->assertTableColumnExists($column);

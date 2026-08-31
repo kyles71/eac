@@ -90,7 +90,7 @@ final class MyEnrollments extends TablePage
             ->query(
                 Enrollment::query()
                     ->where('user_id', auth()->id())
-                    ->with(['course.academicTerm', 'course.events', 'course.teachers.media', 'student'])
+                    ->with(['course.academicTerm', 'course.events', 'course.recurringPrivateLesson', 'course.teachers.media', 'student'])
             )
             ->recordTitle(fn (Enrollment $record): string => $record->course->name)
             ->columns([
@@ -110,7 +110,7 @@ final class MyEnrollments extends TablePage
                 TextColumn::make('course_starts_at')
                     ->label('Starts')
                     ->state(fn (Enrollment $record): mixed => $record->course?->firstMeetingStartsAt())
-                    ->dateTime('M j, Y g:i A')
+                    ->dateTime()
                     ->sortable(false),
                 TextColumn::make('status')
                     ->state(fn (Enrollment $record): string => EnrollmentStatus::for($record))
@@ -129,7 +129,9 @@ final class MyEnrollments extends TablePage
                     Action::make('assignStudent')
                         ->label(fn (Enrollment $record): string => $record->student_id === null ? 'Assign Student' : 'Change Student')
                         ->icon(Heroicon::OutlinedUser)
-                        ->visible(fn (Enrollment $record): bool => ! $this->courseHasConcluded($record) && ($record->student_id === null || $this->canChangeAssignedStudent($record)))
+                        ->visible(fn (Enrollment $record): bool => ! $record->isRecurringPrivateLesson()
+                            && ! $this->courseHasConcluded($record)
+                            && ($record->student_id === null || $this->canChangeAssignedStudent($record)))
                         ->stickyModalHeader(false)
                         ->stickyModalFooter(false)
                         ->schema([
@@ -186,7 +188,8 @@ final class MyEnrollments extends TablePage
                         ->label('Remove Student')
                         ->icon(Heroicon::OutlinedXMark)
                         ->color('danger')
-                        ->visible(fn (Enrollment $record): bool => $this->canUnassignStudent($record))
+                        ->visible(fn (Enrollment $record): bool => ! $record->isRecurringPrivateLesson()
+                            && $this->canUnassignStudent($record))
                         ->requiresConfirmation()
                         ->action(function (Enrollment $record): void {
                             try {

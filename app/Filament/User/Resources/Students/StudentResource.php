@@ -105,6 +105,6 @@ final class StudentResource extends Resource
     {
         return $record instanceof Student
             && $record->user_id === auth()->id()
-            && $record->enrollments()->doesntExist();
+            && $record->canBeDeleted();
     }
 }

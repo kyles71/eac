@@ -32,7 +32,6 @@ final class CourseHoldForm
                             ->disabledOn('edit'),
                         DateTimePicker::make('expires_at')
                             ->label('Expires At')
-                            ->timezone((string) config('app.display_timezone', config('app.timezone')))
                             ->rules([new FutureDisplayDateTime])
                             ->required(),
                         Textarea::make('notes')

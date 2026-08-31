@@ -17,6 +17,7 @@ use App\Filament\Admin\Resources\GiftCards\GiftCardResource;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Filament\Admin\Resources\Products\ProductResource;
+use App\Filament\Admin\Resources\RecurringPrivateLessons\RecurringPrivateLessonResource;
 use App\Filament\Admin\Resources\Roles\RoleResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
@@ -40,6 +41,7 @@ it('groups high traffic admin resources by workflow', function (): void {
         ->and(FormUserResource::getNavigationGroup())->toBe(AdminNavigation::PeopleAndAccess)
         ->and(RoleResource::getNavigationGroup())->toBe(AdminNavigation::PeopleAndAccess)
         ->and(CourseResource::getNavigationGroup())->toBe(AdminNavigation::ClassesAndSchedule)
+        ->and(RecurringPrivateLessonResource::getNavigationGroup())->toBe(AdminNavigation::ClassesAndSchedule)
         ->and(EventResource::getNavigationGroup())->toBe(AdminNavigation::ClassesAndSchedule)
         ->and(EnrollmentResource::getNavigationGroup())->toBe(AdminNavigation::ClassesAndSchedule)
         ->and(ProductResource::getNavigationGroup())->toBe(AdminNavigation::Storefront)
@@ -58,6 +60,7 @@ it('keeps workflow resource ordering explicit', function (): void {
         ->and(FormUserResource::getNavigationSort())->toBe(AdminNavigation::PeopleFormAssignments)
         ->and(RoleResource::getNavigationSort())->toBe(AdminNavigation::PeopleRoles)
         ->and(CourseResource::getNavigationSort())->toBe(AdminNavigation::ScheduleCourses)
+        ->and(RecurringPrivateLessonResource::getNavigationSort())->toBe(AdminNavigation::ScheduleRecurringPrivateLessons)
         ->and(EnrollmentResource::getNavigationSort())->toBe(AdminNavigation::ScheduleEnrollments)
         ->and(ProductResource::getNavigationSort())->toBe(AdminNavigation::StoreProducts)
         ->and(OrderResource::getNavigationSort())->toBe(AdminNavigation::BillingOrders)

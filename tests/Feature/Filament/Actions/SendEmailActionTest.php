@@ -68,6 +68,69 @@ it('queues a handcrafted email using the handcrafted mailer', function (): void 
     });
 });
 
+it('bccs the authenticated sender on handcrafted emails', function (): void {
+    Mail::fake();
+    config()->set('mail.mailers.handcrafted.archive_to', '');
+    $sender = User::factory()->create(['email' => 'sender@example.com']);
+    $this->actingAs($sender);
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['recipient@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 1);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('recipient@example.com')
+        && $mail->hasBcc('sender@example.com'));
+});
+
+it('queues a separate sender copy for Textmagic handcrafted emails', function (): void {
+    Mail::fake();
+    config()->set('mail.mailers.handcrafted.transport', 'textmagic');
+    config()->set('mail.mailers.handcrafted.archive_to', '');
+    $sender = User::factory()->create(['email' => 'sender@example.com']);
+    $this->actingAs($sender);
+
+    SendEmailAction::make()->call([
+        'data' => [
+            'to' => ['recipient@example.com'],
+            'subject' => 'Class update',
+            'body' => 'See you soon.',
+        ],
+    ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 2);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('recipient@example.com')
+        && ! $mail->hasTo('sender@example.com'));
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('sender@example.com')
+        && ! $mail->hasTo('recipient@example.com'));
+});
+
+it('copies the authenticated sender on custom student emails', function (): void {
+    Mail::fake();
+    config()->set('mail.mailers.handcrafted.archive_to', '');
+    $sender = User::factory()->isOwner()->create(['email' => 'sender@example.com']);
+    $student = Student::factory()->create();
+    $this->actingAs($sender);
+
+    SendEmailAction::make()
+        ->forStudent($student)
+        ->call([
+            'data' => [
+                'to' => ['recipient@example.com'],
+                'subject' => 'Class update',
+                'body' => 'See you soon.',
+            ],
+        ]);
+
+    Mail::assertQueued(HandcraftedEmail::class, 1);
+    Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('recipient@example.com')
+        && $mail->hasBcc('sender@example.com'));
+});
+
 it('queues one handcrafted email per recipient by default', function (): void {
     Mail::fake();
 
@@ -233,10 +296,12 @@ it('does not queue an archive copy when archive recipients are empty', function 
     Mail::assertQueued(HandcraftedEmail::class, 2);
 });
 
-it('can disable archive copies for a send action instance', function (): void {
+it('can disable configured archive copies while retaining the sender copy', function (): void {
     Mail::fake();
 
     config()->set('mail.mailers.handcrafted.archive_to', 'archive@example.com');
+    $sender = User::factory()->create(['email' => 'sender@example.com']);
+    $this->actingAs($sender);
 
     SendEmailAction::make()
         ->withoutArchiveCopy()
@@ -250,7 +315,8 @@ it('can disable archive copies for a send action instance', function (): void {
 
     Mail::assertQueued(HandcraftedEmail::class, 1);
     Mail::assertQueued(HandcraftedEmail::class, fn (HandcraftedEmail $mail): bool => $mail->hasTo('first@example.com')
-        && ! $mail->hasBcc('archive@example.com'));
+        && ! $mail->hasBcc('archive@example.com')
+        && $mail->hasBcc('sender@example.com'));
 });
 
 it('defaults the student resource action to the student name token', function (): void {

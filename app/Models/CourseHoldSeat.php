@@ -27,6 +27,19 @@ final class CourseHoldSeat extends Model
         'released_by_user_id' => 'integer',
     ];
 
+    public static function applyAvailableConstraint(Builder $query): Builder
+    {
+        return $query->whereNull('released_at')
+            ->whereNull('claimed_order_item_id')
+            ->whereDoesntHave('enrollment')
+            ->whereHas('hold', fn (Builder $query): Builder => $query->where('expires_at', '>', now()));
+    }
+
+    public static function applyClaimableConstraint(Builder $query): Builder
+    {
+        return self::applyAvailableConstraint($query);
+    }
+
     /** @return BelongsTo<CourseHold, $this> */
     public function hold(): BelongsTo
     {
@@ -66,16 +79,13 @@ final class CourseHoldSeat extends Model
     /** @param Builder<CourseHoldSeat> $query */
     public function scopeAvailable(Builder $query): void
     {
-        $query->whereNull('released_at')
-            ->whereNull('claimed_order_item_id')
-            ->whereDoesntHave('enrollment')
-            ->whereHas('hold', fn (Builder $query): Builder => $query->where('expires_at', '>', now()));
+        self::applyAvailableConstraint($query);
     }
 
     /** @param Builder<CourseHoldSeat> $query */
     public function scopeClaimable(Builder $query): void
     {
-        $query->available();
+        self::applyClaimableConstraint($query);
     }
 
     /** @param Builder<CourseHoldSeat> $query */

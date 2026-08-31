@@ -49,7 +49,13 @@
         this.processing = true
         this.errorMessage = ''
 
-        await $wire.markOrderProcessing()
+        const canProcess = await $wire.markOrderProcessing()
+
+        if (!canProcess) {
+            this.processing = false
+
+            return
+        }
 
         const returnUrl = @js(\App\Filament\User\Pages\CheckoutSuccess::getUrl() . '?order_id=' . $this->order->id);
         const confirmParams = {

@@ -8,6 +8,7 @@ use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Shared\Widgets\CalendarWidget;
 use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
+use App\Filament\Shared\Widgets\RecurringPrivateLessonAttention;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Widgets\Widget;
 
@@ -26,6 +27,7 @@ final class Dashboard extends BaseDashboard
     public function getWidgets(): array
     {
         return [
+            RecurringPrivateLessonAttention::class,
             SubstituteCoverageReminder::class,
             MessagesFromEac::class,
             QuickLinks::class,

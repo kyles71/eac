@@ -28,6 +28,8 @@ final class ViewUser extends ViewRecord
 
     private function refreshAccessDependentContent(): void
     {
+        $this->cachedRelationManagers = null;
+
         unset(
             $this->cachedSchemas['content'],
             $this->cachedSchemas['infolist'],

@@ -91,13 +91,11 @@ final class EventForm
                                     $fail("This event overlaps the \"{$holiday->name}\" holiday.");
                                 }
                             },
-                        ])
-                        ->timezone(self::displayTimezone()),
+                        ]),
                     DateTimePicker::make('end_time')
                         ->label('Ends At')
                         ->required()
-                        ->afterOrEqual('start_time')
-                        ->timezone(self::displayTimezone()),
+                        ->afterOrEqual('start_time'),
                     Select::make('repeat_frequency')
                         ->label('Repeat')
                         ->placeholder('Does not repeat')
@@ -212,11 +210,6 @@ final class EventForm
     private static function excludedUserQuery(?Calendar $calendar): Builder
     {
         return $calendar?->usersWithAccess() ?? User::query()->whereRaw('0 = 1');
-    }
-
-    private static function displayTimezone(): string
-    {
-        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private static function canViewPrivateContent(?Event $record): bool

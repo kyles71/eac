@@ -119,6 +119,13 @@ final class Enrollment extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function isRecurringPrivateLesson(): bool
+    {
+        $this->loadMissing('course.recurringPrivateLesson');
+
+        return $this->course?->recurringPrivateLesson !== null;
+    }
+
     /** @param Builder<Enrollment> $query */
     public function scopeOpen(Builder $query): void
     {

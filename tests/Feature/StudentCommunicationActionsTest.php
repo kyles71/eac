@@ -311,7 +311,7 @@ it('records a custom email sent from event attendance in the student history', f
         ->and($communication->subject)->toBe('Private class follow-up')
         ->and($history['type'])->toBe('custom_email')
         ->and($history['subject'])->toBe('Private class follow-up')
-        ->and($history['note'])->toBe('Please review today’s class notes.');
+        ->and($history['note'])->toBe('<p>Please review today’s class notes.</p>');
 });
 
 it('defaults the communication time to now when no event is selected', function (): void {

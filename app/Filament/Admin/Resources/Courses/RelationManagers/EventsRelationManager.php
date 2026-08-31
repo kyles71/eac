@@ -9,6 +9,7 @@ use App\Filament\Admin\Resources\Events\Tables\EventsTable;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
 use App\Models\Course;
 use App\Models\Event;
+use App\Models\User;
 use Filament\Actions\CreateAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -23,7 +24,10 @@ final class EventsRelationManager extends RelationManager
 
     public function isReadOnly(): bool
     {
-        return false;
+        $user = auth()->user();
+
+        return $this->course()->is_private
+            && (! $user instanceof User || ! $user->hasAnyRole(['owner', 'super_admin']));
     }
 
     public function form(Schema $schema): Schema

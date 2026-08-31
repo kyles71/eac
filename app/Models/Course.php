@@ -43,6 +43,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'id' => 'integer',
         'academic_term_id' => 'integer',
         'capacity' => 'integer',
+        'is_private' => 'boolean',
         'event_reminder_processed_at' => 'datetime',
     ];
 
@@ -235,6 +236,12 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
+    }
+
+    /** @return HasOne<RecurringPrivateLesson, $this> */
+    public function recurringPrivateLesson(): HasOne
+    {
+        return $this->hasOne(RecurringPrivateLesson::class);
     }
 
     /** @return HasMany<CourseHoldSeat, $this> */

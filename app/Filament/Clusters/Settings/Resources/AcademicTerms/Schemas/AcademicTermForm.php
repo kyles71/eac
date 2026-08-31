@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Clusters\Settings\Resources\AcademicTerms\Schemas;
 
 use App\Enums\CourseSemester;
+use App\Models\AcademicTerm;
+use App\Services\AcademicTermService;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -37,7 +40,38 @@ final class AcademicTermForm
                             ->required(),
                         Toggle::make('uses_default_dates')
                             ->label('Use Recurring Default Dates')
-                            ->helperText('Turn this off to override the dates for this term only.')
+                            ->helperText('Upcoming terms follow the recurring defaults. Dates are preserved once a term begins. Turn this off to override the dates for this term only.')
+                            ->rules([
+                                fn (Get $get, ?AcademicTerm $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
+                                    if (! $value || ($record?->uses_default_dates && ! $record->isUpcoming())) {
+                                        return;
+                                    }
+
+                                    $semesterValue = $get('semester') ?? $record?->semester;
+                                    $semester = $semesterValue instanceof CourseSemester
+                                        ? $semesterValue
+                                        : (is_string($semesterValue) ? CourseSemester::tryFrom($semesterValue) : null);
+                                    $year = filter_var($get('year') ?? $record?->year, FILTER_VALIDATE_INT);
+
+                                    if (! $semester instanceof CourseSemester || $year === false) {
+                                        return;
+                                    }
+
+                                    $overlappingTerm = app(AcademicTermService::class)
+                                        ->findOverlappingTermForDefaultDates($semester, $year, $record);
+
+                                    if (! $overlappingTerm instanceof AcademicTerm) {
+                                        return;
+                                    }
+
+                                    $fail(sprintf(
+                                        'The recurring default dates overlap %s (%s–%s). Turn off recurring defaults or adjust the overlapping term first.',
+                                        $overlappingTerm->display_name,
+                                        $overlappingTerm->starts_on->format('M j, Y'),
+                                        $overlappingTerm->ends_on->format('M j, Y'),
+                                    ));
+                                },
+                            ])
                             ->default(true)
                             ->live()
                             ->columnSpanFull(),

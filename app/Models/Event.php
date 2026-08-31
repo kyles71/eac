@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -103,6 +104,35 @@ final class Event extends Model implements HasMedia
         });
     }
 
+    /** @param array<int, mixed> $statuses */
+    public static function applySubstituteCoverageStatusesConstraint(Builder $query, array $statuses): Builder
+    {
+        /** @var array<string, EventSubstituteCoverageStatus> $normalizedStatuses */
+        $normalizedStatuses = [];
+
+        foreach ($statuses as $status) {
+            $status = match (true) {
+                $status instanceof EventSubstituteCoverageStatus => $status,
+                is_string($status) => EventSubstituteCoverageStatus::tryFrom($status),
+                default => null,
+            };
+
+            if ($status instanceof EventSubstituteCoverageStatus) {
+                $normalizedStatuses[$status->value] = $status;
+            }
+        }
+
+        if ($normalizedStatuses === []) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($normalizedStatuses): void {
+            foreach ($normalizedStatuses as $status) {
+                $query->orWhere(fn (Builder $query): Builder => self::applySubstituteCoverageStatusConstraint($query, $status));
+            }
+        });
+    }
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
@@ -119,6 +149,12 @@ final class Event extends Model implements HasMedia
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_user_id');
+    }
+
+    /** @return HasOne<RecurringPrivateLessonCharge, $this> */
+    public function recurringPrivateLessonCharge(): HasOne
+    {
+        return $this->hasOne(RecurringPrivateLessonCharge::class);
     }
 
     /** @return BelongsTo<User, $this> */
@@ -283,34 +319,39 @@ final class Event extends Model implements HasMedia
     /** @param array<int, mixed> $statuses */
     public function scopeWithSubstituteCoverageStatuses(Builder $query, array $statuses): void
     {
-        /** @var array<string, EventSubstituteCoverageStatus> $normalizedStatuses */
-        $normalizedStatuses = [];
-
-        foreach ($statuses as $status) {
-            $status = match (true) {
-                $status instanceof EventSubstituteCoverageStatus => $status,
-                is_string($status) => EventSubstituteCoverageStatus::tryFrom($status),
-                default => null,
-            };
-
-            if ($status instanceof EventSubstituteCoverageStatus) {
-                $normalizedStatuses[$status->value] = $status;
-            }
-        }
-
-        if ($normalizedStatuses === []) {
-            return;
-        }
-
-        $query->where(function (Builder $query) use ($normalizedStatuses): void {
-            foreach ($normalizedStatuses as $status) {
-                $query->orWhere(fn (Builder $query): Builder => self::applySubstituteCoverageStatusConstraint($query, $status));
-            }
-        });
+        self::applySubstituteCoverageStatusesConstraint($query, $statuses);
     }
 
     public function scopeVisibleOnCalendar(Builder $query, Calendar $calendar, User $user): Builder
     {
+        if (! $user->hasAnyRole(['owner', 'super_admin'])) {
+            $isStaff = $user->hasRole('teacher');
+
+            $query->where(function (Builder $query) use ($isStaff, $user): void {
+                $query
+                    ->where('substitute_teacher_id', $user->id)
+                    ->orWhereNull('course_id')
+                    ->orWhereHas('course', function (Builder $query) use ($isStaff, $user): void {
+                        $query
+                            ->where('is_private', false)
+                            ->orWhere(function (Builder $query) use ($isStaff, $user): void {
+                                $query
+                                    ->where('is_private', true)
+                                    ->where(function (Builder $query) use ($isStaff, $user): void {
+                                        $query
+                                            ->whereHas('teachers', fn (Builder $query): Builder => $query->whereKey($user->id))
+                                            ->orWhereHas(
+                                                'recurringPrivateLesson',
+                                                fn (Builder $query): Builder => $isStaff
+                                                    ? $query
+                                                    : $query->where('user_id', $user->id),
+                                            );
+                                    });
+                            });
+                    });
+            });
+        }
+
         if (! $calendar->isMyCalendar()) {
             $query->whereDoesntHave(
                 'excludedUsers',

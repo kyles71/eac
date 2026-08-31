@@ -34,11 +34,9 @@ final class DashboardMessageForm
                             ->helperText('Higher audiences automatically also see messages for lower audiences.'),
                         DateTimePicker::make('published_at')
                             ->label('Publish At')
-                            ->timezone((string) config('app.display_timezone', config('app.timezone')))
                             ->helperText('Leave blank to publish immediately.'),
                         DateTimePicker::make('expires_at')
                             ->label('Expires At')
-                            ->timezone((string) config('app.display_timezone', config('app.timezone')))
                             ->after('published_at')
                             ->helperText('Leave blank to keep the message visible indefinitely.'),
                     ]),

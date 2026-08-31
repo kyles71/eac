@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Actions\Forms\AssignFormManually;
+use App\Actions\RecurringPrivateLessons\HandleRecurringPrivateLessonEventCancellation;
+use App\Actions\RecurringPrivateLessons\SynchronizeRecurringPrivateLessonCharges;
 use App\Jobs\ReconcileRequiredFormsForCourses;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -247,7 +249,12 @@ it('dispatches reconciliation after event changes for every affected course', fu
     $newCourse = Course::factory()->create();
     $event = Event::withoutEvents(fn (): Event => Event::factory()->create(['course_id' => $originalCourse->id]));
     $bus = new RequiredFormsRecordingDispatcher();
-    $observer = new EventObserver(app(HolidayConflictService::class), $bus);
+    $observer = new EventObserver(
+        app(HolidayConflictService::class),
+        app(SynchronizeRecurringPrivateLessonCharges::class),
+        app(HandleRecurringPrivateLessonEventCancellation::class),
+        $bus,
+    );
     $observer->saved($event);
 
     Event::withoutEvents(fn (): bool => $event->update(['course_id' => $newCourse->id]));

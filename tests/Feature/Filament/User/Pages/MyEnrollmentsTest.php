@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Actions\Enrollments\AssignStudentToEnrollmentAction;
+use App\Actions\Enrollments\UnassignStudentFromEnrollmentAction;
 use App\Enums\CourseSemester;
 use App\Filament\User\Pages\MyEnrollments;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
+use App\Models\RecurringPrivateLesson;
 use App\Models\Student;
 use App\Models\User;
 use Filament\Actions\ActionGroup;
@@ -15,6 +18,7 @@ use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Illuminate\Contracts\Support\Htmlable;
+use InvalidArgumentException;
 
 use function Pest\Livewire\livewire;
 
@@ -25,6 +29,45 @@ beforeEach(function () {
 it('can render the my classes page', function () {
     livewire(MyEnrollments::class)
         ->assertOk();
+});
+
+it('only allows viewing details for recurring private lesson enrollments', function (): void {
+    $household = auth()->user();
+    $student = Student::factory()->for($household)->create();
+    $otherStudent = Student::factory()->for($household)->create();
+    $course = Course::factory()->create(['is_private' => true]);
+    Event::factory()->create([
+        'course_id' => $course->id,
+        'start_time' => now()->addMonth(),
+        'end_time' => now()->addMonth()->addHour(),
+    ]);
+    RecurringPrivateLesson::factory()->create([
+        'course_id' => $course->id,
+        'user_id' => $household->id,
+        'student_id' => $student->id,
+    ]);
+    $enrollment = Enrollment::factory()->withStudent($student)->create([
+        'course_id' => $course->id,
+        'user_id' => $household->id,
+        'student_id' => $student->id,
+    ]);
+
+    livewire(MyEnrollments::class)
+        ->set('activeTab', 'all')
+        ->assertActionVisible(TestAction::make('viewCourseDetails')->table($enrollment))
+        ->assertActionHidden(TestAction::make('assignStudent')->table($enrollment))
+        ->assertActionHidden(TestAction::make('removeStudent')->table($enrollment));
+
+    expect(fn () => app(AssignStudentToEnrollmentAction::class)->handle(
+        $enrollment,
+        $otherStudent,
+        $household,
+    ))->toThrow(InvalidArgumentException::class, 'cannot be changed')
+        ->and(fn () => app(UnassignStudentFromEnrollmentAction::class)->handle(
+            $enrollment,
+            $household,
+        ))->toThrow(InvalidArgumentException::class, 'cannot be removed')
+        ->and($enrollment->refresh()->student_id)->toBe($student->id);
 });
 
 it('groups row actions at the start of the table', function () {

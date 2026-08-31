@@ -66,6 +66,7 @@ final class Store extends TablePage
     protected function makeTable(): Table
     {
         $query = Product::query()
+            ->where('is_store_listed', true)
             ->visibleTo($this->getUser())
             ->with(['productable', 'questions']);
 
@@ -318,11 +319,11 @@ final class Store extends TablePage
             return 0;
         }
 
-        return CourseHoldSeat::query()
+        $query = CourseHoldSeat::query()
             ->where('course_id', $product->productable->id)
-            ->whereHas('hold', fn ($query) => $query->where('user_id', $this->getUser()->id))
-            ->claimable()
-            ->count();
+            ->whereHas('hold', fn ($query) => $query->where('user_id', $this->getUser()->id));
+
+        return CourseHoldSeat::applyClaimableConstraint($query)->count();
     }
 
     private function firstActiveHold(Product $product): ?CourseHold
@@ -333,10 +334,10 @@ final class Store extends TablePage
 
         return CourseHold::query()
             ->where('user_id', $this->getUser()->id)
-            ->whereHas('seats', fn ($query) => $query
-                ->where('course_id', $product->productable->id)
-                ->claimable())
-            ->current()
+            ->whereHas('seats', fn ($query) => CourseHoldSeat::applyClaimableConstraint(
+                $query->where('course_id', $product->productable->id),
+            ))
+            ->tap(fn ($query) => CourseHold::applyCurrentConstraint($query))
             ->orderBy('expires_at')
             ->first();
     }

@@ -126,11 +126,9 @@ final class ManagedBannerForm
                                         ->required(),
                                     DateTimePicker::make('published_at')
                                         ->label('Publish At')
-                                        ->timezone((string) config('app.display_timezone', config('app.timezone')))
                                         ->helperText('Leave blank to publish immediately.'),
                                     DateTimePicker::make('expires_at')
                                         ->label('Expires At')
-                                        ->timezone((string) config('app.display_timezone', config('app.timezone')))
                                         ->after('published_at')
                                         ->helperText('Leave blank to keep visible indefinitely.'),
                                     Select::make('audiences')

@@ -75,7 +75,8 @@ final class EventsTable
                     ->label('Substitute Coverage')
                     ->multiple()
                     ->options(EventSubstituteCoverageStatus::class)
-                    ->query(fn (Builder $query, array $data): Builder => $query->withSubstituteCoverageStatuses(
+                    ->query(fn (Builder $query, array $data): Builder => Event::applySubstituteCoverageStatusesConstraint(
+                        $query,
                         is_array($data['values'] ?? null) ? $data['values'] : [],
                     )),
             ])
@@ -86,7 +87,8 @@ final class EventsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->authorizeIndividualRecords('delete'),
                 ]),
             ]);
     }
