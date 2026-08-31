@@ -40,6 +40,8 @@ it('creates a private semester series, skips holidays, and prepares monthly sche
 
     expect($series->course->is_private)->toBeTrue()
         ->and($series->course->capacity)->toBe(1)
+        ->and($series->course->academicTerm->semester)->toBe(CourseSemester::Fall)
+        ->and($series->course->academicTerm->year)->toBe(2026)
         ->and($series->course->teachers)->toHaveCount(1)
         ->and($series->course->events)->toHaveCount(4)
         ->and($series->course->events->pluck('start_time')->map->format('Y-m-d')->all())
