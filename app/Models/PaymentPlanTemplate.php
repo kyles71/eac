@@ -137,7 +137,7 @@ final class PaymentPlanTemplate extends Model
             return false;
         }
 
-        $semester = $product->productable->semester->value;
+        $semester = $product->productable->academicTerm->semester->value;
 
         return in_array($semester, $allowedSemesters, true);
     }

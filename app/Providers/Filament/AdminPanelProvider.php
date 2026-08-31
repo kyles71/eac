@@ -31,6 +31,11 @@ final class AdminPanelProvider extends BasePanelProvider
 
         return $panel
             ->brandName('EAC Admin')
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('15s')
+            ->spaUrlExceptions([
+                '*/admin/report-exports/*/download*',
+            ])
             ->strictAuthorization()
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->renderHook(
@@ -50,9 +55,9 @@ final class AdminPanelProvider extends BasePanelProvider
                     ->icon(Heroicon::OutlinedCreditCard),
                 NavigationGroup::make(AdminNavigation::Competition)
                     ->icon(Heroicon::OutlinedSparkles),
-                NavigationGroup::make(AdminNavigation::Email)
-                    ->icon(Heroicon::OutlinedEnvelope),
-                NavigationGroup::make(AdminNavigation::Settings)
+                NavigationGroup::make(AdminNavigation::Reports)
+                    ->icon(Heroicon::OutlinedChartBar),
+                NavigationGroup::make(AdminNavigation::Tools)
                     ->icon(Heroicon::OutlinedCog6Tooth),
             ])
             ->pages([
@@ -80,12 +85,15 @@ final class AdminPanelProvider extends BasePanelProvider
                         'default' => 1,
                     ]),
                 ThemeBuilderPlugin::make()
-                    ->authorizeUsing('Manage:ThemeBuilder'),
+                    ->authorizeUsing('Manage:ThemeBuilder')
+                    ->navigationGroup(AdminNavigation::Tools)
+                    ->navigationSort(AdminNavigation::ToolsThemeBuilder),
                 FilamentMailManagerPlugin::make()
                     ->emailTypeEditActionSlideOver()
                     ->emailTypeRecordActionsGrouped()
                     ->enableSentEmails(false)
-                    ->navigationGroup(AdminNavigation::Email),
+                    ->navigationGroup(AdminNavigation::Tools)
+                    ->navigationSort(AdminNavigation::ToolsMailManager),
             ])
             ->globalSearchFieldSuffix(fn (): ?string => match (Platform::detect()) {
                 Platform::Windows, Platform::Linux => 'CTRL + K',

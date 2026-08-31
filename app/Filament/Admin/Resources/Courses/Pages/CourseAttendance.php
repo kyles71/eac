@@ -107,9 +107,9 @@ final class CourseAttendance extends ViewRecord implements HasTable
                     ->rules(fn (): array => [new Enum(AttendanceStatus::class)])
                     ->toggleable(false)
                     ->state(fn (Enrollment $record): ?string => $this->attendance()
-                        ->recordStudentAttendanceStatus($event, $record))
+                        ->recordAttendanceStatus($event, $record))
                     ->updateStateUsing(fn (Enrollment $record, mixed $state): ?string => $this->attendance()
-                        ->setRecordStudentAttendanceStatus($event, $record, $state)),
+                        ->setRecordAttendanceStatus($event, $record, $state)),
                 IconColumn::make("attendance_notes_{$event->id}")
                     ->label('Notes')
                     ->toggleable(false)
@@ -119,7 +119,7 @@ final class CourseAttendance extends ViewRecord implements HasTable
                     ->trueColor('warning')
                     ->falseColor('gray')
                     ->state(fn (Enrollment $record): bool => filled($this->attendance()
-                        ->recordStudentNotes($event, $record)))
+                        ->recordAttendanceNotes($event, $record)))
                     ->tooltip(fn (bool $state): string => match (true) {
                         Gate::denies('updateAttendance', $event) && $state => 'View notes',
                         Gate::denies('updateAttendance', $event) => 'No notes',
@@ -150,10 +150,10 @@ final class CourseAttendance extends ViewRecord implements HasTable
                     ->rows(6),
             ])
             ->fillForm(fn (Model $record): array => [
-                'notes' => $this->attendance()->recordStudentNotes($event, $record),
+                'notes' => $this->attendance()->recordAttendanceNotes($event, $record),
             ])
             ->action(function (array $data, Model $record) use ($event): void {
-                $this->attendance()->setRecordStudentNotes($event, $record, $data['notes'] ?? null);
+                $this->attendance()->setRecordAttendanceNotes($event, $record, $data['notes'] ?? null);
             });
     }
 

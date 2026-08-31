@@ -6,8 +6,12 @@ namespace App\Filament\Admin\Resources\Events\Pages;
 
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
+use App\Models\Event;
+use App\Models\User;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\On;
 
 final class ListEvents extends ListRecords
@@ -20,6 +24,23 @@ final class ListEvents extends ListRecords
     public function refreshEventsTable(): void
     {
         $this->flushCachedTableRecords();
+    }
+
+    public function getTabs(): array
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User || $user->hasCourseRestrictedAdminAccess()) {
+            return [];
+        }
+
+        return [
+            'all' => Tab::make('All Events'),
+            'mine' => Tab::make('My Events')
+                ->modifyQueryUsing(
+                    fn (Builder $query): Builder => Event::applyAdminUserViewConstraint($query, $user),
+                ),
+        ];
     }
 
     protected function getHeaderActions(): array

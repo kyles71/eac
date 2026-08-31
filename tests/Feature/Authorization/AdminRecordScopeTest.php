@@ -78,6 +78,8 @@ it('limits teachers to assigned course events even after a course is completed',
         ->and(Gate::allows('view', $standaloneEvent))->toBeFalse();
 
     livewire(ListEvents::class)
+        ->assertDontSee('All Events')
+        ->assertDontSee('My Events')
         ->loadTable()
         ->assertCanSeeTableRecords([$assignedEvent])
         ->assertCanNotSeeTableRecords([$otherEvent, $standaloneEvent]);
@@ -92,7 +94,11 @@ it('limits teachers to assigned course events even after a course is completed',
 
 it('allows owners to view and update every event', function (): void {
     $owner = User::factory()->isOwner()->create();
-    $courseEvent = Event::factory()->create();
+    $assignedCourse = Course::factory()->create();
+    $assignedCourse->teachers()->sync([$owner->id]);
+    $courseEvent = Event::factory()->create(['course_id' => $assignedCourse->id]);
+    $substituteEvent = Event::factory()->create(['substitute_teacher_id' => $owner->id]);
+    $otherEvent = Event::factory()->create();
     $standaloneEvent = Event::factory()->create(['course_id' => null]);
 
     $this->actingAs($owner);
@@ -103,8 +109,14 @@ it('allows owners to view and update every event', function (): void {
         ->and(Gate::allows('update', $standaloneEvent))->toBeTrue();
 
     livewire(ListEvents::class)
+        ->assertSee('All Events')
+        ->assertSee('My Events')
         ->loadTable()
-        ->assertCanSeeTableRecords([$courseEvent, $standaloneEvent]);
+        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $otherEvent, $standaloneEvent])
+        ->set('activeTab', 'mine')
+        ->loadTable()
+        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent])
+        ->assertCanNotSeeTableRecords([$otherEvent, $standaloneEvent]);
 });
 
 it('prevents teachers from assigning an event to a course they do not teach', function (): void {

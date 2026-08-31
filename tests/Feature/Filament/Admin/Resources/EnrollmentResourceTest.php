@@ -91,7 +91,7 @@ it('shows assignment state and schedule context on the enrollment table', functi
         ->set('activeTab', 'all')
         ->loadTable()
         ->assertCanSeeTableRecords([$openEnrollment])
-        ->assertTableColumnExists('course.semester')
+        ->assertTableColumnExists('academic_term')
         ->assertTableColumnExists('next_class')
         ->assertTableColumnExists('assignment_status')
         ->assertTableColumnStateSet('assignment_status', 'Needs student', $openEnrollment)

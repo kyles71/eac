@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Enums\ReportKey;
+use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -29,6 +31,7 @@ use App\Filament\Admin\Resources\StaffNotes\StaffNoteResource;
 use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
+use App\Filament\Clusters\Settings\Resources\AcademicTerms\AcademicTermResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Models\Role;
 use App\Services\PermissionCatalogSynchronizerService;
@@ -81,6 +84,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         ->and(config('filament-shield.policies.methods'))->toBe([])
         ->and(config('filament-shield.resources.manage'))->toBe($expected)
         ->and(config('filament-shield.resources.exclude'))->toContain(StudentCommunicationResource::class);
+    expect(config('filament-shield.resources.exclude'))->toContain(AcademicTermResource::class);
 
     foreach ($expected as $resource => $abilities) {
         $policy = Gate::getPolicyFor($resource::getModel());
@@ -125,11 +129,17 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'AdjustDueDates:PaymentPlan',
             'View:AppUpdatesPage',
             'View:StaffNote',
+            ReportKey::EnrollmentsByTerm->permission(),
+            ReportKey::InstructorHoursSummary->permission(),
+            ReportWidgetKey::EnrollmentCapacityMetrics->permission(),
+            ReportWidgetKey::InstructorOverview->permission(),
         )
         ->and($desired)->not->toContain(
             'ViewAny:StudentCommunication',
             'View:StudentCommunication',
             'Create:StudentCommunication',
+            'View:EnrollmentReports',
+            'View:InstructorReports',
         );
 
     foreach ($desired as $permission) {

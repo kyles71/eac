@@ -39,7 +39,7 @@ final class ViewCourseDetailsAction
 
         return [
             'name' => $course?->name,
-            'semester' => $course?->semester?->getLabel(),
+            'semester' => $course?->academicTerm?->display_name,
             'teacher' => $course?->teacherDisplayName,
             'student' => $enrollment->student?->fullName,
             'starts_at' => $course?->firstMeetingStartsAt(),

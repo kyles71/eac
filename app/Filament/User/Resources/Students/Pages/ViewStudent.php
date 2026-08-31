@@ -104,7 +104,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                             automaticLoading: fn (): bool => $this->automaticHistoryLoading,
                             loadMethod: 'loadMoreHistory',
                             itemView: 'filament.shared.enrollment-list-item',
-                            emptyMessage: 'No past classes.',
+                            emptyMessage: 'No past courses or events.',
                             batchSize: 5,
                         ),
                     ]),
@@ -245,16 +245,42 @@ final class ViewStudent extends ViewRecord implements HasTable
      */
     private function historyItems(): array
     {
-        return $this->historyEnrollments()
-            ->take($this->historyLimit)
-            ->map(fn (Enrollment $enrollment): array => $this->enrollmentItem($enrollment))
-            ->values()
-            ->all();
+        return array_map(
+            fn (array $record): array => $record['item'],
+            array_slice($this->historyRecords(), 0, $this->historyLimit),
+        );
     }
 
     private function hasMoreHistory(): bool
     {
-        return $this->historyEnrollments()->count() > $this->historyLimit;
+        return count($this->historyRecords()) > $this->historyLimit;
+    }
+
+    /**
+     * @return list<array{occurred_at: CarbonInterface|null, item: array<string, mixed>}>
+     */
+    private function historyRecords(): array
+    {
+        $enrollments = $this->historyEnrollments()
+            ->map(fn (Enrollment $enrollment): array => [
+                'occurred_at' => $this->enrollmentMeetingTime($enrollment),
+                'item' => $this->enrollmentItem($enrollment),
+            ]);
+        $events = $this->historyStandaloneEvents()
+            ->map(fn (Event $event): array => [
+                'occurred_at' => $this->eventMeetingTime($event),
+                'item' => $this->standaloneEventItem($event),
+            ]);
+
+        $records = array_merge($enrollments->all(), $events->all());
+
+        usort(
+            $records,
+            fn (array $first, array $second): int => ($second['occurred_at']?->getTimestamp() ?? 0)
+                <=> ($first['occurred_at']?->getTimestamp() ?? 0),
+        );
+
+        return $records;
     }
 
     /**
@@ -275,6 +301,30 @@ final class ViewStudent extends ViewRecord implements HasTable
     }
 
     /**
+     * @return Collection<int, Event>
+     */
+    private function historyStandaloneEvents(): Collection
+    {
+        $student = $this->student();
+        $studentMorphClass = $student->getMorphClass();
+
+        return Event::query()
+            ->passed()
+            ->whereNull('course_id')
+            ->whereDoesntHave(
+                'excludedUsers',
+                fn (Builder $query): Builder => $query->whereKey(auth()->id())
+            )
+            ->whereHas('attendees', fn (Builder $query): Builder => $query
+                ->where('attendee_type', $studentMorphClass)
+                ->where('attendee_id', $student->id))
+            ->orderByRaw('COALESCE(end_time, start_time) DESC')
+            ->orderByDesc('id')
+            ->limit($this->historyLimit + 1)
+            ->get();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function enrollmentItem(Enrollment $enrollment): array
@@ -284,7 +334,7 @@ final class ViewStudent extends ViewRecord implements HasTable
 
         return [
             'course' => $course->name,
-            'semester' => $course->semester->getLabel(),
+            'semester' => $course->academicTerm->display_name,
             'teacher' => CourseStaffPresenter::render($course),
             'status' => $status,
             'starts_at' => $this->enrollmentMeetingTime($enrollment)
@@ -306,6 +356,27 @@ final class ViewStudent extends ViewRecord implements HasTable
         }
 
         return $course->nextMeetingStartsAt();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function standaloneEventItem(Event $event): array
+    {
+        return [
+            'course' => $event->name,
+            'semester' => '',
+            'teacher' => null,
+            'status' => 'Past',
+            'starts_at' => $this->eventMeetingTime($event)
+                ?->timezone((string) config('app.display_timezone', config('app.timezone')))
+                ->format('M j, Y g:i A'),
+        ];
+    }
+
+    private function eventMeetingTime(Event $event): ?CarbonInterface
+    {
+        return $event->end_time ?? $event->start_time;
     }
 
     /** @return Builder<Event> */

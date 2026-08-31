@@ -58,6 +58,7 @@ final class DatabaseSeeder extends Seeder
     {
         $this->call([
             ShieldSeeder::class,
+            AcademicTermSeeder::class,
         ]);
 
         $this->seedSystemCalendars();

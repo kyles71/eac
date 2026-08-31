@@ -16,6 +16,20 @@ Schedule::command('orders:cancel-abandoned')
     ->name('cancel-abandoned-orders')
     ->description('Cancel pending orders abandoned for more than 24 hours');
 
+Schedule::command('academic-terms:sync')
+    ->dailyAt('00:05')
+    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+    ->withoutOverlapping()
+    ->name('sync-academic-terms')
+    ->description('Ensure current and upcoming academic terms exist');
+
+Schedule::command('reports:prune-exports')
+    ->dailyAt('00:20')
+    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+    ->withoutOverlapping()
+    ->name('prune-report-exports')
+    ->description('Delete expired private report export files and records');
+
 Schedule::command('course-holds:cancel-expired-checkouts')
     ->everyMinute()
     ->withoutOverlapping()

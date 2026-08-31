@@ -80,7 +80,10 @@ final class Enrollment extends Model
         return $query->whereHas(
             'course',
             fn (Builder $query): Builder => self::applyCourseNotConcludedConstraint(
-                $query->where('semester', $semester->value),
+                $query->whereHas(
+                    'academicTerm',
+                    fn (Builder $query): Builder => $query->where('semester', $semester->value),
+                ),
                 $date,
             )
         );

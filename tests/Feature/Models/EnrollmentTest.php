@@ -114,9 +114,7 @@ it('returns past enrollments where the course started and has no future events',
 });
 
 it('returns semester enrollments until the course has concluded', function () {
-    $currentCourse = Course::factory()->create([
-        'semester' => CourseSemester::Summer,
-    ]);
+    $currentCourse = Course::factory()->forSemester(CourseSemester::Summer)->create();
     Event::factory()->create([
         'course_id' => $currentCourse->id,
         'start_time' => Carbon::now()->subWeek(),
@@ -129,9 +127,7 @@ it('returns semester enrollments until the course has concluded', function () {
     ]);
     $currentEnrollment = Enrollment::factory()->create(['course_id' => $currentCourse->id]);
 
-    $concludedCourse = Course::factory()->create([
-        'semester' => CourseSemester::Summer,
-    ]);
+    $concludedCourse = Course::factory()->forSemester(CourseSemester::Summer)->create();
     Event::factory()->create([
         'course_id' => $concludedCourse->id,
         'start_time' => Carbon::now()->subWeek(),
@@ -140,9 +136,7 @@ it('returns semester enrollments until the course has concluded', function () {
     $concludedEnrollment = Enrollment::factory()->create(['course_id' => $concludedCourse->id]);
 
     $fallEnrollment = Enrollment::factory()->create([
-        'course_id' => Course::factory()->create([
-            'semester' => CourseSemester::Fall,
-        ])->id,
+        'course_id' => Course::factory()->forSemester(CourseSemester::Fall)->create()->id,
     ]);
 
     $results = Enrollment::semester(CourseSemester::Summer)->pluck('id');
