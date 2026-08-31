@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Filament\Admin\Resources\Forms\Components\FormVersionPreview;
 use App\Filament\Admin\Resources\Forms\Pages\EditFormVersion;
 use App\Filament\Admin\Resources\Forms\Pages\ViewForm;
-use App\Filament\Shared\Forms\Components\PreviewBuilder;
 use App\Forms\DefaultFormDefinitions;
 use App\Forms\Eac\Blocks\EmergencyContactsBlock;
 use App\Forms\Eac\EacFormContentProvider;
@@ -19,7 +18,6 @@ use Database\Seeders\ShowcaseParticipationFormSeeder;
 use Database\Seeders\StudentWaiverFormSeeder;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Repeater;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Livewire as LivewireSchemaComponent;
@@ -28,9 +26,13 @@ use Kyle\FilamentFormBuilder\Actions\PublishFormVersion;
 use Kyle\FilamentFormBuilder\Enums\FormContentSlot;
 use Kyle\FilamentFormBuilder\Enums\FormHelpPosition;
 use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
+use Kyle\FilamentFormBuilder\Enums\FormValidityMode;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
 use Kyle\FilamentFormBuilder\Filament\Resources\Forms\RelationManagers\VersionsRelationManager;
+use Kyle\FilamentFormBuilder\Support\FormBlockRuntimeContext;
 use Kyle\FilamentFormBuilder\Support\FormContentRegistry;
+use Kyle\FilamentFormBuilder\Support\FormDefinition;
+use Kyle\FilamentFormBuilder\Support\FormSchemaDocument;
 use Kyle\FilamentFormBuilder\Support\FormVersionComparator;
 use Kyle\FilamentFormBuilder\Support\PhoneNumber;
 
@@ -78,8 +80,18 @@ it('installs the seasonal waiver and showcase blueprints idempotently', function
     $mediaConsent = findSeededFormBlock($waiverVersion->schema, DefaultFormDefinitions::MediaReleaseConsent);
     $mediaReleaseSignedOn = findSeededFormBlock($waiverVersion->schema, DefaultFormDefinitions::MediaReleaseSignedOn);
     $showcaseParticipation = findSeededFormBlock($showcaseVersion->schema, DefaultFormDefinitions::ShowcaseParticipation);
-    $emergencyContactsComponent = app(EmergencyContactsBlock::class)->compile($emergencyContacts['data'], null, false);
-    $emergencyContactRules = app(EmergencyContactsBlock::class)->validationRules($emergencyContacts['data']);
+    $emergencyContactsBlock = app(EmergencyContactsBlock::class);
+    $emergencyContactsDesigner = $emergencyContactsBlock->designer();
+    $emergencyContactsComponent = $emergencyContactsBlock->compile(
+        $emergencyContacts['data'],
+        null,
+        new FormBlockRuntimeContext(
+            definition: app(FormDefinition::class),
+            schema: $waiverVersion->schema,
+            preview: true,
+        ),
+    );
+    $emergencyContactRules = $emergencyContactsBlock->validationRules($emergencyContacts['data']);
 
     expect(Form::query()->count())->toBe(2)
         ->and($waiver->name)->toBe('Student Waiver')
@@ -88,6 +100,8 @@ it('installs the seasonal waiver and showcase blueprints idempotently', function
         ->and($waiver->active_version_id)->toBe($waiverVersion->id)
         ->and($waiverVersion->version_key)->toBe('2025-2026')
         ->and($waiverVersion->label)->toBe('September 2025 – August 2026')
+        ->and($waiverVersion->schema['schema_version'])->toBe(FormSchemaDocument::Version)
+        ->and($waiverVersion->versionSettings()->validityMode)->toBe(FormValidityMode::VersionEnd)
         ->and($waiverVersion->requires_signature)->toBeTrue()
         ->and($waiverVersion->require_completed_again)->toBeTrue()
         ->and($waiverVersion->activation_starts_at?->setTimezone('America/Detroit')->format('Y-m-d H:i'))->toBe('2025-09-01 00:00')
@@ -100,8 +114,20 @@ it('installs the seasonal waiver and showcase blueprints idempotently', function
         ->and($emergencyContacts['data']['default_items'])->toBe(2)
         ->and($emergencyContacts['data']['text_message_policy_reference'])
         ->toBe(EacFormContentProvider::textMessageUpdatesPolicyReference($textUpdatesVersion))
+        ->and($emergencyContactsDesigner->type)->toBe('emergency_contacts')
+        ->and($emergencyContactsDesigner->category)->toBe('Application blocks')
+        ->and($emergencyContactsDesigner->defaultData)->toBe([
+            'label' => 'Emergency Contacts',
+            'min_items' => 1,
+            'default_items' => 2,
+        ])
+        ->and($emergencyContactsDesigner->inspectorSchema())->toHaveCount(4)
+        ->and($emergencyContactsDesigner->canvasSummary($emergencyContacts['data']))->toBe([
+            'Minimum contacts' => 1,
+            'Default contacts' => 2,
+        ])
         ->and($emergencyContactsComponent)->toBeInstanceOf(Repeater::class)
-        ->and(app(EmergencyContactsBlock::class)->blockPickerTooltip())->toContain('one or more emergency contacts')
+        ->and($emergencyContactsBlock->blockPickerTooltip())->toContain('one or more emergency contacts')
         ->and($emergencyContactsComponent->getMinItems())->toBe(1)
         ->and($emergencyContactsComponent->getDefaultState())->toHaveCount(2)
         ->and(collect($emergencyContactRules['answers.'.DefaultFormDefinitions::EmergencyContacts.'.*.phone_number'])
@@ -234,7 +260,11 @@ it('rejects missing or unrelated immutable policy references during publication'
         ->toThrow(InvalidArgumentException::class, 'does not belong to the Health & Safety Policy');
 
     $schema = $version->schema;
-    $schema[0]['data']['help_reference'] = EacFormContentProvider::healthSafetyPolicyReference(999999);
+    data_set(
+        $schema,
+        'pages.0.components.0.data.help_reference',
+        EacFormContentProvider::healthSafetyPolicyReference(999999),
+    );
     $version->update(['schema' => $schema]);
 
     expect(fn () => app(PublishFormVersion::class)->handle($version->refresh(), auth()->user()))
@@ -262,34 +292,12 @@ it('allows an author to select the EAC policy link for question help', function 
             ],
         ]],
     ]);
-    $schema = $version->schema;
-    $schema[0]['data']['help_reference'] = $secondReference;
-
     $page = livewire(EditFormVersion::class, ['record' => $form->id, 'version' => $version->id])
-        ->assertSee('I agree to the policy.');
-    $formBuilder = $page->instance()->getSchema('form')->getComponent(
-        findComponentUsing: fn (Component $component): bool => $component instanceof Builder
-            && $component->getName() === 'schema',
-        withActions: false,
-        withHidden: true,
-    );
-
-    if (! $formBuilder instanceof PreviewBuilder) {
-        throw new LogicException('The form builder field did not boot.');
-    }
-
-    $itemKey = array_key_first($formBuilder->getRawState());
-
-    $page
-        ->mountAction(
-            TestAction::make('edit')
-                ->arguments(['item' => $itemKey])
-                ->schemaComponent('schema', 'form'),
-        )
-        ->assertMountedActionModalSee('Help source')
-        ->setActionData($schema[0]['data'])
-        ->callMountedAction()
-        ->assertHasNoActionErrors()
+        ->assertSee('I agree to the policy.')
+        ->assertSeeHtml('data-form-version-designer')
+        ->call('selectNode', DefaultFormDefinitions::HealthSafetyPolicyConsent)
+        ->assertSee('Help source')
+        ->set('inspectorData.help_reference', $secondReference)
         ->call('save')
         ->assertHasNoFormErrors()
         ->assertNotified();
@@ -297,7 +305,7 @@ it('allows an author to select the EAC policy link for question help', function 
     expect($authoringOptions)->toHaveKeys([
         EacFormContentProvider::healthSafetyPolicyReference($firstVersion),
         $secondReference,
-    ])->and($version->refresh()->schema[0]['data']['help_reference'])->toBe($secondReference);
+    ])->and(data_get($version->refresh()->schema, 'pages.0.components.0.data.help_reference'))->toBe($secondReference);
 });
 
 it('compares seeded waiver versions containing repeatable blocks', function (): void {
@@ -312,30 +320,25 @@ it('compares seeded waiver versions containing repeatable blocks', function (): 
 
     $page = livewire(EditFormVersion::class, ['record' => $form->id, 'version' => $draft->id])
         ->assertSee('Medical Waiver')
+        ->assertSeeHtml('data-form-version-designer')
+        ->assertSeeHtml('data-designer-canvas')
         ->assertDontSee('Complete this block to preview it.')
         ->call('save')
         ->assertHasNoFormErrors()
-        ->assertNotified();
+        ->assertNotified()
+        ->call('setTab', 'preview');
 
-    $formBuilder = $page->instance()->getSchema('form')->getComponent(
-        findComponentUsing: fn (Component $component): bool => $component instanceof Builder
-            && $component->getName() === 'schema',
-        withActions: false,
-        withHidden: true,
-    );
     $preview = $page->instance()->getSchema('preview')->getComponent(
         findComponentUsing: fn (Component $component): bool => $component instanceof LivewireSchemaComponent,
         withActions: false,
         withHidden: true,
     );
 
-    if (! $formBuilder instanceof PreviewBuilder || ! $preview instanceof LivewireSchemaComponent) {
-        throw new LogicException('The memory-efficient form editor did not boot.');
+    if (! $preview instanceof LivewireSchemaComponent) {
+        throw new LogicException('The memory-efficient form preview did not boot.');
     }
 
-    expect($formBuilder)->toBeInstanceOf(PreviewBuilder::class)
-        ->and($formBuilder->hasBlockPreviews())->toBeTrue()
-        ->and($preview)->toBeInstanceOf(LivewireSchemaComponent::class)
+    expect($preview)->toBeInstanceOf(LivewireSchemaComponent::class)
         ->and($preview->isLazy())->toBeFalse()
         ->and($preview->getComponent())->toBe(FormVersionPreview::class);
 
@@ -386,7 +389,7 @@ it('renders a seeded waiver live preview independently from the editor', functio
  */
 function findSeededFormBlock(array $blocks, string $key): array
 {
-    foreach ($blocks as $block) {
+    foreach (FormSchemaDocument::components($blocks) as $block) {
         $data = is_array($block['data'] ?? null) ? $block['data'] : [];
 
         if (($data['key'] ?? null) === $key) {

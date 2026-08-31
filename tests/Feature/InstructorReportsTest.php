@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Enums\AttendanceStatus;
-use App\Enums\FormTypes;
 use App\Enums\ReportCategory;
 use App\Enums\ReportExportFormat;
 use App\Enums\ReportKey;
@@ -27,7 +26,9 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\EventSubstituteRequest;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormResponse;
+use App\Models\FormVersion;
 use App\Models\ReportExport;
 use App\Models\Student;
 use App\Models\StudentWaiver;
@@ -36,6 +37,7 @@ use App\Services\Reports\InstructorReportService;
 use App\Services\Reports\ReportExportService;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Storage;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 
 use function Pest\Livewire\livewire;
 
@@ -158,11 +160,22 @@ it('builds class roster, safety, and emergency text reports from current waiver 
         'behavioral_notes' => 'Quiet space helps',
         'media_release_consent' => true,
     ]);
-    $form = Form::factory()->create([
-        'form_type' => FormTypes::StudentWaiver,
-        'valid_until' => null,
+    $form = Form::factory()->create(['key' => 'student-waiver']);
+    $version = FormVersion::factory()->for($form)->published()->create();
+    $assignment = FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $version->id,
+        'respondent_id' => $guardian->id,
+        'subject_id' => $student->id,
     ]);
-    FormUser::factory()->for($form)->for($guardian)->forStudent($student)->for($waiver, 'responseable')->create();
+    FormResponse::factory()->create([
+        'form_assignment_id' => $assignment->id,
+        'form_version_id' => $version->id,
+        'status' => FormResponseStatus::Submitted,
+        'projection_type' => $waiver->getMorphClass(),
+        'projection_id' => $waiver->id,
+        'submitted_at' => now(),
+    ]);
     EmergencyContact::factory()->for($waiver)->create([
         'name' => 'First Contact',
         'phone_number' => '555-1111',

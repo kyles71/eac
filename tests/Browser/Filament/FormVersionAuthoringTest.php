@@ -12,7 +12,7 @@ beforeEach(function (): void {
     Filament::setCurrentPanel('admin');
 });
 
-it('renders responsive authoring columns with a live preview and temporary sidebar collapse', function (): void {
+it('renders the responsive Designer V2 workspace and temporary sidebar collapse', function (): void {
     $form = Form::factory()->create();
     $version = $form->createDraftVersion(schema: [
         [
@@ -40,49 +40,38 @@ it('renders responsive authoring columns with a live preview and temporary sideb
     $desktop = visit($url)
         ->on()
         ->desktop()
-        ->assertSee('Live preview')
+        ->assertSee('Form canvas')
+        ->assertSee('Inspector')
         ->assertSee('Rich preview instructions')
-        ->assertSee('Short Text: Original preview question')
         ->assertSee('Original preview question')
-        ->assertDontSee('Complete this block to preview it.')
         ->assertNoJavaScriptErrors();
 
     expect($desktop->script(<<<'JS'
         () => {
-            const editor = document.querySelector('[data-form-version-editor="editor"]').getBoundingClientRect()
-            const preview = document.querySelector('[data-form-version-editor="preview"]').getBoundingClientRect()
+            const palette = document.querySelector('[data-designer-palette]').getBoundingClientRect()
+            const canvas = document.querySelector('[data-designer-canvas]').getBoundingClientRect()
+            const inspector = document.querySelector('[data-designer-inspector]').getBoundingClientRect()
 
             return {
-                sameRow: Math.abs(editor.top - preview.top) < 20,
-                editorIsWider: editor.width > preview.width,
+                sameRow: Math.abs(palette.top - canvas.top) < 20 && Math.abs(canvas.top - inspector.top) < 20,
+                canvasIsWider: canvas.width > palette.width && canvas.width > inspector.width,
             }
         }
         JS))->toBe([
         'sameRow' => true,
-        'editorIsWider' => true,
+        'canvasIsWider' => true,
     ])
         ->and($desktop->script('() => window.Alpine.store("sidebar").isOpenDesktop'))->toBeFalse();
 
-    $desktop->click('Add to form');
-
     $picker = $desktop->script(<<<'JS'
-        async () => {
-            await new Promise((resolve) => setTimeout(resolve, 100))
+        () => {
+            const items = Array.from(document.querySelectorAll('[data-designer-palette] button[draggable="true"]'))
 
-            const panel = Array.from(document.querySelectorAll('.fi-fo-builder-block-picker .fi-dropdown-panel'))
-                .find((element) => element.offsetParent !== null)
-            const picker = panel.closest('.fi-fo-builder-block-picker')
-            const result = {
-                labels: Array.from(panel.querySelectorAll('.fi-dropdown-list-item-label'))
-                    .map((element) => element.innerText.trim()),
-                tooltipCount: panel.querySelectorAll('[x-tooltip]').length,
-                tooltipLabelDisplay: getComputedStyle(panel.querySelector('[data-form-block-picker-label]')).display,
-                width: Math.round(panel.getBoundingClientRect().width),
+            return {
+                labels: items.map((element) => element.innerText.trim()),
+                emergencyContactsHelp: items.find((element) => element.innerText.trim() === 'Emergency Contacts')?.title,
+                width: Math.round(document.querySelector('[data-designer-palette]').getBoundingClientRect().width),
             }
-
-            picker.querySelector('.fi-dropdown-trigger button').click()
-
-            return result
         }
         JS);
 
@@ -96,38 +85,25 @@ it('renders responsive authoring columns with a live preview and temporary sideb
         'Phone Number',
         'Number',
         'Date',
-        'Select',
-        'Radio',
-        'Yes / No Choice',
         'Consent Checkbox',
         'Toggle',
+        'Yes / No Choice',
+        'Select',
+        'Radio',
         'Emergency Contacts',
     ])
-        ->and($picker['tooltipCount'])->toBe(5)
-        ->and($picker['tooltipLabelDisplay'])->toBe('inline-flex')
-        ->and($picker['width'])->toBeLessThanOrEqual(680);
+        ->and($picker['emergencyContactsHelp'])->toContain('one or more emergency contacts')
+        ->and($picker['width'])->toBeLessThanOrEqual(300);
 
     $desktop->script(<<<'JS'
         async () => {
-            const item = Array.from(document.querySelectorAll('.fi-fo-builder-item'))
+            const item = Array.from(document.querySelectorAll('[data-designer-node]'))
                 .find((element) => element.textContent.includes('Original preview question'))
 
-            item.querySelector('.fi-fo-builder-item-preview-edit-overlay').click()
+            item.click()
 
             await new Promise((resolve) => setTimeout(resolve, 300))
-        }
-        JS);
-
-    $desktop->script(<<<'JS'
-        async () => {
-            const modal = Array.from(document.querySelectorAll('.fi-modal'))
-                .find((element) => element.offsetParent !== null)
-
-            if (! modal) {
-                return true
-            }
-
-            const input = Array.from(document.querySelectorAll('input'))
+            const input = Array.from(document.querySelectorAll('[data-designer-inspector] input'))
                 .find((element) => ['Original preview question', 'Updated preview question'].includes(element.value))
             const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
 
@@ -139,11 +115,6 @@ it('renders responsive authoring columns with a live preview and temporary sideb
                 input.blur()
             }
 
-            const saveButton = Array.from(modal.querySelectorAll('button'))
-                .find((element) => element.innerText.trim().startsWith('Save'))
-
-            saveButton?.click()
-
             await new Promise((resolve) => setTimeout(resolve, 1000))
 
             return true
@@ -152,6 +123,10 @@ it('renders responsive authoring columns with a live preview and temporary sideb
 
     $desktop
         ->assertSee('Updated preview question')
+        ->click('Preview')
+        ->assertSee('Rich preview instructions')
+        ->assertSee('Updated preview question')
+        ->click('Save changes')
         ->click('View Form')
         ->assertSee($form->name);
 
@@ -161,17 +136,85 @@ it('renders responsive authoring columns with a live preview and temporary sideb
         ->on()
         ->mobile()
         ->wait(1)
-        ->assertSee('Live preview')
+        ->assertSee('Form canvas')
         ->assertSee('Rich preview instructions')
-        ->assertDontSee('Complete this block to preview it.')
         ->assertNoJavaScriptErrors();
 
     expect($mobile->script(<<<'JS'
         () => {
-            const editor = document.querySelector('[data-form-version-editor="editor"]').getBoundingClientRect()
-            const preview = document.querySelector('[data-form-version-editor="preview"]').getBoundingClientRect()
+            const canvas = document.querySelector('[data-designer-canvas]').getBoundingClientRect()
 
-            return preview.top >= (editor.bottom - 2)
+            return canvas.width <= window.innerWidth && canvas.left >= 0
         }
         JS))->toBeTrue();
+
+    expect($mobile->script(<<<'JS'
+        () => {
+            const toolbar = document.querySelector('.ffb-designer-toolbar').getBoundingClientRect()
+            const tabs = document.querySelector('.ffb-designer-toolbar-start').getBoundingClientRect()
+            const drawerControls = document.querySelector('.ffb-designer-toolbar-center').getBoundingClientRect()
+            const actions = document.querySelector('.ffb-designer-toolbar-actions').getBoundingClientRect()
+            const visibleControls = Array.from(document.querySelectorAll('.ffb-designer-toolbar button'))
+                .filter((button) => button.offsetParent !== null)
+
+            return {
+                firstRowDoesNotOverlap: tabs.right <= actions.left + 1,
+                drawerControlsOnSecondRow: drawerControls.top >= Math.max(tabs.bottom, actions.bottom) - 1,
+                toolbarContainsControls: visibleControls.every((control) => {
+                    const bounds = control.getBoundingClientRect()
+
+                    return bounds.left >= toolbar.left - 1
+                        && bounds.right <= toolbar.right + 1
+                        && bounds.top >= toolbar.top - 1
+                        && bounds.bottom <= toolbar.bottom + 1
+                }),
+                toolbarFitsViewport: toolbar.left >= 0 && toolbar.right <= window.innerWidth,
+            }
+        }
+        JS))->toBe([
+        'firstRowDoesNotOverlap' => true,
+        'drawerControlsOnSecondRow' => true,
+        'toolbarContainsControls' => true,
+        'toolbarFitsViewport' => true,
+    ]);
+
+    $drawer = $mobile->script(<<<'JS'
+        async () => {
+            const button = Array.from(document.querySelectorAll('button'))
+                .find((element) => element.offsetParent !== null && element.innerText.trim() === 'Fields')
+
+            button.click()
+            await new Promise((resolve) => setTimeout(resolve, 200))
+
+            const palette = document.querySelector('[data-designer-palette]')
+            const bounds = palette.getBoundingClientRect()
+
+            return {
+                className: palette.className,
+                display: getComputedStyle(palette).display,
+                visible: bounds.width > 0 && bounds.height > 0,
+            }
+        }
+        JS);
+
+    expect($drawer['className'])->toContain('ffb-mobile-drawer-open')
+        ->and($drawer['display'])->toBe('block')
+        ->and($drawer['visible'])->toBeTrue();
+
+    $mobile->script(<<<'JS'
+        async () => {
+            document.querySelector('[aria-label="Close field palette"]').click()
+            await new Promise((resolve) => setTimeout(resolve, 200))
+
+            Array.from(document.querySelectorAll('button'))
+                .find((element) => element.innerText.trim() === 'Preview')
+                .click()
+
+            await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+        JS);
+
+    $mobile
+        ->assertSee('Updated preview question')
+        ->assertNoJavaScriptErrors();
 });

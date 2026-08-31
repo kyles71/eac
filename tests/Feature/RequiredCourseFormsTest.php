@@ -15,63 +15,13 @@ use App\Models\Student;
 use App\Models\User;
 use App\Observers\EventObserver;
 use App\Services\HolidayConflictService;
-use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Gate;
 use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
+use Tests\Support\RequiredFormsRecordingDispatcher;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
-
-final class RequiredFormsRecordingDispatcher implements Dispatcher
-{
-    /** @var list<object> */
-    public array $commands = [];
-
-    public function dispatch($command): mixed
-    {
-        $this->commands[] = $command;
-
-        return null;
-    }
-
-    public function dispatchSync($command, $handler = null): mixed
-    {
-        return null;
-    }
-
-    public function dispatchNow($command, $handler = null): mixed
-    {
-        return null;
-    }
-
-    public function dispatchAfterResponse($command, $handler = null): void {}
-
-    public function chain($jobs = null): mixed
-    {
-        return null;
-    }
-
-    public function hasCommandHandler($command): bool
-    {
-        return false;
-    }
-
-    public function getCommandHandler($command): mixed
-    {
-        return null;
-    }
-
-    public function pipeThrough(array $pipes): static
-    {
-        return $this;
-    }
-
-    public function map(array $map): static
-    {
-        return $this;
-    }
-}
 
 function createPublishedRequiredForm(array $attributes = []): Form
 {

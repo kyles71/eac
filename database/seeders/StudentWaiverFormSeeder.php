@@ -11,6 +11,7 @@ use App\Models\FormVersion;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Kyle\FilamentFormBuilder\Actions\InstallFormBlueprint;
+use Kyle\FilamentFormBuilder\Support\FormSchemaDocument;
 
 final class StudentWaiverFormSeeder extends Seeder
 {
@@ -47,10 +48,10 @@ final class StudentWaiverFormSeeder extends Seeder
             ->first();
     }
 
-    /** @param array<int, array<string, mixed>> $blocks */
+    /** @param array<string, mixed>|array<int, array<string, mixed>> $blocks */
     private function healthSafetyPolicyReference(array $blocks): ?string
     {
-        foreach ($blocks as $block) {
+        foreach (FormSchemaDocument::components($blocks) as $block) {
             $data = is_array($block['data'] ?? null) ? $block['data'] : [];
 
             if (($data['key'] ?? null) === DefaultFormDefinitions::HealthSafetyPolicyConsent) {
@@ -73,10 +74,10 @@ final class StudentWaiverFormSeeder extends Seeder
         return null;
     }
 
-    /** @param array<int, array<string, mixed>> $blocks */
+    /** @param array<string, mixed>|array<int, array<string, mixed>> $blocks */
     private function textMessageUpdatesPolicyReference(array $blocks): ?string
     {
-        foreach ($blocks as $block) {
+        foreach (FormSchemaDocument::components($blocks) as $block) {
             $data = is_array($block['data'] ?? null) ? $block['data'] : [];
 
             if (($data['key'] ?? null) === DefaultFormDefinitions::EmergencyContacts) {

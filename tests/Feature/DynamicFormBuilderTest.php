@@ -13,7 +13,6 @@ use App\Models\FormVersion;
 use App\Models\LegalDocument;
 use App\Models\Student;
 use App\Models\StudentWaiver;
-use App\Models\User;
 use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -23,16 +22,13 @@ use Illuminate\Validation\ValidationException;
 use Kyle\FilamentFormBuilder\Actions\PublishFormVersion;
 use Kyle\FilamentFormBuilder\Actions\SaveFormResponseDraft;
 use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
-use Kyle\FilamentFormBuilder\Contracts\FormMappingProvider;
-use Kyle\FilamentFormBuilder\Enums\FormAnswerType;
 use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
-use Kyle\FilamentFormBuilder\Support\FormMapping;
-use Kyle\FilamentFormBuilder\Support\FormProjectionTarget;
 use Kyle\FilamentFormBuilder\Support\FormSchemaCompiler;
 use Kyle\FilamentFormBuilder\Support\FormVersionComparator;
 use Kyle\FilamentFormBuilder\Support\FormVersionManager;
+use Tests\Support\GenericFormMappingProviderForTest;
 
 use function Pest\Laravel\assertDatabaseHas;
 
@@ -368,7 +364,7 @@ it('validates scalar strings against their typed answer storage limit', function
     ]))->toThrow(ValidationException::class);
 });
 
-it('rejects unknown builder blocks and visibility rules that do not target earlier scalar fields', function (): void {
+it('rejects unknown builder blocks and conditional rules that do not target earlier scalar fields', function (): void {
     $form = Form::factory()->create();
     $unknown = $form->versions()->create([
         'version' => 1,
@@ -399,7 +395,7 @@ it('rejects unknown builder blocks and visibility rules that do not target earli
     ]);
 
     expect(fn () => app(PublishFormVersion::class)->handle($invalidVisibility, auth()->user()))
-        ->toThrow(InvalidArgumentException::class, 'Visibility rules may only depend on an earlier answer field.');
+        ->toThrow(InvalidArgumentException::class, 'Conditional rules may only depend on an earlier scalar answer field.');
 });
 
 it('allows only one mutable draft and requires replacement field identity for type changes', function (): void {
@@ -493,37 +489,3 @@ it('uses registered mapping providers for generic projection behavior', function
     expect($assignment->respondent->refresh()->first_name)->toBe('Portable')
         ->and($response->projection?->is($assignment->respondent))->toBeTrue();
 });
-
-final class GenericFormMappingProviderForTest implements FormMappingProvider
-{
-    public function supports(Kyle\FilamentFormBuilder\Models\Form $form): bool
-    {
-        return $form->key === 'generic-projection';
-    }
-
-    public function mappings(Kyle\FilamentFormBuilder\Models\Form $form): array
-    {
-        return [
-            new FormMapping(
-                key: 'generic.answer',
-                label: 'Generic Answer',
-                answerType: FormAnswerType::String,
-                target: 'respondent',
-                attribute: 'first_name',
-            ),
-        ];
-    }
-
-    public function targets(Kyle\FilamentFormBuilder\Models\Form $form): array
-    {
-        return [
-            new FormProjectionTarget(
-                key: 'respondent',
-                label: 'Respondent',
-                model: User::class,
-                resolve: fn (Kyle\FilamentFormBuilder\Models\FormResponse $response): User => $response->assignment->respondent,
-                primary: true,
-            ),
-        ];
-    }
-}

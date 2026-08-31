@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Forms\Eac\Blocks;
 
 use App\Forms\Eac\EacFormContentProvider;
-use Filament\Forms\Components\Builder\Block;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -24,9 +23,9 @@ use Kyle\FilamentFormBuilder\Contracts\FormBlockInfolistProvider;
 use Kyle\FilamentFormBuilder\Contracts\FormBlockPickerTooltipProvider;
 use Kyle\FilamentFormBuilder\Contracts\FormBlockProvider;
 use Kyle\FilamentFormBuilder\Enums\FormAnswerType;
-use Kyle\FilamentFormBuilder\Models\Form;
 use Kyle\FilamentFormBuilder\Models\FormAssignment;
-use Kyle\FilamentFormBuilder\Support\FormBlockIdentity;
+use Kyle\FilamentFormBuilder\Support\FormBlockDesignerDescriptor;
+use Kyle\FilamentFormBuilder\Support\FormBlockRuntimeContext;
 use Kyle\FilamentFormBuilder\Support\PhoneNumber;
 
 final readonly class EmergencyContactsBlock implements FormBlockComparisonProvider, FormBlockInfolistProvider, FormBlockPickerTooltipProvider, FormBlockProvider
@@ -46,27 +45,32 @@ final readonly class EmergencyContactsBlock implements FormBlockComparisonProvid
         return 'Collects one or more emergency contacts, including contact details and text-message consent.';
     }
 
-    public function builderBlock(Form $form): Block
+    public function designer(): FormBlockDesignerDescriptor
     {
-        return Block::make($this->type())
-            ->label(fn (?array $state): string => $this->label($state ?? []))
-            ->schema([
-                FormBlockIdentity::field(),
+        return new FormBlockDesignerDescriptor(
+            type: $this->type(),
+            category: 'Application blocks',
+            label: 'Emergency Contacts',
+            icon: 'heroicon-o-user-group',
+            helpText: $this->blockPickerTooltip(),
+            defaultData: [
+                'label' => 'Emergency Contacts',
+                'min_items' => 1,
+                'default_items' => 2,
+            ],
+            inspectorSchema: fn (): array => [
                 TextInput::make('label')
-                    ->default('Emergency Contacts')
                     ->required()
                     ->live(onBlur: true),
                 TextInput::make('min_items')
                     ->label('Minimum contacts')
                     ->numeric()
-                    ->default(1)
                     ->minValue(1)
                     ->required(),
                 TextInput::make('default_items')
                     ->label('Default contacts')
                     ->helperText('Number of blank contact rows shown when the form is first opened.')
                     ->numeric()
-                    ->default(2)
                     ->minValue(1)
                     ->required(),
                 Select::make('text_message_policy_reference')
@@ -75,7 +79,12 @@ final readonly class EmergencyContactsBlock implements FormBlockComparisonProvid
                     ->options(fn (): array => app(EacFormContentProvider::class)->textMessageUpdatesPolicyOptions())
                     ->searchable()
                     ->required(),
-            ]);
+            ],
+            canvasSummary: fn (array $data): array => [
+                'Minimum contacts' => max(1, (int) ($data['min_items'] ?? 1)),
+                'Default contacts' => max(1, (int) ($data['default_items'] ?? 2)),
+            ],
+        );
     }
 
     public function validate(array $data): void
@@ -159,7 +168,7 @@ final readonly class EmergencyContactsBlock implements FormBlockComparisonProvid
             ]);
     }
 
-    public function compile(array $data, ?FormAssignment $assignment, bool $disabled): Component
+    public function compile(array $data, ?FormAssignment $assignment, FormBlockRuntimeContext $context): Component
     {
         $key = (string) $data['key'];
         $minimum = max(1, (int) ($data['min_items'] ?? 1));
@@ -167,7 +176,7 @@ final readonly class EmergencyContactsBlock implements FormBlockComparisonProvid
         $textMessagePolicyReference = is_string($data['text_message_policy_reference'] ?? null)
             ? $data['text_message_policy_reference']
             : null;
-        $relationship = $disabled && $assignment !== null
+        $relationship = $context->globallyDisabled && $assignment !== null
             ? TextInput::make('relationship')
                 ->label('Relationship')
             : Flex::make([
@@ -230,15 +239,15 @@ final readonly class EmergencyContactsBlock implements FormBlockComparisonProvid
             ])
             ->minItems($minimum)
             ->defaultItems($defaultItems)
-            ->afterStateHydrated(function (Repeater $component, mixed $state) use ($defaultItems, $disabled): void {
-                if ($disabled || filled($state)) {
+            ->afterStateHydrated(function (Repeater $component, Get $get, mixed $state) use ($context, $data, $defaultItems): void {
+                if ($context->disabled($data, $get) || filled($state)) {
                     return;
                 }
 
                 $component->state(array_fill(0, $defaultItems, []));
             })
             ->reorderable(false)
-            ->disabled($disabled)
+            ->disabled($context->globallyDisabled)
             ->required();
     }
 

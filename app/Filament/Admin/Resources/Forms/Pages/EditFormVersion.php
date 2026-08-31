@@ -8,8 +8,6 @@ use App\Filament\Admin\Resources\Forms\Components\FormVersionPreview;
 use App\Filament\Admin\Resources\Forms\FormResource;
 use App\Models\Form;
 use App\Models\FormVersion;
-use Filament\Forms\Components\Builder;
-use Filament\Forms\Components\Builder\Block;
 use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -17,23 +15,6 @@ use Filament\Schemas\Schema;
 final class EditFormVersion extends \Kyle\FilamentFormBuilder\Filament\Resources\Forms\Pages\EditFormVersion
 {
     protected static string $resource = FormResource::class;
-
-    public function form(Schema $schema): Schema
-    {
-        return Builder::configureUsing(
-            function (Builder $builder): void {
-                $builder->blockPreviews();
-            },
-            fn (): Schema => Block::configureUsing(
-                function (Block $block): void {
-                    $block->preview('filament.admin.resources.forms.block-preview');
-                },
-                fn (): Schema => parent::form($schema),
-                isImportant: true,
-            ),
-            isImportant: true,
-        );
-    }
 
     public function preview(Schema $schema): Schema
     {

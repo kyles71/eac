@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Enums\AttendanceStatus;
-use App\Enums\FormTypes;
 use App\Enums\StopLightColor;
 use App\Enums\StudentCommunicationType;
 use App\Enums\StudentNoteType;
@@ -13,7 +12,9 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormResponse;
+use App\Models\FormVersion;
 use App\Models\StaffNote;
 use App\Models\Student;
 use App\Models\StudentCommunication;
@@ -25,6 +26,7 @@ use Carbon\CarbonImmutable;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 
 use function Pest\Livewire\livewire;
 
@@ -46,10 +48,8 @@ it('shows teachers the completed medical waiver details and media release consen
         'course_id' => $course->id,
         'user_id' => $student->user_id,
     ]);
-    $form = Form::factory()->create([
-        'form_type' => FormTypes::StudentWaiver,
-        'valid_until' => now()->addMonth(),
-    ]);
+    $form = Form::factory()->create(['key' => 'student-waiver']);
+    $version = FormVersion::factory()->for($form)->published()->create();
     $waiver = StudentWaiver::factory()->create([
         'allergies' => 'Peanuts',
         'medical_conditions' => 'Asthma',
@@ -59,12 +59,23 @@ it('shows teachers the completed medical waiver details and media release consen
         'medical_release_consent' => true,
         'media_release_consent' => false,
     ]);
-    FormUser::factory()->forStudent($student)->create([
+    $assignment = FormAssignment::factory()->create([
         'form_id' => $form->id,
-        'user_id' => $student->user_id,
-        'responseable_type' => $waiver->getMorphClass(),
-        'responseable_id' => $waiver->id,
+        'form_version_id' => $version->id,
+        'respondent_id' => $student->user_id,
+        'subject_id' => $student->id,
     ]);
+    FormResponse::factory()->create([
+        'form_assignment_id' => $assignment->id,
+        'form_version_id' => $version->id,
+        'status' => FormResponseStatus::Submitted,
+        'projection_type' => $waiver->getMorphClass(),
+        'projection_id' => $waiver->id,
+        'submitted_at' => now(),
+        'valid_until' => now()->addMonth(),
+    ]);
+
+    expect(app(StudentProfileService::class)->medicalWaiver($student)?->is($waiver))->toBeTrue();
 
     $this->actingAs($teacher);
 

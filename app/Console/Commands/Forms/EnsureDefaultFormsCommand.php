@@ -16,6 +16,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Kyle\FilamentFormBuilder\Actions\InstallFormBlueprint;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
+use Kyle\FilamentFormBuilder\Support\FormSchemaDocument;
 
 #[Signature('forms:ensure-defaults')]
 #[Description('Idempotently ensure seasonal waiver versions and the manual showcase template')]
@@ -72,7 +73,7 @@ final class EnsureDefaultFormsCommand extends Command
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $blocks
+     * @param  array<string, mixed>|array<int, array<string, mixed>>  $blocks
      * @return array{string|null, string|null}
      */
     private function pinnedReferences(array $blocks): array
@@ -80,7 +81,7 @@ final class EnsureDefaultFormsCommand extends Command
         $health = null;
         $text = null;
 
-        foreach ($blocks as $block) {
+        foreach (FormSchemaDocument::components($blocks) as $block) {
             $data = is_array($block['data'] ?? null) ? $block['data'] : [];
             $helpReference = $data['help_reference'] ?? null;
             $textReference = $data['text_message_policy_reference'] ?? null;

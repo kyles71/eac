@@ -10,6 +10,7 @@ use Carbon\CarbonInterface;
 use Kyle\FilamentFormBuilder\Blueprints\FormBlueprint;
 use Kyle\FilamentFormBuilder\Enums\FormHelpPosition;
 use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
+use Kyle\FilamentFormBuilder\Enums\FormValidityMode;
 use Kyle\FilamentFormBuilder\Support\InstructionRichText;
 
 final readonly class DefaultFormDefinitions
@@ -73,6 +74,12 @@ final readonly class DefaultFormDefinitions
             versionKey: "{$startYear}-{$endYear}",
             versionLabel: "September {$startYear} – August {$endYear}",
             schema: $this->medicalWaiver($healthSafetyPolicyReference, $textMessageUpdatesPolicyReference),
+            settings: [
+                'validity' => [
+                    'mode' => FormValidityMode::VersionEnd->value,
+                    'days' => null,
+                ],
+            ],
             requiresSignature: true,
             requireCompletedAgain: true,
             activatesAt: CarbonImmutable::parse("{$startYear}-09-01 00:00:00", $timezone)->utc(),

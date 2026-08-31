@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\StripeServiceContract;
-use App\Filament\Shared\Forms\Components\PreviewBuilder;
 use App\Listeners\Forms\ReconcileRequiredFormsForPublishedVersion;
 use App\Models\Course;
 use App\Models\CourseForm;
@@ -27,7 +26,6 @@ use App\Services\StripeService;
 use App\Support\PasswordRequirements;
 use App\Support\TextmagicMailTransportFactory;
 use BezhanSalleh\PanelSwitch\PanelSwitch;
-use Filament\Forms\Components\Builder;
 use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
@@ -39,8 +37,6 @@ final class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->bind(Builder::class, PreviewBuilder::class);
-
         $this->configureDatabaseDumpOptions();
 
         $this->app->singleton(StripeServiceContract::class, function (): StripeService {

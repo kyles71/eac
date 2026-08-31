@@ -30,7 +30,10 @@ it('includes form builder package classes in the admin theme', function (): void
 
     expect($adminTheme)
         ->toContain("@source '../../../../vendor/kyle/filament-form-builder/src/**/*.php';")
-        ->toContain("@source '../../../../vendor/kyle/filament-form-builder/resources/**/*.blade.php';");
+        ->toContain("@source '../../../../vendor/kyle/filament-form-builder/resources/**/*.blade.php';")
+        ->toContain('.fi-panel-admin.fi-form-builder-designer-page.fi-body-has-topbar .fi-layout')
+        ->toContain('height: calc(100dvh - 4rem - var(--eac-managed-banner-height, 0px))')
+        ->toContain('.fi-panel-admin.fi-form-builder-designer-page .fi-main [data-managed-banners-location]');
 });
 
 it('pins the user panel topbar on mobile viewports', function (): void {

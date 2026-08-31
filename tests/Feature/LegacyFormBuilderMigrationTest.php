@@ -25,7 +25,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
+use Kyle\FilamentFormBuilder\Enums\FormValidityMode;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
+use Kyle\FilamentFormBuilder\Support\FormSchemaDocument;
 use Kyle\FilamentFormBuilder\Support\FormTableRegistry;
 
 beforeEach(function (): void {
@@ -81,6 +83,18 @@ it('hashes the approved waiver contract independently of JSON object key order',
     $contract->assertMatches($mysqlRoundTrippedSchema);
 });
 
+it('installs the Designer V2 columns with the form builder schema', function (): void {
+    $tables = app(FormTableRegistry::class);
+    $versionsTable = $tables->name('versions');
+    $responsesTable = $tables->name('responses');
+    $hasValidUntilIndex = collect(Schema::getIndexes($responsesTable))
+        ->contains(fn (array $index): bool => $index['columns'] === ['valid_until']);
+
+    expect(Schema::hasColumn($versionsTable, 'settings'))->toBeTrue()
+        ->and(Schema::hasColumn($responsesTable, 'valid_until'))->toBeTrue()
+        ->and($hasValidUntilIndex)->toBeTrue();
+});
+
 it('performs the production-shaped waiver cutover once and creates clean defaults', function (): void {
     Carbon::setTestNow('2026-07-15 12:00:00 UTC');
     $fixture = createProductionLegacyFormFixture();
@@ -112,6 +126,8 @@ it('performs the production-shaped waiver cutover once and creates clean default
     $firstResponse = FormResponse::query()->findOrFail(1001);
     $revision = FormResponse::query()->findOrFail(1002);
     $pending = FormResponse::query()->findOrFail(1003);
+    $courseFormForeignKey = collect(Schema::getForeignKeys('course_forms'))
+        ->first(fn (array $foreignKey): bool => $foreignKey['columns'] === ['form_id']);
 
     expect(DB::table('forms')->count())->toBe(3)
         ->and(DB::table('form_users')->count())->toBe(3)
@@ -122,23 +138,29 @@ it('performs the production-shaped waiver cutover once and creates clean default
         ->and($version->status)->toBe(FormVersionStatus::Published)
         ->and($version->version)->toBe(1)
         ->and($version->version_key)->toBe('2025-2026')
+        ->and($version->schema['schema_version'])->toBe(FormSchemaDocument::Version)
+        ->and($version->versionSettings()->validityMode)->toBe(FormValidityMode::VersionEnd)
         ->and(FormAssignment::query()->count())->toBe(2)
         ->and(FormResponse::query()->count())->toBe(3)
         ->and($firstAssignment->form_version_id)->toBe($version->id)
         ->and($firstAssignment->respondent?->is($fixture['current_first_user']))->toBeTrue()
         ->and($pendingAssignment->respondent?->is($fixture['second_student']->user))->toBeTrue()
         ->and($firstResponse->submittedBy?->is($fixture['historical_user']))->toBeTrue()
+        ->and($firstResponse->valid_until?->equalTo($version->activation_ends_at))->toBeTrue()
         ->and($revision->submittedBy?->is($fixture['current_first_user']))->toBeTrue()
+        ->and($revision->valid_until?->equalTo($version->activation_ends_at))->toBeTrue()
         ->and($revision->revision_of_id)->toBe(1001)
         ->and($revision->projection?->is($fixture['second_waiver']))->toBeTrue()
         ->and($revision->response_state['answers'][DefaultFormDefinitions::MedicalConditions])->toBe('Updated asthma')
         ->and($revision->response_state['answers'][DefaultFormDefinitions::EmergencyContacts][0]['phone_number'])->toBe('+1 313-555-0100 ext. 42')
         ->and($pending->status)->toBe(FormResponseStatus::Draft)
+        ->and($pending->valid_until)->toBeNull()
         ->and($pending->form_version_id)->toBe($version->id)
         ->and(DB::table($tables->name('answer_groups'))->count())->toBe(4)
         ->and(DB::table($tables->name('answers'))->count())->toBe(59)
         ->and(DB::table('course_forms')->count())->toBe(1)
-        ->and((int) DB::table('course_forms')->value('form_id'))->toBe($waiver->id);
+        ->and((int) DB::table('course_forms')->value('form_id'))->toBe($waiver->id)
+        ->and($courseFormForeignKey['foreign_table'] ?? null)->toBe($tables->name('forms'));
 
     $schema = $version->schema;
     expect(json_encode($schema, JSON_THROW_ON_ERROR))

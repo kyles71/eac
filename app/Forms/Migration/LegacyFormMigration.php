@@ -24,7 +24,9 @@ use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
 use Kyle\FilamentFormBuilder\Enums\FormVersionStatus;
 use Kyle\FilamentFormBuilder\Support\FormDefinition;
+use Kyle\FilamentFormBuilder\Support\FormSchemaDocument;
 use Kyle\FilamentFormBuilder\Support\FormTableRegistry;
+use Kyle\FilamentFormBuilder\Support\FormVersionSettings;
 use RuntimeException;
 
 final readonly class LegacyFormMigration
@@ -125,7 +127,7 @@ final readonly class LegacyFormMigration
         DB::transaction(function () use ($blueprint, $waiver): void {
             $this->insertFormAndVersion($waiver, $blueprint);
             $this->insertFields((int) $waiver->id, $blueprint->schema);
-            $this->insertAssignmentsResponsesAndAnswers($waiver);
+            $this->insertAssignmentsResponsesAndAnswers($waiver, $blueprint->deactivatesAt);
             DB::table($this->tables->name('forms'))
                 ->where('id', $waiver->id)
                 ->update(['active_version_id' => $waiver->id]);
@@ -393,7 +395,8 @@ final readonly class LegacyFormMigration
             'label' => $blueprint->versionLabel,
             'status' => FormVersionStatus::Published->value,
             'draft_marker' => null,
-            'schema' => json_encode($blueprint->schema, JSON_THROW_ON_ERROR),
+            'schema' => json_encode(FormSchemaDocument::normalize($blueprint->schema), JSON_THROW_ON_ERROR),
+            'settings' => json_encode(FormVersionSettings::from($blueprint->settings, 'Student Waiver')->toArray(), JSON_THROW_ON_ERROR),
             'requires_signature' => true,
             'require_completed_again' => true,
             'activation_starts_at' => $blueprint->activatesAt,
@@ -426,7 +429,7 @@ final readonly class LegacyFormMigration
         }
     }
 
-    private function insertAssignmentsResponsesAndAnswers(object $waiver): void
+    private function insertAssignmentsResponsesAndAnswers(object $waiver, ?CarbonInterface $validUntil): void
     {
         $userType = (new User)->getMorphClass();
         $studentType = (new Student)->getMorphClass();
@@ -472,6 +475,7 @@ final readonly class LegacyFormMigration
                     'submitted_by_type' => $userType,
                     'submitted_by_id' => $row->user_id,
                     'submitted_at' => $submitted ? $row->updated_at : null,
+                    'valid_until' => $submitted ? $validUntil : null,
                     'created_at' => $row->created_at,
                     'updated_at' => $row->updated_at,
                 ]);
@@ -626,6 +630,11 @@ final readonly class LegacyFormMigration
         LegalDocumentVersion $healthPolicy,
         LegalDocumentVersion $textPolicy,
     ): array {
+        $validUntil = $this->definitions->studentWaiverBlueprint(
+            at: now(),
+            healthSafetyPolicyReference: EacFormContentProvider::healthSafetyPolicyReference($healthPolicy),
+            textMessageUpdatesPolicyReference: EacFormContentProvider::textMessageUpdatesPolicyReference($textPolicy),
+        )->deactivatesAt;
         $rows = DB::table('form_users')
             ->where('form_id', $waiver->id)
             ->orderBy('student_id')
@@ -662,6 +671,7 @@ final readonly class LegacyFormMigration
                     'projection_id' => (int) $row->responseable_id,
                     'submitted_by_id' => (int) $row->user_id,
                     'submitted_at' => $submitted ? $row->updated_at : null,
+                    'valid_until' => $submitted ? $validUntil : null,
                     'created_at' => $row->created_at,
                     'updated_at' => $row->updated_at,
                 ];
@@ -753,6 +763,7 @@ final readonly class LegacyFormMigration
                 'projection_id' => (int) $row->projection_id,
                 'submitted_by_id' => $row->submitted_by_type === $userType ? (int) $row->submitted_by_id : null,
                 'submitted_at' => $row->submitted_at,
+                'valid_until' => $row->valid_until,
                 'created_at' => $row->created_at,
                 'updated_at' => $row->updated_at,
             ])->all();
@@ -840,6 +851,7 @@ final readonly class LegacyFormMigration
             'health_policy_id' => (int) $healthPolicy->id,
             'text_policy_id' => (int) $textPolicy->id,
             'contract_hash' => $this->contract->hash($blueprint->schema),
+            'settings' => FormVersionSettings::from($blueprint->settings, 'Student Waiver')->toArray(),
             'fields' => collect($this->formDefinition->fields($blueprint->schema))->map(fn (array $field): array => [
                 'key' => $field['key'],
                 'type' => $field['answer_type']->value,
@@ -853,7 +865,7 @@ final readonly class LegacyFormMigration
     {
         $form = DB::table($this->tables->name('forms'))->where('id', $waiver->id)->first();
         $version = DB::table($this->tables->name('versions'))->where('id', $waiver->id)->first();
-        $schema = json_decode($version->schema, true, flags: JSON_THROW_ON_ERROR);
+        $schema = FormSchemaDocument::components(json_decode($version->schema, true, flags: JSON_THROW_ON_ERROR));
         $references = $this->policyIdsFromSchema($schema);
 
         return [
@@ -866,6 +878,7 @@ final readonly class LegacyFormMigration
             'health_policy_id' => $references['health'],
             'text_policy_id' => $references['text'],
             'contract_hash' => $this->contract->hash($schema),
+            'settings' => json_decode($version->settings, true, flags: JSON_THROW_ON_ERROR),
             'fields' => DB::table($this->tables->name('fields'))
                 ->where('form_id', $waiver->id)
                 ->orderBy('key')
