@@ -6,6 +6,11 @@
 @source '../../../vendor/bezhansalleh/filament-panel-switch/resources/views/**/*.blade.php';
 @source '../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
+.fi-page .fi-wi-widget {
+    background: transparent;
+    box-shadow: none;
+}
+
 .eac-table-scrollbar {
     background: rgb(243 244 246);
     border: 1px solid rgb(209 213 219);
@@ -267,5 +272,14 @@
     .filament-fullcalendar .fc-header-toolbar .fc-toolbar-title {
         font-size: 1.5rem;
         text-align: center;
+    }
+
+    .filament-fullcalendar .fc-list-sticky .fc-list-day>th {
+        background-color: var(--color-white);
+        z-index: 1;
+    }
+
+    .dark .filament-fullcalendar .fc-list-sticky .fc-list-day>th {
+        background-color: var(--color-gray-900);
     }
 }

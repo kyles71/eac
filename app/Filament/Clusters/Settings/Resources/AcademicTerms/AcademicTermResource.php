@@ -67,6 +67,14 @@ final class AcademicTermResource extends Resource
             return $data;
         }
 
+        if ($record?->uses_default_dates && ! $record->isUpcoming()) {
+            return [
+                ...$data,
+                'starts_on' => $record->starts_on->toDateString(),
+                'ends_on' => $record->ends_on->toDateString(),
+            ];
+        }
+
         $semesterValue = $data['semester'] ?? $record?->semester;
         $semester = $semesterValue instanceof CourseSemester
             ? $semesterValue

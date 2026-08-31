@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 use App\Models\User;
-use App\Services\StoreCodeAttemptLimiter;
+use App\Services\StoreCodeAttemptLimiterService;
 
 it('limits failed code attempts per user for sixty seconds', function () {
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
-    $attemptLimiter = app(StoreCodeAttemptLimiter::class);
+    $attemptLimiter = app(StoreCodeAttemptLimiterService::class);
 
     foreach (range(1, 5) as $attempt) {
         $attemptLimiter->recordFailure($user);
