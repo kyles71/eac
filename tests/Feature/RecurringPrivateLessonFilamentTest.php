@@ -30,7 +30,9 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Components\Icon;
+use Filament\Schemas\Components\Text;
 use Filament\Support\Enums\IconPosition;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Icons\Heroicon;
@@ -57,6 +59,8 @@ it('lets an owner create a recurring private lesson from the admin resource', fu
         ->toBeLessThan(array_search('repeat_frequency', $formComponentKeys, true));
 
     $createPage
+        ->assertSee('This description is visible to the dancer/parent.')
+        ->assertSee('Every lesson must be scheduled more than 24 hours in advance.')
         ->assertSchemaComponentExists(
             'starts_at',
             checkComponentUsing: fn (DateTimePicker $component): bool => ! $component->hasSeconds()
@@ -237,6 +241,44 @@ it('shows lesson management actions only to owners and removes the waiver action
         ->assertActionDoesNotExist(TestAction::make('transferCoverage')->table($charge))
         ->assertActionDoesNotExist(TestAction::make('issueCredit')->table($charge))
         ->assertActionDoesNotExist(TestAction::make('refund')->table($charge));
+
+    livewire(ChargesRelationManager::class, [
+        'ownerRecord' => $series,
+        'pageClass' => ViewRecurringPrivateLesson::class,
+    ])
+        ->loadTable()
+        ->assertActionVisible(TestAction::make('reschedule')->table($charge))
+        ->mountAction(TestAction::make('reschedule')->table($charge))
+        ->assertActionMounted(TestAction::make('reschedule')->table($charge))
+        ->assertSchemaComponentExists(
+            'reason',
+            'mountedActionSchema0',
+            function (Textarea $textarea): bool {
+                $helper = $textarea->getChildSchema(
+                    Textarea::BELOW_CONTENT_SCHEMA_KEY,
+                )?->getComponents()[0] ?? null;
+
+                return $helper instanceof Text
+                    && $helper->getContent() === 'This reason is visible to the dancer/parent.';
+            },
+        )
+        ->unmountAction()
+        ->assertActionVisible(TestAction::make('removeLesson')->table($charge))
+        ->mountAction(TestAction::make('removeLesson')->table($charge))
+        ->assertActionMounted(TestAction::make('removeLesson')->table($charge))
+        ->assertSchemaComponentExists(
+            'reason',
+            'mountedActionSchema0',
+            function (Textarea $textarea): bool {
+                $helper = $textarea->getChildSchema(
+                    Textarea::BELOW_CONTENT_SCHEMA_KEY,
+                )?->getComponents()[0] ?? null;
+
+                return $helper instanceof Text
+                    && $helper->getContent() === 'This reason is visible to the dancer/parent.';
+            },
+        )
+        ->unmountAction();
 
     livewire(ChargesRelationManager::class, [
         'ownerRecord' => $series,

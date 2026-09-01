@@ -27,6 +27,7 @@ use App\Mail\Types\PaymentPlanScheduleAdjustedEmailType;
 use App\Mail\Types\ProductPurchaseNotificationEmailType;
 use App\Mail\Types\RecurringPrivateLessonAutomaticCancellationEmailType;
 use App\Mail\Types\RecurringPrivateLessonBillingEmailType;
+use App\Mail\Types\RecurringPrivateLessonBillingSummaryEmailType;
 use App\Mail\Types\RecurringPrivateLessonPaymentReminderEmailType;
 use App\Mail\Types\RecurringPrivateLessonRemovedEmailType;
 use App\Mail\Types\RecurringPrivateLessonRescheduledEmailType;
@@ -74,6 +75,7 @@ final class MailManagerServiceProvider extends ServiceProvider
             ProductPurchaseNotificationEmailType::class,
             RecurringPrivateLessonAutomaticCancellationEmailType::class,
             RecurringPrivateLessonBillingEmailType::class,
+            RecurringPrivateLessonBillingSummaryEmailType::class,
             RecurringPrivateLessonPaymentReminderEmailType::class,
             RecurringPrivateLessonRemovedEmailType::class,
             RecurringPrivateLessonRescheduledEmailType::class,

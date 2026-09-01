@@ -229,6 +229,15 @@
     }
 }
 
+.filament-fullcalendar .fc-list-sticky .fc-list-day>th {
+    background-color: var(--color-white);
+    z-index: 1;
+}
+
+.dark .filament-fullcalendar .fc-list-sticky .fc-list-day>th {
+    background-color: var(--color-gray-900);
+}
+
 @media (max-width: 639px) {
     .filament-fullcalendar .fc-header-toolbar {
         display: flex;

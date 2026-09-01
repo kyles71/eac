@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Users\Pages\ListUsers;
+use App\Filament\Admin\Widgets\Reports\EnrollmentOverview;
 use App\Http\Middleware\PersistTablePreferences;
 use App\Models\Course;
 use App\Models\Event;
@@ -252,6 +253,19 @@ it('provides a floating synchronized scrollbar and sticky left action cells for 
         ->toContain('.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child')
         ->toContain('position: sticky')
         ->toContain('inset-inline-start: 0');
+});
+
+it('does not let the theme builder style widget layout wrappers or uncontained sections as cards', function (): void {
+    $themeCss = app(ThemeCssRenderer::class)->render([]);
+    $statsSection = (new EnrollmentOverview)->getSectionContentComponent();
+
+    expect($statsSection->isContained())->toBeFalse()
+        ->and($themeCss)
+        ->not->toContain('.fi-wi-widget')
+        ->not->toContain("\n.fi-section,\n")
+        ->toContain('.fi-section:not(.fi-section-not-contained)')
+        ->toContain('background: var(--fi-theme-builder-card)')
+        ->toContain('box-shadow: var(--fi-theme-builder-shadow)');
 });
 
 it('defaults the calendar to list month on mobile and month grid on larger screens', function (): void {

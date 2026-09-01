@@ -38,7 +38,7 @@ it('persists user table columns and their order across browser sessions', functi
 
     $page = visit('/dancefam/students')
         ->click('Columns')
-        ->check('.fi-ta-col-manager input[id="column-created_at"]');
+        ->check('.fi-ta-col-manager input[id$="-created_at"]');
 
     $page->script(<<<'JS'
         (() => {

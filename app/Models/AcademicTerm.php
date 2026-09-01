@@ -162,14 +162,25 @@ final class AcademicTerm extends Model
 
     private function validateNoOverlap(): void
     {
-        $overlaps = self::query()
+        $overlappingTerm = self::query()
             ->when($this->exists, fn (Builder $query): Builder => $query->whereKeyNot($this->getKey()))
             ->whereDate('starts_on', '<=', $this->ends_on->toDateString())
             ->whereDate('ends_on', '>=', $this->starts_on->toDateString())
-            ->exists();
+            ->first();
 
-        if (! $overlaps) {
+        if (! $overlappingTerm instanceof self) {
             return;
+        }
+
+        if ($this->uses_default_dates) {
+            throw ValidationException::withMessages([
+                'uses_default_dates' => sprintf(
+                    'The recurring default dates overlap %s (%s–%s). Turn off recurring defaults or adjust the overlapping term first.',
+                    $overlappingTerm->display_name,
+                    $overlappingTerm->starts_on->format('M j, Y'),
+                    $overlappingTerm->ends_on->format('M j, Y'),
+                ),
+            ]);
         }
 
         throw ValidationException::withMessages([

@@ -99,8 +99,14 @@ it('permanently removes a scheduled lesson and its empty billing dependencies', 
     assertDatabaseMissing(CartItem::class, ['product_id' => $productId]);
     assertDatabaseMissing(RecurringPrivateLessonBillingPeriod::class, ['id' => $billingPeriodId]);
 
-    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-removed'
-        && $mail->hasTo('household@example.com'));
+    Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
+        $rendered = $mail->getRenderedEmail();
+
+        return $mail->emailTypeKey === 'recurring-private-lesson-removed'
+            && $mail->hasTo('household@example.com')
+            && str_contains($rendered->html, 'Payment resolution:')
+            && str_contains($rendered->html, 'No payment was collected for this lesson.');
+    });
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-removed'
         && $mail->hasTo('teacher@example.com'));
     Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-removed'

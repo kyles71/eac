@@ -94,6 +94,7 @@ final class RecurringPrivateLessonForm
                                 : number_format($record->lesson_price / 100, 2, '.', '')),
                         Textarea::make('course_description')
                             ->label('Description')
+                            ->helperText('This description is visible to the dancer/parent.')
                             ->columnSpanFull()
                             ->formatStateUsing(fn (mixed $state, ?RecurringPrivateLesson $record): mixed => $record?->course->description ?? $state),
                         Select::make('status')
@@ -104,7 +105,7 @@ final class RecurringPrivateLessonForm
                             ->visibleOn('edit'),
                     ]),
                 Section::make('Semester Schedule')
-                    ->description('Holidays are skipped automatically. Every lesson must be scheduled more than 24 hours ahead.')
+                    ->description('Holidays are skipped automatically. Every lesson must be scheduled more than 24 hours in advance.')
                     ->columns(2)
                     ->columnSpanFull()
                     ->visibleOn('create')

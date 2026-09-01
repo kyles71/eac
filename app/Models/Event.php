@@ -323,8 +323,8 @@ final class Event extends Model implements HasMedia
 
             $query->where(function (Builder $query) use ($isStaff, $user): void {
                 $query
-                    ->whereNull('course_id')
-                    ->orWhere('substitute_teacher_id', $user->id)
+                    ->where('substitute_teacher_id', $user->id)
+                    ->orWhereNull('course_id')
                     ->orWhereHas('course', function (Builder $query) use ($isStaff, $user): void {
                         $query
                             ->where('is_private', false)

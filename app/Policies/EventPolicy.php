@@ -93,6 +93,10 @@ final class EventPolicy
 
     private function canAccessPrivateEvent(User $authUser, Event $event): bool
     {
+        if ($event->substitute_teacher_id === $authUser->id) {
+            return true;
+        }
+
         $event->loadMissing('course.recurringPrivateLesson');
 
         if ($event->substitute_teacher_id === $authUser->id) {
@@ -104,10 +108,7 @@ final class EventPolicy
                 || $event->course->recurringPrivateLesson->user_id === $authUser->id;
         }
 
-        return $event->course === null
-            || ! $event->course->is_private
-            || $authUser->hasAnyRole(['owner', 'super_admin'])
-            || $event->course->teachers()->whereKey($authUser->id)->exists();
+        return $event->isAccessibleToAdminUser($authUser);
     }
 
     private function canManagePrivateEvent(User $authUser, Event $event): bool

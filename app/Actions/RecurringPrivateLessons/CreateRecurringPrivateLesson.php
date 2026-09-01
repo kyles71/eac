@@ -7,6 +7,7 @@ namespace App\Actions\RecurringPrivateLessons;
 use App\Enums\CourseSemester;
 use App\Enums\RecurringPrivateLessonStatus;
 use App\Enums\ScheduleFrequency;
+use App\Models\AcademicTerm;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -71,13 +72,18 @@ final readonly class CreateRecurringPrivateLesson
             throw new InvalidArgumentException('The repeat-through date must be on or after the first lesson.');
         }
 
+        $academicTerm = AcademicTerm::query()
+            ->where('semester', $semester)
+            ->where('year', $firstStart->year)
+            ->firstOrFail();
+
         return DB::transaction(function () use (
+            $academicTerm,
             $household,
             $student,
             $teacherIds,
             $name,
             $description,
-            $semester,
             $lessonPrice,
             $firstStart,
             $durationMinutes,
@@ -87,7 +93,7 @@ final readonly class CreateRecurringPrivateLesson
             $course = Course::query()->create([
                 'name' => $name,
                 'description' => $description,
-                'semester' => $semester,
+                'academic_term_id' => $academicTerm->id,
                 'capacity' => 1,
                 'is_private' => true,
             ]);

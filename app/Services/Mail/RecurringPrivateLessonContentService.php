@@ -10,9 +10,32 @@ use App\Models\RecurringPrivateLesson;
 use App\Models\RecurringPrivateLessonBillingPeriod;
 use App\Models\RecurringPrivateLessonCharge;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Collection;
 
 final class RecurringPrivateLessonContentService
 {
+    /**
+     * @param  Collection<int, RecurringPrivateLessonCharge>  $charges
+     * @return array{tokens: array<string, string>, slots: array<string, string>}
+     */
+    public function forBillingSummary(Collection $charges, CarbonInterface $month): array
+    {
+        return [
+            'tokens' => [
+                'app.name' => (string) config('app.name'),
+                'billing.month' => $month->format('F Y'),
+                'billing.lesson_count' => (string) $charges->count(),
+                'billing.total' => format_money((int) $charges->sum('amount')),
+            ],
+            'slots' => [
+                'private-lesson-billing-summary' => view(
+                    'mail.recurring-private-lesson-billing-summary',
+                    ['charges' => $charges],
+                )->render(),
+            ],
+        ];
+    }
+
     /** @return array{tokens: array<string, string>, slots: array<string, string>} */
     public function forBillingPeriod(RecurringPrivateLessonBillingPeriod $billingPeriod): array
     {
@@ -89,6 +112,7 @@ final class RecurringPrivateLessonContentService
         RecurringPrivateLessonCharge $charge,
         CarbonInterface $previousStartsAt,
         string $reason,
+        string $paymentResolution = '',
     ): array {
         $charge->loadMissing([
             'event',
@@ -106,6 +130,7 @@ final class RecurringPrivateLessonContentService
                     ->format('F j, Y \a\t g:i A'),
                 'lesson.starts_at' => $startsAt?->format('F j, Y \a\t g:i A') ?? '',
                 'lesson.amount' => format_money($charge->amount),
+                'lesson.payment_resolution' => $paymentResolution,
                 'change.reason' => $reason,
             ],
             'slots' => [],

@@ -494,8 +494,7 @@ final class Billing extends Page
                     TextEntry::make("refund_{$refund->id}_date")
                         ->label('Refund Date')
                         ->state($refund->completed_at)
-                        ->dateTime('M j, Y g:i A')
-                        ->timezone($this->displayTimezone()),
+                        ->dateTime(),
                     TextEntry::make("refund_{$refund->id}_amount")
                         ->label('Refund Amount')
                         ->state($refund->formattedAmount()),

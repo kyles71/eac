@@ -41,6 +41,32 @@ final class RecurringPrivateLessonCoverage extends Model
 
     public function netPaidAmount(): int
     {
-        return $this->restricted_credit_amount + $this->credit_amount + $this->stripe_amount;
+        return min(
+            $this->netLessonPrice(),
+            $this->restricted_credit_amount + $this->credit_amount + $this->stripe_amount,
+        );
+    }
+
+    public function restorableCreditAmount(): int
+    {
+        return min(
+            $this->netLessonPrice(),
+            $this->restricted_credit_amount + $this->credit_amount,
+        );
+    }
+
+    public function refundableStripeAmount(): int
+    {
+        return min(
+            $this->stripe_amount,
+            max(0, $this->netLessonPrice() - $this->restorableCreditAmount()),
+        );
+    }
+
+    private function netLessonPrice(): int
+    {
+        $this->loadMissing('charge');
+
+        return max(0, $this->charge->amount - min($this->discount_amount, $this->charge->amount));
     }
 }
