@@ -16,6 +16,8 @@ final class AdminNavigation
 
     public const string Competition = 'Competition';
 
+    public const string Reports = 'Reports';
+
     public const string Tools = 'Tools';
 
     public const int PeopleUsers = 10;
@@ -27,6 +29,8 @@ final class AdminNavigation
     public const int PeopleRoles = 40;
 
     public const int ScheduleCourses = 10;
+
+    public const int ScheduleRecurringPrivateLessons = 15;
 
     public const int ScheduleEvents = 20;
 
@@ -58,6 +62,10 @@ final class AdminNavigation
 
     public const int CompetitionTeams = 20;
 
+    public const int ReportsEnrollment = 10;
+
+    public const int ReportsInstructor = 20;
+
     public const int ToolsSettings = 10;
 
     public const int ToolsMailManager = 20;
@@ -77,6 +85,8 @@ final class AdminNavigation
     public const int SettingsAcademicTerms = 45;
 
     public const int SettingsAcademicTermDefaults = 46;
+
+    public const int SettingsReporting = 47;
 
     public const int SettingsDashboardMessages = 50;
 

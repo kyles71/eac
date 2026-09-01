@@ -51,6 +51,10 @@ final readonly class CancelEvent
                 throw new DomainException('Events with an end time can only be cancelled before they end. Events without an end time can only be cancelled before they start.');
             }
 
+            if ($lockedEvent->recurringPrivateLessonCharge()->exists()) {
+                throw new DomainException('Use the recurring private lesson Remove action so paid lessons can be credited or refunded.');
+            }
+
             Gate::forUser($cancelledBy)->authorize('cancel', $lockedEvent);
 
             $lockedEvent->update([

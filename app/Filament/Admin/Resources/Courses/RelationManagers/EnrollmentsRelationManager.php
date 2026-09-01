@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\RelationManagers;
 
 use App\Filament\Admin\Resources\Enrollments\Schemas\EnrollmentForm;
+use App\Models\Course;
+use App\Models\User;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -23,7 +25,12 @@ final class EnrollmentsRelationManager extends RelationManager
 
     public function isReadOnly(): bool
     {
-        return false;
+        $course = $this->getOwnerRecord();
+        $user = auth()->user();
+
+        return $course instanceof Course
+            && $course->is_private
+            && (! $user instanceof User || ! $user->hasAnyRole(['owner', 'super_admin']));
     }
 
     public function form(Schema $schema): Schema

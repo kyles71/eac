@@ -135,6 +135,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(Enrollment::class);
     }
 
+    /** @return HasMany<SavedReportView, $this> */
+    public function savedReportViews(): HasMany
+    {
+        return $this->hasMany(SavedReportView::class);
+    }
+
+    /** @return HasMany<ReportExport, $this> */
+    public function reportExports(): HasMany
+    {
+        return $this->hasMany(ReportExport::class);
+    }
+
     /** @return HasMany<CourseHold, $this> */
     public function courseHolds(): HasMany
     {
@@ -190,9 +202,23 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasManyThrough(PaymentPlan::class, Order::class);
     }
 
+    /** @return HasMany<CartItem, $this> */
     public function cartItems(): HasMany
     {
         return $this->hasMany(CartItem::class);
+    }
+
+    /** @return HasMany<RecurringPrivateLesson, $this> */
+    public function recurringPrivateLessons(): HasMany
+    {
+        return $this->hasMany(RecurringPrivateLesson::class);
+    }
+
+    /** @return BelongsToMany<Product, $this> */
+    public function assignedProducts(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'product_user_assignment')
+            ->withTimestamps();
     }
 
     public function giftCardsPurchased(): HasMany

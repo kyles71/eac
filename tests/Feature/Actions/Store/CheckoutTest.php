@@ -134,7 +134,31 @@ it('fails when a cart product gains unmet purchase eligibility requirements', fu
 
     $action = app(CreateOrder::class);
     $action->handle($this->user);
-})->throws(InvalidArgumentException::class, '"Competition Jacket" requires qualifying course enrollment and/or competition team membership.');
+})->throws(InvalidArgumentException::class, '"Competition Jacket" is limited to its configured purchase audience.');
+
+it('requires every configured group category unless the customer is directly assigned', function () {
+    $requiredCourse = Course::factory()->create();
+    $season = CompetitionSeason::factory()->current()->create();
+    $unmatchedTeam = CompetitionTeam::factory()->for($season, 'season')->create();
+    $this->product->requiredCourses()->attach($requiredCourse);
+    $this->product->requiredCompetitionTeams()->attach($unmatchedTeam);
+
+    Enrollment::factory()->create([
+        'course_id' => $requiredCourse->id,
+        'user_id' => $this->user->id,
+    ]);
+    CartItem::factory()->create([
+        'user_id' => $this->user->id,
+        'product_id' => $this->product->id,
+    ]);
+
+    expect(fn () => app(CreateOrder::class)->handle($this->user))
+        ->toThrow(InvalidArgumentException::class, 'limited to its configured purchase audience');
+
+    $this->product->assignedUsers()->attach($this->user);
+
+    expect(app(CreateOrder::class)->handle($this->user))->toBeInstanceOf(Order::class);
+});
 
 it('checks early access window timing at checkout', function () {
     $this->product->update([

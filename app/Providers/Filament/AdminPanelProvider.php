@@ -31,6 +31,11 @@ final class AdminPanelProvider extends BasePanelProvider
 
         return $panel
             ->brandName('EAC Admin')
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('15s')
+            ->spaUrlExceptions([
+                '*/admin/report-exports/*/download*',
+            ])
             ->strictAuthorization()
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->renderHook(
@@ -50,6 +55,8 @@ final class AdminPanelProvider extends BasePanelProvider
                     ->icon(Heroicon::OutlinedCreditCard),
                 NavigationGroup::make(AdminNavigation::Competition)
                     ->icon(Heroicon::OutlinedSparkles),
+                NavigationGroup::make(AdminNavigation::Reports)
+                    ->icon(Heroicon::OutlinedChartBar),
                 NavigationGroup::make(AdminNavigation::Tools)
                     ->icon(Heroicon::OutlinedCog6Tooth),
             ])

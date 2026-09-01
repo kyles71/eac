@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -24,11 +25,14 @@ final class AcademicTerm extends Model
 
     protected $casts = [
         'id' => 'integer',
+        'academic_year_id' => 'integer',
         'semester' => CourseSemester::class,
         'year' => 'integer',
         'starts_on' => 'date',
         'ends_on' => 'date',
         'uses_default_dates' => 'boolean',
+        'target_enrollments' => 'integer',
+        'stretch_goal_enrollments' => 'integer',
     ];
 
     public static function comparisonDate(?CarbonInterface $date = null): string
@@ -44,6 +48,12 @@ final class AcademicTerm extends Model
         return Attribute::make(
             get: fn (): string => $this->semester->getLabel().' '.$this->year,
         );
+    }
+
+    /** @return BelongsTo<AcademicYear, $this> */
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
     }
 
     /** @return HasMany<Course, $this> */
@@ -96,7 +106,12 @@ final class AcademicTerm extends Model
     protected static function booted(): void
     {
         self::saving(function (AcademicTerm $academicTerm): void {
+            $academicTerm->academic_year_id = AcademicYear::forTerm(
+                $academicTerm->semester,
+                $academicTerm->year,
+            )->id;
             $academicTerm->validateDateRange();
+            $academicTerm->validateEnrollmentGoals();
             $academicTerm->validateNoOverlap();
         });
 
@@ -122,16 +137,50 @@ final class AcademicTerm extends Model
         ]);
     }
 
+    private function validateEnrollmentGoals(): void
+    {
+        if ($this->target_enrollments !== null && $this->target_enrollments < 0) {
+            throw ValidationException::withMessages([
+                'target_enrollments' => 'The target enrollment goal must be zero or greater.',
+            ]);
+        }
+
+        if ($this->stretch_goal_enrollments !== null && $this->stretch_goal_enrollments < 0) {
+            throw ValidationException::withMessages([
+                'stretch_goal_enrollments' => 'The stretch enrollment goal must be zero or greater.',
+            ]);
+        }
+
+        if ($this->target_enrollments !== null
+            && $this->stretch_goal_enrollments !== null
+            && $this->stretch_goal_enrollments < $this->target_enrollments) {
+            throw ValidationException::withMessages([
+                'stretch_goal_enrollments' => 'The stretch goal must be at least the target goal.',
+            ]);
+        }
+    }
+
     private function validateNoOverlap(): void
     {
-        $overlaps = self::query()
+        $overlappingTerm = self::query()
             ->when($this->exists, fn (Builder $query): Builder => $query->whereKeyNot($this->getKey()))
             ->whereDate('starts_on', '<=', $this->ends_on->toDateString())
             ->whereDate('ends_on', '>=', $this->starts_on->toDateString())
-            ->exists();
+            ->first();
 
-        if (! $overlaps) {
+        if (! $overlappingTerm instanceof self) {
             return;
+        }
+
+        if ($this->uses_default_dates) {
+            throw ValidationException::withMessages([
+                'uses_default_dates' => sprintf(
+                    'The recurring default dates overlap %s (%s–%s). Turn off recurring defaults or adjust the overlapping term first.',
+                    $overlappingTerm->display_name,
+                    $overlappingTerm->starts_on->format('M j, Y'),
+                    $overlappingTerm->ends_on->format('M j, Y'),
+                ),
+            ]);
         }
 
         throw ValidationException::withMessages([

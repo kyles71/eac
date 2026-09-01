@@ -19,7 +19,7 @@ final class CoursePolicy
 
     public function view(User $authUser, Course $course): bool
     {
-        return $authUser->can('View:Course');
+        return $authUser->can('View:Course') && $this->canAccessPrivateCourse($authUser, $course);
     }
 
     public function viewAttendance(User $authUser, Course $course): bool
@@ -38,17 +38,27 @@ final class CoursePolicy
 
     public function update(User $authUser, Course $course): bool
     {
-        return $authUser->can('Update:Course');
+        return $authUser->can('Update:Course')
+            && (! $course->is_private || $authUser->hasAnyRole(['owner', 'super_admin']));
     }
 
     public function delete(User $authUser, Course $course): bool
     {
         return $authUser->can('Delete:Course')
+            && $course->recurringPrivateLesson()->doesntExist()
+            && (! $course->is_private || $authUser->hasAnyRole(['owner', 'super_admin']))
             && ($course->product?->canBeDeleted() ?? true);
     }
 
     public function deleteAny(User $authUser): bool
     {
         return $authUser->can('DeleteAny:Course');
+    }
+
+    private function canAccessPrivateCourse(User $authUser, Course $course): bool
+    {
+        return ! $course->is_private
+            || $authUser->hasAnyRole(['owner', 'super_admin'])
+            || $course->teachers()->whereKey($authUser->id)->exists();
     }
 }

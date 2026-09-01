@@ -43,6 +43,7 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
         'id' => 'integer',
         'academic_term_id' => 'integer',
         'capacity' => 'integer',
+        'is_private' => 'boolean',
         'event_reminder_processed_at' => 'datetime',
     ];
 
@@ -205,6 +206,7 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
         return null;
     }
 
+    /** @return BelongsToMany<User, $this> */
     public function teachers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
@@ -230,9 +232,16 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
         return $this->morphOne(Product::class, 'productable');
     }
 
+    /** @return HasMany<Enrollment, $this> */
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
+    }
+
+    /** @return HasOne<RecurringPrivateLesson, $this> */
+    public function recurringPrivateLesson(): HasOne
+    {
+        return $this->hasOne(RecurringPrivateLesson::class);
     }
 
     /** @return HasMany<CourseHoldSeat, $this> */

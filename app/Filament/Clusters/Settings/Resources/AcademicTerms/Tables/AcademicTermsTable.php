@@ -21,17 +21,25 @@ final class AcademicTermsTable
     {
         return $table
             ->columns([
+                TextColumn::make('academicYear.display_name')
+                    ->label('Academic Year')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('display_name')
                     ->label('Term')
-                    ->state(fn (AcademicTerm $record): string => $record->display_name),
+                    ->state(fn (AcademicTerm $record): string => $record->display_name)
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('starts_on')
                     ->label('Starts On')
                     ->date()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('ends_on')
                     ->label('Ends On')
                     ->date()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('status')
                     ->state(fn (AcademicTerm $record): string => $record->status())
                     ->badge()
@@ -39,14 +47,27 @@ final class AcademicTermsTable
                         'Current' => 'success',
                         'Upcoming' => 'info',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
                 IconColumn::make('uses_default_dates')
                     ->label('Recurring Defaults')
-                    ->boolean(),
+                    ->boolean()
+                    ->toggleable(),
                 TextColumn::make('courses_count')
                     ->label('Courses')
                     ->counts('courses')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('target_enrollments')
+                    ->label('Target')
+                    ->numeric()
+                    ->placeholder('Not set')
+                    ->toggleable(),
+                TextColumn::make('stretch_goal_enrollments')
+                    ->label('Stretch Goal')
+                    ->numeric()
+                    ->placeholder('Not set')
+                    ->toggleable(),
             ])
             ->filters([
                 //
@@ -54,7 +75,7 @@ final class AcademicTermsTable
             ->recordActions([
                 ActionGroup::make([
                     EditAction::make()
-                        ->mutateDataUsing(fn (array $data): array => AcademicTermResource::prepareFormData($data)),
+                        ->mutateDataUsing(fn (array $data, AcademicTerm $record): array => AcademicTermResource::prepareFormData($data, $record)),
                     DeleteAction::make(),
                 ]),
             ])

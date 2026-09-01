@@ -140,11 +140,9 @@ final class ProductForm
                     ->schema([
                         DateTimePicker::make('available_from')
                             ->label('Available From')
-                            ->timezone(self::displayTimezone())
                             ->helperText('Leave blank to make this product available immediately when active.'),
                         DateTimePicker::make('available_until')
                             ->label('Available Until')
-                            ->timezone(self::displayTimezone())
                             ->after('available_from')
                             ->helperText('Leave blank to keep this product available indefinitely while active.'),
                         Repeater::make('earlyAccessWindows')
@@ -160,11 +158,9 @@ final class ProductForm
                             ->schema([
                                 DateTimePicker::make('available_from')
                                     ->label('Available From')
-                                    ->timezone(self::displayTimezone())
                                     ->required(),
                                 DateTimePicker::make('available_until')
                                     ->label('Available Until')
-                                    ->timezone(self::displayTimezone())
                                     ->after('available_from'),
                                 Select::make('audiences')
                                     ->label('Audiences')
@@ -185,12 +181,13 @@ final class ProductForm
                             ->collapsible()
                             ->columnSpanFull(),
                     ]),
-                Section::make('Purchase Eligibility')
-                    ->columns(2)
+                Section::make('Purchase Audience')
+                    ->description('Course and Competition Team requirements are cumulative: a customer must match any selected Course and any selected Team. Specific Users always qualify as overrides. Leave all three empty to make this Product available to everyone while its store schedule is open.')
+                    ->columns(3)
                     ->columnSpanFull()
                     ->schema([
                         Select::make('requiredCourses')
-                            ->label('Requires Enrollment In At Least One Of')
+                            ->label('Courses')
                             ->relationship(
                                 name: 'requiredCourses',
                                 titleAttribute: 'name',
@@ -199,9 +196,9 @@ final class ProductForm
                             ->multiple()
                             ->searchable(['name'])
                             ->preload()
-                            ->helperText('Leave empty for no course requirement. When teams are also selected, both requirements must be met.'),
+                            ->helperText('Enrollment in any selected Course satisfies the Course requirement.'),
                         Select::make('requiredCompetitionTeams')
-                            ->label('Requires Membership In At Least One Of')
+                            ->label('Competition Teams')
                             ->relationship(
                                 name: 'requiredCompetitionTeams',
                                 titleAttribute: 'name',
@@ -230,7 +227,12 @@ final class ProductForm
                             ->getOptionLabelFromRecordUsing(
                                 fn (CompetitionTeam $record): string => "{$record->season->name}: {$record->name} ({$record->season->status()})",
                             )
-                            ->helperText('Leave empty for no team requirement. Student households and assigned team staff qualify; ended seasons do not. When courses are also selected, both requirements must be met.'),
+                            ->helperText('Membership in any selected Team satisfies the Team requirement. Student households and Team staff qualify; ended seasons do not.'),
+                        Select::make('assignedUsers')
+                            ->label('Specific Users')
+                            ->multiple()
+                            ->userRelationship('assignedUsers')
+                            ->helperText('Selected Users qualify directly, even when they do not meet Course or Competition Team requirements.'),
                     ]),
                 Section::make('Purchaser Questions & Notifications')
                     ->columnSpanFull()
@@ -368,11 +370,6 @@ final class ProductForm
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
-    }
-
-    private static function displayTimezone(): string
-    {
-        return (string) config('app.display_timezone', config('app.timezone'));
     }
 
     private static function requiresFixedPrice(Get $get): bool

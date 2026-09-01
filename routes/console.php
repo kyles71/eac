@@ -23,6 +23,13 @@ Schedule::command('academic-terms:sync')
     ->name('sync-academic-terms')
     ->description('Ensure current and upcoming academic terms exist');
 
+Schedule::command('reports:prune-exports')
+    ->dailyAt('00:20')
+    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+    ->withoutOverlapping()
+    ->name('prune-report-exports')
+    ->description('Delete expired private report export files and records');
+
 Schedule::command('course-holds:cancel-expired-checkouts')
     ->everyMinute()
     ->withoutOverlapping()
@@ -75,6 +82,26 @@ Schedule::command('cart:send-abandoned-reminders')
     ->withoutOverlapping()
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
+
+Schedule::command('private-lessons:send-payment-reminders')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-recurring-private-lesson-payment-reminders')
+    ->description('Send seven-day and two-day recurring private lesson payment reminders');
+
+Schedule::command('private-lessons:send-billing-summary')
+    ->dailyAt('08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping()
+    ->name('send-recurring-private-lesson-billing-summary')
+    ->description('Send next month\'s unbilled recurring private lessons seven days before month-end');
+
+Schedule::command('private-lessons:cancel-unpaid')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('cancel-unpaid-recurring-private-lessons')
+    ->description('Cancel unpaid recurring private lessons at the 24-hour cutoff');
 
 Schedule::command('backup:clean', ['--disable-notifications'])
     ->dailyAt('03:10')

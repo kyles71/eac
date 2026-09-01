@@ -128,8 +128,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                     ->placeholder('-'),
                 TextColumn::make('start_time')
                     ->label('Next Meeting Time')
-                    ->dateTime('M j, Y g:i A')
-                    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+                    ->dateTime()
                     ->searchable(false)
                     ->sortable(false)
                     ->placeholder('-'),
@@ -193,7 +192,6 @@ final class ViewStudent extends ViewRecord implements HasTable
                     ->label('Last Updated')
                     ->state(fn () => $this->student()->currentMedicalWaiver()?->updated_at)
                     ->dateTime()
-                    ->timezone((string) config('app.display_timezone', config('app.timezone')))
                     ->placeholder('Never'),
                 Actions::make([
                     Action::make('viewMedicalWaiver')
@@ -487,11 +485,9 @@ final class ViewStudent extends ViewRecord implements HasTable
                             ->formatStateUsing(fn (Event $record): ?HtmlString => CourseStaffPresenter::render($record->course))
                             ->placeholder('-'),
                         DateTimePicker::make('start_time')
-                            ->label('Starts At')
-                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                            ->label('Starts At'),
                         DateTimePicker::make('end_time')
-                            ->label('Ends At')
-                            ->timezone((string) config('app.display_timezone', config('app.timezone'))),
+                            ->label('Ends At'),
                         TextInput::make('focus')
                             ->label('Focus / Theme'),
                         Textarea::make('description')

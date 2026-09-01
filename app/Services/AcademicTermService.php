@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\CourseSemester;
 use App\Models\AcademicTerm;
+use App\Models\AcademicYear;
 use App\Settings\AcademicTermSettings;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -19,11 +20,19 @@ final readonly class AcademicTermService
     public function sync(?CarbonInterface $date = null): int
     {
         $comparisonDate = AcademicTerm::comparisonDate($date);
-        $currentYear = (int) mb_substr($comparisonDate, 0, 4);
+        $currentCalendarYear = (int) mb_substr($comparisonDate, 0, 4);
+        $fallStartsOn = $this->startDate($currentCalendarYear, $this->settings->fall_starts_on);
+        $currentAcademicYear = $comparisonDate >= $fallStartsOn->toDateString()
+            ? $currentCalendarYear
+            : $currentCalendarYear - 1;
         $changes = [];
 
-        foreach ([$currentYear, $currentYear + 1] as $year) {
-            foreach (CourseSemester::cases() as $semester) {
+        foreach ([$currentAcademicYear, $currentAcademicYear + 1] as $academicYearStartsIn) {
+            $academicYear = AcademicYear::query()->firstOrCreate([
+                'starts_in_year' => $academicYearStartsIn,
+            ]);
+
+            foreach ($this->termYearsForAcademicYear($academicYearStartsIn) as [$semester, $year]) {
                 $academicTerm = AcademicTerm::query()->firstOrNew([
                     'semester' => $semester,
                     'year' => $year,
@@ -38,6 +47,7 @@ final readonly class AcademicTermService
 
                 $academicTerm->fill([
                     ...$this->defaultDates($semester, $year),
+                    'academic_year_id' => $academicYear->id,
                     'uses_default_dates' => true,
                 ]);
 
@@ -84,6 +94,30 @@ final readonly class AcademicTermService
                 'ends_on' => $nextWinterSpringStartsOn->subDay()->toDateString(),
             ],
         };
+    }
+
+    public function findOverlappingTermForDefaultDates(
+        CourseSemester $semester,
+        int $year,
+        ?AcademicTerm $except = null,
+    ): ?AcademicTerm {
+        $dates = $this->defaultDates($semester, $year);
+
+        return AcademicTerm::query()
+            ->when($except?->exists, fn ($query) => $query->whereKeyNot($except->getKey()))
+            ->whereDate('starts_on', '<=', $dates['ends_on'])
+            ->whereDate('ends_on', '>=', $dates['starts_on'])
+            ->first();
+    }
+
+    /** @return list<array{CourseSemester, int}> */
+    private function termYearsForAcademicYear(int $startsInYear): array
+    {
+        return [
+            [CourseSemester::Fall, $startsInYear],
+            [CourseSemester::WinterSpring, $startsInYear + 1],
+            [CourseSemester::Summer, $startsInYear + 1],
+        ];
     }
 
     private function startDate(int $year, string $monthAndDay): CarbonImmutable

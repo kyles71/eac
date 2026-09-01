@@ -40,7 +40,7 @@ final class StudentsTable
             ->recordUrl(fn (Student $record): string => \App\Filament\User\Resources\Students\StudentResource::getUrl('view', ['record' => $record]))
             ->recordActions([
                 DeleteAction::make()
-                    ->visible(fn (Student $record): bool => $record->enrollments()->doesntExist())
+                    ->visible(fn (Student $record): bool => $record->canBeDeleted())
                     ->successNotification(
                         Notification::make()
                             ->title('Student deleted')

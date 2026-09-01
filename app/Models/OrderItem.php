@@ -24,12 +24,17 @@ final class OrderItem extends Model
         'quantity' => 'integer',
         'unit_price' => 'integer',
         'total_price' => 'integer',
+        'discount_allocated' => 'integer',
+        'restricted_credit_allocated' => 'integer',
+        'credit_allocated' => 'integer',
+        'stripe_allocated' => 'integer',
         'custom_gift_card_amount' => 'integer',
         'status' => OrderItemStatus::class,
         'fulfillment_workflow' => FulfillmentWorkflow::class,
         'purchase_notification_requested' => 'boolean',
     ];
 
+    /** @return BelongsTo<Order, $this> */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);

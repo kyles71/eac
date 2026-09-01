@@ -34,6 +34,7 @@ final class CourseFactory extends Factory
             'name' => fake()->randomElement(['Tap', 'Acro', 'Ballet', 'Jazz']).' '.fake()->randomElement([1, 2, 3, 4]),
             'description' => fake()->text(),
             'capacity' => fake()->randomElement([10, 15]),
+            'is_private' => false,
             'guest_teacher' => null,
         ];
     }

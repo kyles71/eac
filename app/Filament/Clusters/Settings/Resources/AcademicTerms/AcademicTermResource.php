@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 final class AcademicTermResource extends Resource
 {
@@ -60,19 +61,35 @@ final class AcademicTermResource extends Resource
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    public static function prepareFormData(array $data): array
+    public static function prepareFormData(array $data, ?AcademicTerm $record = null): array
     {
         if (! ($data['uses_default_dates'] ?? false)) {
             return $data;
         }
 
-        $semester = $data['semester'] instanceof CourseSemester
-            ? $data['semester']
-            : CourseSemester::from((string) $data['semester']);
+        if ($record?->uses_default_dates && ! $record->isUpcoming()) {
+            return [
+                ...$data,
+                'starts_on' => $record->starts_on->toDateString(),
+                'ends_on' => $record->ends_on->toDateString(),
+            ];
+        }
+
+        $semesterValue = $data['semester'] ?? $record?->semester;
+        $semester = $semesterValue instanceof CourseSemester
+            ? $semesterValue
+            : (is_string($semesterValue) ? CourseSemester::tryFrom($semesterValue) : null);
+        $year = filter_var($data['year'] ?? $record?->year, FILTER_VALIDATE_INT);
+
+        if (! $semester instanceof CourseSemester || $year === false) {
+            throw ValidationException::withMessages([
+                'semester' => 'A valid semester and calendar year are required to use recurring default dates.',
+            ]);
+        }
 
         return [
             ...$data,
-            ...app(AcademicTermService::class)->defaultDates($semester, (int) $data['year']),
+            ...app(AcademicTermService::class)->defaultDates($semester, $year),
         ];
     }
 }

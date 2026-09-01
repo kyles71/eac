@@ -13,6 +13,7 @@ use App\Filament\Admin\Resources\GiftCardTypes\GiftCardTypeResource;
 use App\Filament\Admin\Resources\LegalDocuments\LegalDocumentResource;
 use App\Filament\Admin\Resources\ManagedBanners\ManagedBannerResource;
 use App\Filament\Admin\Resources\PaymentPlanTemplates\PaymentPlanTemplateResource;
+use App\Filament\Admin\Resources\RecurringPrivateLessons\RecurringPrivateLessonResource;
 use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
@@ -50,6 +51,7 @@ it('keeps resources out of global search when they have no record-level view abi
         ->and(LegalDocumentResource::canGloballySearch())->toBeFalse()
         ->and(ManagedBannerResource::canGloballySearch())->toBeFalse()
         ->and(PaymentPlanTemplateResource::canGloballySearch())->toBeFalse()
+        ->and(RecurringPrivateLessonResource::canGloballySearch())->toBeFalse()
         ->and(StudentCommunicationResource::canGloballySearch())->toBeFalse();
 });
 

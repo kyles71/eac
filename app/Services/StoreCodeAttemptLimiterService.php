@@ -7,7 +7,7 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 
-final readonly class StoreCodeAttemptLimiter
+final readonly class StoreCodeAttemptLimiterService
 {
     private const int MAX_ATTEMPTS = 5;
 
