@@ -15,8 +15,10 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\LocationNameGuidance;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\TextInput;
 
 use function Pest\Livewire\livewire;
 
@@ -240,6 +242,14 @@ it('offers only student invitees and defaults new events to the staff calendar',
         ->mountAction(TestAction::make('createFulfillmentEvent')->table($orderItem))
         ->assertSchemaComponentDoesNotExist('user_ids', 'mountedActionSchema0')
         ->assertSchemaComponentExists('student_ids', 'mountedActionSchema0')
+        ->assertSchemaComponentExists(
+            'name',
+            'mountedActionSchema0',
+            fn (TextInput $input): bool => str_contains(
+                (string) $input->getChildSchema(TextInput::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString(),
+                LocationNameGuidance::HELP_TEXT,
+            ),
+        )
         ->assertSchemaComponentStateSet('calendar_id', $staffCalendar->id, 'mountedActionSchema0');
 
     livewire(OrderFulfillment::class)

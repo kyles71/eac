@@ -18,6 +18,7 @@ use App\Models\Event;
 use App\Models\OrderItem;
 use App\Models\OrderItemFulfillment;
 use App\Models\User;
+use App\Support\LocationNameGuidance;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
@@ -474,6 +475,7 @@ final class OrderFulfillment extends Page implements HasTable
                     TextInput::make('name')
                         ->label('Event Name')
                         ->default($orderItem === null ? 'Private Lesson' : $orderItem->product->name)
+                        ->helperText(LocationNameGuidance::HELP_TEXT)
                         ->required()
                         ->maxLength(255),
                     Select::make('calendar_id')
