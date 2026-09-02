@@ -61,13 +61,20 @@ final readonly class CancelEvent
                 'cancellation_reason' => $reason,
                 'cancelled_at' => now(),
                 'cancelled_by_user_id' => $cancelledBy->id,
-                'substitute_needed_at' => null,
             ]);
 
             $lockedEvent->substituteRequests()
                 ->where('status', EventSubstituteRequestStatus::Pending)
                 ->update([
                     'status' => EventSubstituteRequestStatus::Withdrawn,
+                    'closed_at' => now(),
+                    'closed_by_user_id' => $cancelledBy->id,
+                    'closure_reason' => 'The event was cancelled.',
+                ]);
+
+            $lockedEvent->substituteCoverages()
+                ->active()
+                ->update([
                     'closed_at' => now(),
                     'closed_by_user_id' => $cancelledBy->id,
                     'closure_reason' => 'The event was cancelled.',

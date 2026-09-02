@@ -8,8 +8,10 @@ use App\Actions\Events\ManageEventSubstitution;
 use App\Enums\EventSubstituteCoverageStatus;
 use App\Enums\EventSubstituteRequestReason;
 use App\Models\Event;
+use App\Models\EventSubstituteCoverage;
 use App\Models\EventSubstituteRequest;
 use App\Models\User;
+use App\Services\TeacherScheduleConflictService;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -19,6 +21,7 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Throwable;
 
 final class EventSubstituteActions
@@ -59,34 +62,55 @@ final class EventSubstituteActions
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->color('warning')
             ->authorize('update')
-            ->visible(fn (Event $record): bool => $record->substitute_needed_at === null
-                && $record->substitute_teacher_id === null
+            ->visible(fn (Event $record): bool => $record->teachers()->exists()
                 && ! $record->isCancelled()
                 && ! $record->isCompletedAt())
-            ->requiresConfirmation()
-            ->action(fn (Event $record): mixed => self::run(
-                fn (User $user): Event => app(ManageEventSubstitution::class)->markNeeded($record, $user),
-                'Event marked as needing a substitute',
-            ))
+            ->schema([
+                Select::make('covered_teacher_id')
+                    ->label('Teacher Being Covered')
+                    ->options(fn (Event $record): array => self::regularTeacherOptions($record, excludeActive: true))
+                    ->required(),
+            ])
+            ->action(function (Event $record, array $data): mixed {
+                $coveredTeacher = User::query()->find($data['covered_teacher_id'] ?? null);
+
+                if (! $coveredTeacher instanceof User) {
+                    Notification::make()->title('Teacher not found')->danger()->send();
+
+                    return null;
+                }
+
+                return self::run(
+                    fn (User $user): EventSubstituteCoverage => app(ManageEventSubstitution::class)->markNeeded(
+                        $record,
+                        $coveredTeacher,
+                        $user,
+                    ),
+                    'Event marked as needing a substitute',
+                );
+            })
             ->after(self::refreshRecord(...));
     }
 
     public static function request(): Action
     {
         return Action::make('requestEventSubstitute')
-            ->label(fn (Event $record): string => $record->substitute_teacher_id === null
-                ? 'Request Substitute'
-                : 'Request Replacement')
+            ->label('Request Substitute')
+            ->modalHeading('Request Substitute')
             ->icon(Heroicon::OutlinedUserPlus)
             ->color('primary')
             ->authorize('update')
             ->visible(fn (Event $record): bool => ! $record->isCancelled()
                 && ! $record->isCompletedAt()
-                && ! $record->pendingSubstituteRequest() instanceof EventSubstituteRequest)
+                && $record->teachers()->exists())
             ->schema([
+                Select::make('covered_teacher_id')
+                    ->label('Teacher Being Covered')
+                    ->options(fn (Event $record): array => self::regularTeacherOptions($record))
+                    ->required(),
                 Select::make('teacher_id')
-                    ->label('Teacher')
-                    ->options(self::teacherOptions(...))
+                    ->label('Substitute Teacher')
+                    ->options(fn (Event $record): array => self::substituteOptions($record))
                     ->searchable()
                     ->preload()
                     ->required(),
@@ -116,6 +140,7 @@ final class EventSubstituteActions
                 return self::run(
                     fn (User $user): EventSubstituteRequest => app(ManageEventSubstitution::class)->requestSubstitute(
                         $record,
+                        User::query()->findOrFail($data['covered_teacher_id']),
                         $teacher,
                         $user,
                         self::substituteRequestReason($data),
@@ -135,9 +160,14 @@ final class EventSubstituteActions
             ->authorize('update')
             ->visible(fn (Event $record): bool => $record->pendingSubstituteRequest() instanceof EventSubstituteRequest
                 && ! $record->isCompletedAt())
-            ->requiresConfirmation()
-            ->action(function (Event $record): mixed {
-                $request = $record->pendingSubstituteRequest();
+            ->schema([
+                Select::make('request_id')
+                    ->label('Pending Request')
+                    ->options(fn (Event $record): array => self::pendingRequestOptions($record))
+                    ->required(),
+            ])
+            ->action(function (Event $record, array $data): mixed {
+                $request = $record->substituteRequests()->pending()->find($data['request_id'] ?? null);
 
                 return $request instanceof EventSubstituteRequest
                     ? self::run(
@@ -157,11 +187,17 @@ final class EventSubstituteActions
             ->color('warning')
             ->authorize('update')
             ->visible(fn (Event $record): bool => $record->pendingSubstituteRequest() instanceof EventSubstituteRequest)
-            ->schema([self::reasonField()])
+            ->schema([
+                Select::make('coverage_id')
+                    ->label('Teacher Coverage')
+                    ->options(fn (Event $record): array => self::coverageOptions($record, pendingOnly: true))
+                    ->required(),
+                self::reasonField(),
+            ])
             ->requiresConfirmation()
-            ->action(fn (Event $record, array $data): mixed => self::run(
+            ->action(fn (array $data): mixed => self::run(
                 fn (User $user): EventSubstituteRequest => app(ManageEventSubstitution::class)->withdrawPending(
-                    $record,
+                    EventSubstituteCoverage::query()->findOrFail($data['coverage_id']),
                     $user,
                     (string) ($data['reason'] ?? ''),
                 ),
@@ -177,10 +213,20 @@ final class EventSubstituteActions
             ->icon(Heroicon::OutlinedCheckCircle)
             ->color('gray')
             ->authorize('update')
-            ->visible(fn (Event $record): bool => $record->currentSubstituteRequest()?->hasReleaseRequest() === true)
-            ->requiresConfirmation()
-            ->action(fn (Event $record): mixed => self::run(
-                fn (User $user): EventSubstituteRequest => app(ManageEventSubstitution::class)->dismissReleaseRequest($record, $user),
+            ->visible(fn (Event $record): bool => $record->currentSubstituteCoverages()->contains(
+                fn (EventSubstituteCoverage $coverage): bool => $coverage->currentSubstituteRequest()?->hasReleaseRequest() === true,
+            ))
+            ->schema([
+                Select::make('coverage_id')
+                    ->label('Teacher Coverage')
+                    ->options(fn (Event $record): array => self::coverageOptions($record, releaseOnly: true))
+                    ->required(),
+            ])
+            ->action(fn (array $data): mixed => self::run(
+                fn (User $user): EventSubstituteRequest => app(ManageEventSubstitution::class)->dismissReleaseRequest(
+                    EventSubstituteCoverage::query()->findOrFail($data['coverage_id']),
+                    $user,
+                ),
                 'Substitute release request dismissed',
             ))
             ->after(self::refreshRecord(...));
@@ -193,13 +239,21 @@ final class EventSubstituteActions
             ->icon(Heroicon::OutlinedUserMinus)
             ->color('danger')
             ->authorize('requestSubstituteRelease')
-            ->visible(fn (Event $record): bool => ! $record->currentSubstituteRequest()?->hasReleaseRequest())
-            ->schema([self::reasonField()])
+            ->visible(fn (Event $record): bool => auth()->user() instanceof User
+                && $record->isConfirmedSubstitute(auth()->user())
+                && ! $record->isCompletedAt())
+            ->schema([
+                Select::make('coverage_id')
+                    ->label('Teacher Covered')
+                    ->options(fn (Event $record): array => self::coverageOptionsForCurrentSubstitute($record))
+                    ->required(),
+                self::reasonField(),
+            ])
             ->modalDescription('You remain assigned until staff removes or replaces you.')
             ->requiresConfirmation()
-            ->action(fn (Event $record, array $data): mixed => self::run(
+            ->action(fn (array $data): mixed => self::run(
                 fn (User $user): EventSubstituteRequest => app(ManageEventSubstitution::class)->requestRelease(
-                    $record,
+                    EventSubstituteCoverage::query()->findOrFail($data['coverage_id']),
                     $user,
                     (string) ($data['reason'] ?? ''),
                 ),
@@ -215,13 +269,20 @@ final class EventSubstituteActions
             ->icon(Heroicon::OutlinedUserMinus)
             ->color('danger')
             ->authorize('update')
-            ->visible(fn (Event $record): bool => $record->substitute_teacher_id !== null && ! $record->isCompletedAt())
-            ->schema([self::reasonField()])
+            ->visible(fn (Event $record): bool => $record->activeSubstituteCoverages()
+                ->whereNotNull('substitute_teacher_id')->exists() && ! $record->isCompletedAt())
+            ->schema([
+                Select::make('coverage_id')
+                    ->label('Teacher Coverage')
+                    ->options(fn (Event $record): array => self::coverageOptions($record, confirmedOnly: true))
+                    ->required(),
+                self::reasonField(),
+            ])
             ->modalDescription('The teacher will lose access immediately and the event will remain marked as needing a substitute.')
             ->requiresConfirmation()
-            ->action(fn (Event $record, array $data): mixed => self::run(
-                fn (User $user): Event => app(ManageEventSubstitution::class)->removeCurrent(
-                    $record,
+            ->action(fn (array $data): mixed => self::run(
+                fn (User $user): EventSubstituteCoverage => app(ManageEventSubstitution::class)->removeCurrent(
+                    EventSubstituteCoverage::query()->findOrFail($data['coverage_id']),
                     $user,
                     (string) ($data['reason'] ?? ''),
                 ),
@@ -237,12 +298,18 @@ final class EventSubstituteActions
             ->icon(Heroicon::OutlinedCheck)
             ->color('gray')
             ->authorize('update')
-            ->visible(fn (Event $record): bool => $record->substitute_needed_at !== null && ! $record->isCompletedAt())
-            ->schema([self::reasonField()])
+            ->visible(fn (Event $record): bool => $record->activeSubstituteCoverages()->exists() && ! $record->isCompletedAt())
+            ->schema([
+                Select::make('coverage_id')
+                    ->label('Teacher Coverage')
+                    ->options(fn (Event $record): array => self::coverageOptions($record))
+                    ->required(),
+                self::reasonField(),
+            ])
             ->requiresConfirmation()
-            ->action(fn (Event $record, array $data): mixed => self::run(
-                fn (User $user): Event => app(ManageEventSubstitution::class)->removeCurrent(
-                    $record,
+            ->action(fn (array $data): mixed => self::run(
+                fn (User $user): EventSubstituteCoverage => app(ManageEventSubstitution::class)->removeCurrent(
+                    EventSubstituteCoverage::query()->findOrFail($data['coverage_id']),
                     $user,
                     (string) ($data['reason'] ?? ''),
                     false,
@@ -263,6 +330,10 @@ final class EventSubstituteActions
                 && auth()->user() instanceof User
                 && auth()->user()->hasAnyRole(['owner', 'super_admin']))
             ->schema([
+                Select::make('covered_teacher_id')
+                    ->label('Teacher Covered')
+                    ->options(fn (Event $record): array => self::regularTeacherOptions($record))
+                    ->required(),
                 Select::make('teacher_id')
                     ->label('Teacher Who Substituted')
                     ->placeholder('No substitute')
@@ -271,7 +342,6 @@ final class EventSubstituteActions
                     ->preload(),
                 self::reasonField('Audit Reason'),
             ])
-            ->fillForm(fn (Event $record): array => ['teacher_id' => $record->substitute_teacher_id])
             ->action(function (Event $record, array $data): mixed {
                 $teacher = filled($data['teacher_id'] ?? null)
                     ? User::query()->find($data['teacher_id'])
@@ -283,6 +353,7 @@ final class EventSubstituteActions
                         $teacher instanceof User ? $teacher : null,
                         $user,
                         (string) ($data['reason'] ?? ''),
+                        User::query()->findOrFail($data['covered_teacher_id']),
                     ),
                     'Historical substitute record corrected',
                 );
@@ -300,6 +371,111 @@ final class EventSubstituteActions
             ->get()
             ->mapWithKeys(fn (User $user): array => [$user->id => $user->fullName])
             ->all();
+    }
+
+    /** @return array<int, string> */
+    private static function substituteOptions(Event $event): array
+    {
+        $availability = app(TeacherScheduleConflictService::class);
+
+        return $availability->availableSubstituteTeachers($event)
+            ->mapWithKeys(fn (User $teacher): array => [$teacher->id => $teacher->fullName])
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private static function regularTeacherOptions(Event $event, bool $excludeActive = false): array
+    {
+        $query = $event->teachers();
+
+        if ($excludeActive) {
+            $query->whereNotIn('users.id', $event->activeSubstituteCoverages()
+                ->whereNotNull('covered_teacher_id')
+                ->pluck('covered_teacher_id'));
+        }
+
+        return $query->get()
+            ->mapWithKeys(fn (User $teacher): array => [$teacher->id => $teacher->fullName])
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private static function pendingRequestOptions(Event $event): array
+    {
+        return $event->substituteRequests()
+            ->pending()
+            ->with(['teacher', 'coverage.coveredTeacher'])
+            ->get()
+            ->mapWithKeys(fn (EventSubstituteRequest $request): array => [
+                $request->id => ($request->event_substitute_coverage_id !== null
+                    ? $request->coverage->coveredTeacherName()
+                    : 'Original teacher not recorded')
+                    .' → '.($request->teacher_id !== null ? $request->teacher->fullName : 'Unknown teacher'),
+            ])
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private static function coverageOptions(
+        Event $event,
+        bool $pendingOnly = false,
+        bool $releaseOnly = false,
+        bool $confirmedOnly = false,
+    ): array {
+        $query = $event->activeSubstituteCoverages()
+            ->with(['coveredTeacher', 'substituteTeacher', 'requests.teacher']);
+
+        if ($pendingOnly) {
+            $query->whereHas('requests', fn (Builder $query): Builder => $query
+                ->where('status', \App\Enums\EventSubstituteRequestStatus::Pending));
+        }
+
+        if ($releaseOnly) {
+            $query->whereHas('requests', fn (Builder $query): Builder => $query
+                ->where('status', \App\Enums\EventSubstituteRequestStatus::Accepted)
+                ->whereNotNull('release_requested_at'));
+        }
+
+        if ($confirmedOnly) {
+            $query->whereNotNull('substitute_teacher_id');
+        }
+
+        return $query->get()
+            ->mapWithKeys(fn (EventSubstituteCoverage $coverage): array => [
+                $coverage->id => self::coverageOptionLabel($coverage),
+            ])
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    private static function coverageOptionsForCurrentSubstitute(Event $event): array
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return [];
+        }
+
+        return $event->activeSubstituteCoverages()
+            ->where('substitute_teacher_id', $user->id)
+            ->with(['coveredTeacher', 'substituteTeacher', 'requests'])
+            ->get()
+            ->filter(fn (EventSubstituteCoverage $coverage): bool => ! $coverage->currentSubstituteRequest()?->hasReleaseRequest())
+            ->mapWithKeys(fn (EventSubstituteCoverage $coverage): array => [
+                $coverage->id => $coverage->coveredTeacherName(),
+            ])
+            ->all();
+    }
+
+    private static function coverageOptionLabel(EventSubstituteCoverage $coverage): string
+    {
+        $coveredTeacher = $coverage->coveredTeacherName();
+        $pendingRequest = $coverage->pendingRequest();
+        $replacement = $coverage->substituteTeacherName()
+            ?? ($pendingRequest?->teacher_id !== null ? $pendingRequest->teacher->fullName : null)
+            ?? 'Uncovered';
+
+        return $coveredTeacher.' → '.$replacement;
     }
 
     private static function reasonField(string $label = 'Reason'): Textarea
@@ -351,7 +527,7 @@ final class EventSubstituteActions
 
     private static function coverageLabel(?Event $event): string
     {
-        return 'Substitute: '.self::coverageStatus($event)->getLabel();
+        return 'Substitute: '.($event?->substituteCoverageLabel() ?? EventSubstituteCoverageStatus::NotNeeded->getLabel());
     }
 
     private static function coverageStatus(?Event $event): EventSubstituteCoverageStatus

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Actions\Store\RecordOrderItemFulfillment;
 use App\Enums\FulfillmentWorkflow;
 use App\Enums\OrderItemStatus;
@@ -12,10 +13,16 @@ use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\ProductQuestionAnswer;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\LocationNameGuidance;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 
 use function Pest\Livewire\livewire;
 
@@ -76,11 +83,113 @@ it('bulk changes existing outstanding items to scheduled-event fulfillment', fun
 });
 
 it('attaches an event and confirms attendees from the queue', function (): void {
+    Mail::fake();
     $order = Order::factory()->completed()->create();
     $student = Student::factory()->create(['user_id' => $order->user_id]);
     $orderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
         'quantity' => 1,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]);
+    $event = Event::factory()->standalone()->create([
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $teacher = User::factory()->isTeacher()->create(['email' => 'teacher@example.com']);
+    app(ManageEventTeacherAssignments::class)->assignCustom($event, [$teacher->id]);
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->callAction(TestAction::make('attachFulfillmentEvent')->table($orderItem), [
+            'unit_numbers' => [1],
+            'event_id' => $event->id,
+            'student_ids' => [$student->id],
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Event attached and fulfillment recorded');
+
+    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled)
+        ->and($event->orderItemFulfillments()->count())->toBe(1)
+        ->and($event->orderItemFulfillments()->sole()->students->modelKeys())->toBe([$student->id])
+        ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue()
+        ->and($event->attendees()->whereMorphedTo('attendee', $order->user)->exists())->toBeFalse();
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-scheduled'
+        && $mail->hasTo($order->user->email));
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-scheduled'
+        && $mail->hasTo('teacher@example.com'));
+});
+
+it('reopens scheduled fulfillment and explains that the reason is user visible', function (): void {
+    $order = Order::factory()->completed()->create();
+    $student = Student::factory()->create(['user_id' => $order->user_id]);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'question' => 'Lesson focus',
+        'answer' => 'Turns',
+    ]);
+    $event = Event::factory()->standalone()->create([
+        'name' => 'Avery Private Lesson (MAIN CAMPUS)',
+        'start_time' => now()->addWeek(),
+        'end_time' => now()->addWeek()->addHour(),
+    ]);
+    $teacher = User::factory()->isTeacher()->create(['email' => 'teacher@example.com']);
+    app(ManageEventTeacherAssignments::class)->assignCustom($event, [$teacher->id]);
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    $fulfillment = app(RecordOrderItemFulfillment::class)->handle(
+        orderItem: $orderItem,
+        unitNumbers: [1],
+        fulfilledBy: $actor,
+        source: $event,
+        studentIds: [$student->id],
+    )->sole();
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->mountAction(TestAction::make('reopenFulfillment')->table($orderItem))
+        ->assertSchemaComponentExists(
+            'reason',
+            'mountedActionSchema0',
+            fn (Textarea $textarea): bool => str_contains(
+                (string) $textarea->getChildSchema(Textarea::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString(),
+                'Reason is visible to user / parent.',
+            ),
+        );
+
+    Mail::fake();
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->callAction(TestAction::make('reopenFulfillment')->table($orderItem), [
+            'fulfillment_ids' => [$fulfillment->id],
+            'reason' => 'Teacher conflict; EAC will contact you with options.',
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Fulfillment reopened');
+
+    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending)
+        ->and($fulfillment->refresh()->void_reason)->toBe('Teacher conflict; EAC will contact you with options.');
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-reopened'
+        && $mail->hasTo($order->user->email)
+        && str_contains($mail->getRenderedEmail()->html, 'Teacher conflict; EAC will contact you with options.'));
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-reopened'
+        && $mail->hasTo('teacher@example.com'));
+});
+
+it('does not offer an unstaffed standalone event for fulfillment', function (): void {
+    $order = Order::factory()->completed()->create();
+    $student = Student::factory()->create(['user_id' => $order->user_id]);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
         'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
     ]);
     $event = Event::factory()->standalone()->create([
@@ -95,13 +204,9 @@ it('attaches an event and confirms attendees from the queue', function (): void 
             'event_id' => $event->id,
             'student_ids' => [$student->id],
         ])
-        ->assertHasNoFormErrors()
-        ->assertNotified('Event attached and fulfillment recorded');
+        ->assertHasFormErrors(['event_id']);
 
-    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled)
-        ->and($event->orderItemFulfillments()->count())->toBe(1)
-        ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue()
-        ->and($event->attendees()->whereMorphedTo('attendee', $order->user)->exists())->toBeFalse();
+    expect($orderItem->refresh()->fulfilledQuantity())->toBe(0);
 });
 
 it('creates a standalone event and links the selected units', function (): void {
@@ -113,6 +218,7 @@ it('creates a standalone event and links the selected units', function (): void 
         'quantity' => 1,
         'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
     ]);
+    $teacher = User::factory()->isTeacher()->create();
 
     livewire(OrderFulfillment::class)
         ->loadTable()
@@ -124,6 +230,7 @@ it('creates a standalone event and links the selected units', function (): void 
             'end_time' => now()->addDays(2)->addHour(),
             'description' => null,
             'details' => 'Work on turns.',
+            'teacher_ids' => [$teacher->id],
             'student_ids' => [$student->id],
         ])
         ->assertHasNoFormErrors()
@@ -134,9 +241,67 @@ it('creates a standalone event and links the selected units', function (): void 
     expect($event->course_id)->toBeNull()
         ->and($event->calendar_id)->toBe($calendar->id)
         ->and($event->orderItemFulfillments()->count())->toBe(1)
+        ->and($event->teachers->modelKeys())->toBe([$teacher->id])
         ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue()
         ->and($event->attendees()->whereMorphedTo('attendee', $order->user)->exists())->toBeFalse()
         ->and($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled);
+});
+
+it('requires staffing before creating a fulfillment event', function (): void {
+    $calendar = Calendar::query()->where('slug', Calendar::SLUG_STAFF)->firstOrFail();
+    $order = Order::factory()->completed()->create();
+    $student = Student::factory()->create(['user_id' => $order->user_id]);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]);
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->callAction(TestAction::make('createFulfillmentEvent')->table($orderItem), [
+            'unit_numbers' => [1],
+            'name' => 'Unstaffed Private Lesson',
+            'calendar_id' => $calendar->id,
+            'start_time' => now()->addDays(2),
+            'end_time' => now()->addDays(2)->addHour(),
+            'teacher_ids' => [],
+            'student_ids' => [$student->id],
+        ])
+        ->assertHasFormErrors(['teacher_ids']);
+
+    expect(Event::query()->where('name', 'Unstaffed Private Lesson')->exists())->toBeFalse()
+        ->and($orderItem->refresh()->fulfilledQuantity())->toBe(0);
+});
+
+it('creates one staffed event atomically for shared fulfillment', function (): void {
+    $calendar = Calendar::query()->where('slug', Calendar::SLUG_STAFF)->firstOrFail();
+    $teacher = User::factory()->isTeacher()->create();
+    $student = Student::factory()->create();
+    $orderItems = collect([1, 2])->map(fn (): OrderItem => OrderItem::factory()->create([
+        'order_id' => Order::factory()->completed(),
+        'quantity' => 1,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]));
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->selectTableRecords($orderItems)
+        ->callAction(TestAction::make('createFulfillmentEventBulk')->table()->bulk(), [
+            'name' => 'Shared Private Lesson',
+            'calendar_id' => $calendar->id,
+            'start_time' => now()->addDays(3),
+            'end_time' => now()->addDays(3)->addHour(),
+            'teacher_ids' => [$teacher->id],
+            'student_ids' => [$student->id],
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Shared event created and fulfillment recorded');
+
+    $event = Event::query()->where('name', 'Shared Private Lesson')->sole();
+
+    expect($event->teachers->modelKeys())->toBe([$teacher->id])
+        ->and($event->orderItemFulfillments)->toHaveCount(2)
+        ->and($orderItems->every(fn (OrderItem $orderItem): bool => $orderItem->refresh()->fulfilledQuantity() === 1))->toBeTrue();
 });
 
 it('offers only student invitees and defaults new events to the staff calendar', function (): void {
@@ -153,6 +318,14 @@ it('offers only student invitees and defaults new events to the staff calendar',
         ->mountAction(TestAction::make('createFulfillmentEvent')->table($orderItem))
         ->assertSchemaComponentDoesNotExist('user_ids', 'mountedActionSchema0')
         ->assertSchemaComponentExists('student_ids', 'mountedActionSchema0')
+        ->assertSchemaComponentExists(
+            'name',
+            'mountedActionSchema0',
+            fn (TextInput $input): bool => str_contains(
+                (string) $input->getChildSchema(TextInput::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString(),
+                LocationNameGuidance::HELP_TEXT,
+            ),
+        )
         ->assertSchemaComponentStateSet('calendar_id', $staffCalendar->id, 'mountedActionSchema0');
 
     livewire(OrderFulfillment::class)

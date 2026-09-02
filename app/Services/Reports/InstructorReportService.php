@@ -15,6 +15,7 @@ use App\Models\EmergencyContact;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
+use App\Models\EventSubstituteCoverage;
 use App\Models\Role;
 use App\Models\Student;
 use App\Models\StudentWaiver;
@@ -65,18 +66,26 @@ final readonly class InstructorReportService
             Event::query()
                 ->whereNotNull('cancelled_at')
                 ->whereBetween('start_time', [$startsAt, $endsAt])
-                ->whereHas('course', fn (Builder $query): Builder => $query
-                    ->where('academic_term_id', $term->id)),
+                ->where(function (Builder $query) use ($term): void {
+                    $query
+                        ->whereNull('course_id')
+                        ->orWhereHas('course', fn (Builder $query): Builder => $query
+                            ->where('academic_term_id', $term->id));
+                }),
             $user,
         )->count();
         $needsCoverage = $this->applyEventAccessConstraint(
             Event::query()
                 ->whereNull('cancelled_at')
-                ->whereNotNull('substitute_needed_at')
-                ->whereNull('substitute_teacher_id')
+                ->whereHas('activeSubstituteCoverages', fn (Builder $query): Builder => $query
+                    ->whereNull('substitute_teacher_id'))
                 ->whereBetween('start_time', [$startsAt, $endsAt])
-                ->whereHas('course', fn (Builder $query): Builder => $query
-                    ->where('academic_term_id', $term->id)),
+                ->where(function (Builder $query) use ($term): void {
+                    $query
+                        ->whereNull('course_id')
+                        ->orWhereHas('course', fn (Builder $query): Builder => $query
+                            ->where('academic_term_id', $term->id));
+                }),
             $user,
         )->count();
         $occurredEvents = $this->applyEventAccessConstraint(
@@ -84,15 +93,23 @@ final readonly class InstructorReportService
                 ->whereNull('cancelled_at')
                 ->whereBetween('start_time', [$startsAt, $endsAt])
                 ->where('start_time', '<=', now())
-                ->whereHas('course', fn (Builder $query): Builder => $query
-                    ->where('academic_term_id', $term->id))
-                ->with(['course.enrollments', 'attendees']),
+                ->where(function (Builder $query) use ($term): void {
+                    $query
+                        ->whereNull('course_id')
+                        ->orWhereHas('course', fn (Builder $query): Builder => $query
+                            ->where('academic_term_id', $term->id));
+                })
+                ->with(['course.enrollments', 'attendees', 'substituteCoverages']),
             $user,
         )->get();
         $attendanceOpportunities = 0;
         $attended = 0;
 
         foreach ($occurredEvents as $event) {
+            if (! $event->course instanceof Course) {
+                continue;
+            }
+
             $studentIds = $event->course->enrollments
                 ->pluck('student_id')
                 ->filter()
@@ -122,7 +139,7 @@ final readonly class InstructorReportService
             'cancelled_event_count' => $cancelledEvents,
             'overall_attendance_rate' => $this->percentageValue($attended, $attendanceOpportunities),
             'overall_sub_rate' => $this->percentageValue(
-                $occurredEvents->whereNotNull('substitute_needed_at')->count(),
+                $occurredEvents->filter(fn (Event $event): bool => $event->substituteCoverages->isNotEmpty())->count(),
                 $occurredEvents->count(),
             ),
         ];
@@ -409,45 +426,41 @@ final readonly class InstructorReportService
         $instructorId = $this->instructorFilterId($filters, $user);
         $coverageStatus = $this->filterValue($filters, 'coverage_status');
         $events = $this->eventQuery($user, $filters)
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNotNull('substitute_needed_at')
-                    ->orWhereNotNull('substitute_teacher_id')
-                    ->orWhereHas('substituteRequests');
-            })
-            ->with('substituteRequests')
+            ->whereHas('substituteCoverages')
+            ->with(['substituteCoverages.coveredTeacher', 'substituteCoverages.substituteTeacher', 'substituteCoverages.requests'])
             ->get();
         $rows = [];
 
         foreach ($events as $event) {
-            $status = $event->substituteCoverageStatus();
+            foreach ($event->substituteCoverages as $coverage) {
+                $status = $this->coverageSlotStatus($coverage);
 
-            if (filled($coverageStatus) && $status->value !== $coverageStatus) {
-                continue;
+                if (filled($coverageStatus) && $status['value'] !== $coverageStatus) {
+                    continue;
+                }
+
+                if ($instructorId !== null
+                    && $coverage->covered_teacher_id !== $instructorId
+                    && $coverage->substitute_teacher_id !== $instructorId) {
+                    continue;
+                }
+
+                $startsAt = $event->start_time->copy()->timezone($this->displayTimezone());
+                $endsAt = $event->end_time->copy()->timezone($this->displayTimezone());
+                $rows[] = [
+                    '_key' => "coverage_{$coverage->id}",
+                    'date' => $startsAt->format('Y-m-d'),
+                    'time' => $startsAt->format('g:i A').'–'.$endsAt->format('g:i A'),
+                    'course_name' => $this->eventCourseName($event),
+                    'academic_term' => $this->eventAcademicTermName($event),
+                    'assigned_instructors' => $coverage->coveredTeacherName()
+                        .' (of '.$this->assignedEventInstructorNames($event).')',
+                    'reason' => $this->substituteCoverageReason($coverage),
+                    'confirmed_substitute' => $coverage->substituteTeacherName() ?? '—',
+                    'coverage_status' => $status['label'],
+                    'hours' => $this->durationHours($event),
+                ];
             }
-
-            $assignedInstructorIds = $event->course->teachers->modelKeys();
-
-            if ($instructorId !== null
-                && $event->substitute_teacher_id !== $instructorId
-                && ! in_array($instructorId, $assignedInstructorIds, true)) {
-                continue;
-            }
-
-            $startsAt = $event->start_time->copy()->timezone($this->displayTimezone());
-            $endsAt = $event->end_time->copy()->timezone($this->displayTimezone());
-            $rows[] = [
-                '_key' => "event_{$event->id}",
-                'date' => $startsAt->format('Y-m-d'),
-                'time' => $startsAt->format('g:i A').'–'.$endsAt->format('g:i A'),
-                'course_name' => $event->course->name,
-                'academic_term' => $event->course->academicTerm->display_name ?? 'Unassigned',
-                'assigned_instructors' => $this->assignedInstructorNames($event->course),
-                'reason' => $this->substituteReason($event),
-                'confirmed_substitute' => $event->substituteTeacher->fullName ?? '—',
-                'coverage_status' => $status->getLabel(),
-                'hours' => $this->durationHours($event),
-            ];
         }
 
         return new ReportDataset($headers, $rows);
@@ -680,21 +693,27 @@ final readonly class InstructorReportService
         $instructorId = $this->instructorFilterId($filters, $user);
         $hoursByInstructor = collect();
         $events = $this->eventQuery($user, $filters)
-            ->whereNotNull('substitute_needed_at')
+            ->whereHas('substituteCoverages')
+            ->with('substituteCoverages.coveredTeacher')
             ->get();
 
         foreach ($events as $event) {
-            foreach ($this->courseAssignmentInstructors($event->course, $user) as $instructor) {
-                if ($instructorId !== null && $instructor['user_id'] !== $instructorId) {
+            foreach ($event->substituteCoverages as $coverage) {
+                $coveredTeacher = $coverage->coveredTeacher;
+
+                if (! $coveredTeacher instanceof User
+                    || ($instructorId !== null && $coveredTeacher->id !== $instructorId)
+                    || ($user->hasCourseRestrictedAdminAccess() && $coveredTeacher->id !== $user->id)) {
                     continue;
                 }
 
-                $current = $hoursByInstructor->get($instructor['key'], [
-                    'instructor_name' => $instructor['name'],
+                $key = "user_{$coveredTeacher->id}";
+                $current = $hoursByInstructor->get($key, [
+                    'instructor_name' => $coveredTeacher->fullName,
                     'hours' => 0.0,
                 ]);
                 $current['hours'] += $this->durationHours($event);
-                $hoursByInstructor->put($instructor['key'], $current);
+                $hoursByInstructor->put($key, $current);
             }
         }
 
@@ -873,30 +892,21 @@ final readonly class InstructorReportService
             'reason' => 'Reason',
             'substitute_instructor' => 'Sub Instructor Name',
         ];
-        $events = $this->courseQuery($user, $this->academicTermId($filters))
-            ->with([
-                'teachers:id,first_name,last_name',
-                'events' => fn ($query) => $query
-                    ->whereNull('cancelled_at')
-                    ->where(function (Builder $query): void {
-                        $query
-                            ->whereNotNull('substitute_needed_at')
-                            ->orWhereNotNull('substitute_teacher_id')
-                            ->orWhereHas('substituteRequests');
-                    })
-                    ->with(['substituteTeacher:id,first_name,last_name', 'substituteRequests'])
-                    ->orderBy('start_time'),
-            ])
-            ->get()
-            ->flatMap->events;
-        $rows = $events->map(fn (Event $event): array => [
-            '_key' => "event_{$event->id}",
-            'original_instructor' => $this->assignedInstructorNames($event->course),
-            'course_name' => $event->course->name,
-            'event_date' => $this->formatDateTime($event->start_time),
-            'reason' => $this->substituteReason($event),
-            'substitute_instructor' => $event->substituteTeacher->fullName ?? '—',
-        ])->all();
+        $events = $this->eventQuery($user, $filters)
+            ->whereHas('substituteCoverages')
+            ->with(['substituteCoverages.coveredTeacher', 'substituteCoverages.substituteTeacher', 'substituteCoverages.requests'])
+            ->get();
+        $rows = $events->flatMap(fn (Event $event): Collection => $event->substituteCoverages
+            ->map(fn (EventSubstituteCoverage $coverage): array => [
+                '_key' => "coverage_{$coverage->id}",
+                'original_instructor' => $coverage->coveredTeacherName(),
+                'course_name' => $this->eventCourseName($event),
+                'event_date' => $this->formatDateTime($event->start_time),
+                'reason' => $this->substituteCoverageReason($coverage),
+                'substitute_instructor' => $coverage->substituteTeacherName() ?? '—',
+            ]))
+            ->values()
+            ->all();
 
         return new ReportDataset($headers, $rows);
     }
@@ -936,9 +946,9 @@ final readonly class InstructorReportService
                     'instructor_name' => $instructor['name'],
                     'starts_at' => $startsAt,
                     'ends_at' => $endsAt,
-                    'course_name' => $event->course->name,
-                    'enrollment_count' => (int) $event->course->enrollments_count,
-                    'academic_term' => $event->course->academicTerm->display_name ?? 'Unassigned',
+                    'course_name' => $this->eventCourseName($event),
+                    'enrollment_count' => $event->course_id !== null ? (int) $event->course->enrollments_count : 0,
+                    'academic_term' => $this->eventAcademicTermName($event),
                     'role' => $instructor['role'],
                     'hours' => $this->durationHours($event),
                     'status' => $this->eventStatus($event),
@@ -957,21 +967,44 @@ final readonly class InstructorReportService
     {
         [$startsAt, $endsAt] = $this->dateRange($filters);
         $termId = $this->integerFilterValue($filters, 'academic_term_id');
+        $term = $termId === null ? null : AcademicTerm::query()->find($termId);
+        $termStartsAt = $term instanceof AcademicTerm
+            ? CarbonImmutable::parse($term->starts_on->toDateString(), $this->displayTimezone())
+                ->startOfDay()
+                ->timezone((string) config('app.timezone', 'UTC'))
+            : null;
+        $termEndsAt = $term instanceof AcademicTerm
+            ? CarbonImmutable::parse($term->ends_on->toDateString(), $this->displayTimezone())
+                ->endOfDay()
+                ->timezone((string) config('app.timezone', 'UTC'))
+            : null;
         $query = Event::query()
             ->whereNull('cancelled_at')
             ->whereNotNull('start_time')
             ->whereNotNull('end_time')
             ->whereBetween('start_time', [$startsAt, $endsAt])
             ->when($termId !== null, fn (Builder $query): Builder => $query
-                ->whereHas('course', fn (Builder $query): Builder => $query
-                    ->where('academic_term_id', $termId)))
+                ->where(function (Builder $query) use ($termEndsAt, $termId, $termStartsAt): void {
+                    $query
+                        ->where(function (Builder $query) use ($termEndsAt, $termStartsAt): void {
+                            $query
+                                ->whereNull('course_id')
+                                ->when(
+                                    $termStartsAt instanceof CarbonInterface && $termEndsAt instanceof CarbonInterface,
+                                    fn (Builder $query): Builder => $query->whereBetween('start_time', [$termStartsAt, $termEndsAt]),
+                                );
+                        })
+                        ->orWhereHas('course', fn (Builder $query): Builder => $query
+                            ->where('academic_term_id', $termId));
+                }))
             ->with([
                 'course' => function (Relation $relation): void {
                     $relation->getQuery()->withCount('enrollments');
                 },
                 'course.academicTerm',
-                'course.teachers:id,first_name,last_name',
-                'substituteTeacher:id,first_name,last_name',
+                'teachers:id,first_name,last_name',
+                'substituteCoverages.coveredTeacher:id,first_name,last_name',
+                'substituteCoverages.substituteTeacher:id,first_name,last_name',
             ])
             ->orderBy('start_time')
             ->orderBy('id');
@@ -993,30 +1026,48 @@ final readonly class InstructorReportService
     /** @return list<array{key: string, user_id: int|null, name: string, role: string}> */
     private function creditedInstructors(Event $event, User $user): array
     {
-        if ($event->substituteTeacher instanceof User) {
-            $instructors = [[
-                'key' => "user_{$event->substituteTeacher->id}",
-                'user_id' => $event->substituteTeacher->id,
-                'name' => $event->substituteTeacher->fullName,
+        $coveredTeacherIds = $event->substituteCoverages
+            ->filter(fn (EventSubstituteCoverage $coverage): bool => $coverage->isActive()
+                || $coverage->substitute_teacher_id !== null)
+            ->pluck('covered_teacher_id')
+            ->filter()
+            ->map(fn (mixed $id): int => (int) $id);
+        $instructors = $event->teachers
+            ->reject(fn (User $instructor): bool => $coveredTeacherIds->contains($instructor->id))
+            ->map(fn (User $instructor): array => [
+                'key' => "user_{$instructor->id}",
+                'user_id' => $instructor->id,
+                'name' => $instructor->fullName,
+                'role' => 'Assigned',
+            ])
+            ->values()
+            ->all();
+
+        foreach ($event->substituteCoverages->whereNotNull('substitute_teacher_id') as $coverage) {
+            if (! $coverage->substituteTeacher instanceof User) {
+                continue;
+            }
+
+            $instructors[] = [
+                'key' => "user_{$coverage->substituteTeacher->id}",
+                'user_id' => $coverage->substituteTeacher->id,
+                'name' => $coverage->substituteTeacher->fullName,
                 'role' => 'Substitute',
-            ]];
-        } elseif (filled($event->course->guest_teacher)) {
+            ];
+        }
+
+        $instructors = collect($instructors)
+            ->unique(fn (array $instructor): string => $instructor['key'])
+            ->values()
+            ->all();
+
+        if ($instructors === [] && $event->course_id !== null && filled($event->course->guest_teacher)) {
             $instructors = [[
                 'key' => 'guest_'.md5(mb_strtolower((string) $event->course->guest_teacher)),
                 'user_id' => null,
                 'name' => (string) $event->course->guest_teacher,
                 'role' => 'Guest',
             ]];
-        } else {
-            $instructors = $event->course->teachers
-                ->map(fn (User $instructor): array => [
-                    'key' => "user_{$instructor->id}",
-                    'user_id' => $instructor->id,
-                    'name' => $instructor->fullName,
-                    'role' => 'Assigned',
-                ])
-                ->values()
-                ->all();
         }
 
         if ($instructors === [] && ! $user->hasCourseRestrictedAdminAccess()) {
@@ -1086,14 +1137,63 @@ final readonly class InstructorReportService
         return filled($names) ? $names : 'Unassigned';
     }
 
-    private function substituteReason(Event $event): string
+    private function assignedEventInstructorNames(Event $event): string
     {
-        $requests = $event->substituteRequests->sortByDesc('id');
+        $names = $event->teachers->pluck('fullName')->filter()->join(', ');
+
+        if (filled($names)) {
+            return $names;
+        }
+
+        return $event->course_id !== null && filled($event->course->guest_teacher)
+            ? (string) $event->course->guest_teacher
+            : 'Unassigned';
+    }
+
+    /** @return array{value: string, label: string} */
+    private function coverageSlotStatus(EventSubstituteCoverage $coverage): array
+    {
+        if ($coverage->currentSubstituteRequest()?->hasReleaseRequest() === true) {
+            $status = EventSubstituteCoverageStatus::ReleaseRequested;
+        } elseif ($coverage->substitute_teacher_id === null && $coverage->pendingRequest() instanceof \App\Models\EventSubstituteRequest) {
+            $status = EventSubstituteCoverageStatus::AwaitingResponse;
+        } elseif ($coverage->substitute_teacher_id === null && $coverage->isActive()) {
+            $status = EventSubstituteCoverageStatus::NeedsSubstitute;
+        } elseif ($coverage->substitute_teacher_id !== null && $coverage->pendingRequest() instanceof \App\Models\EventSubstituteRequest) {
+            $status = EventSubstituteCoverageStatus::ReplacementPending;
+        } elseif ($coverage->substitute_teacher_id !== null) {
+            $status = EventSubstituteCoverageStatus::Confirmed;
+        } else {
+            $status = EventSubstituteCoverageStatus::NotNeeded;
+        }
+
+        return [
+            'value' => $status->value,
+            'label' => $status->getLabel(),
+        ];
+    }
+
+    private function substituteCoverageReason(EventSubstituteCoverage $coverage): string
+    {
+        $requests = $coverage->requests->sortByDesc('id');
         $reason = $requests->pluck('request_reason')->first(fn (mixed $reason): bool => filled($reason))
             ?? $requests->pluck('release_reason')->first(fn (mixed $reason): bool => filled($reason))
-            ?? $requests->pluck('closure_reason')->first(fn (mixed $reason): bool => filled($reason));
+            ?? $requests->pluck('closure_reason')->first(fn (mixed $reason): bool => filled($reason))
+            ?? $coverage->closure_reason;
 
         return filled($reason) ? (string) $reason : '—';
+    }
+
+    private function eventCourseName(Event $event): string
+    {
+        return $event->course_id !== null ? $event->course->name : $event->name;
+    }
+
+    private function eventAcademicTermName(Event $event): string
+    {
+        return $event->course_id !== null
+            ? ($event->course->academicTerm->display_name ?? 'Unassigned')
+            : 'Standalone';
     }
 
     private function additionalInstructorNames(

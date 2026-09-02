@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\RelationManagers;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Events\Tables\EventsTable;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -46,6 +47,7 @@ final class EventsRelationManager extends RelationManager
                             $record = new Event($data);
 
                             $this->course()->events()->save($record);
+                            app(ManageEventTeacherAssignments::class)->initializeCourseEvent($record);
                         });
                     }),
             ]);

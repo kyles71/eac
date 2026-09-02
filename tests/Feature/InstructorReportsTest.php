@@ -363,7 +363,7 @@ it('reports course schedules and owner-only substitute reasons', function (): vo
             'enrollment_count' => 2,
             'additional_instructors' => 'Co Teacher',
         ])->and($subReport->rows[0])->toMatchArray([
-            'original_instructor' => 'Co Teacher, Primary Teacher',
+            'original_instructor' => 'Original teacher not recorded',
             'course_name' => 'Monday Ballet',
             'reason' => 'Primary teacher is unavailable',
             'substitute_instructor' => 'Sub Teacher',
