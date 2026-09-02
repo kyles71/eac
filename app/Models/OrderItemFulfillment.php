@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 final class OrderItemFulfillment extends Model
@@ -46,6 +47,12 @@ final class OrderItemFulfillment extends Model
     public function voidedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'voided_by_user_id');
+    }
+
+    /** @return BelongsToMany<Student, $this> */
+    public function students(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class)->withTimestamps();
     }
 
     public function isActive(): bool

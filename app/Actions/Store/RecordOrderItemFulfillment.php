@@ -20,6 +20,7 @@ final readonly class RecordOrderItemFulfillment
 {
     /**
      * @param  list<int>  $unitNumbers
+     * @param  list<int>  $studentIds
      * @return Collection<int, OrderItemFulfillment>
      */
     public function handle(
@@ -28,6 +29,7 @@ final readonly class RecordOrderItemFulfillment
         User $fulfilledBy,
         ?Model $source = null,
         ?string $note = null,
+        array $studentIds = [],
     ): Collection {
         $unitNumbers = collect($unitNumbers)
             ->map(fn (mixed $unitNumber): int => (int) $unitNumber)
@@ -35,12 +37,18 @@ final readonly class RecordOrderItemFulfillment
             ->sort()
             ->values()
             ->all();
+        $studentIds = collect($studentIds)
+            ->map(fn (mixed $studentId): int => (int) $studentId)
+            ->filter(fn (int $studentId): bool => $studentId > 0)
+            ->unique()
+            ->values()
+            ->all();
 
         if ($unitNumbers === []) {
             throw new InvalidArgumentException('Select at least one unit to fulfill.');
         }
 
-        return DB::transaction(function () use ($fulfilledBy, $note, $orderItem, $source, $unitNumbers): Collection {
+        return DB::transaction(function () use ($fulfilledBy, $note, $orderItem, $source, $studentIds, $unitNumbers): Collection {
             /** @var OrderItem|null $lockedOrderItem */
             $lockedOrderItem = OrderItem::query()
                 ->with('order')
@@ -80,6 +88,11 @@ final readonly class RecordOrderItemFulfillment
                 }
 
                 $fulfillment->save();
+
+                if ($studentIds !== []) {
+                    $fulfillment->students()->attach($studentIds);
+                }
+
                 $fulfillments->push($fulfillment);
             }
 

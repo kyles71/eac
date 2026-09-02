@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Orders\Pages;
 
 use App\Actions\Events\ManageEventTeacherAssignments;
+use App\Actions\Mail\SendOrderFulfillmentEmail;
 use App\Actions\Store\RecordOrderItemFulfillment;
 use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Enums\FulfillmentWorkflow;
@@ -238,12 +239,14 @@ final class OrderFulfillment extends Page implements HasTable
                 $event = DB::transaction(function () use ($data, $record): Event {
                     $event = $this->createEvent($data);
                     $this->addEventAttendees($event, $data);
-                    app(RecordOrderItemFulfillment::class)->handle(
+                    $fulfillments = app(RecordOrderItemFulfillment::class)->handle(
                         orderItem: $record,
                         unitNumbers: $this->unitNumbers($data),
                         fulfilledBy: $this->authenticatedUser(),
                         source: $event,
+                        studentIds: $this->studentIds($data),
                     );
+                    app(SendOrderFulfillmentEmail::class)->scheduled($event, $fulfillments);
 
                     return $event;
                 });
@@ -273,12 +276,14 @@ final class OrderFulfillment extends Page implements HasTable
 
                 DB::transaction(function () use ($data, $event, $record): void {
                     $this->addEventAttendees($event, $data);
-                    app(RecordOrderItemFulfillment::class)->handle(
+                    $fulfillments = app(RecordOrderItemFulfillment::class)->handle(
                         orderItem: $record,
                         unitNumbers: $this->unitNumbers($data),
                         fulfilledBy: $this->authenticatedUser(),
                         source: $event,
+                        studentIds: $this->studentIds($data),
                     );
+                    app(SendOrderFulfillmentEmail::class)->scheduled($event, $fulfillments);
                 });
 
                 $this->success('Event attached and fulfillment recorded', EventResource::getUrl('view', ['record' => $event]));
@@ -299,21 +304,43 @@ final class OrderFulfillment extends Page implements HasTable
                     ->required(),
                 Textarea::make('reason')
                     ->label('Reason')
+                    ->helperText('Input reason for cancelling as well as what reschedule solution is, or if EAC will be in touch with rescheduling options. Reason is visible to user / parent.')
                     ->required()
                     ->rows(3),
             ])
             ->action(function (array $data, OrderItem $record): void {
                 Gate::authorize('fulfill', $record->order);
                 $fulfillments = $record->activeFulfillments()
+                    ->with('source')
                     ->whereKey(array_map('intval', $data['fulfillment_ids'] ?? []))
                     ->get();
+                $reopenedFulfillments = new Collection;
+                $reason = (string) str((string) $data['reason'])->squish();
 
                 foreach ($fulfillments as $fulfillment) {
-                    app(VoidOrderItemFulfillment::class)->handle(
+                    $wasReopened = app(VoidOrderItemFulfillment::class)->handle(
                         fulfillment: $fulfillment,
                         voidedBy: $this->authenticatedUser(),
-                        reason: (string) $data['reason'],
+                        reason: $reason,
                     );
+
+                    if ($wasReopened) {
+                        $reopenedFulfillments->push($fulfillment);
+                    }
+                }
+
+                foreach ($reopenedFulfillments
+                    ->filter(fn (OrderItemFulfillment $fulfillment): bool => $fulfillment->source instanceof Event)
+                    ->groupBy('source_id') as $eventFulfillments) {
+                    $event = $eventFulfillments->first()?->source;
+
+                    if ($event instanceof Event) {
+                        app(SendOrderFulfillmentEmail::class)->reopened(
+                            $event,
+                            $eventFulfillments,
+                            $reason,
+                        );
+                    }
                 }
 
                 $this->success('Fulfillment reopened');
@@ -393,12 +420,14 @@ final class OrderFulfillment extends Page implements HasTable
 
                     foreach ($records as $record) {
                         Gate::authorize('fulfill', $record->order);
-                        app(RecordOrderItemFulfillment::class)->handle(
+                        $fulfillments = app(RecordOrderItemFulfillment::class)->handle(
                             orderItem: $record,
                             unitNumbers: $record->remainingUnitNumbers(),
                             fulfilledBy: $this->authenticatedUser(),
                             source: $event,
+                            studentIds: $this->studentIds($data),
                         );
+                        app(SendOrderFulfillmentEmail::class)->scheduled($event, $fulfillments);
                     }
 
                     return $event;
@@ -429,12 +458,14 @@ final class OrderFulfillment extends Page implements HasTable
 
                     foreach ($records as $record) {
                         Gate::authorize('fulfill', $record->order);
-                        app(RecordOrderItemFulfillment::class)->handle(
+                        $fulfillments = app(RecordOrderItemFulfillment::class)->handle(
                             orderItem: $record,
                             unitNumbers: $record->remainingUnitNumbers(),
                             fulfilledBy: $this->authenticatedUser(),
                             source: $event,
+                            studentIds: $this->studentIds($data),
                         );
+                        app(SendOrderFulfillmentEmail::class)->scheduled($event, $fulfillments);
                     }
                 });
 
@@ -658,6 +689,12 @@ final class OrderFulfillment extends Page implements HasTable
     private function unitNumbers(array $data): array
     {
         return array_values(array_map('intval', $data['unit_numbers'] ?? []));
+    }
+
+    /** @return list<int> */
+    private function studentIds(array $data): array
+    {
+        return array_values(array_map('intval', $data['student_ids'] ?? []));
     }
 
     private function unitLabel(OrderItem $orderItem, int $unitNumber): string

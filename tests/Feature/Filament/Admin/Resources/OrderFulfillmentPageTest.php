@@ -13,12 +13,16 @@ use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\ProductQuestionAnswer;
 use App\Models\Student;
 use App\Models\User;
 use App\Support\LocationNameGuidance;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Facades\Mail;
+use Kyle\FilamentMailManager\Mail\ManagedMail;
 
 use function Pest\Livewire\livewire;
 
@@ -79,6 +83,7 @@ it('bulk changes existing outstanding items to scheduled-event fulfillment', fun
 });
 
 it('attaches an event and confirms attendees from the queue', function (): void {
+    Mail::fake();
     $order = Order::factory()->completed()->create();
     $student = Student::factory()->create(['user_id' => $order->user_id]);
     $orderItem = OrderItem::factory()->create([
@@ -90,7 +95,7 @@ it('attaches an event and confirms attendees from the queue', function (): void 
         'start_time' => now()->addDay(),
         'end_time' => now()->addDay()->addHour(),
     ]);
-    $teacher = User::factory()->isTeacher()->create();
+    $teacher = User::factory()->isTeacher()->create(['email' => 'teacher@example.com']);
     app(ManageEventTeacherAssignments::class)->assignCustom($event, [$teacher->id]);
 
     livewire(OrderFulfillment::class)
@@ -105,8 +110,79 @@ it('attaches an event and confirms attendees from the queue', function (): void 
 
     expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Fulfilled)
         ->and($event->orderItemFulfillments()->count())->toBe(1)
+        ->and($event->orderItemFulfillments()->sole()->students->modelKeys())->toBe([$student->id])
         ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeTrue()
         ->and($event->attendees()->whereMorphedTo('attendee', $order->user)->exists())->toBeFalse();
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-scheduled'
+        && $mail->hasTo($order->user->email));
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-scheduled'
+        && $mail->hasTo('teacher@example.com'));
+});
+
+it('reopens scheduled fulfillment and explains that the reason is user visible', function (): void {
+    $order = Order::factory()->completed()->create();
+    $student = Student::factory()->create(['user_id' => $order->user_id]);
+    $orderItem = OrderItem::factory()->create([
+        'order_id' => $order->id,
+        'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
+    ]);
+    ProductQuestionAnswer::factory()->create([
+        'order_item_id' => $orderItem->id,
+        'product_question_id' => null,
+        'question' => 'Lesson focus',
+        'answer' => 'Turns',
+    ]);
+    $event = Event::factory()->standalone()->create([
+        'name' => 'Avery Private Lesson (MAIN CAMPUS)',
+        'start_time' => now()->addWeek(),
+        'end_time' => now()->addWeek()->addHour(),
+    ]);
+    $teacher = User::factory()->isTeacher()->create(['email' => 'teacher@example.com']);
+    app(ManageEventTeacherAssignments::class)->assignCustom($event, [$teacher->id]);
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    $fulfillment = app(RecordOrderItemFulfillment::class)->handle(
+        orderItem: $orderItem,
+        unitNumbers: [1],
+        fulfilledBy: $actor,
+        source: $event,
+        studentIds: [$student->id],
+    )->sole();
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->mountAction(TestAction::make('reopenFulfillment')->table($orderItem))
+        ->assertSchemaComponentExists(
+            'reason',
+            'mountedActionSchema0',
+            fn (Textarea $textarea): bool => str_contains(
+                (string) $textarea->getChildSchema(Textarea::BELOW_CONTENT_SCHEMA_KEY)?->toHtmlString(),
+                'Reason is visible to user / parent.',
+            ),
+        );
+
+    Mail::fake();
+
+    livewire(OrderFulfillment::class)
+        ->loadTable()
+        ->callAction(TestAction::make('reopenFulfillment')->table($orderItem), [
+            'fulfillment_ids' => [$fulfillment->id],
+            'reason' => 'Teacher conflict; EAC will contact you with options.',
+        ])
+        ->assertHasNoFormErrors()
+        ->assertNotified('Fulfillment reopened');
+
+    expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending)
+        ->and($fulfillment->refresh()->void_reason)->toBe('Teacher conflict; EAC will contact you with options.');
+
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-reopened'
+        && $mail->hasTo($order->user->email)
+        && str_contains($mail->getRenderedEmail()->html, 'Teacher conflict; EAC will contact you with options.'));
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-reopened'
+        && $mail->hasTo('teacher@example.com'));
 });
 
 it('does not offer an unstaffed standalone event for fulfillment', function (): void {
