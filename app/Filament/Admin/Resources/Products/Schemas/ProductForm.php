@@ -33,11 +33,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class ProductForm
 {
-    public static function configure(Schema $schema): Schema
+    public static function configure(Schema $schema, bool $includeLinkedItem = true): Schema
     {
         return $schema
             ->components([
-                Section::make('Linked Item')
+                ...($includeLinkedItem ? [Section::make('Linked Item')
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
@@ -90,7 +90,7 @@ final class ProductForm
                                     $set('price', number_format($giftCardType->denomination / 100, 2, '.', ''));
                                 }
                             }),
-                    ]),
+                    ])] : []),
                 Section::make('Fulfillment')
                     ->columns(2)
                     ->columnSpanFull()
@@ -359,6 +359,13 @@ final class ProductForm
      */
     private static function availableProductableOptions(string $productableType, ?Product $currentProduct): array
     {
+        if ($productableType === Gear::class) {
+            return Gear::query()
+                ->orderBy('name')
+                ->pluck('name', 'id')
+                ->all();
+        }
+
         return $productableType::query()
             ->where(function (Builder $query) use ($productableType, $currentProduct): void {
                 $query->whereDoesntHave('product');

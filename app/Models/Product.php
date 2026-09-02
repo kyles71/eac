@@ -9,6 +9,7 @@ use App\Contracts\ProvidesStorefrontDetails;
 use App\Contracts\RequiresAddToCartInformation;
 use App\Enums\FulfillmentWorkflow;
 use App\Enums\ProductAvailabilityStatus;
+use App\Services\ProductAssociationService;
 use App\Services\ProductAvailabilityService;
 use App\Support\MediaDisks;
 use Carbon\CarbonInterface;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -55,6 +57,24 @@ final class Product extends Model implements HasMedia
         }
 
         return $this->fulfillment_workflow ?? FulfillmentWorkflow::Manual;
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    public function save(array $options = []): bool
+    {
+        $associationService = app(ProductAssociationService::class);
+
+        if (! $associationService->requiresSingularAssociation($this)) {
+            return parent::save($options);
+        }
+
+        return DB::transaction(function () use ($associationService, $options): bool {
+            $associationService->assertSingularAssociationAvailable($this);
+
+            return parent::save($options);
+        }, 3);
     }
 
     /** @return BelongsToMany<Course, $this> */
@@ -116,6 +136,13 @@ final class Product extends Model implements HasMedia
     public function scopePurchasableBy(Builder $query, User $user, ?CarbonInterface $at = null): void
     {
         $this->scopeVisibleTo($query, $user, $at);
+    }
+
+    public function scopeForProductable(Builder $query, Model $productable): void
+    {
+        $query
+            ->where('productable_type', $productable->getMorphClass())
+            ->where('productable_id', $productable->getKey());
     }
 
     /**
