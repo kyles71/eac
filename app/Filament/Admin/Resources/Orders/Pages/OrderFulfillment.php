@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Orders\Pages;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Actions\Store\RecordOrderItemFulfillment;
 use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Enums\FulfillmentWorkflow;
@@ -492,6 +493,20 @@ final class OrderFulfillment extends Page implements HasTable
                         ->timezone($this->displayTimezone())
                         ->after('start_time')
                         ->required(),
+                    Select::make('teacher_ids')
+                        ->label('Teachers')
+                        ->multiple()
+                        ->options(fn (): array => User::query()
+                            ->whereHas('roles', fn (Builder $query): Builder => $query
+                                ->whereIn('name', ['teacher', 'owner', 'super_admin']))
+                            ->orderBy('first_name')
+                            ->orderBy('last_name')
+                            ->get()
+                            ->mapWithKeys(fn (User $teacher): array => [$teacher->id => $teacher->fullName])
+                            ->all())
+                        ->searchable()
+                        ->preload()
+                        ->required(),
                     Textarea::make('description')
                         ->label('Public Description')
                         ->columnSpanFull(),
@@ -553,6 +568,7 @@ final class OrderFulfillment extends Page implements HasTable
             ->whereNull('course_id')
             ->whereNull('cancelled_at')
             ->where('start_time', '>', now())
+            ->whereHas('teacherAssignments')
             ->orderBy('start_time')
             ->get()
             ->filter(fn (Event $event): bool => Gate::forUser($user)->allows('update', $event))
@@ -564,7 +580,7 @@ final class OrderFulfillment extends Page implements HasTable
 
     private function createEvent(array $data): Event
     {
-        return Event::query()->create([
+        $event = Event::query()->create([
             'name' => $data['name'],
             'calendar_id' => $data['calendar_id'],
             'course_id' => null,
@@ -573,6 +589,11 @@ final class OrderFulfillment extends Page implements HasTable
             'description' => $data['description'] ?? null,
             'details' => $data['details'] ?? null,
         ]);
+
+        return app(ManageEventTeacherAssignments::class)->assignCustom(
+            $event,
+            array_map('intval', $data['teacher_ids'] ?? []),
+        );
     }
 
     private function selectedEvent(array $data): Event
@@ -581,6 +602,7 @@ final class OrderFulfillment extends Page implements HasTable
             ->whereNull('course_id')
             ->whereNull('cancelled_at')
             ->where('start_time', '>', now())
+            ->whereHas('teacherAssignments')
             ->find($data['event_id'] ?? null);
 
         if (! $event instanceof Event) {

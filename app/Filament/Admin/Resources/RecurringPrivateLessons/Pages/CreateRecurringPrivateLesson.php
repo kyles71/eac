@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\RecurringPrivateLessons\Pages;
 
 use App\Actions\RecurringPrivateLessons\CreateRecurringPrivateLesson as CreateRecurringPrivateLessonAction;
 use App\Enums\CourseSemester;
+use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Enums\ScheduleFrequency;
 use App\Filament\Admin\Resources\RecurringPrivateLessons\RecurringPrivateLessonResource;
 use Filament\Resources\Pages\CreateRecord;
@@ -34,6 +35,9 @@ final class CreateRecurringPrivateLesson extends CreateRecord
             frequency: $data['repeat_frequency'] instanceof ScheduleFrequency
                 ? $data['repeat_frequency']
                 : ScheduleFrequency::from($data['repeat_frequency']),
+            teacherAssignmentStrategy: $data['teacher_assignment_strategy'] instanceof CourseTeacherAssignmentStrategy
+                ? $data['teacher_assignment_strategy']
+                : CourseTeacherAssignmentStrategy::from($data['teacher_assignment_strategy']),
         );
     }
 }

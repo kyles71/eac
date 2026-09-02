@@ -166,7 +166,8 @@ it('isolates, filters, and orders the household recurring lesson table', functio
 
     $otherHousehold = User::factory()->create();
     $otherStudent = Student::factory()->for($otherHousehold)->create();
-    $otherCharge = filamentBillingSeries($otherHousehold, $otherStudent, $teacher, '2026-08-24', '2026-08-24')
+    $otherTeacher = User::factory()->isTeacher()->create();
+    $otherCharge = filamentBillingSeries($otherHousehold, $otherStudent, $otherTeacher, '2026-08-24', '2026-08-24')
         ->charges
         ->sole();
 

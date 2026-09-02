@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Pages;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
 use App\Models\Event;
@@ -53,6 +54,23 @@ final class ListEvents extends ListRecords
                         $model = $action->getModel();
                         $record = new $model($data);
                         $record->save();
+
+                        $primaryEvent = $action->getRecord();
+
+                        if (! $record instanceof Event || ! $primaryEvent instanceof Event) {
+                            return;
+                        }
+
+                        if ($record->course_id !== null) {
+                            app(ManageEventTeacherAssignments::class)->initializeCourseEvent($record);
+
+                            return;
+                        }
+
+                        app(ManageEventTeacherAssignments::class)->assignCustom(
+                            $record,
+                            $primaryEvent->teachers()->pluck('users.id')->map(fn (mixed $id): int => (int) $id)->all(),
+                        );
                     });
                 }),
         ];

@@ -8,6 +8,7 @@ use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\HasCapacity;
 use App\Contracts\ProvidesStorefrontDetails;
 use App\Enums\CourseSemester;
+use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Support\MediaDisks;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -44,6 +45,7 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
         'academic_term_id' => 'integer',
         'capacity' => 'integer',
         'is_private' => 'boolean',
+        'teacher_assignment_strategy' => CourseTeacherAssignmentStrategy::class,
         'event_reminder_processed_at' => 'datetime',
     ];
 
@@ -210,7 +212,9 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
     public function teachers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
+            ->withPivot('rotation_position')
             ->withTimestamps()
+            ->orderByPivot('rotation_position')
             ->orderBy('first_name')
             ->orderBy('last_name');
     }
