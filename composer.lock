@@ -3103,16 +3103,16 @@
         },
         {
             "name": "kyle/filament-form-builder",
-            "version": "v0.2.0",
+            "version": "v0.2.2",
             "source": {
                 "type": "git",
                 "url": "git@github.com:kyles71/filament-form-builder.git",
-                "reference": "1e531446349b95e45ea5f632a01d95bb402dbf61"
+                "reference": "348b2c199d70f5f7c89de860326b06bf8b2f7869"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/kyles71/filament-form-builder/zipball/1e531446349b95e45ea5f632a01d95bb402dbf61",
-                "reference": "1e531446349b95e45ea5f632a01d95bb402dbf61",
+                "url": "https://api.github.com/repos/kyles71/filament-form-builder/zipball/348b2c199d70f5f7c89de860326b06bf8b2f7869",
+                "reference": "348b2c199d70f5f7c89de860326b06bf8b2f7869",
                 "shasum": ""
             },
             "require": {
@@ -3164,10 +3164,10 @@
             ],
             "description": "A versioned, assignment-aware form builder and typed response engine for Filament.",
             "support": {
-                "source": "https://github.com/kyles71/filament-form-builder/tree/v0.2.0",
+                "source": "https://github.com/kyles71/filament-form-builder/tree/v0.2.2",
                 "issues": "https://github.com/kyles71/filament-form-builder/issues"
             },
-            "time": "2026-08-31T01:52:55+00:00"
+            "time": "2026-09-02T02:58:07+00:00"
         },
         {
             "name": "kyle/filament-mail-manager",
