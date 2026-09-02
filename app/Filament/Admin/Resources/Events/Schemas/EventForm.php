@@ -10,6 +10,7 @@ use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\HolidayConflictService;
+use App\Support\LocationNameGuidance;
 use App\Support\MediaDisks;
 use Closure;
 use Filament\Forms\Components\DatePicker;
@@ -40,6 +41,7 @@ final class EventForm
                 ->schema([
                     TextInput::make('name')
                         ->label('Event Name')
+                        ->helperText(LocationNameGuidance::HELP_TEXT)
                         ->required()
                         ->maxLength(255),
                     Select::make('course_id')
