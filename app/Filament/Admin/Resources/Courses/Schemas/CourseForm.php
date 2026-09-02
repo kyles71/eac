@@ -13,6 +13,7 @@ use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Form;
 use App\Models\User;
+use App\Support\LocationNameGuidance;
 use App\Support\MediaDisks;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
@@ -38,6 +39,7 @@ final class CourseForm
                     ->columnSpanFull()
                     ->schema([
                         TextInput::make('name')
+                            ->helperText(LocationNameGuidance::HELP_TEXT)
                             ->required(),
                         Select::make('academic_term_id')
                             ->label('Academic Term')
