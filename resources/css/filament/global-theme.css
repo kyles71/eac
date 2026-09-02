@@ -6,11 +6,6 @@
 @source '../../../vendor/bezhansalleh/filament-panel-switch/resources/views/**/*.blade.php';
 @source '../../../vendor/saade/filament-fullcalendar/resources/views/**/*.blade.php';
 
-.fi-page .fi-wi-widget {
-    background: transparent;
-    box-shadow: none;
-}
-
 .eac-table-scrollbar {
     background: rgb(243 244 246);
     border: 1px solid rgb(209 213 219);
