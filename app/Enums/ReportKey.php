@@ -22,6 +22,7 @@ use App\Filament\Admin\Pages\Reports\ReportPage;
 use App\Filament\Admin\Pages\Reports\SubstituteCoverage;
 use App\Filament\Admin\Pages\Reports\TermEmailList;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
+use App\Models\Role;
 use App\Models\User;
 
 enum ReportKey: string
@@ -161,7 +162,13 @@ enum ReportKey: string
 
     public function canView(User $user): bool
     {
-        return $user->can($this->permission());
+        if (! $user->can($this->permission())) {
+            return false;
+        }
+
+        return $this !== self::CompetitionEnrollments
+            || ! $user->hasCourseRestrictedAdminAccess()
+            || $user->competitionTeams()->exists();
     }
 
     /** @return list<string> */
