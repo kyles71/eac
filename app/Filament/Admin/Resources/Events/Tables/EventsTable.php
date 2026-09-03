@@ -8,6 +8,7 @@ use App\Enums\EventSubstituteCoverageStatus;
 use App\Filament\Actions\CancelEventAction;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Models\Event;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -19,7 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class EventsTable
 {
-    public static function configure(Table $table): Table
+    /** @param array<Action | ActionGroup> $additionalRecordActions */
+    public static function configure(Table $table, array $additionalRecordActions = []): Table
     {
         return $table
             ->recordUrl(fn (Event $record): ?string => EventResource::canView($record)
@@ -81,6 +83,7 @@ final class EventsTable
             ])
             ->recordActions([
                 ActionGroup::make([
+                    ...$additionalRecordActions,
                     CancelEventAction::make(),
                 ]),
             ])

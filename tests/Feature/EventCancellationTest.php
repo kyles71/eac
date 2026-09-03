@@ -17,6 +17,7 @@ use App\Models\Student;
 use App\Models\StudentEmail;
 use App\Models\User;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
+use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -260,6 +261,8 @@ it('exposes the same cancellation action on a course events table', function ():
 
     expect($component->instance()->getTable()->getRecordUrl($event))
         ->toBe(EventResource::getUrl('view', ['record' => $event]));
+
+    $component->assertActionExists(TestAction::make(EditAction::class)->table($event));
 
     $component->callAction(
         TestAction::make('cancelEvent')
