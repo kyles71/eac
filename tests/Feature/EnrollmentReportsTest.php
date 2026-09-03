@@ -6,9 +6,11 @@ use App\Enums\ReportCategory;
 use App\Enums\ReportKey;
 use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Pages\Reports\CompetitionEmailList;
+use App\Filament\Admin\Pages\Reports\CompetitionEnrollments;
 use App\Filament\Admin\Pages\Reports\EnrollmentReports;
 use App\Filament\Admin\Pages\Reports\EnrollmentsByTerm;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
+use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Filament\Admin\Widgets\Reports\CapacityMetricChart;
 use App\Filament\Admin\Widgets\Reports\EnrollmentOverview;
 use App\Filament\Clusters\Settings\Pages\ReportingSettingsPage;
@@ -16,7 +18,9 @@ use App\Models\AcademicTerm;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
 use App\Models\Course;
+use App\Models\CourseHoldSeat;
 use App\Models\Enrollment;
+use App\Models\RecurringPrivateLesson;
 use App\Models\Student;
 use App\Models\StudentEmail;
 use App\Models\User;
@@ -85,6 +89,30 @@ it('renders a permission-aware enrollment reports landing page', function (): vo
         ->assertDontSee('Competition Email List');
 
     $this->get(EnrollmentsByTerm::getUrl(panel: 'admin'))->assertForbidden();
+});
+
+it('only exposes competition enrollments to teachers assigned to a competition team', function (): void {
+    $teacher = User::factory()->isTeacher()->create();
+    $teacher->givePermissionTo(ReportKey::CompetitionEnrollments->permission());
+    $this->actingAs($teacher);
+
+    expect(ReportKey::CompetitionEnrollments->canView($teacher))->toBeFalse();
+    $this->get(CompetitionEnrollments::getUrl(panel: 'admin'))->assertForbidden();
+
+    livewire(EnrollmentReports::class)
+        ->assertOk()
+        ->assertDontSee('Competition Enrollments');
+
+    $season = CompetitionSeason::factory()->create();
+    $team = CompetitionTeam::factory()->for($season, 'season')->create();
+    $team->staff()->attach($teacher);
+
+    expect(ReportKey::CompetitionEnrollments->canView($teacher))->toBeTrue();
+    $this->get(CompetitionEnrollments::getUrl(panel: 'admin'))->assertOk();
+
+    livewire(EnrollmentReports::class)
+        ->assertOk()
+        ->assertSee('Competition Enrollments');
 });
 
 it('renders the academic term selector before the enrollment dashboard widgets', function (): void {
@@ -210,7 +238,7 @@ it('hydrates dashboard-linked table filters from the URL', function (): void {
         ->assertDontSee($availableCourse->name);
 });
 
-it('links enrollment capacity widgets to URL-filtered reports', function (): void {
+it('links enrollment overview widgets to their detailed views', function (): void {
     $owner = User::factory()->isOwner()->create();
     $term = AcademicTerm::factory()->create();
     $this->actingAs($owner);
@@ -218,12 +246,16 @@ it('links enrollment capacity widgets to URL-filtered reports', function (): voi
         'academic_term_id' => ['value' => $term->id],
         'capacity_status' => ['value' => 'sold_out'],
     ]);
+    $openEnrollmentsUrl = EnrollmentResource::getUrl('index', ['tab' => 'open']);
 
     livewire(EnrollmentOverview::class, [
         'pageFilters' => ['academic_term_id' => $term->id],
     ])
         ->assertSee('Sold Out')
-        ->assertSeeHtml(e($soldOutUrl));
+        ->assertSee('Near Sold Out')
+        ->assertSee('*includes Competition team courses')
+        ->assertSeeHtml(e($soldOutUrl))
+        ->assertSeeHtml(e($openEnrollmentsUrl));
 });
 
 it('renders a bar chart for each configured capacity metric', function (): void {
@@ -355,7 +387,7 @@ it('filters the enrollment matrix to students enrolled in a selected course', fu
         ->assertDontSee('Tap Dancer');
 });
 
-it('scopes teacher class totals and dashboard metrics to assigned courses', function (): void {
+it('shows teachers the same approved enrollment report and widget data as owners', function (): void {
     $teacher = User::factory()->isTeacher()->create();
     $term = AcademicTerm::factory()->create([
         'target_enrollments' => 10,
@@ -364,32 +396,143 @@ it('scopes teacher class totals and dashboard metrics to assigned courses', func
     $assigned = Course::factory()->for($term)->create(['name' => 'Assigned Jazz', 'capacity' => 2]);
     $other = Course::factory()->for($term)->create(['name' => 'Other Jazz', 'capacity' => 20]);
     $assigned->syncTagsWithType(['Kiddo'], Course::GENERAL_TAG_TYPE);
+    $other->syncTagsWithType(['Kiddo'], Course::GENERAL_TAG_TYPE);
     $assigned->teachers()->syncWithoutDetaching([$teacher->id]);
     Enrollment::factory(2)->for($assigned)->create();
     Enrollment::factory(4)->for($other)->create();
 
     $service = app(EnrollmentReportService::class);
-    $dataset = $service->dataset(
+    $teacherDataset = $service->dataset(
         ReportKey::TotalEnrollmentsByClass,
         $teacher,
         ['academic_term_id' => ['value' => $term->id]],
     );
-    $metrics = $service->dashboard($term, $teacher);
-    $tagCapacities = $service->capacityByTags($term, $teacher, ['kiddo']);
+    $owner = User::factory()->isOwner()->create();
+    $ownerDataset = $service->dataset(
+        ReportKey::TotalEnrollmentsByClass,
+        $owner,
+        ['academic_term_id' => ['value' => $term->id]],
+    );
+    $teacherMetrics = $service->dashboard($term, $teacher);
+    $ownerMetrics = $service->dashboard($term, $owner);
+    $teacherTagCapacities = $service->capacityByTags($term, $teacher, ['kiddo']);
+    $ownerTagCapacities = $service->capacityByTags($term, $owner, ['kiddo']);
 
-    expect($dataset->rows)->toHaveCount(1)
-        ->and($dataset->rows[0]['course_name'])->toBe('Assigned Jazz')
-        ->and($metrics['enrollment_count'])->toBe(2)
-        ->and($metrics['total_capacity'])->toBe(2)
-        ->and($metrics['sold_out_count'])->toBe(1)
-        ->and($metrics['target_remaining'])->toBe(8)
-        ->and($tagCapacities)->toHaveCount(1)
-        ->and($tagCapacities[0])->toMatchArray([
+    expect($teacherDataset)->toEqual($ownerDataset)
+        ->and($teacherDataset->rows)->toHaveCount(2)
+        ->and($teacherMetrics)->toBe($ownerMetrics)
+        ->and($teacherMetrics['enrollment_count'])->toBe(6)
+        ->and($teacherMetrics['total_capacity'])->toBe(22)
+        ->and($teacherMetrics['sold_out_count'])->toBe(1)
+        ->and($teacherMetrics['target_remaining'])->toBe(4)
+        ->and($teacherTagCapacities)->toBe($ownerTagCapacities)
+        ->and($teacherTagCapacities)->toHaveCount(1)
+        ->and($teacherTagCapacities[0])->toMatchArray([
             'slug' => 'kiddo',
-            'enrollment_count' => 2,
-            'capacity' => 2,
-            'percentage' => 100.0,
+            'enrollment_count' => 6,
+            'capacity' => 22,
+            'percentage' => 27.3,
         ]);
+
+    $this->actingAs($teacher);
+
+    livewire(EnrollmentOverview::class, [
+        'pageFilters' => ['academic_term_id' => $term->id],
+    ])->assertSee('To Enrollment Target');
+});
+
+it('includes capacity-reserving holds in sold out and almost sold out calculations', function (): void {
+    $owner = User::factory()->isOwner()->create();
+    $term = AcademicTerm::factory()->create();
+    $soldOut = Course::factory()->for($term)->create(['name' => 'Held Full', 'capacity' => 3]);
+    $almostSoldOut = Course::factory()->for($term)->create(['name' => 'Held Almost Full', 'capacity' => 6]);
+    Enrollment::factory()->for($soldOut)->create();
+    Enrollment::factory()->for($almostSoldOut)->create();
+    CourseHoldSeat::factory(2)->for($soldOut)->create();
+    CourseHoldSeat::factory(2)->for($almostSoldOut)->create();
+
+    $service = app(EnrollmentReportService::class);
+    $metrics = $service->dashboard($term, $owner);
+    $soldOutReport = $service->dataset(ReportKey::TotalEnrollmentsByClass, $owner, [
+        'academic_term_id' => ['value' => $term->id],
+        'capacity_status' => ['value' => 'sold_out'],
+    ]);
+    $almostSoldOutReport = $service->dataset(ReportKey::TotalEnrollmentsByClass, $owner, [
+        'academic_term_id' => ['value' => $term->id],
+        'capacity_status' => ['value' => 'near_sold_out'],
+    ]);
+
+    expect($metrics['sold_out_count'])->toBe(1)
+        ->and($metrics['near_sold_out_count'])->toBe(1)
+        ->and($metrics['enrollment_count'])->toBe(6)
+        ->and($soldOutReport->headers)->toHaveKey('holds_count', 'Holds')
+        ->and($soldOutReport->rows)->toHaveCount(1)
+        ->and($soldOutReport->rows[0])->toMatchArray([
+            'course_name' => 'Held Full',
+            'enrollment_count' => 3,
+            'holds_count' => 2,
+            'capacity' => 3,
+            'available' => 0,
+            'utilization' => '100.0%',
+        ])
+        ->and($almostSoldOutReport->rows)->toHaveCount(1)
+        ->and($almostSoldOutReport->rows[0])->toMatchArray([
+            'course_name' => 'Held Almost Full',
+            'enrollment_count' => 3,
+            'holds_count' => 2,
+            'capacity' => 6,
+            'available' => 3,
+            'utilization' => '50.0%',
+        ]);
+});
+
+it('excludes private and recurring private lessons from enrollment report counts', function (): void {
+    $owner = User::factory()->isOwner()->create();
+    $term = AcademicTerm::factory()->create();
+    $groupCourse = Course::factory()->for($term)->create([
+        'name' => 'Group Ballet',
+        'capacity' => 10,
+    ]);
+    $privateLesson = Course::factory()->for($term)->create([
+        'name' => 'Recurring Private Ballet',
+        'capacity' => 1,
+        'is_private' => true,
+    ]);
+    $groupCourse->syncTagsWithType(['Ballet'], Course::GENERAL_TAG_TYPE);
+    $privateLesson->syncTagsWithType(['Ballet'], Course::GENERAL_TAG_TYPE);
+    Enrollment::factory(2)->for($groupCourse)->create();
+    CourseHoldSeat::factory()->for($groupCourse)->create();
+    $privateEnrollment = Enrollment::factory()->for($privateLesson)->create();
+    CourseHoldSeat::factory()->for($privateLesson)->create();
+    RecurringPrivateLesson::factory()->for($privateLesson)->create();
+
+    $service = app(EnrollmentReportService::class);
+    $metrics = $service->dashboard($term, $owner);
+    $classTotals = $service->dataset(ReportKey::TotalEnrollmentsByClass, $owner, [
+        'academic_term_id' => ['value' => $term->id],
+    ]);
+    $termMatrix = $service->dataset(ReportKey::EnrollmentsByTerm, $owner, [
+        'academic_term_id' => ['value' => $term->id],
+    ]);
+    $tagCapacity = $service->capacityByTags($term, $owner, ['ballet']);
+
+    expect($metrics['enrollment_count'])->toBe(3)
+        ->and($metrics['total_capacity'])->toBe(10)
+        ->and($classTotals->rows)->toHaveCount(1)
+        ->and($classTotals->rows[0])->toMatchArray([
+            'course_name' => 'Group Ballet',
+            'enrollment_count' => 3,
+            'holds_count' => 1,
+        ])
+        ->and($termMatrix->headers)->toHaveKey("course_{$groupCourse->id}")
+        ->and($termMatrix->headers)->not->toHaveKey("course_{$privateLesson->id}")
+        ->and($termMatrix->footerRows[0]["course_{$groupCourse->id}"])->toBe(3)
+        ->and($tagCapacity[0])->toMatchArray([
+            'enrollment_count' => 3,
+            'capacity' => 10,
+            'percentage' => 30.0,
+        ])
+        ->and($privateEnrollment->exists)->toBeTrue();
 });
 
 it('calculates each configured tag capacity independently', function (): void {

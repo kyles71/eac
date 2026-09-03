@@ -27,6 +27,19 @@ final class CourseHoldSeat extends Model
         'released_by_user_id' => 'integer',
     ];
 
+    /** @param Builder<CourseHoldSeat> $query */
+    public static function applyReservingCapacityConstraint(Builder $query): Builder
+    {
+        return $query->whereNull('released_at')
+            ->whereDoesntHave('enrollment')
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereHas('hold', fn (Builder $query): Builder => $query->where('expires_at', '>', now()))
+                    ->orWhereHas('claimedOrderItem.order', fn (Builder $query): Builder => $query
+                        ->whereIn('status', [OrderStatus::Pending, OrderStatus::Processing]));
+            });
+    }
+
     /** @return BelongsTo<CourseHold, $this> */
     public function hold(): BelongsTo
     {
@@ -81,14 +94,7 @@ final class CourseHoldSeat extends Model
     /** @param Builder<CourseHoldSeat> $query */
     public function scopeReservingCapacity(Builder $query): void
     {
-        $query->whereNull('released_at')
-            ->whereDoesntHave('enrollment')
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereHas('hold', fn (Builder $query): Builder => $query->where('expires_at', '>', now()))
-                    ->orWhereHas('claimedOrderItem.order', fn (Builder $query): Builder => $query
-                        ->whereIn('status', [OrderStatus::Pending, OrderStatus::Processing]));
-            });
+        self::applyReservingCapacityConstraint($query);
     }
 
     public function formattedLockedPrice(): string
