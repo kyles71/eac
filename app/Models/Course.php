@@ -30,6 +30,8 @@ use Spatie\Tags\HasTags;
  * @property-read Product|null $product
  * @property-read CourseSemester|null $semester
  * @property-read string|null $teacherDisplayName
+ * @property-read int $reportable_enrollments_count
+ * @property-read int $reportable_holds_count
  */
 final class Course extends Model implements AutomaticallyFulfillsOrderItems, HasCapacity, HasMedia, ProvidesStorefrontDetails
 {

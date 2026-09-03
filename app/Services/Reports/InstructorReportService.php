@@ -30,7 +30,10 @@ use InvalidArgumentException;
 
 final readonly class InstructorReportService
 {
-    public function __construct(private StudentProfileService $studentProfiles) {}
+    public function __construct(
+        private EnrollmentCountService $enrollmentCounts,
+        private StudentProfileService $studentProfiles,
+    ) {}
 
     /**
      * @return array{
@@ -281,7 +284,7 @@ final readonly class InstructorReportService
         ];
         $termId = $this->integerFilterValue($filters, 'academic_term_id');
         $instructorId = $this->instructorFilterId($filters, $user);
-        $query = Course::query()
+        $query = $this->enrollmentCounts->withCounts(Course::query()
             ->when($termId !== null, fn (Builder $query): Builder => $query
                 ->where('academic_term_id', $termId))
             ->when($user->hasCourseRestrictedAdminAccess(), fn (Builder $query): Builder => $query
@@ -293,8 +296,7 @@ final readonly class InstructorReportService
                     ->whereNull('cancelled_at')
                     ->whereNotNull('start_time')
                     ->orderBy('start_time'),
-            ])
-            ->withCount('enrollments')
+            ]))
             ->orderBy('name')
             ->orderBy('id');
         $rows = [];
@@ -313,7 +315,7 @@ final readonly class InstructorReportService
                     'course_name' => $course->name,
                     'academic_term' => $course->academicTerm->display_name ?? 'Unassigned',
                     'role' => $instructor['role'],
-                    'enrollment_count' => (int) $course->enrollments_count,
+                    'enrollment_count' => $this->enrollmentCounts->count($course),
                     'event_count' => $course->events->count(),
                     'first_meeting' => $this->formatDateTime($firstEvent->start_time ?? null),
                     'last_meeting' => $this->formatDateTime($lastEvent->end_time ?? $lastEvent->start_time ?? null),
@@ -511,7 +513,7 @@ final readonly class InstructorReportService
         ];
         $termId = $this->academicTermId($filters);
         $instructorId = $this->instructorFilterId($filters, $user);
-        $courses = $this->courseQuery($user, $termId)
+        $courses = $this->enrollmentCounts->withCounts($this->courseQuery($user, $termId)
             ->with([
                 'teachers:id,first_name,last_name',
                 'events' => fn ($query) => $query
@@ -519,8 +521,7 @@ final readonly class InstructorReportService
                     ->whereNotNull('start_time')
                     ->whereNotNull('end_time')
                     ->orderBy('start_time'),
-            ])
-            ->withCount('enrollments')
+            ]))
             ->orderBy('name')
             ->get();
         $rows = [];
@@ -550,7 +551,7 @@ final readonly class InstructorReportService
                     'day_of_week' => $schedule->pluck('day')->unique()->join(', '),
                     'start_time' => $schedule->pluck('starts')->unique()->join(', '),
                     'end_time' => $schedule->pluck('ends')->unique()->join(', '),
-                    'enrollment_count' => (int) $course->enrollments_count,
+                    'enrollment_count' => $this->enrollmentCounts->count($course),
                     'additional_instructors' => $this->additionalInstructorNames(
                         $course,
                         $instructor['user_id'],
@@ -947,7 +948,7 @@ final readonly class InstructorReportService
                     'starts_at' => $startsAt,
                     'ends_at' => $endsAt,
                     'course_name' => $this->eventCourseName($event),
-                    'enrollment_count' => $event->course_id !== null ? (int) $event->course->enrollments_count : 0,
+                    'enrollment_count' => $this->enrollmentCounts->count($event->course),
                     'academic_term' => $this->eventAcademicTermName($event),
                     'role' => $instructor['role'],
                     'hours' => $this->durationHours($event),
@@ -999,7 +1000,7 @@ final readonly class InstructorReportService
                 }))
             ->with([
                 'course' => function (Relation $relation): void {
-                    $relation->getQuery()->withCount('enrollments');
+                    $relation->getQuery()->withCount($this->enrollmentCounts->courseCountRelations());
                 },
                 'course.academicTerm',
                 'teachers:id,first_name,last_name',
