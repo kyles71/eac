@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Filament\Admin\Resources\BoardItems\BoardItemResource;
+use App\Filament\Admin\Resources\Boards\BoardResource;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
 use App\Filament\Admin\Resources\DashboardQuickLinks\DashboardQuickLinkResource;
@@ -41,6 +43,8 @@ it('can global search', function (): void {
 
 it('keeps resources out of global search when they have no record-level view ability', function (): void {
     expect(CalendarResource::canGloballySearch())->toBeFalse()
+        ->and(BoardResource::canGloballySearch())->toBeFalse()
+        ->and(BoardItemResource::canGloballySearch())->toBeFalse()
         ->and(GearResource::canGloballySearch())->toBeFalse()
         ->and(DashboardMessageResource::canGloballySearch())->toBeFalse()
         ->and(DashboardQuickLinkResource::canGloballySearch())->toBeFalse()
