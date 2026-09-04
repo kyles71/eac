@@ -18,11 +18,12 @@ use App\Filament\Admin\Pages\Reports\InstructorSchedule;
 use App\Filament\Admin\Pages\Reports\InstructorSubReport;
 use App\Filament\Admin\Pages\Reports\InstructorTeachingSchedule;
 use App\Filament\Admin\Pages\Reports\OverallAttendanceReport;
+use App\Filament\Admin\Pages\Reports\PayrollReport;
 use App\Filament\Admin\Pages\Reports\ReportPage;
+use App\Filament\Admin\Pages\Reports\SickLeaveReport;
 use App\Filament\Admin\Pages\Reports\SubstituteCoverage;
 use App\Filament\Admin\Pages\Reports\TermEmailList;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
-use App\Models\Role;
 use App\Models\User;
 
 enum ReportKey: string
@@ -44,6 +45,8 @@ enum ReportKey: string
     case CompetitionAttendance = 'competition-attendance';
     case OverallAttendance = 'overall-attendance';
     case InstructorSubReport = 'instructor-sub-report';
+    case Payroll = 'payroll';
+    case SickLeave = 'sick-leave';
 
     /** @return array<string, string> */
     public static function permissionOptions(): array
@@ -75,6 +78,8 @@ enum ReportKey: string
             self::CompetitionAttendance,
             self::OverallAttendance,
             self::InstructorSubReport => ReportCategory::Instructor,
+            self::Payroll,
+            self::SickLeave => ReportCategory::Finance,
         };
     }
 
@@ -98,6 +103,8 @@ enum ReportKey: string
             self::CompetitionAttendance => 'Competition Attendance Report',
             self::OverallAttendance => 'Overall Attendance Report',
             self::InstructorSubReport => 'Sub Report',
+            self::Payroll => 'Payroll Report',
+            self::SickLeave => 'Sick Leave Report',
         };
     }
 
@@ -121,6 +128,8 @@ enum ReportKey: string
             self::CompetitionAttendance => 'To-date attendance rates and absences for competition dancers by class.',
             self::OverallAttendance => 'To-date attendance rates and absences summarized by class.',
             self::InstructorSubReport => 'Substitute dates, reasons, original instructors, and confirmed substitutes by term.',
+            self::Payroll => 'Non-cancelled teaching events and payroll details for a selected date range.',
+            self::SickLeave => 'Sick leave utilization by instructor, including requests that need attribution follow-up.',
         };
     }
 
@@ -157,6 +166,8 @@ enum ReportKey: string
             self::CompetitionAttendance => CompetitionAttendanceReport::class,
             self::OverallAttendance => OverallAttendanceReport::class,
             self::InstructorSubReport => InstructorSubReport::class,
+            self::Payroll => PayrollReport::class,
+            self::SickLeave => SickLeaveReport::class,
         };
     }
 
@@ -200,6 +211,8 @@ enum ReportKey: string
             self::ClassAttendance => ['academic_term_id', 'course_id', 'date_range'],
             self::CompetitionAttendance => ['academic_term_id', 'competition_season_id'],
             self::OverallAttendance, self::InstructorSubReport => ['academic_term_id'],
+            self::Payroll => ['date_range'],
+            self::SickLeave => ['academic_term_id', 'attribution_status'],
         };
     }
 }

@@ -106,6 +106,7 @@ final class EventSubstituteActions
             ->stickyModalFooter(false)
             ->action(function (Event $record, array $data): mixed {
                 $teacher = User::query()->find($data['teacher_id'] ?? null);
+                $reasonType = self::substituteRequestReasonType($data['reason_type'] ?? null);
 
                 if (! $teacher instanceof User) {
                     Notification::make()->title('Teacher not found')->danger()->send();
@@ -119,6 +120,7 @@ final class EventSubstituteActions
                         $teacher,
                         $user,
                         self::substituteRequestReason($data),
+                        $reasonType,
                     ),
                     'Substitute request sent',
                 );

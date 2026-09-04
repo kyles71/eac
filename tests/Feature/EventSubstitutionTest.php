@@ -523,7 +523,10 @@ it('records the selected substitute reason and only shows optional details for o
         ->assertNotified('Substitute request sent');
 
     expect($otherEvent->refresh()->pendingSubstituteRequest()?->request_reason)->toBe('Other')
-        ->and($sickEvent->refresh()->pendingSubstituteRequest()?->request_reason)->toBe('Sick');
+        ->and($otherEvent->pendingSubstituteRequest()?->reason_type)->toBe(EventSubstituteRequestReason::Other)
+        ->and($sickEvent->refresh()->pendingSubstituteRequest()?->request_reason)->toBe('Sick')
+        ->and($sickEvent->pendingSubstituteRequest()?->reason_type)->toBe(EventSubstituteRequestReason::Sick)
+        ->and($sickEvent->pendingSubstituteRequest()?->sick_instructor_id)->toBeNull();
 });
 
 it('changes the substitute action group appearance with the coverage state', function (): void {

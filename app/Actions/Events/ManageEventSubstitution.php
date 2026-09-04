@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Events;
 
 use App\Actions\Mail\QueueManagedEmail;
+use App\Enums\EventSubstituteRequestReason;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Models\Event;
 use App\Models\EventSubstituteRequest;
@@ -39,9 +40,14 @@ final readonly class ManageEventSubstitution
         });
     }
 
-    public function requestSubstitute(Event $event, User $teacher, User $requestedBy, ?string $reason = null): EventSubstituteRequest
-    {
-        return DB::transaction(function () use ($event, $teacher, $requestedBy, $reason): EventSubstituteRequest {
+    public function requestSubstitute(
+        Event $event,
+        User $teacher,
+        User $requestedBy,
+        ?string $reason = null,
+        ?EventSubstituteRequestReason $reasonType = null,
+    ): EventSubstituteRequest {
+        return DB::transaction(function () use ($event, $teacher, $requestedBy, $reason, $reasonType): EventSubstituteRequest {
             $lockedEvent = $this->lockedEvent($event);
             Gate::forUser($requestedBy)->authorize('update', $lockedEvent);
             $this->ensureRequestable($lockedEvent);
@@ -67,7 +73,9 @@ final readonly class ManageEventSubstitution
                 'teacher_id' => $teacher->id,
                 'requested_by_user_id' => $requestedBy->id,
                 'status' => EventSubstituteRequestStatus::Pending,
+                'reason_type' => $reasonType,
                 'request_reason' => $reason,
+                'sick_instructor_id' => $this->sickInstructorId($lockedEvent, $reasonType),
             ]);
 
             $lockedEvent->update([
@@ -330,6 +338,21 @@ final readonly class ManageEventSubstitution
         }
 
         return $lockedEvent;
+    }
+
+    private function sickInstructorId(Event $event, ?EventSubstituteRequestReason $reasonType): ?int
+    {
+        if ($reasonType !== EventSubstituteRequestReason::Sick || $event->course_id === null) {
+            return null;
+        }
+
+        $teacherIds = $event->course()
+            ->firstOrFail()
+            ->teachers()
+            ->limit(2)
+            ->pluck('users.id');
+
+        return $teacherIds->count() === 1 ? (int) $teacherIds->first() : null;
     }
 
     private function lockedRequest(EventSubstituteRequest $request): EventSubstituteRequest
