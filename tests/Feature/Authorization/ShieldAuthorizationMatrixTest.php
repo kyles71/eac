@@ -137,7 +137,10 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'View:StaffNote',
             ReportKey::EnrollmentsByTerm->permission(),
             ReportKey::InstructorHoursSummary->permission(),
+            ReportKey::Payroll->permission(),
+            ReportKey::SickLeave->permission(),
             ReportWidgetKey::EnrollmentCapacityMetrics->permission(),
+            ReportWidgetKey::FinanceOverview->permission(),
             ReportWidgetKey::InstructorOverview->permission(),
         )
         ->and($desired)->not->toContain(

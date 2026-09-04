@@ -66,6 +66,8 @@ final class AdminNavigation
 
     public const int ReportsInstructor = 20;
 
+    public const int ReportsFinance = 30;
+
     public const int ToolsSettings = 10;
 
     public const int ToolsMailManager = 20;

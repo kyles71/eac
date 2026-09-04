@@ -14,6 +14,7 @@ use App\Filament\Admin\Pages\Reports\CompetitionEnrollments;
 use App\Filament\Admin\Pages\Reports\EmergencyTextsByCourse;
 use App\Filament\Admin\Pages\Reports\EnrollmentReports;
 use App\Filament\Admin\Pages\Reports\EnrollmentsByTerm;
+use App\Filament\Admin\Pages\Reports\FinanceReports;
 use App\Filament\Admin\Pages\Reports\InstructorClassAssignments;
 use App\Filament\Admin\Pages\Reports\InstructorHoursSummary;
 use App\Filament\Admin\Pages\Reports\InstructorReports;
@@ -21,6 +22,8 @@ use App\Filament\Admin\Pages\Reports\InstructorSchedule;
 use App\Filament\Admin\Pages\Reports\InstructorSubReport;
 use App\Filament\Admin\Pages\Reports\InstructorTeachingSchedule;
 use App\Filament\Admin\Pages\Reports\OverallAttendanceReport;
+use App\Filament\Admin\Pages\Reports\PayrollReport;
+use App\Filament\Admin\Pages\Reports\SickLeaveReport;
 use App\Filament\Admin\Pages\Reports\SubstituteCoverage;
 use App\Filament\Admin\Pages\Reports\TermEmailList;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
@@ -58,6 +61,7 @@ use App\Filament\Admin\Resources\Students\StudentResource;
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Admin\Widgets\Reports\CapacityMetricChart;
 use App\Filament\Admin\Widgets\Reports\EnrollmentOverview;
+use App\Filament\Admin\Widgets\Reports\FinanceOverview;
 use App\Filament\Admin\Widgets\Reports\InstructorOverview;
 use App\Filament\Admin\Widgets\SubstituteCoverageReminder;
 use App\Filament\Admin\Widgets\SubstituteRequestBanners;
@@ -364,6 +368,9 @@ return [
             CompetitionAttendanceReport::class,
             OverallAttendanceReport::class,
             InstructorSubReport::class,
+            FinanceReports::class,
+            PayrollReport::class,
+            SickLeaveReport::class,
             ReportingSettingsPage::class,
         ],
     ],
@@ -386,6 +393,7 @@ return [
             CalendarWidget::class,
             CapacityMetricChart::class,
             EnrollmentOverview::class,
+            FinanceOverview::class,
             InstructorOverview::class,
             MessagesFromEac::class,
             QuickLinks::class,
