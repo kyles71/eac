@@ -6,6 +6,8 @@ namespace App\Filament\Admin\Resources\Gear\Tables;
 
 use App\Filament\Actions\DeleteProductableAction;
 use App\Filament\Actions\DeleteProductableBulkAction;
+use App\Filament\Admin\Resources\Gear\GearResource;
+use App\Models\Gear;
 use App\Support\MediaDisks;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -29,6 +31,10 @@ final class GearTable
                 TextColumn::make('name')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('products_count')
+                    ->label('Product Listings')
+                    ->counts('products')
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -45,6 +51,7 @@ final class GearTable
                     DeleteProductableAction::make(),
                 ]),
             ])
+            ->recordUrl(fn (Gear $record): string => GearResource::getUrl('view', ['record' => $record]))
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteProductableBulkAction::make(),

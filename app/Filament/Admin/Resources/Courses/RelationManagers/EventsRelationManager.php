@@ -12,6 +12,7 @@ use App\Models\Course;
 use App\Models\Event;
 use App\Models\User;
 use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -38,7 +39,9 @@ final class EventsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-        return EventsTable::configure($table)
+        return EventsTable::configure($table, [
+            EditAction::make(),
+        ])
             ->headerActions([
                 CreateAction::make()
                     ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))

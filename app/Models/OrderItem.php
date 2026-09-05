@@ -167,4 +167,17 @@ final class OrderItem extends Model
     {
         $this->update(['status' => OrderItemStatus::Fulfilled]);
     }
+
+    protected static function booted(): void
+    {
+        self::creating(function (OrderItem $orderItem): void {
+            if (filled($orderItem->product_name) || $orderItem->product_id === null) {
+                return;
+            }
+
+            $orderItem->product_name = Product::query()
+                ->whereKey($orderItem->product_id)
+                ->value('name');
+        });
+    }
 }
