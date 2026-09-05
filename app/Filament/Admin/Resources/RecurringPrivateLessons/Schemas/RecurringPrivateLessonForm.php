@@ -8,15 +8,14 @@ use App\Enums\CourseSemester;
 use App\Enums\RecurringPrivateLessonStatus;
 use App\Enums\ScheduleFrequency;
 use App\Models\RecurringPrivateLesson;
-use App\Models\Student;
 use App\Models\User;
+use App\Support\Filament\HouseholdStudentSelect;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -30,34 +29,13 @@ final class RecurringPrivateLessonForm
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('user_id')
+                        HouseholdStudentSelect::user()
                             ->label('Household')
-                            ->searchable(['first_name', 'last_name', 'email'])
-                            ->getSearchResultsUsing(fn (string $search): array => User::query()
-                                ->where(function (Builder $query) use ($search): void {
-                                    $query
-                                        ->where('first_name', 'like', "%{$search}%")
-                                        ->orWhere('last_name', 'like', "%{$search}%")
-                                        ->orWhere('email', 'like', "%{$search}%");
-                                })
-                                ->limit(50)
-                                ->get()
-                                ->mapWithKeys(fn (User $user): array => [$user->id => $user->displayName().' · '.$user->email])
-                                ->all())
-                            ->getOptionLabelUsing(fn ($value): ?string => User::query()->find($value)?->displayName())
                             ->selectablePlaceholder(false)
                             ->required()
-                            ->live()
                             ->disabledOn('edit'),
-                        Select::make('student_id')
+                        HouseholdStudentSelect::student()
                             ->label('Dancer')
-                            ->options(fn (Get $get): array => Student::query()
-                                ->where('user_id', $get('user_id'))
-                                ->orderBy('first_name')
-                                ->orderBy('last_name')
-                                ->get()
-                                ->mapWithKeys(fn (Student $student): array => [$student->id => $student->displayName()])
-                                ->all())
                             ->selectablePlaceholder(false)
                             ->required()
                             ->disabledOn('edit'),

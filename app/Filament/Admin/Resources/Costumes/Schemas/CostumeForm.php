@@ -44,6 +44,7 @@ final class CostumeForm
                             ->searchable()
                             ->preload()
                             ->live()
+                            ->columnStart(1)
                             ->afterStateUpdated(fn (Set $set): mixed => $set('course_id', null))
                             ->dehydrated(false),
                         Select::make('course_id')

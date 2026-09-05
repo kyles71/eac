@@ -225,10 +225,11 @@ final class ProductForm
                                     ? null
                                     : "before_or_equal:{$availableUntil}",
                             ])))
-                            ->helperText('The portal action and one-time email begin on this date. Leave blank for reporting without reminders.')
+                            ->helperText('Send an email and display a reminder on this date. Leave blank for reporting without reminders.')
                             ->visible(fn (Get $get): bool => (bool) $get('is_purchase_required')),
                         TextEntry::make('costume_course')
                             ->label('Costume Course')
+                            ->columnStart(1)
                             ->state(fn (Get $get): string => self::costumeCourseName($get, $costumeContext))
                             ->visible(fn (Get $get): bool => self::isCostumeProduct($get, $costumeContext)),
                         Select::make('requiredCourses')
@@ -241,6 +242,7 @@ final class ProductForm
                             ->multiple()
                             ->searchable(['name'])
                             ->preload()
+                            ->columnStart(1)
                             ->live()
                             ->helperText('Enrollment in any selected Course satisfies the Course requirement.')
                             ->hidden(fn (Get $get): bool => self::isCostumeProduct($get, $costumeContext)),
@@ -286,10 +288,9 @@ final class ProductForm
                             ->hidden(fn (Get $get): bool => self::isCostumeProduct($get, $costumeContext)),
                         Select::make('assignedStudents')
                             ->label('Specific Students')
-                            ->relationship(
-                                name: 'assignedStudents',
-                                titleAttribute: 'first_name',
-                                modifyQueryUsing: fn (Builder $query, Get $get, ?Product $record): Builder => self::studentOptionsQuery(
+                            ->studentRelationship(
+                                'assignedStudents',
+                                fn (Builder $query, Get $get, ?Product $record): Builder => self::studentOptionsQuery(
                                     $query,
                                     $get,
                                     $record,
@@ -297,10 +298,8 @@ final class ProductForm
                                 ),
                             )
                             ->multiple()
-                            ->searchable(['first_name', 'last_name'])
                             ->preload()
                             ->live()
-                            ->getOptionLabelFromRecordUsing(fn (Student $record): string => $record->fullName)
                             ->helperText(fn (Get $get): string => self::isCostumeProduct($get, $costumeContext)
                                 ? 'Only students enrolled in the costume course can be selected.'
                                 : 'Selected Students\' households qualify directly, even when they do not meet Course or Competition Team requirements.')
@@ -311,10 +310,9 @@ final class ProductForm
                             }),
                         Select::make('excludedStudents')
                             ->label('Excluded Students')
-                            ->relationship(
-                                name: 'excludedStudents',
-                                titleAttribute: 'first_name',
-                                modifyQueryUsing: fn (Builder $query, Get $get, ?Product $record): Builder => self::excludedStudentOptionsQuery(
+                            ->studentRelationship(
+                                'excludedStudents',
+                                fn (Builder $query, Get $get, ?Product $record): Builder => self::excludedStudentOptionsQuery(
                                     $query,
                                     $get,
                                     $record,
@@ -322,9 +320,7 @@ final class ProductForm
                                 ),
                             )
                             ->multiple()
-                            ->searchable(['first_name', 'last_name'])
                             ->preload()
-                            ->getOptionLabelFromRecordUsing(fn (Student $record): string => $record->fullName)
                             ->helperText('Excluded students do not create a purchase expectation or qualify their household to see this Product. Other qualifying paths still apply.')
                             ->visible(fn (Get $get): bool => (bool) $get('is_purchase_required'))
                             ->saveRelationshipsUsing(function (?Product $record, array $state): void {

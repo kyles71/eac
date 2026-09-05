@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\FormUsers\Schemas;
 
+use App\Support\Filament\HouseholdStudentSelect;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -23,14 +24,12 @@ final class FormUserForm
                             ->relationship('form', 'name')
                             ->selectablePlaceholder(false)
                             ->required(),
-                        Select::make('user_id')
+                        HouseholdStudentSelect::user()
                             ->label('User')
-                            ->userRelationship()
                             ->selectablePlaceholder(false)
                             ->required(),
-                        Select::make('student_id')
-                            ->label('Student')
-                            ->studentRelationship(),
+                        HouseholdStudentSelect::student()
+                            ->label('Student'),
                     ]),
             ]);
     }

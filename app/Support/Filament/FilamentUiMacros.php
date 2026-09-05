@@ -129,7 +129,7 @@ final class FilamentUiMacros
         return self::searchableRelationship(
             select: $select,
             name: $name,
-            searchColumns: ['first_name', 'last_name'],
+            searchColumns: ['first_name', 'last_name', 'nickname'],
             labelFromRecord: fn (Student $student): string => $student->fullName,
             modifyQueryUsing: $modifyQueryUsing,
             orderBy: ['first_name', 'last_name'],

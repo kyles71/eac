@@ -110,6 +110,17 @@ it('lets an owner create a recurring private lesson from the admin resource', fu
         ->assertSee('Contemporary Private Lesson');
 });
 
+it('populates the recurring private lesson household when its dancer is selected first', function (): void {
+    Filament::setCurrentPanel('admin');
+    $this->actingAs(User::factory()->isOwner()->create());
+    $household = User::factory()->create();
+    $student = Student::factory()->for($household)->create();
+
+    livewire(CreateRecurringPrivateLesson::class)
+        ->set('data.student_id', $student->id)
+        ->assertSchemaStateSet(['user_id' => $household->id]);
+});
+
 it('shows the recurring lesson table and payment policy in the household billing page', function (): void {
     Mail::fake();
     $this->travelTo(CarbonImmutable::parse('2026-08-01 09:00', 'America/New_York'));

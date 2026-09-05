@@ -8,7 +8,6 @@ use App\Actions\CourseHolds\ConvertEnrollmentToCourseHold;
 use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Enrollment;
-use App\Models\Student;
 use App\Models\User;
 use App\Rules\FutureDisplayDateTime;
 use Carbon\CarbonInterface;
@@ -110,12 +109,9 @@ final class EnrollmentsTable
                             Select::make('student_id')
                                 ->selectablePlaceholder(false)
                                 ->required()
-                                ->searchableRelationship(
-                                    name: 'student',
-                                    searchColumns: ['first_name', 'last_name'],
-                                    labelFromRecord: fn (Student $student): string => $student->fullName,
-                                    modifyQueryUsing: fn (Builder $query, Enrollment $record): Builder => $query->where('user_id', $record->user_id),
-                                    orderBy: ['first_name', 'last_name'],
+                                ->studentRelationship(
+                                    'student',
+                                    fn (Builder $query, Enrollment $record): Builder => $query->where('user_id', $record->user_id),
                                 )
                                 ->createOptionForm(fn (Schema $schema, Enrollment $record): Schema => StudentForm::configure($schema, $record->user_id))
                                 ->createOptionUsing(function (array $data, Enrollment $record): int {

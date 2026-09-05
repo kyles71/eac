@@ -7,10 +7,14 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Product;
+use App\Models\Student;
+use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 
 use function Pest\Livewire\livewire;
 
@@ -21,6 +25,54 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     Carbon::setTestNow();
+});
+
+it('synchronizes and scopes the household and student fields when creating an enrollment', function (): void {
+    $this->actingAs(User::factory()->isSuperAdmin()->create());
+    $household = User::factory()->create();
+    $firstStudent = Student::factory()->for($household)->create();
+    $secondStudent = Student::factory()->for($household)->create();
+    $otherHousehold = User::factory()->create();
+    $otherStudent = Student::factory()->for($otherHousehold)->create(['nickname' => 'Scout']);
+
+    $createPage = livewire(ListEnrollments::class)
+        ->assertActionVisible(TestAction::make('create'))
+        ->mountAction(TestAction::make('create'));
+    $schemaName = $createPage->instance()->getMountedActionSchemaName();
+    $schema = $createPage->instance()->{$schemaName};
+    $statePath = $schema->getStatePath();
+    $studentSelect = $schema->getFlatComponents()['student_id'];
+
+    expect($studentSelect)
+        ->toBeInstanceOf(Select::class)
+        ->and($studentSelect->isPreloaded())->toBeTrue()
+        ->and($studentSelect->hasDynamicOptions())->toBeTrue()
+        ->and($studentSelect->getOptions())
+        ->toHaveKeys([$firstStudent->id, $secondStudent->id, $otherStudent->id])
+        ->and($studentSelect->getSearchResults('Scout'))->toHaveKey($otherStudent->id);
+
+    $createPage->set("{$statePath}.user_id", $household->id);
+    $studentSelect = $createPage->instance()->{$schemaName}->getFlatComponents()['student_id'];
+
+    expect($studentSelect->getOptions())
+        ->toHaveKeys([$firstStudent->id, $secondStudent->id])
+        ->not->toHaveKey($otherStudent->id)
+        ->and($studentSelect->getSearchResults('Scout'))->not->toHaveKey($otherStudent->id);
+
+    expect(Validator::make(
+        ['student_id' => $otherStudent->id],
+        ['student_id' => $studentSelect->getValidationRules()],
+    )->fails())->toBeTrue();
+
+    $createPage
+        ->set("{$statePath}.student_id", $firstStudent->id)
+        ->set("{$statePath}.user_id", $otherHousehold->id)
+        ->assertActionDataSet(['student_id' => null]);
+
+    $createPage
+        ->set("{$statePath}.user_id", null)
+        ->set("{$statePath}.student_id", $secondStudent->id)
+        ->assertActionDataSet(['user_id' => $household->id]);
 });
 
 it('lists every assigned enrollment for the same active course', function (): void {
