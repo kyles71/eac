@@ -295,6 +295,8 @@ Action::make('updateEmail')
 
 </code-snippet>
 
+When an action modal contains a form with only a few fields, use `->stickyModalHeader(false)` and `->stickyModalFooter(false)` so the header and footer scroll naturally with the short content.
+
 For admin resources, prefer Create and Edit actions in slideovers on the list and view pages instead of dedicated create or edit pages. The application configures these actions as slideovers globally, so only register separate pages when the workflow explicitly requires them.
 
 ### Testing

@@ -26,6 +26,7 @@
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.34",
         "nunomaduro/essentials": "^1.0",
+        "relaticle/flowforge": "^4.0",
         "saade/filament-fullcalendar": "^4.0",
         "sentry/sentry-laravel": "^4.25",
         "spatie/laravel-backup": "^10.0",

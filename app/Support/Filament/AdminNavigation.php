@@ -74,6 +74,8 @@ final class AdminNavigation
 
     public const int ToolsThemeBuilder = 30;
 
+    public const int ToolsBoards = 35;
+
     public const int ToolsUpdates = 40;
 
     public const int SettingsCalendars = 10;

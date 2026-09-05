@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Pages\Dashboard;
 use App\Filament\Admin\Pages\Updates;
+use App\Filament\Admin\Resources\Boards\BoardResource;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -83,6 +84,8 @@ it('groups administrative tools together', function (): void {
         ->and(ThemeBuilder::getNavigationSort())->toBe(AdminNavigation::ToolsThemeBuilder)
         ->and(Updates::getNavigationGroup())->toBe(AdminNavigation::Tools)
         ->and(Updates::getNavigationSort())->toBe(AdminNavigation::ToolsUpdates)
+        ->and(BoardResource::getNavigationGroup())->toBe(AdminNavigation::Tools)
+        ->and(BoardResource::getNavigationSort())->toBe(AdminNavigation::ToolsBoards)
         ->and(MailManagerCluster::getNavigationGroup())->toBe(AdminNavigation::Tools)
         ->and(MailManagerCluster::getNavigationSort())->toBe(AdminNavigation::ToolsMailManager)
         ->and(CalendarResource::getCluster())->toBe(SettingsCluster::class)
@@ -111,6 +114,7 @@ it('groups administrative tools together', function (): void {
             SettingsCluster::class,
             MailManagerCluster::class,
             ThemeBuilder::class,
+            BoardResource::class,
             Updates::class,
         ]);
 });
