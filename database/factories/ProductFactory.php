@@ -37,7 +37,8 @@ final class ProductFactory extends Factory
             'send_purchase_notification' => false,
             'available_from' => null,
             'available_until' => null,
-            'order_due_on' => null,
+            'is_purchase_required' => false,
+            'purchase_reminder_on' => null,
             'productable_type' => null,
             'productable_id' => null,
         ];
@@ -113,6 +114,14 @@ final class ProductFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'available_until' => $availableUntil,
+        ]);
+    }
+
+    public function purchaseRequired(?CarbonInterface $availableUntil = null): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'is_purchase_required' => true,
+            'available_until' => $availableUntil ?? now()->addMonth(),
         ]);
     }
 

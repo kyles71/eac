@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Products\Schemas;
 use App\Enums\DashboardAudience;
 use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
+use App\Models\AcademicTerm;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
 use App\Models\Costume;
@@ -16,7 +17,9 @@ use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\Student;
 use App\Services\ProductStudentAssignmentService;
+use App\Services\ProductStudentExclusionService;
 use App\Support\MediaDisks;
+use Carbon\CarbonInterface;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
@@ -61,7 +64,7 @@ final class ProductForm
                             ->afterStateUpdated(function (Set $set, ?string $state): void {
                                 $set('productable_id', null);
                                 $set('include_productable_images', false);
-                                $set('order_due_on', null);
+                                $set('excludedStudents', []);
 
                                 if ($state === Costume::class) {
                                     $set('assignedStudents', []);
@@ -101,6 +104,7 @@ final class ProductForm
 
                                 if ($get('productable_type') === Costume::class) {
                                     $set('assignedStudents', []);
+                                    $set('excludedStudents', []);
                                 }
 
                                 if ($get('productable_type') !== GiftCardType::class || $state === null) {
@@ -145,15 +149,16 @@ final class ProductForm
                     ->schema([
                         DateTimePicker::make('available_from')
                             ->label('Available From')
+                            ->live()
                             ->helperText('Leave blank to make this product available immediately when active.'),
                         DateTimePicker::make('available_until')
                             ->label('Available Until')
                             ->after('available_from')
-                            ->helperText('Leave blank to keep this product available indefinitely while active.'),
-                        DatePicker::make('order_due_on')
-                            ->label('Order Due Date')
-                            ->helperText('Households with an outstanding costume quantity will see a reminder in their portal.')
-                            ->visible(fn (Get $get): bool => self::isCostumeProduct($get, $costumeContext)),
+                            ->required(fn (Get $get): bool => (bool) $get('is_purchase_required'))
+                            ->live()
+                            ->helperText(fn (Get $get): string => (bool) $get('is_purchase_required')
+                                ? 'This is the deadline for the required purchase.'
+                                : 'Leave blank to keep this product available indefinitely while active.'),
                         Repeater::make('earlyAccessWindows')
                             ->label('Early Access Windows')
                             ->relationship()
@@ -192,11 +197,36 @@ final class ProductForm
                     ]),
                 Section::make('Purchase Audience')
                     ->description(fn (Get $get): string => self::isCostumeProduct($get, $costumeContext)
-                        ? 'The linked costume course determines the eligible households. Leave students blank to require one costume for every enrollment seat, or select the specific dancers who need it.'
-                        : 'Course and Competition Team requirements are cumulative. Specific Users and Students qualify directly as overrides. Leave all four empty to make this Product available to everyone while its store schedule is open.')
+                        ? 'The linked costume course determines eligible households. Specific Students narrow the audience; excluded students are removed.'
+                        : ((bool) $get('is_purchase_required')
+                            ? 'Course and Competition Team requirements are cumulative. Specific Users and Students qualify directly. With no audience, current-term student households qualify.'
+                            : 'Course and Competition Team requirements are cumulative. Specific Users and Students qualify directly. Leave all four empty to make this Product available to everyone.'))
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
+                        Toggle::make('is_purchase_required')
+                            ->label('Purchase is required')
+                            ->helperText('Creates a purchase expectation with status reporting and optional reminders. It does not block other activity.')
+                            ->default(false)
+                            ->live()
+                            ->afterStateUpdated(function (Set $set, bool $state): void {
+                                if (! $state) {
+                                    $set('purchase_reminder_on', null);
+                                    $set('excludedStudents', []);
+                                }
+                            }),
+                        DatePicker::make('purchase_reminder_on')
+                            ->label('Reminder Date')
+                            ->rules(fn (Get $get): array => array_values(array_filter([
+                                ($availableFrom = self::formDate($get('available_from'))) === null
+                                    ? null
+                                    : "after_or_equal:{$availableFrom}",
+                                ($availableUntil = self::formDate($get('available_until'))) === null
+                                    ? null
+                                    : "before_or_equal:{$availableUntil}",
+                            ])))
+                            ->helperText('The portal action and one-time email begin on this date. Leave blank for reporting without reminders.')
+                            ->visible(fn (Get $get): bool => (bool) $get('is_purchase_required')),
                         TextEntry::make('costume_course')
                             ->label('Costume Course')
                             ->state(fn (Get $get): string => self::costumeCourseName($get, $costumeContext))
@@ -211,6 +241,7 @@ final class ProductForm
                             ->multiple()
                             ->searchable(['name'])
                             ->preload()
+                            ->live()
                             ->helperText('Enrollment in any selected Course satisfies the Course requirement.')
                             ->hidden(fn (Get $get): bool => self::isCostumeProduct($get, $costumeContext)),
                         Select::make('requiredCompetitionTeams')
@@ -240,6 +271,7 @@ final class ProductForm
                             ->multiple()
                             ->searchable(['name'])
                             ->preload()
+                            ->live()
                             ->getOptionLabelFromRecordUsing(
                                 fn (CompetitionTeam $record): string => "{$record->season->name}: {$record->name} ({$record->season->status()})",
                             )
@@ -249,6 +281,7 @@ final class ProductForm
                             ->label('Specific Users')
                             ->multiple()
                             ->userRelationship('assignedUsers')
+                            ->live()
                             ->helperText('Selected Users qualify directly, even when they do not meet Course or Competition Team requirements.')
                             ->hidden(fn (Get $get): bool => self::isCostumeProduct($get, $costumeContext)),
                         Select::make('assignedStudents')
@@ -266,6 +299,7 @@ final class ProductForm
                             ->multiple()
                             ->searchable(['first_name', 'last_name'])
                             ->preload()
+                            ->live()
                             ->getOptionLabelFromRecordUsing(fn (Student $record): string => $record->fullName)
                             ->helperText(fn (Get $get): string => self::isCostumeProduct($get, $costumeContext)
                                 ? 'Only students enrolled in the costume course can be selected.'
@@ -275,6 +309,30 @@ final class ProductForm
                                     app(ProductStudentAssignmentService::class)->sync($record, $state);
                                 }
                             }),
+                        Select::make('excludedStudents')
+                            ->label('Excluded Students')
+                            ->relationship(
+                                name: 'excludedStudents',
+                                titleAttribute: 'first_name',
+                                modifyQueryUsing: fn (Builder $query, Get $get, ?Product $record): Builder => self::excludedStudentOptionsQuery(
+                                    $query,
+                                    $get,
+                                    $record,
+                                    $costumeContext,
+                                ),
+                            )
+                            ->multiple()
+                            ->searchable(['first_name', 'last_name'])
+                            ->preload()
+                            ->getOptionLabelFromRecordUsing(fn (Student $record): string => $record->fullName)
+                            ->helperText('Excluded students do not create a purchase expectation or qualify their household to see this Product. Other qualifying paths still apply.')
+                            ->visible(fn (Get $get): bool => (bool) $get('is_purchase_required'))
+                            ->saveRelationshipsUsing(function (?Product $record, array $state): void {
+                                if ($record instanceof Product) {
+                                    app(ProductStudentExclusionService::class)->sync($record, $state);
+                                }
+                            })
+                            ->columnSpanFull(),
                     ]),
                 Section::make('Purchaser Questions & Notifications')
                     ->columnSpanFull()
@@ -460,6 +518,83 @@ final class ProductForm
             ->orderBy('first_name');
     }
 
+    /** @param Builder<Student> $query */
+    private static function excludedStudentOptionsQuery(
+        Builder $query,
+        Get $get,
+        ?Product $record,
+        ?Costume $costumeContext,
+    ): Builder {
+        $costume = $costumeContext;
+
+        if (! $costume instanceof Costume && $get('productable_type') === Costume::class) {
+            $costume = Costume::query()->find($get('productable_id'));
+        }
+
+        if (! $costume instanceof Costume && $record?->productable instanceof Costume) {
+            $costume = $record->productable;
+        }
+
+        if ($costume instanceof Costume) {
+            return $query
+                ->where(function (Builder $query) use ($costume, $record): void {
+                    $query->whereHas('enrollments', fn (Builder $query): Builder => $query
+                        ->where('course_id', $costume->course_id));
+
+                    if ($record instanceof Product) {
+                        $query->orWhereIn('students.id', $record->excludedStudents()->select('students.id'));
+                    }
+                })
+                ->orderBy('last_name')
+                ->orderBy('first_name');
+        }
+
+        $courseIds = array_map('intval', (array) ($get('requiredCourses') ?? []));
+        $teamIds = array_map('intval', (array) ($get('requiredCompetitionTeams') ?? []));
+        $assignedStudentIds = array_map('intval', (array) ($get('assignedStudents') ?? []));
+        $hasAnyAudience = $courseIds !== []
+            || $teamIds !== []
+            || $assignedStudentIds !== []
+            || filled($get('assignedUsers'));
+
+        return $query
+            ->where(function (Builder $query) use (
+                $assignedStudentIds,
+                $courseIds,
+                $hasAnyAudience,
+                $record,
+                $teamIds,
+            ): void {
+                $query->whereRaw('1 = 0');
+
+                if ($assignedStudentIds !== []) {
+                    $query->orWhereKey($assignedStudentIds);
+                }
+
+                if ($courseIds !== []) {
+                    $query->orWhereHas('enrollments', fn (Builder $query): Builder => $query
+                        ->whereIn('course_id', $courseIds));
+                }
+
+                if ($teamIds !== []) {
+                    $query->orWhereHas('competitionTeams', fn (Builder $query): Builder => $query
+                        ->whereKey($teamIds));
+                }
+
+                if (! $hasAnyAudience) {
+                    $query->orWhereHas('enrollments.course.academicTerm', fn (Builder $query): Builder => $query
+                        ->whereDate('starts_on', '<=', AcademicTerm::comparisonDate())
+                        ->whereDate('ends_on', '>=', AcademicTerm::comparisonDate()));
+                }
+
+                if ($record instanceof Product) {
+                    $query->orWhereIn('students.id', $record->excludedStudents()->select('students.id'));
+                }
+            })
+            ->orderBy('last_name')
+            ->orderBy('first_name');
+    }
+
     private static function costumeCourseName(Get $get, ?Costume $costumeContext): string
     {
         $costume = $costumeContext;
@@ -552,5 +687,18 @@ final class ProductForm
         $name = $productable?->getAttribute('name');
 
         return is_string($name) ? $name : null;
+    }
+
+    private static function formDate(mixed $value): ?string
+    {
+        if ($value instanceof CarbonInterface) {
+            return $value->toDateString();
+        }
+
+        if (! is_string($value) || blank($value)) {
+            return null;
+        }
+
+        return mb_substr($value, 0, 10);
     }
 }

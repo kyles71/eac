@@ -9,11 +9,14 @@ use App\Filament\Actions\DeleteProductableAction;
 use App\Filament\Actions\DeleteProductableBulkAction;
 use App\Filament\Actions\ManageProductListingAction;
 use App\Filament\Admin\Resources\Costumes\CostumeResource;
+use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Models\Costume;
 use App\Support\MediaDisks;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -65,6 +68,11 @@ final class CostumesTable
                 ActionGroup::make([
                     EditAction::make(),
                     ManageProductListingAction::make(),
+                    Action::make('viewPurchaseStatus')
+                        ->label('View Purchase Status')
+                        ->icon(Heroicon::OutlinedClipboardDocumentCheck)
+                        ->visible(fn (Costume $record): bool => $record->product?->is_purchase_required === true)
+                        ->url(fn (Costume $record): string => ProductResource::getUrl('purchase-status', ['record' => $record->product])),
                     DeleteProductableAction::make(),
                 ]),
             ])

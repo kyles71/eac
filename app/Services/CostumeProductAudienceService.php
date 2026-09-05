@@ -27,6 +27,7 @@ final readonly class CostumeProductAudienceService
         if ($product->assignedStudents()->exists()) {
             return $product->assignedStudents()
                 ->where('students.user_id', $user->id)
+                ->whereNotIn('students.id', $product->excludedStudents()->select('students.id'))
                 ->whereHas('enrollments', fn (Builder $query): Builder => $query
                     ->where('course_id', $costume->course_id))
                 ->exists();
@@ -34,6 +35,11 @@ final readonly class CostumeProductAudienceService
 
         return $costume->course->enrollments()
             ->where('user_id', $user->id)
+            ->where(function (Builder $query) use ($product): void {
+                $query
+                    ->whereNull('student_id')
+                    ->orWhereNotIn('student_id', $product->excludedStudents()->select('students.id'));
+            })
             ->exists();
     }
 
@@ -69,7 +75,16 @@ final readonly class CostumeProductAudienceService
             ->join('enrollments', 'enrollments.course_id', '=', 'costumes.course_id')
             ->selectRaw('1')
             ->whereColumn('costumes.id', 'products.productable_id')
-            ->where('enrollments.user_id', $user->id);
+            ->where('enrollments.user_id', $user->id)
+            ->where(function (QueryBuilder $query): void {
+                $query
+                    ->whereNull('enrollments.student_id')
+                    ->orWhereNotExists(fn (QueryBuilder $query): QueryBuilder => $query
+                        ->from('product_student_exclusion')
+                        ->selectRaw('1')
+                        ->whereColumn('product_student_exclusion.product_id', 'products.id')
+                        ->whereColumn('product_student_exclusion.student_id', 'enrollments.student_id'));
+            });
     }
 
     private function assignedStudentEnrollmentQuery(User $user): QueryBuilder
@@ -84,6 +99,11 @@ final readonly class CostumeProductAudienceService
             })
             ->selectRaw('1')
             ->whereColumn('product_student_assignment.product_id', 'products.id')
-            ->where('students.user_id', $user->id);
+            ->where('students.user_id', $user->id)
+            ->whereNotExists(fn (QueryBuilder $query): QueryBuilder => $query
+                ->from('product_student_exclusion')
+                ->selectRaw('1')
+                ->whereColumn('product_student_exclusion.product_id', 'products.id')
+                ->whereColumn('product_student_exclusion.student_id', 'students.id'));
     }
 }

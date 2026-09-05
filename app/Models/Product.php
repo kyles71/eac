@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -36,9 +37,10 @@ final class Product extends Model implements HasMedia
         'allows_payment_plan' => 'boolean',
         'include_productable_images' => 'boolean',
         'send_purchase_notification' => 'boolean',
+        'is_purchase_required' => 'boolean',
         'available_from' => 'datetime',
         'available_until' => 'datetime',
-        'order_due_on' => 'date',
+        'purchase_reminder_on' => 'date',
     ];
 
     public function productable(): MorphTo
@@ -106,6 +108,19 @@ final class Product extends Model implements HasMedia
     {
         return $this->belongsToMany(Student::class, 'product_student_assignment')
             ->withTimestamps();
+    }
+
+    /** @return BelongsToMany<Student, $this> */
+    public function excludedStudents(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'product_student_exclusion')
+            ->withTimestamps();
+    }
+
+    /** @return HasMany<ProductPurchaseReminderDelivery, $this> */
+    public function purchaseReminderDeliveries(): HasMany
+    {
+        return $this->hasMany(ProductPurchaseReminderDelivery::class);
     }
 
     /** @return HasMany<ProductQuestion, $this> */
@@ -285,6 +300,64 @@ final class Product extends Model implements HasMedia
 
         $this->addMediaCollection('videos')
             ->useDisk(MediaDisks::private());
+    }
+
+    protected static function booted(): void
+    {
+        self::saving(function (Product $product): void {
+            if (! $product->is_purchase_required) {
+                $product->purchase_reminder_on = null;
+
+                return;
+            }
+
+            if ($product->available_until === null) {
+                throw ValidationException::withMessages([
+                    'available_until' => 'An availability deadline is required when purchase is required.',
+                ]);
+            }
+
+            if ($product->purchase_reminder_on === null) {
+                return;
+            }
+
+            $timezone = (string) config('app.display_timezone', config('app.timezone'));
+            $reminderDate = $product->purchase_reminder_on->toDateString();
+            $availableFromDate = $product->available_from?->timezone($timezone)->toDateString();
+            $availableUntilDate = $product->available_until->timezone($timezone)->toDateString();
+
+            if ($availableFromDate !== null && $reminderDate < $availableFromDate) {
+                throw ValidationException::withMessages([
+                    'purchase_reminder_on' => 'The reminder date must be on or after the product becomes available.',
+                ]);
+            }
+
+            if ($reminderDate > $availableUntilDate) {
+                throw ValidationException::withMessages([
+                    'purchase_reminder_on' => 'The reminder date must be on or before the availability deadline.',
+                ]);
+            }
+        });
+
+        self::saved(function (Product $product): void {
+            if (! array_key_exists('is_purchase_required', $product->getAttributes())) {
+                return;
+            }
+
+            if (! $product->is_purchase_required) {
+                if ($product->wasChanged('is_purchase_required')
+                    && (bool) $product->getRawOriginal('is_purchase_required')) {
+                    $product->excludedStudents()->detach();
+                    $product->purchaseReminderDeliveries()->delete();
+                }
+
+                return;
+            }
+
+            if ($product->wasChanged('purchase_reminder_on')) {
+                $product->purchaseReminderDeliveries()->delete();
+            }
+        });
     }
 
     // public function registerMediaConversions(?Media $media = null): void

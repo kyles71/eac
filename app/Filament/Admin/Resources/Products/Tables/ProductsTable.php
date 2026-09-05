@@ -6,11 +6,15 @@ namespace App\Filament\Admin\Resources\Products\Tables;
 
 use App\Enums\ProductAvailabilityStatus;
 use App\Enums\ProductType;
+use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Services\ProductAvailabilityService;
 use App\Support\MediaDisks;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -40,6 +44,9 @@ final class ProductsTable
                     ->sortable(),
                 IconColumn::make('is_active')
                     ->label('Active')
+                    ->boolean(),
+                IconColumn::make('is_purchase_required')
+                    ->label('Required')
                     ->boolean(),
                 TextColumn::make('availability_status')
                     ->label('Availability')
@@ -74,6 +81,8 @@ final class ProductsTable
             ->filters([
                 TernaryFilter::make('is_active')
                     ->label('Active'),
+                TernaryFilter::make('is_purchase_required')
+                    ->label('Purchase Required'),
                 SelectFilter::make('availability_status')
                     ->label('Availability')
                     ->options(ProductAvailabilityStatus::adminOptions())
@@ -88,7 +97,13 @@ final class ProductsTable
                     }),
             ])
             ->recordActions([
-
+                ActionGroup::make([
+                    Action::make('viewPurchaseStatus')
+                        ->label('View Purchase Status')
+                        ->icon(Heroicon::OutlinedClipboardDocumentCheck)
+                        ->visible(fn (Product $record): bool => $record->is_purchase_required)
+                        ->url(fn (Product $record): string => ProductResource::getUrl('purchase-status', ['record' => $record])),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -66,7 +66,50 @@ it('can list products', function () {
 it('has required columns', function (string $column) {
     livewire(ListProducts::class)
         ->assertTableColumnExists($column);
-})->with(['name', 'price', 'is_active', 'availability_status', 'productable_type', 'available_from', 'available_until', 'created_at', 'updated_at']);
+})->with(['name', 'price', 'is_active', 'is_purchase_required', 'availability_status', 'productable_type', 'available_from', 'available_until', 'created_at', 'updated_at']);
+
+it('configures required purchase fields and requires a purchase deadline', function (): void {
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentExists('is_purchase_required')
+        ->assertSchemaComponentHidden('purchase_reminder_on')
+        ->fillForm([
+            'name' => 'Required Shoes',
+            'price' => '45.00',
+            'is_active' => true,
+            'is_purchase_required' => true,
+        ])
+        ->assertSchemaComponentVisible('purchase_reminder_on')
+        ->callMountedAction()
+        ->assertHasActionErrors(['available_until' => 'required']);
+});
+
+it('offers purchase status actions only for required products', function (): void {
+    $requiredProduct = Product::factory()->purchaseRequired()->create();
+    $optionalProduct = Product::factory()->create();
+
+    livewire(ViewProduct::class, ['record' => $requiredProduct->id])
+        ->assertActionVisible('viewPurchaseStatus')
+        ->assertActionVisible('downloadRequirementReport');
+
+    livewire(ViewProduct::class, ['record' => $optionalProduct->id])
+        ->assertActionHidden('viewPurchaseStatus')
+        ->assertActionHidden('downloadRequirementReport');
+});
+
+it('keeps the purchase reminder inside the availability window', function (): void {
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Required Tights',
+            'price' => '20.00',
+            'is_active' => true,
+            'is_purchase_required' => true,
+            'available_from' => '2030-09-10 09:00:00',
+            'available_until' => '2030-09-30 17:00:00',
+            'purchase_reminder_on' => '2030-09-09',
+        ])
+        ->assertHasActionErrors(['purchase_reminder_on' => 'after_or_equal']);
+});
 
 it('has an include linked item images field on the product form', function () {
     livewire(ListProducts::class)

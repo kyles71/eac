@@ -14,7 +14,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            $table->date('order_due_on')->nullable()->after('available_until');
+            $table->boolean('is_purchase_required')->default(false)->after('available_until');
+            $table->date('purchase_reminder_on')->nullable()->after('is_purchase_required');
         });
 
         Schema::table('payment_plan_templates', function (Blueprint $table) {
@@ -31,8 +32,15 @@ return new class extends Migration
             $table->dropColumn('costume_program_types');
         });
 
-        Schema::table('products', function (Blueprint $table) {
-            $table->dropColumn('order_due_on');
-        });
+        $productColumns = array_values(array_filter(
+            ['order_due_on', 'is_purchase_required', 'purchase_reminder_on'],
+            fn (string $column): bool => Schema::hasColumn('products', $column),
+        ));
+
+        if ($productColumns !== []) {
+            Schema::table('products', function (Blueprint $table) use ($productColumns) {
+                $table->dropColumn($productColumns);
+            });
+        }
     }
 };

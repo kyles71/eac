@@ -83,6 +83,13 @@ Schedule::command('cart:send-abandoned-reminders')
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
 
+Schedule::command('products:send-purchase-reminders')
+    ->dailyAt('08:00')
+    ->timezone((string) config('app.display_timezone', config('app.timezone')))
+    ->withoutOverlapping()
+    ->name('send-required-product-purchase-reminders')
+    ->description('Remind households about outstanding required Product purchases');
+
 Schedule::command('private-lessons:send-payment-reminders')
     ->dailyAt('08:00')
     ->timezone('America/New_York')

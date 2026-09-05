@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\ProductStudentAssignmentService;
+use App\Services\ProductStudentExclusionService;
 use Illuminate\Validation\ValidationException;
 
 it('maps costumes to their own product type and stores course metadata', function (): void {
@@ -76,6 +77,25 @@ it('rejects student assignments outside the costume course', function (): void {
 
     expect(fn () => app(ProductStudentAssignmentService::class)->sync($product, [$student->id]))
         ->toThrow(ValidationException::class);
+});
+
+it('removes excluded costume students from requirements and storefront visibility', function (): void {
+    $course = Course::factory()->create();
+    $excludedHousehold = User::factory()->create();
+    $includedHousehold = User::factory()->create();
+    $excludedStudent = Student::factory()->for($excludedHousehold)->create();
+    $includedStudent = Student::factory()->for($includedHousehold)->create();
+    Enrollment::factory()->for($course)->for($excludedHousehold)->withStudent($excludedStudent)->create();
+    Enrollment::factory()->for($course)->for($includedHousehold)->withStudent($includedStudent)->create();
+    $product = Product::factory()
+        ->forCostume(Costume::factory()->for($course)->create())
+        ->purchaseRequired()
+        ->create();
+    app(ProductStudentExclusionService::class)->sync($product, [$excludedStudent->id]);
+
+    expect($product->refresh()->canBePurchasedBy($excludedHousehold))->toBeFalse()
+        ->and(Product::query()->visibleTo($excludedHousehold)->whereKey($product)->exists())->toBeFalse()
+        ->and($product->canBePurchasedBy($includedHousehold))->toBeTrue();
 });
 
 it('allows only one product listing per costume', function (): void {

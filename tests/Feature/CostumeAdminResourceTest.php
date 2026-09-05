@@ -5,10 +5,10 @@ declare(strict_types=1);
 use App\Enums\CourseProgramType;
 use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
-use App\Filament\Admin\Resources\Costumes\Pages\PurchaseStatus;
 use App\Filament\Admin\Resources\Costumes\Pages\ViewCostume;
 use App\Filament\Admin\Resources\Courses\Pages\ListCourses;
 use App\Filament\Admin\Resources\Courses\Pages\ViewCourse;
+use App\Filament\Admin\Resources\Products\Pages\PurchaseStatus;
 use App\Models\AcademicTerm;
 use App\Models\Costume;
 use App\Models\Course;
@@ -108,7 +108,9 @@ it('creates and edits the single product listing from a costume', function (): v
             'price' => '125.00',
             'is_active' => true,
             'assignedStudents' => [$student->id],
-            'order_due_on' => '2026-10-01',
+            'is_purchase_required' => true,
+            'purchase_reminder_on' => '2026-10-01',
+            'available_until' => '2026-10-15 23:59:59',
         ])
         ->assertHasNoActionErrors()
         ->assertNotified();
@@ -128,7 +130,9 @@ it('creates and edits the single product listing from a costume', function (): v
             'price' => '130.00',
             'is_active' => true,
             'assignedStudents' => [$student->id],
-            'order_due_on' => '2026-10-15',
+            'is_purchase_required' => true,
+            'purchase_reminder_on' => '2026-10-15',
+            'available_until' => '2026-10-31 23:59:59',
         ])
         ->assertHasNoActionErrors()
         ->assertNotified();
@@ -214,9 +218,9 @@ it('renders searchable costume order status', function (): void {
     $course = Course::factory()->create();
     Enrollment::factory()->for($course)->for($household)->create();
     $costume = Costume::factory()->for($course)->create();
-    Product::factory()->forCostume($costume)->create();
+    $product = Product::factory()->forCostume($costume)->purchaseRequired()->create();
 
-    livewire(PurchaseStatus::class, ['record' => $costume->id])
+    livewire(PurchaseStatus::class, ['record' => $product->id])
         ->loadTable()
         ->assertCanSeeTableRecords([$household])
         ->searchTable('Targeted')

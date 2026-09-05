@@ -13,7 +13,6 @@ use App\Filament\User\Pages\HeldClasses;
 use App\Filament\User\Pages\MyEnrollments;
 use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
-use App\Models\Costume;
 use App\Models\CourseHold;
 use App\Models\Enrollment;
 use App\Models\FormUser;
@@ -21,7 +20,7 @@ use App\Models\Installment;
 use App\Models\Product;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
-use App\Services\CostumePurchaseRequirementService;
+use App\Services\ProductPurchaseRequirementService;
 use Filament\Widgets\Widget;
 
 final class NeedsAttention extends Widget
@@ -110,33 +109,33 @@ final class NeedsAttention extends Widget
                 'color' => 'warning',
             ]);
 
-        $costumes = Product::query()
-            ->where('productable_type', Costume::class)
+        $requiredProducts = Product::query()
+            ->where('is_purchase_required', true)
             ->where('is_store_listed', true)
-            ->whereNotNull('order_due_on')
+            ->whereNotNull('purchase_reminder_on')
+            ->whereDate('purchase_reminder_on', '<=', today((string) config('app.display_timezone', config('app.timezone'))))
             ->visibleTo($user)
-            ->with('productable.course')
-            ->orderBy('order_due_on')
+            ->with('productable')
+            ->orderBy('purchase_reminder_on')
             ->get()
             ->map(function (Product $product) use ($user): ?array {
-                $requirement = app(CostumePurchaseRequirementService::class)->rowForUser($product, $user);
+                $requirement = app(ProductPurchaseRequirementService::class)->rowForUser($product, $user);
 
                 if ($requirement === null || $requirement['remaining'] === 0) {
                     return null;
                 }
 
-                /** @var Costume $costume */
-                $costume = $product->productable;
                 $quantity = $requirement['remaining'];
+                $timezone = (string) config('app.display_timezone', config('app.timezone'));
 
                 return [
-                    'title' => "Costume order needed: {$costume->name}",
-                    'description' => $quantity.' '.str('costume')->plural($quantity)
-                        .' remaining across '.implode(', ', $requirement['targets'])
-                        .' · due '.$product->order_due_on->format('M j, Y'),
+                    'title' => "Required purchase: {$product->name}",
+                    'description' => $quantity.' '.str('item')->plural($quantity)
+                        .' remaining for '.implode(', ', $requirement['targets'])
+                        .' · order by '.$product->available_until->timezone($timezone)->format('M j, Y \a\t g:i A'),
                     'url' => ProductDetails::getUrl(['product' => $product], panel: 'user'),
-                    'action' => 'Order costume',
-                    'color' => $product->order_due_on->isBefore(today()) ? 'danger' : 'warning',
+                    'action' => 'View product',
+                    'color' => 'warning',
                 ];
             })
             ->filter();
@@ -172,7 +171,7 @@ final class NeedsAttention extends Widget
             ->concat($forms)
             ->concat($enrollments)
             ->concat($holds)
-            ->concat($costumes)
+            ->concat($requiredProducts)
             ->concat($privateLessons)
             ->values()
             ->all();

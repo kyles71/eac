@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Products;
 
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
+use App\Filament\Admin\Resources\Products\Pages\PurchaseStatus;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Filament\Admin\Resources\Products\Schemas\ProductForm;
 use App\Filament\Admin\Resources\Products\Schemas\ProductInfolist;
@@ -94,6 +95,7 @@ final class ProductResource extends Resource
         return [
             'index' => ListProducts::route('/'),
             'view' => ViewProduct::route('/{record}'),
+            'purchase-status' => PurchaseStatus::route('/{record}/purchase-status'),
         ];
     }
 

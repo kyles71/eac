@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Costumes;
 
 use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
-use App\Filament\Admin\Resources\Costumes\Pages\PurchaseStatus;
 use App\Filament\Admin\Resources\Costumes\Pages\ViewCostume;
 use App\Filament\Admin\Resources\Costumes\Schemas\CostumeForm;
 use App\Filament\Admin\Resources\Costumes\Schemas\CostumeInfolist;
@@ -61,7 +60,6 @@ final class CostumeResource extends Resource
         return [
             'index' => ListCostumes::route('/'),
             'view' => ViewCostume::route('/{record}'),
-            'purchase-status' => PurchaseStatus::route('/{record}/purchase-status'),
         ];
     }
 }

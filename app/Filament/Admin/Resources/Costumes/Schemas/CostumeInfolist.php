@@ -62,13 +62,35 @@ final class CostumeInfolist
                             ->color(fn (ProductAvailabilityStatus|string $state): string => $state instanceof ProductAvailabilityStatus
                                 ? $state->getColor()
                                 : 'gray'),
-                        TextEntry::make('product.order_due_on')
-                            ->label('Order Due Date')
+                        TextEntry::make('product.is_purchase_required')
+                            ->label('Purchase Required')
+                            ->badge()
+                            ->formatStateUsing(fn (?bool $state): string => $state ? 'Yes' : 'No')
+                            ->color(fn (?bool $state): string => $state ? 'warning' : 'gray')
+                            ->placeholder('No product listing'),
+                        TextEntry::make('product.purchase_reminder_on')
+                            ->label('Reminder Date')
                             ->date()
+                            ->placeholder('None'),
+                        TextEntry::make('product.available_until')
+                            ->label('Purchase Deadline')
+                            ->dateTime()
                             ->placeholder('None'),
                         TextEntry::make('product_student_audience')
                             ->label('Student Audience')
                             ->state(fn (Costume $record): string => self::studentAudience($record->product))
+                            ->columnSpanFull(),
+                        TextEntry::make('product_student_exclusions')
+                            ->label('Excluded Students')
+                            ->state(fn (Costume $record): array => $record->product?->excludedStudents()
+                                ->orderBy('last_name')
+                                ->orderBy('first_name')
+                                ->get()
+                                ->map(fn ($student): string => $student->fullName)
+                                ->all() ?? [])
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder('None')
                             ->columnSpanFull(),
                     ]),
                 Section::make('Media')
