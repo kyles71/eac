@@ -18,7 +18,9 @@ final class CourseFactory extends Factory
     public function configure(): static
     {
         return $this->afterCreating(function (Course $course): void {
-            $course->teachers()->syncWithoutDetaching([User::factory()->create()->id]);
+            $course->teachers()->syncWithoutDetaching([
+                User::factory()->isTeacher()->create()->id => ['rotation_position' => 1],
+            ]);
         });
     }
 

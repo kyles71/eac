@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Products\Schemas;
 
 use App\Enums\DashboardAudience;
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
 use App\Models\CompetitionSeason;
@@ -49,9 +50,15 @@ final class ProductForm
                             ])
                             ->placeholder(ProductType::Standalone->getLabel())
                             ->live()
-                            ->afterStateUpdated(function (Set $set): void {
+                            ->afterStateUpdated(function (Set $set, ?string $state): void {
                                 $set('productable_id', null);
                                 $set('include_productable_images', false);
+                                $set(
+                                    'fulfillment_workflow',
+                                    in_array($state, [Course::class, GiftCardType::class], true)
+                                        ? FulfillmentWorkflow::Automatic->value
+                                        : FulfillmentWorkflow::Manual->value,
+                                );
                             }),
                         Select::make('productable_id')
                             ->label(fn (Get $get): string => match ($get('productable_type')) {
@@ -84,6 +91,26 @@ final class ProductForm
                                 }
                             }),
                     ])] : []),
+                Section::make('Fulfillment')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('fulfillment_workflow')
+                            ->label('Fulfillment Workflow')
+                            ->options(fn (Get $get): array => in_array($get('productable_type'), [Course::class, GiftCardType::class], true)
+                                ? [FulfillmentWorkflow::Automatic->value => FulfillmentWorkflow::Automatic->getLabel()]
+                                : FulfillmentWorkflow::configurableOptions())
+                            ->searchable(false)
+                            ->default(FulfillmentWorkflow::Manual->value)
+                            ->disabled(fn (Get $get): bool => in_array($get('productable_type'), [Course::class, GiftCardType::class], true))
+                            ->dehydrated()
+                            ->preload()
+                            ->required()
+                            ->selectablePlaceholder(false)
+                            ->helperText(fn (Get $get): string => in_array($get('productable_type'), [Course::class, GiftCardType::class], true)
+                                ? 'The linked item fulfills purchases automatically.'
+                                : 'Manual items are completed by staff. Scheduled-event items are completed by creating or attaching an event. The choice is copied to future order items.'),
+                    ]),
                 Section::make('Store Details')
                     ->columns(2)
                     ->columnSpanFull()

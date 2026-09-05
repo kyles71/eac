@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\Events\CancelEvent;
 use App\Actions\Events\ManageEventSubstitution;
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Enums\EventSubstituteCoverageStatus;
 use App\Enums\EventSubstituteRequestReason;
 use App\Enums\EventSubstituteRequestStatus;
@@ -20,6 +21,7 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\EventSubstituteRequest;
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
@@ -49,7 +51,7 @@ it('requests a teacher substitute and queues the customizable request email', fu
         $event,
         $teacher,
         $actor,
-        'Regular teacher unavailable.',
+        'Teacher unavailable.',
     );
 
     expect($request->status)->toBe(EventSubstituteRequestStatus::Pending)
@@ -59,7 +61,7 @@ it('requests a teacher substitute and queues the customizable request email', fu
 
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'event-substitute-request'
         && $mail->hasTo('substitute@example.com')
-        && str_contains($mail->getRenderedEmail()->html, 'Regular teacher unavailable.'));
+        && str_contains($mail->getRenderedEmail()->html, 'Teacher unavailable.'));
 });
 
 it('only allows users with the teacher role to be requested', function (): void {
@@ -72,7 +74,7 @@ it('only allows users with the teacher role to be requested', function (): void 
     app(ManageEventSubstitution::class)->requestSubstitute($event, $candidate, $actor);
 })->throws(DomainException::class, 'Only users with the teacher role may be substitutes.');
 
-it('blocks teachers who have an overlapping teaching attendee or substitute assignment', function (string $commitment): void {
+it('blocks teachers who have an overlapping regular or substitute assignment', function (string $commitment): void {
     $teacher = User::factory()->isTeacher()->create();
     $event = futureSubstituteEvent();
     $conflict = Event::factory()->create([
@@ -82,10 +84,7 @@ it('blocks teachers who have an overlapping teaching attendee or substitute assi
     ]);
 
     match ($commitment) {
-        'teacher' => tap(Course::factory()->create(), function (Course $course) use ($conflict, $teacher): void {
-            $course->teachers()->sync([$teacher->id]);
-            $conflict->update(['course_id' => $course->id]);
-        }),
+        'teacher' => app(ManageEventTeacherAssignments::class)->assignCustom($conflict, [$teacher->id]),
         'attendee' => EventAttendee::factory()->forUser($teacher)->create(['event_id' => $conflict->id]),
         'substitute' => $conflict->update(['substitute_teacher_id' => $teacher->id]),
         default => throw new LogicException("Unknown commitment type: {$commitment}"),
@@ -96,6 +95,42 @@ it('blocks teachers who have an overlapping teaching attendee or substitute assi
 
     app(ManageEventSubstitution::class)->requestSubstitute($event, $teacher, $actor);
 })->with(['teacher', 'attendee', 'substitute'])->throws(DomainException::class, 'overlapping event');
+
+it('does not allow a teacher assigned to the event to be requested as a substitute', function (): void {
+    $event = futureSubstituteEvent();
+    $coveredTeacher = $event->teachers()->firstOrFail();
+    $coTeacher = User::factory()->isTeacher()->create();
+    $actor = auth()->user();
+    app(ManageEventTeacherAssignments::class)->assignCustom($event, [
+        $coveredTeacher->id,
+        $coTeacher->id,
+    ]);
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    app(ManageEventSubstitution::class)->requestSubstitute(
+        $event,
+        $coveredTeacher,
+        $coTeacher,
+        $actor,
+    );
+})->throws(DomainException::class, 'already teaching this event');
+
+it('rechecks substitute availability when a teacher accepts', function (): void {
+    $event = futureSubstituteEvent();
+    $candidate = User::factory()->isTeacher()->create();
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+    $request = app(ManageEventSubstitution::class)->requestSubstitute($event, $candidate, $actor);
+    $conflict = Event::factory()->standalone()->create([
+        'start_time' => $event->start_time?->copy()->addMinutes(15),
+        'end_time' => $event->end_time?->copy()->addMinutes(15),
+    ]);
+    app(ManageEventTeacherAssignments::class)->assignCustom($conflict, [$candidate->id]);
+
+    app(ManageEventSubstitution::class)->respond($request, $candidate, true);
+})->throws(DomainException::class, 'overlapping event');
 
 it('accepts a request and grants only record-specific substitute abilities', function (): void {
     $event = futureSubstituteEvent();
@@ -461,6 +496,7 @@ it('manages substitute coverage through explicit admin event actions and table s
         ->assertActionVisible('markSubstituteNeeded')
         ->assertActionVisible('requestEventSubstitute')
         ->callAction(TestAction::make('requestEventSubstitute'), [
+            'covered_teacher_id' => $event->teachers()->value('users.id'),
             'teacher_id' => $teacher->id,
             'reason_type' => EventSubstituteRequestReason::Other->value,
             'reason' => 'Please cover this class.',
@@ -477,8 +513,65 @@ it('manages substitute coverage through explicit admin event actions and table s
         ->assertActionDoesNotExist(TestAction::make('markSubstituteNeeded')->table($event))
         ->assertTableColumnStateSet(
             'substitute_coverage_status',
-            EventSubstituteCoverageStatus::AwaitingResponse,
+            EventSubstituteCoverageStatus::AwaitingResponse->getLabel(),
             $event,
+        );
+});
+
+it('offers only available teachers in the request substitute action', function (): void {
+    Filament::setCurrentPanel('admin');
+    Mail::fake();
+    $event = futureSubstituteEvent();
+    $assignedTeacher = $event->teachers()->firstOrFail();
+    $currentSubstitute = User::factory()->isTeacher()->create();
+    $busyTeacher = User::factory()->isTeacher()->create();
+    $busyAttendee = User::factory()->isTeacher()->create();
+    $busySubstitute = User::factory()->isTeacher()->create();
+    $availableTeacher = User::factory()->isTeacher()->create();
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+    $currentRequest = app(ManageEventSubstitution::class)->requestSubstitute($event, $currentSubstitute, $actor);
+    app(ManageEventSubstitution::class)->respond($currentRequest, $currentSubstitute, true);
+
+    $regularConflict = Event::factory()->standalone()->create([
+        'start_time' => $event->start_time?->copy()->addMinutes(10),
+        'end_time' => $event->end_time?->copy()->addMinutes(10),
+    ]);
+    app(ManageEventTeacherAssignments::class)->assignCustom($regularConflict, [$busyTeacher->id]);
+    EventAttendee::factory()->forUser($busyAttendee)->create(['event_id' => $regularConflict->id]);
+
+    $substituteConflict = futureSubstituteEvent();
+    $busyRequest = app(ManageEventSubstitution::class)->requestSubstitute($substituteConflict, $busySubstitute, $actor);
+    app(ManageEventSubstitution::class)->respond($busyRequest, $busySubstitute, true);
+
+    livewire(ViewEvent::class, ['record' => $event->id])
+        ->assertSee('Coverage by Teacher')
+        ->assertDontSee('Regular Teacher')
+        ->assertActionExists(
+            'requestEventSubstitute',
+            fn (Action $action): bool => $action->getLabel() === 'Request Substitute'
+                && $action->getModalHeading() === 'Request Substitute',
+        )
+        ->mountAction('requestEventSubstitute')
+        ->assertSchemaComponentExists(
+            'covered_teacher_id',
+            'mountedActionSchema0',
+            fn (Select $select): bool => $select->getLabel() === 'Teacher Being Covered',
+        )
+        ->assertSchemaComponentExists(
+            'teacher_id',
+            'mountedActionSchema0',
+            function (Select $select) use ($assignedTeacher, $availableTeacher, $busyAttendee, $busySubstitute, $busyTeacher, $currentSubstitute): bool {
+                $options = $select->getOptions();
+
+                return array_key_exists($availableTeacher->id, $options)
+                    && ! array_key_exists($assignedTeacher->id, $options)
+                    && ! array_key_exists($currentSubstitute->id, $options)
+                    && ! array_key_exists($busyTeacher->id, $options)
+                    && ! array_key_exists($busyAttendee->id, $options)
+                    && ! array_key_exists($busySubstitute->id, $options);
+            },
         );
 });
 
@@ -502,6 +595,7 @@ it('records the selected substitute reason and only shows optional details for o
         )
         ->assertSchemaComponentHidden('reason', 'mountedActionSchema0')
         ->setActionData([
+            'covered_teacher_id' => $otherEvent->teachers()->value('users.id'),
             'teacher_id' => $otherTeacher->id,
             'reason_type' => EventSubstituteRequestReason::Other->value,
         ])
@@ -516,6 +610,7 @@ it('records the selected substitute reason and only shows optional details for o
 
     livewire(ViewEvent::class, ['record' => $sickEvent->id])
         ->callAction('requestEventSubstitute', [
+            'covered_teacher_id' => $sickEvent->teachers()->value('users.id'),
             'teacher_id' => $sickTeacher->id,
             'reason_type' => EventSubstituteRequestReason::Sick->value,
             'reason' => 'This hidden detail should not be saved.',
@@ -573,9 +668,13 @@ it('changes the substitute action group appearance with the coverage state', fun
 
 function futureSubstituteEvent(): Event
 {
-    return Event::factory()->create([
+    $event = Event::factory()->create([
         'course_id' => null,
         'start_time' => now()->addDay(),
         'end_time' => now()->addDay()->addHour(),
     ]);
+    $regularTeacher = User::factory()->isTeacher()->create();
+    app(ManageEventTeacherAssignments::class)->assignCustom($event, [$regularTeacher->id]);
+
+    return $event;
 }

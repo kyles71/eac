@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\ProvidesStorefrontDetails;
 use App\Contracts\RequiresAddToCartInformation;
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\ProductAvailabilityStatus;
 use App\Services\ProductAssociationService;
 use App\Services\ProductAvailabilityService;
@@ -36,6 +38,7 @@ final class Product extends Model implements HasMedia
         'allows_payment_plan' => 'boolean',
         'include_productable_images' => 'boolean',
         'send_purchase_notification' => 'boolean',
+        'fulfillment_workflow' => FulfillmentWorkflow::class,
         'available_from' => 'datetime',
         'available_until' => 'datetime',
     ];
@@ -43,6 +46,17 @@ final class Product extends Model implements HasMedia
     public function productable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    public function fulfillmentWorkflow(): FulfillmentWorkflow
+    {
+        $this->loadMissing('productable');
+
+        if ($this->productable instanceof AutomaticallyFulfillsOrderItems) {
+            return FulfillmentWorkflow::Automatic;
+        }
+
+        return $this->fulfillment_workflow ?? FulfillmentWorkflow::Manual;
     }
 
     /**

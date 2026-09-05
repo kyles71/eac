@@ -29,7 +29,8 @@ final class EventsTable
                 : null)
             ->columns([
                 TextColumn::make('name')
-                    ->icon(fn (Event $record): ?Heroicon => $record->substitute_teacher_id !== null
+                    ->icon(fn (Event $record): ?Heroicon => $record->activeSubstituteCoverages()
+                        ->whereNotNull('substitute_teacher_id')->exists()
                         ? Heroicon::OutlinedUser
                         : null)
                     ->iconColor('success')
@@ -50,13 +51,20 @@ final class EventsTable
                 TextColumn::make('course.name')
                     ->label('Course')
                     ->searchable(),
+                TextColumn::make('teachers.fullName')
+                    ->label('Teachers')
+                    ->listWithLineBreaks()
+                    ->searchable(['first_name', 'last_name'])
+                    ->toggleable(),
                 TextColumn::make('substitute_coverage_status')
                     ->label('Substitute')
-                    ->state(fn (Event $record) => $record->substituteCoverageStatus())
+                    ->state(fn (Event $record): string => $record->substituteCoverageLabel())
                     ->badge()
+                    ->color(fn (Event $record): string => $record->substituteCoverageStatus()->getColor())
                     ->toggleable(),
-                TextColumn::make('substituteTeacher.fullName')
-                    ->label('Confirmed Substitute')
+                TextColumn::make('substituteTeachers.fullName')
+                    ->label('Confirmed Substitutes')
+                    ->listWithLineBreaks()
                     ->searchable(['first_name', 'last_name'])
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('calendar.name')
@@ -77,7 +85,8 @@ final class EventsTable
                     ->label('Substitute Coverage')
                     ->multiple()
                     ->options(EventSubstituteCoverageStatus::class)
-                    ->query(fn (Builder $query, array $data): Builder => $query->withSubstituteCoverageStatuses(
+                    ->query(fn (Builder $query, array $data): Builder => Event::applySubstituteCoverageStatusesConstraint(
+                        $query,
                         is_array($data['values'] ?? null) ? $data['values'] : [],
                     )),
             ])

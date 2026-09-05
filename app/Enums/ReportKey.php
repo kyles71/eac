@@ -22,7 +22,6 @@ use App\Filament\Admin\Pages\Reports\ReportPage;
 use App\Filament\Admin\Pages\Reports\SubstituteCoverage;
 use App\Filament\Admin\Pages\Reports\TermEmailList;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
-use App\Models\Role;
 use App\Models\User;
 
 enum ReportKey: string

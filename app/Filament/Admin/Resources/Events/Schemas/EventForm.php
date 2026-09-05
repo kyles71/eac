@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
+use App\Enums\EventTeacherAssignmentMode;
 use App\Enums\ScheduleFrequency;
 use App\Filament\Shared\Schemas\PeopleAndGroupsPicker;
 use App\Models\Calendar;
@@ -63,6 +65,58 @@ final class EventForm
                             },
                         ])
                         ->live(),
+                    Select::make('teacher_assignment_mode')
+                        ->label('Teacher Assignments')
+                        ->options(EventTeacherAssignmentMode::class)
+                        ->default($course_id === null
+                            ? EventTeacherAssignmentMode::Custom->value
+                            : EventTeacherAssignmentMode::CourseDefaults->value)
+                        ->required()
+                        ->selectablePlaceholder(false)
+                        ->visible(fn (Get $get): bool => filled($get('course_id')) || $course_id !== null)
+                        ->live(),
+                    Select::make('teacher_ids')
+                        ->label('Teachers')
+                        ->multiple()
+                        ->searchable()
+                        ->preload()
+                        ->options(fn (): array => User::query()
+                            ->whereHas('roles', fn (Builder $query): Builder => $query
+                                ->whereIn('name', ['teacher', 'owner', 'super_admin']))
+                            ->orderBy('first_name')
+                            ->orderBy('last_name')
+                            ->get()
+                            ->mapWithKeys(fn (User $teacher): array => [$teacher->id => $teacher->fullName])
+                            ->all())
+                        ->default(fn (): array => $course_id === null
+                            ? []
+                            : \App\Models\Course::query()->find($course_id)?->teachers()->pluck('users.id')->all() ?? [])
+                        ->required(fn (Get $get): bool => (filled($get('course_id')) || $course_id !== null)
+                            && self::teacherAssignmentMode($get('teacher_assignment_mode')) === EventTeacherAssignmentMode::Custom)
+                        ->visible(fn (Get $get): bool => ! filled($get('course_id'))
+                            || self::teacherAssignmentMode($get('teacher_assignment_mode')) === EventTeacherAssignmentMode::Custom)
+                        ->loadStateFromRelationshipsUsing(function (Select $component, ?Event $record): void {
+                            $component->state($record?->teachers()->pluck('users.id')->all() ?? []);
+                        })
+                        ->saveRelationshipsUsing(function (?Event $record, array $state): void {
+                            if (! $record instanceof Event) {
+                                return;
+                            }
+
+                            $mode = $record->teacher_assignment_mode;
+
+                            if ($record->course_id !== null && $mode === EventTeacherAssignmentMode::CourseDefaults) {
+                                app(ManageEventTeacherAssignments::class)->initializeCourseEvent($record);
+
+                                return;
+                            }
+
+                            app(ManageEventTeacherAssignments::class)->assignCustom(
+                                $record,
+                                array_map('intval', $state),
+                            );
+                        })
+                        ->dehydrated(false),
                     TextInput::make('focus')
                         ->label('Focus / Theme (Public)'),
                     Textarea::make('description')
@@ -232,6 +286,13 @@ final class EventForm
         $user = auth()->user();
 
         return $user instanceof User && $user->hasCourseRestrictedAdminAccess();
+    }
+
+    private static function teacherAssignmentMode(mixed $mode): ?EventTeacherAssignmentMode
+    {
+        return $mode instanceof EventTeacherAssignmentMode
+            ? $mode
+            : (is_string($mode) ? EventTeacherAssignmentMode::tryFrom($mode) : null);
     }
 
     private static function currentUserCanUseCourse(mixed $courseId): bool

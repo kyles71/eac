@@ -135,6 +135,7 @@ it('queues individualized handcrafted emails to all associated attendee addresse
         'start_time' => now()->addWeek(),
         'end_time' => now()->addWeek()->addHour(),
     ]);
+    $event->teachers()->firstOrFail()->update(['email' => 'teacher@example.com']);
 
     $account = User::factory()->create(['email' => 'guardian@example.com']);
     $student = Student::factory()->create(['user_id' => $account->id]);
@@ -169,9 +170,9 @@ it('queues individualized handcrafted emails to all associated attendee addresse
             $actor,
             'Weather <unsafe>',
             true,
-        ))->toBe(5);
+        ))->toBe(6);
 
-    Mail::assertQueued(ManagedMail::class, 5);
+    Mail::assertQueued(ManagedMail::class, 6);
 
     foreach ([
         'guardian@example.com',
@@ -179,6 +180,7 @@ it('queues individualized handcrafted emails to all associated attendee addresse
         'direct@example.com',
         'second-guardian@example.com',
         'second-dancer@example.com',
+        'teacher@example.com',
     ] as $recipient) {
         Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'event-cancellation'
             && $mail->hasTo($recipient)
