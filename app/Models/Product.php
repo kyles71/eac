@@ -38,6 +38,7 @@ final class Product extends Model implements HasMedia
         'send_purchase_notification' => 'boolean',
         'available_from' => 'datetime',
         'available_until' => 'datetime',
+        'order_due_on' => 'date',
     ];
 
     public function productable(): MorphTo
@@ -97,6 +98,13 @@ final class Product extends Model implements HasMedia
     public function assignedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'product_user_assignment')
+            ->withTimestamps();
+    }
+
+    /** @return BelongsToMany<Student, $this> */
+    public function assignedStudents(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'product_student_assignment')
             ->withTimestamps();
     }
 

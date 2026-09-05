@@ -9,6 +9,7 @@ use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
 use App\Models\CompetitionTeam;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CourseHold;
 use App\Models\CourseHoldSeat;
@@ -56,6 +57,7 @@ final class ProductDetails extends Page
         ]);
         $product->loadMorph('productable', [
             Course::class => ['events', 'teachers.media'],
+            Costume::class => ['course'],
         ]);
 
         if ($product->productable instanceof HasMedia) {

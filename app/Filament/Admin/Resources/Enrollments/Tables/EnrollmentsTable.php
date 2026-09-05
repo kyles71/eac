@@ -108,6 +108,7 @@ final class EnrollmentsTable
                         ->hidden(fn ($record) => $record->student_id)
                         ->schema([
                             Select::make('student_id')
+                                ->selectablePlaceholder(false)
                                 ->required()
                                 ->searchableRelationship(
                                     name: 'student',

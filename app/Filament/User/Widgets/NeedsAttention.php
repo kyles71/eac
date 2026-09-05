@@ -11,13 +11,17 @@ use App\Enums\RecurringPrivateLessonStatus;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\HeldClasses;
 use App\Filament\User\Pages\MyEnrollments;
+use App\Filament\User\Pages\ProductDetails;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
+use App\Models\Costume;
 use App\Models\CourseHold;
 use App\Models\Enrollment;
 use App\Models\FormUser;
 use App\Models\Installment;
+use App\Models\Product;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
+use App\Services\CostumePurchaseRequirementService;
 use Filament\Widgets\Widget;
 
 final class NeedsAttention extends Widget
@@ -106,6 +110,37 @@ final class NeedsAttention extends Widget
                 'color' => 'warning',
             ]);
 
+        $costumes = Product::query()
+            ->where('productable_type', Costume::class)
+            ->where('is_store_listed', true)
+            ->whereNotNull('order_due_on')
+            ->visibleTo($user)
+            ->with('productable.course')
+            ->orderBy('order_due_on')
+            ->get()
+            ->map(function (Product $product) use ($user): ?array {
+                $requirement = app(CostumePurchaseRequirementService::class)->rowForUser($product, $user);
+
+                if ($requirement === null || $requirement['remaining'] === 0) {
+                    return null;
+                }
+
+                /** @var Costume $costume */
+                $costume = $product->productable;
+                $quantity = $requirement['remaining'];
+
+                return [
+                    'title' => "Costume order needed: {$costume->name}",
+                    'description' => $quantity.' '.str('costume')->plural($quantity)
+                        .' remaining across '.implode(', ', $requirement['targets'])
+                        .' · due '.$product->order_due_on->format('M j, Y'),
+                    'url' => ProductDetails::getUrl(['product' => $product], panel: 'user'),
+                    'action' => 'Order costume',
+                    'color' => $product->order_due_on->isBefore(today()) ? 'danger' : 'warning',
+                ];
+            })
+            ->filter();
+
         $privateLessons = RecurringPrivateLessonCharge::query()
             ->where('status', RecurringPrivateLessonChargeStatus::Billed)
             ->whereHas('recurringPrivateLesson', fn ($query) => $query
@@ -137,6 +172,7 @@ final class NeedsAttention extends Widget
             ->concat($forms)
             ->concat($enrollments)
             ->concat($holds)
+            ->concat($costumes)
             ->concat($privateLessons)
             ->values()
             ->all();

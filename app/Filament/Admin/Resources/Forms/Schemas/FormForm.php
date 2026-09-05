@@ -27,6 +27,7 @@ final class FormForm
                         Select::make('form_type')
                             ->label('Type')
                             ->options(FormTypes::class)
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Toggle::make('can_update')
                             ->label('Can Be Updated')

@@ -28,6 +28,9 @@ final class CourseInfolist
                             ->state(fn (Course $record): ?string => $record->academicTerm?->display_name)
                             ->badge()
                             ->color(fn (Course $record): ?string => $record->academicTerm?->semester->getColor()),
+                        TextEntry::make('program_type')
+                            ->label('Program Type')
+                            ->badge(),
                         TextEntry::make('product.price')
                             ->label('Price')
                             ->moneyCents('No product linked'),
@@ -66,16 +69,6 @@ final class CourseInfolist
                             ->visibility('public')
                             // ->conversion('thumb')
                             ->columnSpanFull(),
-                    ]),
-                Section::make('Record')
-                    ->columns(2)
-                    ->collapsed()
-                    ->columnSpanFull()
-                    ->schema([
-                        TextEntry::make('created_at')
-                            ->dateTime(),
-                        TextEntry::make('updated_at')
-                            ->dateTime(),
                     ]),
             ]);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Gear;
 use App\Models\GiftCardType;
@@ -15,6 +16,7 @@ enum ProductType: string implements HasLabel
 {
     case Any = 'Any';
     case Course = 'Course';
+    case Costume = 'Costume';
     case GiftCardType = 'Gift Card';
     case Gear = 'Gear';
     case RecurringPrivateLesson = 'Recurring Private Lesson';
@@ -33,6 +35,7 @@ enum ProductType: string implements HasLabel
 
         return match ($morphClass) {
             Course::class => self::Course,
+            Costume::class => self::Costume,
             GiftCardType::class => self::GiftCardType,
             Gear::class => self::Gear,
             RecurringPrivateLessonCharge::class => self::RecurringPrivateLesson,
@@ -61,6 +64,7 @@ enum ProductType: string implements HasLabel
         return match ($this) {
             self::Any => throw new InvalidArgumentException('ProductType::Any cannot be mapped to a productable class.'),
             self::Course => Course::class,
+            self::Costume => Costume::class,
             self::GiftCardType => GiftCardType::class,
             self::Gear => Gear::class,
             self::RecurringPrivateLesson => RecurringPrivateLessonCharge::class,

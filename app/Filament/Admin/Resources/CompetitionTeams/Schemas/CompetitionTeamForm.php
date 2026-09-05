@@ -40,6 +40,7 @@ final class CompetitionTeamForm
                                 ->orderByDesc('starts_on'),
                         )
                         ->hidden(fn ($livewire): bool => $livewire instanceof TeamsRelationManager)
+                        ->selectablePlaceholder(false)
                         ->required(),
                     self::nameField(),
                 ]),

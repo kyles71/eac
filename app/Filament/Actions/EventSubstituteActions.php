@@ -89,6 +89,7 @@ final class EventSubstituteActions
                     ->options(self::teacherOptions(...))
                     ->searchable()
                     ->preload()
+                    ->selectablePlaceholder(false)
                     ->required(),
                 Select::make('reason_type')
                     ->label('Reason')

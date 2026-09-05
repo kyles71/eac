@@ -169,6 +169,7 @@ final class ChargesRelationManager extends RelationManager
                                     RecurringPrivateLessonResolutionType::Refund->value => 'Issue Refund',
                                 ])
                                 ->searchable(false)
+                                ->selectablePlaceholder(false)
                                 ->required(fn (RecurringPrivateLessonCharge $record): bool => $record->status === RecurringPrivateLessonChargeStatus::Paid)
                                 ->visible(fn (RecurringPrivateLessonCharge $record): bool => $record->status === RecurringPrivateLessonChargeStatus::Paid),
                             Textarea::make('reason')

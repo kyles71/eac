@@ -69,6 +69,7 @@ final class StudentWaiver
                         column: 'id',
                         modifyQueryUsing: fn (Builder $query): Builder => $query->where('user_id', auth()->id()),
                     )
+                    ->selectablePlaceholder(false)
                     ->required(),
             ]);
 
@@ -98,6 +99,7 @@ final class StudentWaiver
                         ->afterStateUpdatedJs(<<<'JS'
                             $set('relationship', $state === 'Other' ? null : $state)
                             JS)
+                        ->selectablePlaceholder(false)
                         ->required(),
                     TextInput::make('relationship')
                         ->label('Other Relationship')
@@ -169,6 +171,7 @@ final class StudentWaiver
                                 'Legal Guardian' => 'Legal Guardian',
                                 'Self - I am 18+' => 'Self - I am 18+',
                             ])
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Textarea::make('student_home_address')
                             ->label('Student Home Address')

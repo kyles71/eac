@@ -21,10 +21,12 @@ final class FormUserForm
                         Select::make('form_id')
                             ->label('Form')
                             ->relationship('form', 'name')
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Select::make('user_id')
                             ->label('User')
                             ->userRelationship()
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Select::make('student_id')
                             ->label('Student')

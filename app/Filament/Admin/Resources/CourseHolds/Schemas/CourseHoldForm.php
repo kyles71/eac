@@ -27,6 +27,7 @@ final class CourseHoldForm
                         Select::make('user_id')
                             ->label('Family / User')
                             ->userRelationship('user')
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->live()
                             ->disabledOn('edit'),
@@ -56,6 +57,7 @@ final class CourseHoldForm
                                     ->searchable()
                                     ->preload()
                                     ->distinct()
+                                    ->selectablePlaceholder(false)
                                     ->required(),
                                 TextInput::make('quantity')
                                     ->numeric()
@@ -83,6 +85,7 @@ final class CourseHoldForm
                                     ->searchable()
                                     ->preload()
                                     ->distinct()
+                                    ->selectablePlaceholder(false)
                                     ->required(),
                                 TextInput::make('quantity')
                                     ->numeric()

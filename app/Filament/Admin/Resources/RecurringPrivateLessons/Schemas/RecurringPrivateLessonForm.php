@@ -45,6 +45,7 @@ final class RecurringPrivateLessonForm
                                 ->mapWithKeys(fn (User $user): array => [$user->id => $user->displayName().' · '.$user->email])
                                 ->all())
                             ->getOptionLabelUsing(fn ($value): ?string => User::query()->find($value)?->displayName())
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->live()
                             ->disabledOn('edit'),
@@ -57,6 +58,7 @@ final class RecurringPrivateLessonForm
                                 ->get()
                                 ->mapWithKeys(fn (Student $student): array => [$student->id => $student->displayName()])
                                 ->all())
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->disabledOn('edit'),
                         TextInput::make('course_name')
@@ -66,6 +68,7 @@ final class RecurringPrivateLessonForm
                             ->formatStateUsing(fn (mixed $state, ?RecurringPrivateLesson $record): mixed => $record?->course->name ?? $state),
                         Select::make('semester')
                             ->options(CourseSemester::class)
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->default(CourseSemester::Fall->value)
                             ->formatStateUsing(fn (mixed $state, ?RecurringPrivateLesson $record): mixed => $record?->course->semester ?? $state),
@@ -100,6 +103,7 @@ final class RecurringPrivateLessonForm
                         Select::make('status')
                             ->options(RecurringPrivateLessonStatus::class)
                             ->helperText('Completed and cancelled series stop billing, payment reminders, rescheduling, and new lesson synchronization. Paid lessons remain available for individual resolution.')
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->default(RecurringPrivateLessonStatus::Active->value)
                             ->visibleOn('edit'),
@@ -131,6 +135,7 @@ final class RecurringPrivateLessonForm
                                 ScheduleFrequency::Biweekly->value => 'Biweekly',
                             ])
                             ->default(ScheduleFrequency::Weekly->value)
+                            ->selectablePlaceholder(false)
                             ->required(),
                     ]),
             ]);

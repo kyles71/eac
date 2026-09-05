@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
+use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\DashboardMessages\DashboardMessageResource;
 use App\Filament\Admin\Resources\DashboardQuickLinks\DashboardQuickLinkResource;
 use App\Filament\Admin\Resources\DiscountCodes\DiscountCodeResource;
@@ -18,6 +19,7 @@ use App\Filament\Admin\Resources\StudentCommunications\StudentCommunicationResou
 use App\Filament\Admin\Resources\Users\UserResource;
 use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Models\Calendar;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Event;
 use App\Models\Gear;
@@ -33,6 +35,7 @@ use function Pest\Livewire\livewire;
 it('can global search', function (): void {
     Calendar::factory()->create(['name' => 'Test Calendar']);
     Gear::factory()->create(['name' => 'Test Competition Jacket']);
+    Costume::factory()->create(['name' => 'Test Lyrical Costume']);
     LegalDocument::factory()->create(['name' => 'Test Legal Document']);
     PaymentPlanTemplate::factory()->create(['name' => 'Test Payment Plan Template']);
 
@@ -64,6 +67,16 @@ it('can global search for Gear records', function (): void {
         ->and($results)->toHaveCount(1)
         ->and($results->first()->title)->toBe($record->name)
         ->and($results->first()->url)->toBe(GearResource::getUrl('view', ['record' => $record]));
+});
+
+it('can global search for Costume records', function (): void {
+    $record = Costume::factory()->create(['name' => 'Searchable Lyrical Costume']);
+    $results = CostumeResource::getGlobalSearchResults('Searchable Lyrical');
+
+    expect(CostumeResource::canGloballySearch())->toBeTrue()
+        ->and($results)->toHaveCount(1)
+        ->and($results->first()->title)->toBe($record->name)
+        ->and($results->first()->url)->toBe(CostumeResource::getUrl('view', ['record' => $record]));
 });
 
 it('excludes Gear search results without record view permission', function (): void {

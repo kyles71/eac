@@ -668,6 +668,7 @@ final class Billing extends Page
                 Select::make('stripe_payment_method_id')
                     ->label('Saved Payment Method')
                     ->options(fn (): array => $this->paymentMethodOptions())
+                    ->selectablePlaceholder(false)
                     ->required(),
             ])
             ->extraModalFooterActions([

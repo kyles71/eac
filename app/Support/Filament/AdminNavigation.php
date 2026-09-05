@@ -42,13 +42,15 @@ final class AdminNavigation
 
     public const int StoreProducts = 10;
 
-    public const int StoreGear = 20;
+    public const int StoreCostumes = 20;
 
-    public const int StoreGiftCardTypes = 30;
+    public const int StoreGear = 30;
 
-    public const int StoreDiscountCodes = 40;
+    public const int StoreGiftCardTypes = 40;
 
-    public const int StorePaymentPlanTemplates = 50;
+    public const int StoreDiscountCodes = 50;
+
+    public const int StorePaymentPlanTemplates = 60;
 
     public const int BillingOrders = 10;
 

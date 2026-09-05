@@ -38,6 +38,7 @@ final class AssignAndRedeemGiftCardAction extends Action
                     ->getOptionLabelUsing(fn (mixed $value): ?string => self::userLabelForKey($value))
                     ->searchable()
                     ->preload()
+                    ->selectablePlaceholder(false)
                     ->required(),
             ])
             ->action(function (GiftCard $record, array $data): void {

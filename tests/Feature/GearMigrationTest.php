@@ -24,6 +24,19 @@ use Kyle\FilamentMailManager\Enums\LayoutMode;
 use Kyle\FilamentMailManager\Repositories\ManagedTemplateRepository;
 use Spatie\Permission\Models\Permission;
 
+beforeEach(function (): void {
+    suspendCurrentCostumeFeatureForLegacyMigrationTest();
+});
+
+afterEach(function (): void {
+    if (Schema::hasTable('costumes') && ! Schema::hasTable('gear')) {
+        $legacyMigration = require database_path('migrations/2026_08_17_180444_rename_costumes_to_gear.php');
+        $legacyMigration->up();
+    }
+
+    restoreCurrentCostumeFeatureAfterLegacyMigrationTest();
+});
+
 it('renames legacy costume data to gear without changing linked record ids', function (): void {
     Storage::fake(MediaDisks::public());
 
@@ -68,6 +81,7 @@ it('renames legacy costume data to gear without changing linked record ids', fun
         ],
     ]);
     $versionId = (int) $template->versions()->value('id');
+    removeCurrentCostumeSectionFromLegacyReceiptFixture((int) $template->id, $versionId);
     $permission = Permission::findByName('ViewAny:Gear');
     $permissionAssignmentCount = DB::table('role_has_permissions')
         ->where('permission_id', $permission->id)
@@ -212,3 +226,50 @@ it('merges existing gear permission assignments without losing access', function
         }
     }
 });
+
+function suspendCurrentCostumeFeatureForLegacyMigrationTest(): void
+{
+    $receiptMigration = require database_path('migrations/2026_09_04_135033_add_costume_section_to_order_receipt_template.php');
+    $permissionMigration = require database_path('migrations/2026_09_04_133708_grant_costume_permissions_to_owners.php');
+    $pivotMigration = require database_path('migrations/2026_09_04_133025_create_product_student_assignment_table.php');
+    $costumeMigration = require database_path('migrations/2026_09_04_133022_create_costumes_table.php');
+
+    $receiptMigration->down();
+    $permissionMigration->down();
+    $pivotMigration->down();
+    $costumeMigration->down();
+}
+
+function restoreCurrentCostumeFeatureAfterLegacyMigrationTest(): void
+{
+    if (Schema::hasTable('costumes')) {
+        return;
+    }
+
+    $costumeMigration = require database_path('migrations/2026_09_04_133022_create_costumes_table.php');
+    $pivotMigration = require database_path('migrations/2026_09_04_133025_create_product_student_assignment_table.php');
+    $permissionMigration = require database_path('migrations/2026_09_04_133708_grant_costume_permissions_to_owners.php');
+    $receiptMigration = require database_path('migrations/2026_09_04_135033_add_costume_section_to_order_receipt_template.php');
+
+    $costumeMigration->up();
+    $pivotMigration->up();
+    $permissionMigration->up();
+    $receiptMigration->up();
+}
+
+function removeCurrentCostumeSectionFromLegacyReceiptFixture(int $templateId, int $versionId): void
+{
+    $template = DB::table('email_templates')->where('id', $templateId)->first();
+    $sections = json_decode((string) $template->conditional_sections, true, flags: JSON_THROW_ON_ERROR);
+    unset($sections['costume']);
+    DB::table('email_templates')->where('id', $templateId)->update([
+        'conditional_sections' => json_encode($sections, JSON_THROW_ON_ERROR),
+    ]);
+
+    $version = DB::table('email_template_versions')->where('id', $versionId)->first();
+    $snapshot = json_decode((string) $version->manager_snapshot, true, flags: JSON_THROW_ON_ERROR);
+    unset($snapshot['conditional_sections']['costume'], $snapshot['effective_conditional_sections']['costume']);
+    DB::table('email_template_versions')->where('id', $versionId)->update([
+        'manager_snapshot' => json_encode($snapshot, JSON_THROW_ON_ERROR),
+    ]);
+}

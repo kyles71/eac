@@ -125,6 +125,7 @@ final class EventForm
                                 ->when($user instanceof User, fn ($query) => $query->assignableBy($user))
                                 ->orderBy('id', 'asc');
                         })
+                        ->selectablePlaceholder(false)
                         ->required()
                         ->live()
                         ->default(fn (): ?int => Calendar::query()

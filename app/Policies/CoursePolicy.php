@@ -46,6 +46,7 @@ final class CoursePolicy
     {
         return $authUser->can('Delete:Course')
             && $course->recurringPrivateLesson()->doesntExist()
+            && $course->costumes()->doesntExist()
             && (! $course->is_private || $authUser->hasAnyRole(['owner', 'super_admin']))
             && ($course->product?->canBeDeleted() ?? true);
     }

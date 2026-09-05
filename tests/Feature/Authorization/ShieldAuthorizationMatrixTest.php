@@ -7,6 +7,7 @@ use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
+use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
@@ -53,6 +54,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         CalendarResource::class => $fiveAbilities,
         CompetitionSeasonResource::class => $sixAbilities,
         CompetitionTeamResource::class => $sixAbilities,
+        CostumeResource::class => $sixAbilities,
         GearResource::class => $sixAbilities,
         CourseHoldResource::class => ['viewAny', 'view', 'create', 'update'],
         CourseResource::class => $sixAbilities,

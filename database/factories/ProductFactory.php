@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Enums\DashboardAudience;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Gear;
 use App\Models\GiftCardType;
@@ -36,9 +37,26 @@ final class ProductFactory extends Factory
             'send_purchase_notification' => false,
             'available_from' => null,
             'available_until' => null,
+            'order_due_on' => null,
             'productable_type' => null,
             'productable_id' => null,
         ];
+    }
+
+    /**
+     * Create a product linked to a Costume.
+     */
+    public function forCostume(?Costume $costume = null): static
+    {
+        return $this->state(function () use ($costume): array {
+            $costume ??= Costume::factory()->create();
+
+            return [
+                'name' => $costume->name,
+                'productable_type' => Costume::class,
+                'productable_id' => $costume->id,
+            ];
+        });
     }
 
     /**

@@ -27,6 +27,7 @@ trait InteractsWithSavedReportViews
                 Select::make('visibility')
                     ->options(fn (): array => $this->savedViewVisibilityOptions())
                     ->default(SavedReportViewVisibility::Private->value)
+                    ->selectablePlaceholder(false)
                     ->required(),
             ])
             ->stickyModalHeader(false)
@@ -69,6 +70,7 @@ trait InteractsWithSavedReportViews
                     ->label('Saved View')
                     ->options(fn (): array => $this->savedReportViewOptions())
                     ->searchable()
+                    ->selectablePlaceholder(false)
                     ->required(),
             ])
             ->stickyModalHeader(false)
@@ -106,6 +108,7 @@ trait InteractsWithSavedReportViews
                         ->orderBy('name')
                         ->pluck('name', 'id')
                         ->all())
+                    ->selectablePlaceholder(false)
                     ->required(),
             ])
             ->action(function (array $data): void {

@@ -34,15 +34,10 @@ final readonly class OrderReceiptContentService
         foreach ($order->orderItems as $orderItem) {
             $productType = ProductType::fromProductableType($orderItem->product->productable_type);
 
-            if ($productType === ProductType::Gear) {
-                $conditions['gear'] = true;
-                $conditions['costume'] = true;
-
-                continue;
-            }
-
             $condition = match ($productType) {
                 ProductType::Course => 'course',
+                ProductType::Costume => 'costume',
+                ProductType::Gear => 'gear',
                 ProductType::GiftCardType => 'gift-card',
                 ProductType::RecurringPrivateLesson => 'recurring-private-lesson',
                 ProductType::Standalone => 'standalone',

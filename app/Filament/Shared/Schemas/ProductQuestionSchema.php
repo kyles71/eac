@@ -100,6 +100,7 @@ final class ProductQuestionSchema
                 Select::make($fieldName)
                     ->label($question->question)
                     ->options($options)
+                    ->selectablePlaceholder(! $question->is_required)
                     ->required($question->is_required)
                     ->searchable(false)
                     ->afterStateUpdatedJs(fn (): ?string => $question->allows_other

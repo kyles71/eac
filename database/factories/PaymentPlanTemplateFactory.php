@@ -25,6 +25,7 @@ final class PaymentPlanTemplateFactory extends Factory
             'name' => fake()->words(3, true).' Plan',
             'product_type' => ProductType::Any,
             'course_semesters' => null,
+            'costume_program_types' => null,
             'min_price' => 5000,
             'max_price' => 50000,
             'number_of_installments' => 3,

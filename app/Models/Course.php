@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Enums\CourseProgramType;
 use App\Enums\CourseSemester;
 use App\Support\MediaDisks;
 use Carbon\Carbon;
@@ -44,6 +45,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     protected $casts = [
         'id' => 'integer',
         'academic_term_id' => 'integer',
+        'program_type' => CourseProgramType::class,
         'capacity' => 'integer',
         'is_private' => 'boolean',
         'event_reminder_processed_at' => 'datetime',
@@ -232,6 +234,12 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function product(): MorphOne
     {
         return $this->morphOne(Product::class, 'productable');
+    }
+
+    /** @return HasMany<Costume, $this> */
+    public function costumes(): HasMany
+    {
+        return $this->hasMany(Costume::class);
     }
 
     /** @return HasMany<Enrollment, $this> */

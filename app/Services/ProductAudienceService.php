@@ -24,8 +24,8 @@ final readonly class ProductAudienceService
 
     /**
      * A Product with no configured audience is available to everyone. Course and
-     * Competition Team requirements are cumulative, while a direct User
-     * assignment overrides those requirements.
+     * Competition Team requirements are cumulative, while a direct User or
+     * Student assignment overrides those requirements.
      *
      * @param  Builder<Product>  $query
      * @return Builder<Product>
@@ -43,11 +43,16 @@ final readonly class ProductAudienceService
                     $query
                         ->whereDoesntHave('requiredCourses')
                         ->whereDoesntHave('requiredCompetitionTeams')
-                        ->whereDoesntHave('assignedUsers');
+                        ->whereDoesntHave('assignedUsers')
+                        ->whereDoesntHave('assignedStudents');
                 })
                 ->orWhereHas(
                     'assignedUsers',
                     fn (Builder $query): Builder => $query->whereKey($user->getKey()),
+                )
+                ->orWhereHas(
+                    'assignedStudents',
+                    fn (Builder $query): Builder => $query->where('students.user_id', $user->getKey()),
                 )
                 ->orWhere(function (Builder $query) use ($at, $user): void {
                     $query

@@ -136,6 +136,7 @@ abstract class ReportPage extends Page implements HasTable
                     Select::make('format')
                         ->options(ReportExportFormat::class)
                         ->default(ReportExportFormat::Csv->value)
+                        ->selectablePlaceholder(false)
                         ->required(),
                 ])
                 ->action(function (array $data): void {

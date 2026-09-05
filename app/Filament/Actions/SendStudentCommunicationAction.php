@@ -84,11 +84,13 @@ final class SendStudentCommunicationAction extends BaseEmailAction
                         .'<strong>RED Stoplight</strong> = Significant and/or repeated issues (behavioral or otherwise) during class.'
                     ))
                     ->options(StopLightColor::class)
+                    ->selectablePlaceholder(false)
                     ->required(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::StopLight)
                     ->visible(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::StopLight),
                 Select::make('first_aid_type')
                     ->label('Type')
                     ->options(FirstAidType::class)
+                    ->selectablePlaceholder(false)
                     ->required(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::FirstAid)
                     ->visible(fn (): bool => $this->getCommunicationType() === StudentCommunicationType::FirstAid),
                 Textarea::make('note')

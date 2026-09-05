@@ -38,10 +38,12 @@ final class EnrollmentForm
                                     });
                                 }
                             })
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Select::make('user_id')
                             ->label('Parent / User')
                             ->live()
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->userRelationship(
                                 'user',

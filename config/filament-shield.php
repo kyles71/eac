@@ -29,6 +29,7 @@ use App\Filament\Admin\Pages\Updates;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
+use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\CourseHolds\CourseHoldResource;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\CreditGrants\CreditGrantResource;
@@ -234,6 +235,9 @@ return [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             CompetitionTeamResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
+            ],
+            CostumeResource::class => [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             GearResource::class => [
