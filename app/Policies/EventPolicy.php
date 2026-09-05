@@ -99,10 +99,6 @@ final class EventPolicy
 
         $event->loadMissing('course.recurringPrivateLesson');
 
-        if ($event->substitute_teacher_id === $authUser->id) {
-            return true;
-        }
-
         if ($event->course?->recurringPrivateLesson !== null) {
             return $authUser->hasAnyRole(['teacher', 'owner', 'super_admin'])
                 || $event->course->recurringPrivateLesson->user_id === $authUser->id;
