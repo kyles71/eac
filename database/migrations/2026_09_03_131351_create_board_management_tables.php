@@ -164,7 +164,7 @@ return new class() extends Migration
 
         DB::table('board_stages')->insert([
             $this->stage($boardId, 'Future Ideas', 'gray', 10, 'active', true, $now),
-            $this->stage($boardId, 'Under Review', 'info', 20, 'active', false, $now),
+            $this->stage($boardId, 'Planning', 'info', 20, 'active', false, $now),
             $this->stage($boardId, 'Ready to Build', 'primary', 30, 'active', false, $now),
             $this->stage($boardId, 'In Progress', 'warning', 40, 'active', false, $now),
             $this->stage($boardId, 'Ready for Testing', 'info', 50, 'active', false, $now),

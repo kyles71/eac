@@ -19,6 +19,7 @@ use App\Models\BoardItem;
 use App\Models\BoardMembership;
 use App\Models\BoardStage;
 use App\Models\User;
+use App\Support\Filament\BoardWorkspace;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\Testing\TestAction;
@@ -103,6 +104,7 @@ it('creates and validates custom boards from the workspace header', function ():
             'custom_stages' => [
                 [
                     'name' => 'Queued',
+                    'subtitle' => 'Waiting to be scheduled',
                     'color' => 'gray',
                     'kind' => BoardStageKind::Active->value,
                 ],
@@ -112,7 +114,8 @@ it('creates and validates custom boards from the workspace header', function ():
 
     $board = Board::query()->where('name', 'Production Schedule')->firstOrFail();
 
-    expect($board->activeStages()->pluck('name')->all())->toBe(['Queued']);
+    expect($board->activeStages()->pluck('name')->all())->toBe(['Queued'])
+        ->and($board->activeStages()->value('subtitle'))->toBe('Waiting to be scheduled');
 
     livewire(BoardKanban::class, ['record' => $current->slug])
         ->callAction('createBoard', data: [
@@ -129,7 +132,11 @@ it('creates and validates custom boards from the workspace header', function ():
 
 it('renders workspace stage controls and counts matching search results', function (): void {
     $board = Board::factory()->create();
-    $backlog = BoardStage::factory()->for($board)->default()->create(['name' => 'Backlog', 'sort_order' => 10]);
+    $backlog = BoardStage::factory()->for($board)->default()->create([
+        'name' => 'Backlog',
+        'subtitle' => 'Work waiting to begin',
+        'sort_order' => 10,
+    ]);
     $manager = User::factory()->isTeacher()->create();
     BoardMembership::factory()->for($board)->for($manager)->manager()->create();
     $matchingItem = BoardItem::factory()->for($board)->for($backlog, 'stage')->create(['title' => 'Matching card']);
@@ -138,6 +145,13 @@ it('renders workspace stage controls and counts matching search results', functi
 
     $component = livewire(BoardKanban::class, ['record' => $board->slug])
         ->assertOk()
+        ->assertSee('Work waiting to begin')
+        ->assertSee('flowforge-column-header flex items-center justify-between border-b border-gray-200 bg-white', escape: false)
+        ->assertSee('aria-label="View Matching card"', escape: false)
+        ->assertSee('x-on:click="Livewire.navigate(', escape: false)
+        ->assertSee('class="justify-self-end" x-on:click.stop x-on:keydown.stop', escape: false)
+        ->assertSee('x-float.placement.bottom-start.flip', escape: false)
+        ->assertDontSee('pointer-events-auto relative z-20 justify-self-end', escape: false)
         ->assertSee('flowforge.board.'.$board->id.'.collapsed-stages', escape: false)
         ->assertSee('data-stage-sortable-item', escape: false)
         ->assertSee('toggleStage(stageId)', escape: false)
@@ -171,6 +185,46 @@ it('renders workspace stage controls and counts matching search results', functi
         ->and($cardRows[0])->toBeInstanceOf(Grid::class)
         ->and($cardRows[0]->getColumns('lg'))->toBe(2)
         ->and(collect($detailEntries)->map->getName()->all())->toBe(['assignees.full_name', 'due_date']);
+});
+
+it('automatically orders cards by urgency due date and age', function (): void {
+    $board = Board::factory()->create();
+    $stage = BoardStage::factory()->for($board)->default()->create();
+    $manager = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($manager)->manager()->create();
+
+    $createItem = function (string $title, BoardItemPriority $priority, ?string $dueDate, string $createdAt) use ($board, $stage): void {
+        BoardItem::factory()->for($board)->for($stage, 'stage')->create([
+            'title' => $title,
+            'priority' => $priority,
+            'due_date' => $dueDate,
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+    };
+
+    $createItem('Newest undated', BoardItemPriority::High, null, '2026-09-04 12:00:00');
+    $createItem('Later dated', BoardItemPriority::High, '2026-09-10', '2026-09-01 12:00:00');
+    $createItem('Urgent undated', BoardItemPriority::Urgent, null, '2026-08-30 12:00:00');
+    $createItem('Urgent later', BoardItemPriority::Urgent, '2026-09-08', '2026-09-01 12:00:00');
+    $createItem('Oldest undated', BoardItemPriority::Low, null, '2026-08-20 12:00:00');
+    $createItem('Earlier dated', BoardItemPriority::Low, '2026-09-06', '2026-09-03 12:00:00');
+    $createItem('Urgent earlier', BoardItemPriority::Urgent, '2026-09-07', '2026-09-02 12:00:00');
+    $this->actingAs($manager);
+
+    $component = livewire(BoardKanban::class, ['record' => $board->slug]);
+    $workspace = $component->instance()->getBoard();
+
+    expect($workspace)->toBeInstanceOf(BoardWorkspace::class)
+        ->and($workspace->getBoardRecords((string) $stage->id)->pluck('title')->all())->toBe([
+            'Urgent earlier',
+            'Urgent later',
+            'Urgent undated',
+            'Earlier dated',
+            'Later dated',
+            'Oldest undated',
+            'Newest undated',
+        ]);
 });
 
 it('switches only to accessible active or archived boards', function (): void {
@@ -334,6 +388,7 @@ it('creates edits reorders and retires stages from the board', function (): void
         ->assertDontSee('Default submission stage')
         ->callAction('addStage', data: [
             'name' => 'Done',
+            'subtitle' => 'Finished work',
             'color' => 'success',
             'kind' => BoardStageKind::Completed->value,
         ])
@@ -344,14 +399,22 @@ it('creates edits reorders and retires stages from the board', function (): void
     $component
         ->callAction(TestAction::make('editStage')->arguments(['column' => (string) $review->id]), data: [
             'name' => 'Quality Review',
+            'subtitle' => 'Ready for a final check',
             'color' => 'warning',
             'kind' => BoardStageKind::Active->value,
         ])
         ->assertHasNoActionErrors()
-        ->call('reorderStages', [$done->id, $review->id, $backlog->id]);
+        ->assertSee('Ready for a final check');
+
+    expect($component->instance()->getBoard()->getColumn((string) $review->id)?->getLabel())->toBe('Quality Review')
+        ->and($component->instance()->stageSubtitle($review->id))->toBe('Ready for a final check');
+
+    $component->call('reorderStages', [$done->id, $review->id, $backlog->id]);
 
     expect($board->activeStages()->pluck('id')->all())->toBe([$done->id, $review->id, $backlog->id])
         ->and($review->refresh()->name)->toBe('Quality Review')
+        ->and($review->subtitle)->toBe('Ready for a final check')
+        ->and($done->subtitle)->toBe('Finished work')
         ->and($review->is_default)->toBeFalse()
         ->and($backlog->refresh()->is_default)->toBeTrue();
 
@@ -479,4 +542,17 @@ it('renders the dedicated item details and canonical board link', function (): v
         ->assertSee(BoardResource::getUrl('board', ['record' => $item->board]), escape: false);
 
     expect($component->instance()->getBreadcrumbs())->toBe([]);
+});
+
+it('updates the watch action immediately', function (): void {
+    $owner = User::factory()->isOwner()->create();
+    $item = BoardItem::factory()->create();
+    $this->actingAs($owner);
+
+    livewire(ViewBoardItem::class, ['record' => $item->id])
+        ->assertActionHasLabel('watch', 'Watch')
+        ->callAction('watch')
+        ->assertActionHasLabel('watch', 'Unwatch')
+        ->callAction('watch')
+        ->assertActionHasLabel('watch', 'Watch');
 });

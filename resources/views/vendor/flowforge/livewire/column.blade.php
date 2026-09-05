@@ -13,6 +13,7 @@
         ? ActionGroup::make($processedActions)
             ->extraDropdownAttributes(['x-on:close-stage-menus.window' => 'close()'])
         : null;
+    $subtitle = $this->stageSubtitle($columnId);
 @endphp
 
 <div
@@ -23,7 +24,7 @@
     x-bind:class="isStageCollapsed(stageId) ? 'w-14 min-w-14' : 'w-[300px] min-w-[300px]'"
 >
     <div
-        class="flowforge-column-header flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700"
+        class="flowforge-column-header flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900"
         x-show="! isStageCollapsed(stageId)"
     >
         <div
@@ -39,9 +40,17 @@
                 <x-filament::icon :icon="$column['icon']" class="me-2 h-4 w-4 text-gray-500 dark:text-gray-400" />
             @endif
 
-            <h3 class="truncate text-sm font-medium text-gray-700 dark:text-gray-200">
-                {{ $column['label'] }}
-            </h3>
+            <div class="min-w-0">
+                <h3 class="truncate text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {{ $column['label'] }}
+                </h3>
+
+                @if(filled($subtitle))
+                    <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                        {{ $subtitle }}
+                    </p>
+                @endif
+            </div>
         </div>
 
         <div class="ms-2 flex flex-shrink-0 items-center gap-1.5">

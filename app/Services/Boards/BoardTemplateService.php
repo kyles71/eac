@@ -47,6 +47,7 @@ final class BoardTemplateService
             foreach ($stages as $index => $stage) {
                 $board->stages()->create([
                     'name' => $stage['name'],
+                    'subtitle' => $stage['subtitle'] ?? null,
                     'color' => $stage['color'],
                     'sort_order' => ($index + 1) * 10,
                     'kind' => $stage['kind'],
@@ -70,7 +71,7 @@ final class BoardTemplateService
         return match ($template) {
             BoardTemplate::ProductFeedback => [
                 ['name' => 'Future Ideas', 'color' => 'gray', 'kind' => BoardStageKind::Active],
-                ['name' => 'Under Review', 'color' => 'info', 'kind' => BoardStageKind::Active],
+                ['name' => 'Planning', 'color' => 'info', 'kind' => BoardStageKind::Active],
                 ['name' => 'Ready to Build', 'color' => 'primary', 'kind' => BoardStageKind::Active],
                 ['name' => 'In Progress', 'color' => 'warning', 'kind' => BoardStageKind::Active],
                 ['name' => 'Ready for Testing', 'color' => 'info', 'kind' => BoardStageKind::Active],
@@ -109,7 +110,7 @@ final class BoardTemplateService
         };
     }
 
-    /** @return list<array{name: string, color: string, kind: BoardStageKind}> */
+    /** @return list<array{name: string, subtitle: ?string, color: string, kind: BoardStageKind}> */
     private function customStages(mixed $stages): array
     {
         if (! is_array($stages)) {
@@ -120,6 +121,9 @@ final class BoardTemplateService
             ->filter(fn (mixed $stage): bool => is_array($stage) && filled($stage['name'] ?? null))
             ->map(fn (array $stage): array => [
                 'name' => mb_trim((string) $stage['name']),
+                'subtitle' => filled($stage['subtitle'] ?? null)
+                    ? mb_trim((string) $stage['subtitle'])
+                    : null,
                 'color' => (string) ($stage['color'] ?? 'gray'),
                 'kind' => $stage['kind'] instanceof BoardStageKind
                     ? $stage['kind']
