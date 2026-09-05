@@ -237,7 +237,7 @@ return [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             GearResource::class => [
-                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             CourseHoldResource::class => [
                 'viewAny', 'view', 'create', 'update',

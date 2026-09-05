@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Gear;
 
 use App\Filament\Admin\Resources\Gear\Pages\ListGear;
+use App\Filament\Admin\Resources\Gear\Pages\ViewGear;
+use App\Filament\Admin\Resources\Gear\RelationManagers\ProductsRelationManager;
 use App\Filament\Admin\Resources\Gear\Schemas\GearForm;
+use App\Filament\Admin\Resources\Gear\Schemas\GearInfolist;
 use App\Filament\Admin\Resources\Gear\Tables\GearTable;
 use App\Models\Gear;
 use App\Support\Filament\AdminNavigation;
@@ -19,8 +22,6 @@ use UnitEnum;
 final class GearResource extends Resource
 {
     protected static ?string $model = Gear::class;
-
-    protected static bool $isGloballySearchable = false;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
@@ -44,6 +45,11 @@ final class GearResource extends Resource
         return GearForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return GearInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return GearTable::configure($table);
@@ -51,13 +57,16 @@ final class GearResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            ProductsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
     {
         return [
             'index' => ListGear::route('/'),
+            'view' => ViewGear::route('/{record}'),
         ];
     }
 }

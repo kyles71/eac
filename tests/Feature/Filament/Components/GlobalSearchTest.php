@@ -20,6 +20,7 @@ use App\Filament\Clusters\Settings\Resources\Holidays\HolidayResource;
 use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Event;
+use App\Models\Gear;
 use App\Models\LegalDocument;
 use App\Models\PaymentPlanTemplate;
 use App\Models\User;
@@ -31,6 +32,7 @@ use function Pest\Livewire\livewire;
 
 it('can global search', function (): void {
     Calendar::factory()->create(['name' => 'Test Calendar']);
+    Gear::factory()->create(['name' => 'Test Competition Jacket']);
     LegalDocument::factory()->create(['name' => 'Test Legal Document']);
     PaymentPlanTemplate::factory()->create(['name' => 'Test Payment Plan Template']);
 
@@ -41,7 +43,6 @@ it('can global search', function (): void {
 
 it('keeps resources out of global search when they have no record-level view ability', function (): void {
     expect(CalendarResource::canGloballySearch())->toBeFalse()
-        ->and(GearResource::canGloballySearch())->toBeFalse()
         ->and(DashboardMessageResource::canGloballySearch())->toBeFalse()
         ->and(DashboardQuickLinkResource::canGloballySearch())->toBeFalse()
         ->and(DiscountCodeResource::canGloballySearch())->toBeFalse()
@@ -53,6 +54,26 @@ it('keeps resources out of global search when they have no record-level view abi
         ->and(PaymentPlanTemplateResource::canGloballySearch())->toBeFalse()
         ->and(RecurringPrivateLessonResource::canGloballySearch())->toBeFalse()
         ->and(StudentCommunicationResource::canGloballySearch())->toBeFalse();
+});
+
+it('can global search for Gear records', function (): void {
+    $record = Gear::factory()->create(['name' => 'Searchable Competition Jacket']);
+    $results = GearResource::getGlobalSearchResults('Searchable Competition');
+
+    expect(GearResource::canGloballySearch())->toBeTrue()
+        ->and($results)->toHaveCount(1)
+        ->and($results->first()->title)->toBe($record->name)
+        ->and($results->first()->url)->toBe(GearResource::getUrl('view', ['record' => $record]));
+});
+
+it('excludes Gear search results without record view permission', function (): void {
+    Gear::factory()->create(['name' => 'Restricted Competition Jacket']);
+    $user = User::factory()->create();
+    $user->givePermissionTo('ViewAny:Gear');
+    $this->actingAs($user);
+
+    expect(GearResource::canGloballySearch())->toBeTrue()
+        ->and(GearResource::getGlobalSearchResults('Restricted Competition'))->toBeEmpty();
 });
 
 it('can global search for users', function (string $attribute): void {

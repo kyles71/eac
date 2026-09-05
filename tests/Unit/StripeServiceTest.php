@@ -160,6 +160,47 @@ it('creates an idempotent partial refund with private identifiers only', functio
     ]);
 });
 
+it('passes an idempotency key when refunding a payment intent without metadata', function (): void {
+    $refunds = new class
+    {
+        /** @var array<string, mixed> */
+        public array $createdWith = [];
+
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, mixed>  $options
+         */
+        public function create(array $params, array $options): Refund
+        {
+            $this->createdWith = $params;
+            $this->requestOptions = $options;
+
+            return Refund::constructFrom(['id' => 're_private_lesson']);
+        }
+    };
+
+    $service = new StripeService(stripeClientForTest([
+        'refunds' => $refunds,
+    ]));
+
+    $service->refundPaymentIntent(
+        paymentIntentId: 'pi_private_lesson',
+        amount: 6000,
+        idempotencyKey: 'recurring-private-lesson-coverage-123-refund-idempotency-key',
+    );
+
+    expect($refunds->createdWith)->toBe([
+        'payment_intent' => 'pi_private_lesson',
+        'amount' => 6000,
+    ])->and($refunds->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
+        'idempotency_key' => 'recurring-private-lesson-coverage-123-refund-idempotency-key',
+    ]);
+});
+
 /**
  * @param  array<string, object>  $services
  */
