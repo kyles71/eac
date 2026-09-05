@@ -20,7 +20,11 @@ final readonly class EventCancellationRecipientsService
         $excludedUserIds = $event->excludedUsers()->pluck('users.id')->all();
         $emails = [];
 
-        $event->loadMissing('substituteTeachers');
+        $event->loadMissing(['teachers', 'substituteTeachers']);
+
+        foreach ($event->teachers as $teacher) {
+            $this->addUser($emails, $teacher);
+        }
 
         foreach ($event->substituteTeachers as $substituteTeacher) {
             $this->addUser($emails, $substituteTeacher);

@@ -948,7 +948,7 @@ final readonly class InstructorReportService
                     'starts_at' => $startsAt,
                     'ends_at' => $endsAt,
                     'course_name' => $this->eventCourseName($event),
-                    'enrollment_count' => $this->enrollmentCounts->count($event->course),
+                    'enrollment_count' => $event->course_id !== null ? $this->enrollmentCounts->count($event->course) : 0,
                     'academic_term' => $this->eventAcademicTermName($event),
                     'role' => $instructor['role'],
                     'hours' => $this->durationHours($event),

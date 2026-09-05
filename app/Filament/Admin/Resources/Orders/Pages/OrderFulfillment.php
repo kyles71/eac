@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Orders\Pages;
 
 use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Actions\Mail\SendOrderFulfillmentEmail;
+use App\Actions\Store\ReconcileReopenedFulfillmentEvent;
 use App\Actions\Store\RecordOrderItemFulfillment;
 use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Enums\FulfillmentWorkflow;
@@ -335,6 +336,12 @@ final class OrderFulfillment extends Page implements HasTable
                     $event = $eventFulfillments->first()?->source;
 
                     if ($event instanceof Event) {
+                        app(ReconcileReopenedFulfillmentEvent::class)->handle(
+                            $event,
+                            $eventFulfillments,
+                            $this->authenticatedUser(),
+                            $reason,
+                        );
                         app(SendOrderFulfillmentEmail::class)->reopened(
                             $event,
                             $eventFulfillments,
