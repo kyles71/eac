@@ -41,6 +41,17 @@ it('can render the product view page', function () {
         ->assertOk();
 });
 
+it('offers purchase reports only from Gear Product detail pages', function () {
+    $gearProduct = Product::factory()->forGear()->create();
+    $courseProduct = Product::factory()->forCourse()->create();
+
+    livewire(ViewProduct::class, ['record' => $gearProduct->id])
+        ->assertActionVisible('downloadPurchaseReport');
+
+    livewire(ViewProduct::class, ['record' => $courseProduct->id])
+        ->assertActionHidden('downloadPurchaseReport');
+});
+
 it('can list products', function () {
     $products = Product::factory(3)->create();
 
@@ -332,7 +343,7 @@ it('requires a linked item when a product type is selected', function () {
         ->assertHasActionErrors(['productable_id' => 'required']);
 });
 
-it('only offers linked items without an existing product', function (string $productableType) {
+it('only offers singular linked items without an existing product', function (string $productableType) {
     $availableProductable = $productableType::factory()->create();
     $linkedProductable = $productableType::factory()->create();
 
@@ -353,10 +364,24 @@ it('only offers linked items without an existing product', function (string $pro
             ],
         );
 })->with([
-    Course::class,
-    GiftCardType::class,
-    Gear::class,
+    'Course' => [Course::class],
+    'Gift Card Type' => [GiftCardType::class],
 ]);
+
+it('offers Gear that already has Product listings', function () {
+    $gear = Gear::factory()->create(['name' => 'Competition Jacket']);
+    Product::factory()->forGear($gear)->create();
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm(['productable_type' => Gear::class])
+        ->assertSchemaComponentExists(
+            'productable_id',
+            checkComponentUsing: fn (Select $select): bool => $select->getOptions() === [
+                $gear->id => 'Competition Jacket',
+            ],
+        );
+});
 
 it('keeps the current linked item available when editing a product', function () {
     $currentCourse = Course::factory()->create(['name' => 'Current Linked Course']);
