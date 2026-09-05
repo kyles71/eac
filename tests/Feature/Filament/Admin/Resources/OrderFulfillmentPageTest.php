@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\Orders\Pages\OrderFulfillment;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Models\Calendar;
 use App\Models\Event;
+use App\Models\EventAttendee;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductQuestionAnswer;
@@ -164,6 +165,7 @@ it('reopens scheduled fulfillment and explains that the reason is user visible',
             ),
         );
 
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $event->id]);
     Mail::fake();
 
     livewire(OrderFulfillment::class)
@@ -176,13 +178,17 @@ it('reopens scheduled fulfillment and explains that the reason is user visible',
         ->assertNotified('Fulfillment reopened');
 
     expect($orderItem->refresh()->status)->toBe(OrderItemStatus::Pending)
-        ->and($fulfillment->refresh()->void_reason)->toBe('Teacher conflict; EAC will contact you with options.');
+        ->and($fulfillment->refresh()->void_reason)->toBe('Teacher conflict; EAC will contact you with options.')
+        ->and($event->attendees()->whereMorphedTo('attendee', $student)->exists())->toBeFalse()
+        ->and($event->refresh()->isCancelled())->toBeTrue()
+        ->and($event->cancellation_reason)->toBe('Teacher conflict; EAC will contact you with options.');
 
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-reopened'
         && $mail->hasTo($order->user->email)
         && str_contains($mail->getRenderedEmail()->html, 'Teacher conflict; EAC will contact you with options.'));
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'order-fulfillment-reopened'
         && $mail->hasTo('teacher@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'event-cancellation');
 });
 
 it('does not offer an unstaffed standalone event for fulfillment', function (): void {
