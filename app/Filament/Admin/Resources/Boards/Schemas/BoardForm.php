@@ -55,7 +55,11 @@ final class BoardForm
                         ->schema([
                             TextInput::make('name')
                                 ->required()
-                                ->maxLength(80),
+                                ->maxLength(80)
+                                ->columnSpanFull(),
+                            TextInput::make('subtitle')
+                                ->maxLength(160)
+                                ->columnSpanFull(),
                             Select::make('color')
                                 ->options(self::colorOptions())
                                 ->default('gray')
@@ -66,7 +70,7 @@ final class BoardForm
                                 ->default(BoardStageKind::Active->value)
                                 ->required(),
                         ])
-                        ->columns(3)
+                        ->columns(2)
                         ->defaultItems(1)
                         ->minItems(1)
                         ->required(fn (Get $get): bool => self::isBlankTemplate($get('template')))

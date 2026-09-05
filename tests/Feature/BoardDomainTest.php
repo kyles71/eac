@@ -34,7 +34,7 @@ it('installs the feedback board with the product workflow', function (): void {
         ])
         ->and($board->activeStages()->pluck('name')->all())->toBe([
             'Future Ideas',
-            'Under Review',
+            'Planning',
             'Ready to Build',
             'In Progress',
             'Ready for Testing',
@@ -44,6 +44,10 @@ it('installs the feedback board with the product workflow', function (): void {
         ->and($board->defaultStage()?->name)->toBe('Future Ideas')
         ->and($board->activeStages()->where('kind', BoardStageKind::Completed)->value('name'))->toBe('Released')
         ->and($board->activeStages()->where('kind', BoardStageKind::Cancelled)->value('name'))->toBe('Not Planned');
+});
+
+it('labels feature request cards as features', function (): void {
+    expect(BoardItemType::FeatureRequest->getLabel())->toBe('Feature');
 });
 
 it('creates general and custom boards from editable presets', function (): void {
@@ -77,7 +81,7 @@ it('creates general and custom boards from editable presets', function (): void 
 it('forces moderated contributor submissions into the intake stage without workflow metadata', function (): void {
     $board = Board::factory()->moderated()->create();
     $intake = BoardStage::factory()->for($board)->default()->create(['name' => 'Future Ideas', 'sort_order' => 10]);
-    $review = BoardStage::factory()->for($board)->create(['name' => 'Under Review', 'sort_order' => 20]);
+    $review = BoardStage::factory()->for($board)->create(['name' => 'Planning', 'sort_order' => 20]);
     $contributor = User::factory()->isTeacher()->create();
     BoardMembership::factory()->for($board)->for($contributor)->create(['role' => BoardMemberRole::Contributor]);
 

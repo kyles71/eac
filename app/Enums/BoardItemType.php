@@ -18,7 +18,7 @@ enum BoardItemType: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Bug => 'Bug',
-            self::FeatureRequest => 'Feature Request',
+            self::FeatureRequest => 'Feature',
             self::Idea => 'Idea',
             self::Task => 'Task',
         };

@@ -18,6 +18,7 @@ use App\Models\BoardStage;
 use App\Models\User;
 use App\Services\Boards\BoardItemWorkflowService;
 use App\Services\Boards\BoardMembershipService;
+use App\Support\Filament\BoardWorkspace;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\Select;
@@ -131,6 +132,14 @@ final class BoardKanban extends BoardResourcePage
             ->cardAction('view');
     }
 
+    public function stageSubtitle(int|string $stageId): ?string
+    {
+        return $this->boardRecord()
+            ->activeStages
+            ->firstWhere('id', (int) $stageId)
+            ?->subtitle;
+    }
+
     public function getTitle(): string
     {
         return $this->boardRecord()->name;
@@ -205,7 +214,7 @@ final class BoardKanban extends BoardResourcePage
             }
         });
 
-        $this->boardRecord()->unsetRelation('activeStages');
+        $this->refreshBoardWorkspace();
         $this->dispatch('board-stages-reordered');
     }
 
@@ -232,6 +241,8 @@ final class BoardKanban extends BoardResourcePage
             ->extraAttributes(['class' => 'w-full justify-center'])
             ->model(BoardStage::class)
             ->schema(BoardStageForm::components())
+            ->stickyModalHeader(false)
+            ->stickyModalFooter(false)
             ->visible($this->canManageStages())
             ->using(function (array $data): BoardStage {
                 Gate::authorize('update', $this->boardRecord());
@@ -253,6 +264,9 @@ final class BoardKanban extends BoardResourcePage
                     ]);
                 });
             })
+            ->after(function (): void {
+                $this->refreshBoardWorkspace();
+            })
             ->successNotificationTitle('Stage created');
     }
 
@@ -265,6 +279,11 @@ final class BoardKanban extends BoardResourcePage
             $this->membersAction(),
             $this->settingsAction(),
         ];
+    }
+
+    protected function makeBoard(): Board
+    {
+        return BoardWorkspace::make($this);
     }
 
     private function switchBoardAction(): Action
@@ -421,11 +440,14 @@ final class BoardKanban extends BoardResourcePage
 
                 return [
                     'name' => $stage->name,
+                    'subtitle' => $stage->subtitle,
                     'color' => $stage->color,
                     'kind' => $stage->kind->value,
                 ];
             })
             ->schema(BoardStageForm::components())
+            ->stickyModalHeader(false)
+            ->stickyModalFooter(false)
             ->action(function (array $data, array $arguments): void {
                 $stage = $this->activeStageFromArguments($arguments);
                 Gate::authorize('update', $stage);
@@ -444,6 +466,7 @@ final class BoardKanban extends BoardResourcePage
                     ]);
                 });
 
+                $this->refreshBoardWorkspace();
                 Notification::make()->title('Stage updated')->success()->send();
             });
     }
@@ -461,6 +484,8 @@ final class BoardKanban extends BoardResourcePage
                     ->options(fn (): array => $this->boardRecord()->activeStages()->pluck('name', 'id')->all())
                     ->required(),
             ])
+            ->stickyModalHeader(false)
+            ->stickyModalFooter(false)
             ->disabled(function (array $arguments): bool {
                 $stage = $this->stageFromArguments($arguments);
 
@@ -473,6 +498,7 @@ final class BoardKanban extends BoardResourcePage
                 abort_unless($user instanceof User, 403);
 
                 app(BoardItemWorkflowService::class)->retireStage($stage, $replacement, $user);
+                $this->refreshBoardWorkspace();
                 Notification::make()->title('Stage retired')->success()->send();
             });
     }
@@ -531,7 +557,7 @@ final class BoardKanban extends BoardResourcePage
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array{name: string, color: string, kind: BoardStageKind, is_default: bool}
+     * @return array{name: string, subtitle: ?string, color: string, kind: BoardStageKind, is_default: bool}
      */
     private function validateStageData(array $data, ?BoardStage $stage = null): array
     {
@@ -544,6 +570,7 @@ final class BoardKanban extends BoardResourcePage
                     ->where('board_id', $this->boardRecord()->id)
                     ->ignore($stage?->id),
             ],
+            'subtitle' => ['nullable', 'string', 'max:160'],
             'color' => ['required', Rule::in(array_keys(BoardForm::colorOptions()))],
             'kind' => ['required', Rule::enum(BoardStageKind::class)],
             'is_default' => ['boolean'],
@@ -551,11 +578,21 @@ final class BoardKanban extends BoardResourcePage
 
         return [
             'name' => mb_trim((string) $validated['name']),
+            'subtitle' => filled($validated['subtitle'] ?? null)
+                ? mb_trim((string) $validated['subtitle'])
+                : null,
             'color' => (string) $validated['color'],
             'kind' => $validated['kind'] instanceof BoardStageKind
                 ? $validated['kind']
                 : BoardStageKind::from((string) $validated['kind']),
             'is_default' => (bool) ($validated['is_default'] ?? false),
         ];
+    }
+
+    private function refreshBoardWorkspace(): void
+    {
+        $this->record = $this->boardRecord()->refresh();
+        $this->board = $this->board($this->makeBoard());
+        $this->forceRender();
     }
 }

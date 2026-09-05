@@ -64,22 +64,27 @@ final class ViewBoardItem extends ViewRecord
 
     private function watchAction(BoardItem $item): Action
     {
-        $user = auth()->user();
-        $isWatching = $user instanceof User && $item->subscriptions()
-            ->where('user_id', $user->id)
-            ->whereNull('muted_at')
-            ->exists();
-
         return Action::make('watch')
-            ->label($isWatching ? 'Unwatch' : 'Watch')
-            ->icon($isWatching ? 'heroicon-o-bell-slash' : 'heroicon-o-bell')
+            ->label(fn (): string => $this->isWatching($item) ? 'Unwatch' : 'Watch')
+            ->icon(fn (): string => $this->isWatching($item) ? 'heroicon-o-bell-slash' : 'heroicon-o-bell')
             ->color('gray')
-            ->action(function () use ($item, $isWatching): void {
+            ->action(function () use ($item): void {
                 $user = auth()->user();
                 abort_unless($user instanceof User, 403);
                 $service = app(BoardNotificationService::class);
 
-                $isWatching ? $service->unwatch($item, $user) : $service->watch($item, $user);
+                $this->isWatching($item) ? $service->unwatch($item, $user) : $service->watch($item, $user);
+                $this->forceRender();
             });
+    }
+
+    private function isWatching(BoardItem $item): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $item->subscriptions()
+            ->where('user_id', $user->id)
+            ->whereNull('muted_at')
+            ->exists();
     }
 }

@@ -24,6 +24,7 @@ final class BoardStageFactory extends Factory
         return [
             'board_id' => Board::factory(),
             'name' => fake()->unique()->words(2, true),
+            'subtitle' => null,
             'color' => 'gray',
             'sort_order' => fake()->unique()->numberBetween(1, 30000),
             'kind' => BoardStageKind::Active,
