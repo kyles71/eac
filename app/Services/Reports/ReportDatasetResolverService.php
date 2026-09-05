@@ -15,6 +15,7 @@ final readonly class ReportDatasetResolverService
     public function __construct(
         private EnrollmentReportService $enrollmentReports,
         private InstructorReportService $instructorReports,
+        private FinanceReportService $financeReports,
     ) {}
 
     /** @param array<string, mixed> $filters */
@@ -23,6 +24,7 @@ final readonly class ReportDatasetResolverService
         return match ($report->category()) {
             ReportCategory::Enrollment => $this->enrollmentReports->dataset($report, $user, $filters),
             ReportCategory::Instructor => $this->instructorReports->dataset($report, $user, $filters),
+            ReportCategory::Finance => $this->financeReports->dataset($report, $user, $filters),
             default => throw new InvalidArgumentException("{$report->label()} does not have a dataset provider."),
         };
     }

@@ -27,6 +27,8 @@ final class EventSubstituteRequestFactory extends Factory
             'teacher_id' => User::factory()->isTeacher(),
             'requested_by_user_id' => User::factory(),
             'status' => EventSubstituteRequestStatus::Pending,
+            'reason_type' => null,
+            'sick_instructor_id' => null,
         ];
     }
 
