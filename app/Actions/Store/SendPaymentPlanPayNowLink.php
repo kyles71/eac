@@ -8,6 +8,7 @@ use App\Actions\Mail\QueueManagedEmail;
 use App\Filament\User\Pages\PayPaymentPlan;
 use App\Models\PaymentPlan;
 use App\Models\User;
+use DomainException;
 
 final readonly class SendPaymentPlanPayNowLink
 {
@@ -17,6 +18,10 @@ final readonly class SendPaymentPlanPayNowLink
 
     public function handle(PaymentPlan $paymentPlan): bool
     {
+        if (! $paymentPlan->hasCollectibleMissedInstallments()) {
+            throw new DomainException('This payment plan does not have any missed installments available for payment.');
+        }
+
         $paymentPlan->loadMissing('order.user');
         $user = $paymentPlan->order?->user;
 

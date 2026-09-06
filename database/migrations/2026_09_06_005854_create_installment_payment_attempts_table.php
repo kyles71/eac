@@ -27,13 +27,19 @@ return new class() extends Migration
             $table->string('failure_code')->nullable();
             $table->string('advice_code')->nullable();
             $table->timestamp('failure_recorded_at')->nullable();
+            $table->string('success_email_status')->nullable();
+            $table->timestamp('success_email_processing_at')->nullable();
             $table->timestamp('success_email_sent_at')->nullable();
+            $table->string('failure_email_status')->nullable();
+            $table->timestamp('failure_email_processing_at')->nullable();
             $table->timestamp('failure_email_sent_at')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
 
             $table->index(['payment_plan_id', 'status']);
             $table->index(['status', 'updated_at']);
+            $table->index(['success_email_status', 'id']);
+            $table->index(['failure_email_status', 'id']);
         });
     }
 

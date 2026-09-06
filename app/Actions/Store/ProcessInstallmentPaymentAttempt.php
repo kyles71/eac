@@ -12,6 +12,9 @@ use DomainException;
 use Stripe\Exception\ApiConnectionException;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\CardException;
+use Stripe\Exception\IdempotencyException;
+use Stripe\Exception\RateLimitException;
+use Stripe\Exception\UnknownApiErrorException;
 use Stripe\PaymentIntent;
 use Throwable;
 
@@ -30,23 +33,21 @@ final readonly class ProcessInstallmentPaymentAttempt
             return $paymentAttempt;
         }
 
-        if ($paymentAttempt->stripe_payment_intent_id !== null) {
-            return $this->finalizePaymentAttempt->handle(
-                $paymentAttempt,
-                $this->stripeService->retrievePaymentIntent($paymentAttempt->stripe_payment_intent_id),
-            );
-        }
-
         try {
-            $paymentIntent = $this->createPaymentIntent($paymentAttempt);
-        } catch (ApiConnectionException $exception) {
-            $paymentAttempt->update([
-                'failure_reason' => 'Stripe could not be reached. This payment attempt will be reconciled automatically.',
-            ]);
+            if ($paymentAttempt->stripe_payment_intent_id !== null) {
+                return $this->finalizePaymentAttempt->handle(
+                    $paymentAttempt,
+                    $this->stripeService->retrievePaymentIntent($paymentAttempt->stripe_payment_intent_id),
+                );
+            }
 
-            throw $exception;
+            $paymentIntent = $this->createPaymentIntent($paymentAttempt);
         } catch (CardException $exception) {
-            $paymentIntent = $this->paymentIntentFromException($exception);
+            try {
+                $paymentIntent = $this->paymentIntentFromException($exception);
+            } catch (ApiErrorException $retrievalException) {
+                return $this->handleApiError($paymentAttempt, $retrievalException);
+            }
 
             if ($paymentIntent instanceof PaymentIntent) {
                 return $this->finalizePaymentAttempt->handle($paymentAttempt, $paymentIntent);
@@ -59,18 +60,13 @@ final readonly class ProcessInstallmentPaymentAttempt
                 $this->stringValue(data_get($exception->getError(), 'advice_code')),
             );
         } catch (ApiErrorException $exception) {
-            return $this->finalizePaymentAttempt->failWithoutPaymentIntent(
-                $paymentAttempt,
-                'We could not process this payment. Please review the payment method on your account.',
-                $exception->getStripeCode(),
-                $this->stringValue(data_get($exception->getError(), 'advice_code')),
-            );
+            return $this->handleApiError($paymentAttempt, $exception);
         } catch (Throwable $exception) {
             report($exception);
 
-            return $this->finalizePaymentAttempt->failWithoutPaymentIntent(
+            return $this->finalizePaymentAttempt->recordOperationalError(
                 $paymentAttempt,
-                'We could not process this payment. Please review the payment method on your account.',
+                'A system error prevented this payment from being processed. No installment retry was recorded.',
             );
         }
 
@@ -79,6 +75,45 @@ final readonly class ProcessInstallmentPaymentAttempt
             $paymentIntent,
             recordFailure: $paymentAttempt->origin !== InstallmentPaymentAttemptOrigin::Customer,
         );
+    }
+
+    private function handleApiError(
+        InstallmentPaymentAttempt $paymentAttempt,
+        ApiErrorException $exception,
+    ): InstallmentPaymentAttempt {
+        report($exception);
+
+        if ($this->isRecoverableApiError($exception)) {
+            InstallmentPaymentAttempt::query()
+                ->whereKey($paymentAttempt->id)
+                ->active()
+                ->update([
+                    'failure_reason' => 'Stripe is temporarily unavailable. This payment attempt will be reconciled automatically.',
+                    'failure_code' => $exception->getStripeCode(),
+                ]);
+
+            throw $exception;
+        }
+
+        return $this->finalizePaymentAttempt->recordOperationalError(
+            $paymentAttempt,
+            'Stripe rejected the payment request because of a system configuration error. No installment retry was recorded.',
+            $exception->getStripeCode(),
+        );
+    }
+
+    private function isRecoverableApiError(ApiErrorException $exception): bool
+    {
+        if ($exception instanceof ApiConnectionException
+            || $exception instanceof RateLimitException
+            || $exception instanceof IdempotencyException
+            || $exception instanceof UnknownApiErrorException) {
+            return true;
+        }
+
+        $httpStatus = $exception->getHttpStatus();
+
+        return $httpStatus === 409 || (is_int($httpStatus) && $httpStatus >= 500);
     }
 
     private function createPaymentIntent(InstallmentPaymentAttempt $paymentAttempt): PaymentIntent

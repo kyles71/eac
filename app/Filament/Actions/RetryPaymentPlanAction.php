@@ -8,7 +8,6 @@ use App\Actions\Store\CreateInstallmentPaymentAttempt;
 use App\Actions\Store\ProcessInstallmentPaymentAttempt;
 use App\Enums\InstallmentPaymentAttemptOrigin;
 use App\Enums\InstallmentPaymentAttemptStatus;
-use App\Enums\InstallmentStatus;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
 use App\Models\User;
@@ -97,6 +96,11 @@ final class RetryPaymentPlanAction extends Action
                             ->body('Stripe is still processing the charge. Its status will update automatically.')
                             ->info()
                             ->send(),
+                        InstallmentPaymentAttemptStatus::Error => Notification::make()
+                            ->title('Payment could not be started')
+                            ->body($paymentAttempt->failure_reason ?? 'A system error prevented this payment from being processed.')
+                            ->danger()
+                            ->send(),
                         default => Notification::make()
                             ->title('Payment was not completed')
                             ->body(($paymentAttempt->failure_reason ?? 'The customer must complete or update their payment method.').' You can send a Pay Now link.')
@@ -126,8 +130,7 @@ final class RetryPaymentPlanAction extends Action
     private static function eligibleInstallments(PaymentPlan $paymentPlan): \Illuminate\Database\Eloquent\Collection
     {
         return $paymentPlan->installments()
-            ->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue])
-            ->withoutActivePaymentAttempt()
+            ->collectibleMissed()
             ->orderBy('due_date')
             ->orderBy('installment_number')
             ->get();

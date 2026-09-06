@@ -12,6 +12,7 @@ use App\Models\OrderRefund;
 use App\Models\PaymentPlan;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Stripe\Exception\CardException;
 use Stripe\PaymentIntent;
 
 beforeEach(function () {
@@ -145,7 +146,13 @@ it('marks installment as failed when auto-charge fails', function () {
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->once()
-        ->andThrow(new Exception('Card declined'));
+        ->andThrow(CardException::factory(
+            message: 'Card declined',
+            httpStatus: 402,
+            jsonBody: ['error' => ['message' => 'Card declined', 'type' => 'card_error']],
+            stripeCode: 'card_declined',
+            declineCode: 'insufficient_funds',
+        ));
 
     $action = app(ProcessInstallments::class);
     $result = $action->handle();
@@ -156,19 +163,20 @@ it('marks installment as failed when auto-charge fails', function () {
 
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Failed)
-        ->and($installment->retry_count)->toBe(1);
+        ->and($installment->retry_count)->toBe(1)
+        ->and($installment->last_failure_reason)->toBe('Card declined')
+        ->and($installment->last_failure_code)->toBe('insufficient_funds');
 
     Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
         $rendered = $mail->getRenderedEmail();
 
         return $mail->emailTypeKey === 'payment-plan-installment-failed'
             && $mail->usesMailer('transactional')
-            && str_contains($rendered->html, 'We could not process this payment')
-            && ! str_contains($rendered->html, 'Card declined');
+            && str_contains($rendered->html, 'Card declined');
     });
 });
 
-it('continues processing installments when a charge throws a runtime throwable', function () {
+it('continues processing installments without consuming a retry when a charge throws a runtime throwable', function () {
     $plans = PaymentPlan::factory()->count(2)->create([
         'stripe_customer_id' => 'cus_runtime_throwable',
         'stripe_payment_method_id' => 'pm_runtime_throwable',
@@ -214,8 +222,8 @@ it('continues processing installments when a charge throws a runtime throwable',
     expect($result['processed'])->toBe(2)
         ->and($result['succeeded'])->toBe(1)
         ->and($result['failed'])->toBe(1)
-        ->and($firstInstallment->refresh()->status)->toBe(InstallmentStatus::Failed)
-        ->and($firstInstallment->retry_count)->toBe(1)
+        ->and($firstInstallment->refresh()->status)->toBe(InstallmentStatus::Pending)
+        ->and($firstInstallment->retry_count)->toBe(0)
         ->and($secondInstallment->refresh()->status)->toBe(InstallmentStatus::Paid)
         ->and($secondInstallment->stripe_payment_intent_id)->toBe('pi_runtime_recovered');
 });
@@ -263,7 +271,13 @@ it('does not consume more than one failed retry per eastern calendar day', funct
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->twice()
-        ->andThrow(new Exception('Card declined'));
+        ->andThrow(CardException::factory(
+            message: 'Card declined',
+            httpStatus: 402,
+            jsonBody: ['error' => ['message' => 'Card declined', 'type' => 'card_error']],
+            stripeCode: 'card_declined',
+            declineCode: 'insufficient_funds',
+        ));
 
     expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(1)
         ->and($installment->refresh()->retry_count)->toBe(2)

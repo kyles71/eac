@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Actions\Store;
 
+use App\Enums\InstallmentPaymentAttemptEmailStatus;
 use App\Enums\InstallmentPaymentAttemptOrigin;
 use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
+use App\Jobs\SendInstallmentPaymentAttemptResultEmail;
+use App\Models\Installment;
 use App\Models\InstallmentPaymentAttempt;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +19,6 @@ use Throwable;
 final readonly class FinalizeInstallmentPaymentAttempt
 {
     public function __construct(
-        private SendInstallmentPaymentAttemptEmail $paymentEmail,
         private SendPastDueInstallmentNotification $pastDueNotification,
     ) {}
 
@@ -33,6 +35,7 @@ final readonly class FinalizeInstallmentPaymentAttempt
                 ->findOrFail($paymentAttempt->id);
 
             $this->validatePaymentIntent($lockedAttempt, $paymentIntent);
+            $this->lockAllocatedInstallments($lockedAttempt);
 
             if ($lockedAttempt->status === InstallmentPaymentAttemptStatus::Succeeded
                 && $paymentIntent->status !== 'succeeded') {
@@ -47,7 +50,35 @@ final readonly class FinalizeInstallmentPaymentAttempt
                 'stripe_status' => $status,
             ];
 
+            if ($lockedAttempt->status === InstallmentPaymentAttemptStatus::Cancelled
+                && ! in_array($status, ['succeeded', 'processing'], true)) {
+                $lockedAttempt->update([
+                    ...$attributes,
+                    'status' => InstallmentPaymentAttemptStatus::Cancelled,
+                    'completed_at' => $lockedAttempt->completed_at ?? now(),
+                ]);
+
+                return $lockedAttempt->refresh()->load(['allocations.installment', 'paymentPlan.order.user']);
+            }
+
             if ($status === 'succeeded') {
+                if ($lockedAttempt->allocations->contains(
+                    fn ($allocation): bool => $allocation->installment->status === InstallmentStatus::Cancelled,
+                )) {
+                    report(new DomainException(
+                        "Stripe payment {$paymentIntent->id} succeeded for payment attempt #{$lockedAttempt->id}, but an allocated installment is cancelled.",
+                    ));
+
+                    $lockedAttempt->update([
+                        ...$attributes,
+                        'status' => InstallmentPaymentAttemptStatus::Error,
+                        'failure_reason' => 'Stripe reported a successful payment for a cancelled installment. Review the payment in Stripe and issue a refund if needed.',
+                        'completed_at' => $lockedAttempt->completed_at ?? now(),
+                    ]);
+
+                    return $lockedAttempt->refresh()->load(['allocations.installment', 'paymentPlan.order.user']);
+                }
+
                 if ($lockedAttempt->status !== InstallmentPaymentAttemptStatus::Succeeded) {
                     foreach ($lockedAttempt->allocations as $allocation) {
                         $installment = $allocation->installment;
@@ -69,6 +100,8 @@ final readonly class FinalizeInstallmentPaymentAttempt
                 $attributes['failure_code'] = null;
                 $attributes['advice_code'] = null;
                 $attributes['completed_at'] = $lockedAttempt->completed_at ?? now();
+                $attributes['success_email_status'] = $lockedAttempt->success_email_status
+                    ?? InstallmentPaymentAttemptEmailStatus::Pending;
             } elseif ($status === 'processing') {
                 $attributes['status'] = InstallmentPaymentAttemptStatus::Processing;
             } elseif ($status === 'requires_action') {
@@ -96,6 +129,11 @@ final readonly class FinalizeInstallmentPaymentAttempt
 
                 if ($attributes['status'] === InstallmentPaymentAttemptStatus::Failed) {
                     $attributes['completed_at'] = $lockedAttempt->completed_at ?? now();
+                }
+
+                if (($attributes['failure_recorded_at'] ?? $lockedAttempt->failure_recorded_at) !== null) {
+                    $attributes['failure_email_status'] = $lockedAttempt->failure_email_status
+                        ?? InstallmentPaymentAttemptEmailStatus::Pending;
                 }
             } elseif ($status === 'canceled') {
                 $attributes['status'] = InstallmentPaymentAttemptStatus::Cancelled;
@@ -126,8 +164,9 @@ final readonly class FinalizeInstallmentPaymentAttempt
                 ->with(['allocations.installment', 'paymentPlan.order.user'])
                 ->lockForUpdate()
                 ->findOrFail($paymentAttempt->id);
+            $this->lockAllocatedInstallments($lockedAttempt);
 
-            if ($lockedAttempt->status === InstallmentPaymentAttemptStatus::Succeeded) {
+            if (! $lockedAttempt->status->isActive()) {
                 return $lockedAttempt;
             }
 
@@ -152,6 +191,8 @@ final readonly class FinalizeInstallmentPaymentAttempt
                 'failure_code' => $failureCode,
                 'advice_code' => $adviceCode,
                 'failure_recorded_at' => $lockedAttempt->failure_recorded_at ?? now(),
+                'failure_email_status' => $lockedAttempt->failure_email_status
+                    ?? InstallmentPaymentAttemptEmailStatus::Pending,
                 'completed_at' => $lockedAttempt->completed_at ?? now(),
             ]);
 
@@ -161,6 +202,33 @@ final readonly class FinalizeInstallmentPaymentAttempt
         $this->sendResultNotifications($paymentAttempt);
 
         return $paymentAttempt->refresh();
+    }
+
+    public function recordOperationalError(
+        InstallmentPaymentAttempt $paymentAttempt,
+        string $failureReason,
+        ?string $failureCode = null,
+    ): InstallmentPaymentAttempt {
+        return DB::transaction(function () use ($paymentAttempt, $failureReason, $failureCode): InstallmentPaymentAttempt {
+            /** @var InstallmentPaymentAttempt $lockedAttempt */
+            $lockedAttempt = InstallmentPaymentAttempt::query()
+                ->with(['allocations.installment', 'paymentPlan.order.user'])
+                ->lockForUpdate()
+                ->findOrFail($paymentAttempt->id);
+
+            if (! $lockedAttempt->status->isActive()) {
+                return $lockedAttempt;
+            }
+
+            $lockedAttempt->update([
+                'status' => InstallmentPaymentAttemptStatus::Error,
+                'failure_reason' => $failureReason,
+                'failure_code' => $failureCode,
+                'completed_at' => $lockedAttempt->completed_at ?? now(),
+            ]);
+
+            return $lockedAttempt->refresh()->load(['allocations.installment', 'paymentPlan.order.user']);
+        }, attempts: 3);
     }
 
     private function validatePaymentIntent(
@@ -177,6 +245,22 @@ final readonly class FinalizeInstallmentPaymentAttempt
             || $this->stringValue($paymentIntent->customer ?? null) !== $paymentAttempt->stripe_customer_id
             || $this->stringValue(data_get($paymentIntent, 'metadata.payment_attempt_id')) !== (string) $paymentAttempt->id) {
             throw new DomainException('The Stripe payment details do not match this payment attempt.');
+        }
+    }
+
+    private function lockAllocatedInstallments(InstallmentPaymentAttempt $paymentAttempt): void
+    {
+        $installments = Installment::query()
+            ->whereKey($paymentAttempt->allocations->pluck('installment_id'))
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        foreach ($paymentAttempt->allocations as $allocation) {
+            /** @var Installment $installment */
+            $installment = $installments->get($allocation->installment_id);
+            $allocation->setRelation('installment', $installment);
         }
     }
 
@@ -217,15 +301,12 @@ final readonly class FinalizeInstallmentPaymentAttempt
 
     private function sendResultNotifications(InstallmentPaymentAttempt $paymentAttempt): void
     {
-        if ($paymentAttempt->status === InstallmentPaymentAttemptStatus::Succeeded) {
-            $this->sendEmailOnce($paymentAttempt, successful: true, timestampColumn: 'success_email_sent_at');
+        if ($paymentAttempt->success_email_status === InstallmentPaymentAttemptEmailStatus::Pending) {
+            $this->dispatchResultEmail($paymentAttempt, successful: true);
         }
 
-        if (in_array($paymentAttempt->status, [
-            InstallmentPaymentAttemptStatus::Failed,
-            InstallmentPaymentAttemptStatus::RequiresPaymentMethod,
-        ], true) && $paymentAttempt->failure_recorded_at !== null) {
-            $this->sendEmailOnce($paymentAttempt, successful: false, timestampColumn: 'failure_email_sent_at');
+        if ($paymentAttempt->failure_email_status === InstallmentPaymentAttemptEmailStatus::Pending) {
+            $this->dispatchResultEmail($paymentAttempt, successful: false);
         }
 
         if ($paymentAttempt->failure_recorded_at === null) {
@@ -243,31 +324,20 @@ final readonly class FinalizeInstallmentPaymentAttempt
         }
     }
 
-    private function sendEmailOnce(
+    private function dispatchResultEmail(
         InstallmentPaymentAttempt $paymentAttempt,
         bool $successful,
-        string $timestampColumn,
     ): void {
-        $claimed = InstallmentPaymentAttempt::query()
-            ->whereKey($paymentAttempt->id)
-            ->whereNull($timestampColumn)
-            ->update([$timestampColumn => now()]) === 1;
-
-        if (! $claimed) {
-            return;
-        }
-
         try {
-            if ($this->paymentEmail->handle($paymentAttempt, $successful)) {
-                return;
-            }
+            SendInstallmentPaymentAttemptResultEmail::dispatch(
+                $paymentAttempt->id,
+                $paymentAttempt->idempotency_key,
+                $successful,
+            )
+                ->afterCommit();
         } catch (Throwable $exception) {
             report($exception);
         }
-
-        InstallmentPaymentAttempt::query()
-            ->whereKey($paymentAttempt->id)
-            ->update([$timestampColumn => null]);
     }
 
     private function stringValue(mixed $value): ?string

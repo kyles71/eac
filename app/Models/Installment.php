@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderRefundStatus;
@@ -55,8 +56,41 @@ final class Installment extends Model
     {
         $query->whereDoesntHave(
             'paymentAttemptAllocations.paymentAttempt',
-            fn (Builder $query): Builder => $query->active(),
+            fn (Builder $query): Builder => $query->whereIn('status', [
+                InstallmentPaymentAttemptStatus::Pending,
+                InstallmentPaymentAttemptStatus::RequiresPaymentMethod,
+                InstallmentPaymentAttemptStatus::RequiresAction,
+                InstallmentPaymentAttemptStatus::Processing,
+            ]),
         );
+    }
+
+    public function scopeReschedulable(Builder $query): void
+    {
+        $query->whereIn('status', [
+            InstallmentStatus::Pending,
+            InstallmentStatus::Failed,
+            InstallmentStatus::Overdue,
+        ]);
+    }
+
+    public function scopeCollectibleMissed(Builder $query): void
+    {
+        $query->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue]);
+        $this->scopeNotBlockedByRefundCancellation($query);
+        $this->scopeWithoutActivePaymentAttempt($query);
+    }
+
+    public function hasActivePaymentAttempt(): bool
+    {
+        return $this->paymentAttemptAllocations()
+            ->whereHas('paymentAttempt', fn (Builder $query): Builder => $query->whereIn('status', [
+                InstallmentPaymentAttemptStatus::Pending,
+                InstallmentPaymentAttemptStatus::RequiresPaymentMethod,
+                InstallmentPaymentAttemptStatus::RequiresAction,
+                InstallmentPaymentAttemptStatus::Processing,
+            ]))
+            ->exists();
     }
 
     /**

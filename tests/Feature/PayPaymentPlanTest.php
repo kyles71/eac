@@ -91,6 +91,46 @@ it('shows Pay Now after the latest payment attempt was cancelled', function (): 
         ->assertSee('Pay Now');
 });
 
+it('shows Pay Now when a completed payment leaves another missed installment', function (): void {
+    /** @var User $customer */
+    $customer = auth()->user();
+    $order = Order::factory()->completed()->create(['user_id' => $customer->id]);
+    $paymentPlan = PaymentPlan::factory()->create(['order_id' => $order->id]);
+    $paidInstallment = Installment::factory()->paid()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 1,
+        'amount' => 1666,
+    ]);
+    $remainingInstallment = Installment::factory()->overdue()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 2,
+        'amount' => 1666,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'initiated_by_user_id' => $customer->id,
+        'origin' => InstallmentPaymentAttemptOrigin::Customer,
+        'status' => InstallmentPaymentAttemptStatus::Succeeded,
+        'total_amount' => $paidInstallment->amount,
+        'completed_at' => now(),
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $paidInstallment->id,
+        'amount' => $paidInstallment->amount,
+    ]);
+
+    livewire(PayPaymentPlan::class, ['paymentPlan' => $paymentPlan])
+        ->assertOk()
+        ->assertSee('Payment completed')
+        ->assertSee('1', escape: false)
+        ->assertSee("mountAction('preparePayment'", escape: false)
+        ->assertActionVisible('preparePayment')
+        ->mountAction('preparePayment')
+        ->assertActionDataSet([
+            'installment_ids' => [$remainingInstallment->id],
+        ]);
+});
+
 it('offers recovery instead of loading Stripe for an interrupted payment setup', function (): void {
     /** @var User $customer */
     $customer = auth()->user();

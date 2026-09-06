@@ -90,6 +90,8 @@ final class PaymentPlanInfolist
                                 TableColumn::make('Installments'),
                                 TableColumn::make('Initiated By'),
                                 TableColumn::make('Stripe Payment'),
+                                TableColumn::make('Success Email'),
+                                TableColumn::make('Failure Email'),
                                 TableColumn::make('Created'),
                             ])
                             ->schema([
@@ -100,12 +102,7 @@ final class PaymentPlanInfolist
                                     ->badge(),
                                 TextEntry::make('status')
                                     ->badge()
-                                    ->color(fn (InstallmentPaymentAttempt $record): string => match ($record->status->value) {
-                                        'Succeeded' => 'success',
-                                        'Failed' => 'danger',
-                                        'Cancelled' => 'gray',
-                                        default => 'warning',
-                                    }),
+                                    ->color(fn (InstallmentPaymentAttempt $record): string => $record->status->getColor()),
                                 TextEntry::make('total_amount')
                                     ->label('Amount')
                                     ->moneyCents(),
@@ -121,6 +118,14 @@ final class PaymentPlanInfolist
                                     ->label('Stripe Payment')
                                     ->placeholder('—')
                                     ->copyable(),
+                                TextEntry::make('success_email_status')
+                                    ->label('Success Email')
+                                    ->badge()
+                                    ->placeholder('—'),
+                                TextEntry::make('failure_email_status')
+                                    ->label('Failure Email')
+                                    ->badge()
+                                    ->placeholder('—'),
                                 TextEntry::make('created_at')
                                     ->label('Created')
                                     ->dateTime(),

@@ -17,8 +17,8 @@ final class ReconcileInstallmentPaymentAttemptsCommand extends Command
     {
         $result = $reconcilePaymentAttempts->handle();
 
-        $this->info("Reconciled {$result['processed']} payment attempt(s); {$result['failed']} failed.");
+        $this->info("Reconciled {$result['processed']} payment attempt(s), queued {$result['emails_queued']} result email job(s); {$result['failed']} failed.");
 
-        return self::SUCCESS;
+        return $result['failed'] === 0 ? self::SUCCESS : self::FAILURE;
     }
 }

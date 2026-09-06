@@ -10,8 +10,6 @@ return new class() extends Migration
 {
     public function up(): void
     {
-        Schema::dropIfExists('installment_payment_attempt_allocations');
-
         Schema::create('installment_payment_attempt_allocations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('installment_payment_attempt_id');

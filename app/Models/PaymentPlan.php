@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
 use App\Enums\PaymentPlanFrequency;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -81,5 +82,30 @@ final class PaymentPlan extends Model
     public function remainingBalance(): int
     {
         return $this->total_amount - $this->amountPaid();
+    }
+
+    public function hasCollectibleMissedInstallments(): bool
+    {
+        if (! $this->order()
+            ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Refunded->value])
+            ->exists()) {
+            return false;
+        }
+
+        return $this->installments()->collectibleMissed()->exists();
+    }
+
+    public function hasReschedulableInstallments(): bool
+    {
+        if (! $this->order()
+            ->whereNotIn('status', [OrderStatus::Cancelled->value, OrderStatus::Refunded->value])
+            ->exists()) {
+            return false;
+        }
+
+        return $this->installments()
+            ->reschedulable()
+            ->notBlockedByRefundCancellation()
+            ->exists();
     }
 }

@@ -9,6 +9,7 @@ use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Models\InstallmentPaymentAttempt;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\DB;
 
 final readonly class CancelInstallmentPaymentAttempt
 {
@@ -41,11 +42,24 @@ final readonly class CancelInstallmentPaymentAttempt
             );
         }
 
-        $paymentAttempt->update([
-            'status' => InstallmentPaymentAttemptStatus::Cancelled,
-            'completed_at' => now(),
-        ]);
+        return DB::transaction(function () use ($paymentAttempt): InstallmentPaymentAttempt {
+            /** @var InstallmentPaymentAttempt $lockedAttempt */
+            $lockedAttempt = InstallmentPaymentAttempt::query()
+                ->lockForUpdate()
+                ->findOrFail($paymentAttempt->id);
 
-        return $paymentAttempt->refresh();
+            if (! $lockedAttempt->status->isActive()
+                || $lockedAttempt->status === InstallmentPaymentAttemptStatus::Processing
+                || $lockedAttempt->stripe_payment_intent_id !== null) {
+                return $lockedAttempt;
+            }
+
+            $lockedAttempt->update([
+                'status' => InstallmentPaymentAttemptStatus::Cancelled,
+                'completed_at' => now(),
+            ]);
+
+            return $lockedAttempt->refresh();
+        }, attempts: 3);
     }
 }

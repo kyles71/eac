@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\InstallmentPaymentAttemptEmailStatus;
 use App\Enums\InstallmentPaymentAttemptOrigin;
 use App\Enums\InstallmentPaymentAttemptStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +27,11 @@ final class InstallmentPaymentAttempt extends Model
         'total_amount' => 'integer',
         'use_for_future' => 'boolean',
         'failure_recorded_at' => 'datetime',
+        'success_email_status' => InstallmentPaymentAttemptEmailStatus::class,
+        'success_email_processing_at' => 'datetime',
         'success_email_sent_at' => 'datetime',
+        'failure_email_status' => InstallmentPaymentAttemptEmailStatus::class,
+        'failure_email_processing_at' => 'datetime',
         'failure_email_sent_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

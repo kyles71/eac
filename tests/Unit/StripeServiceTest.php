@@ -49,6 +49,60 @@ it('creates a new payment intent without preassigning a saved payment method', f
     ])->not->toHaveKey('payment_method');
 });
 
+it('uses a derived idempotency key when it must create the Stripe customer', function (): void {
+    $customers = new class
+    {
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, mixed>  $options
+         */
+        public function create(array $params, array $options): Customer
+        {
+            $this->requestOptions = $options;
+
+            return Customer::constructFrom(['id' => 'cus_idempotent']);
+        }
+    };
+    $paymentIntents = new class
+    {
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, mixed>  $options
+         */
+        public function create(array $params, array $options): PaymentIntent
+        {
+            $this->requestOptions = $options;
+
+            return PaymentIntent::constructFrom(['id' => 'pi_idempotent']);
+        }
+    };
+    $service = new StripeService(stripeClientForTest([
+        'customers' => $customers,
+        'paymentIntents' => $paymentIntents,
+    ]));
+    $user = User::factory()->create(['stripe_id' => null]);
+
+    $service->createPaymentIntent(
+        user: $user,
+        amount: 5000,
+        idempotencyKey: 'installment-payment-attempt-test',
+    );
+
+    expect($customers->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
+        'idempotency_key' => 'installment-payment-attempt-test-customer',
+    ])->and($paymentIntents->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
+        'idempotency_key' => 'installment-payment-attempt-test',
+    ])->and($user->refresh()->stripe_id)->toBe('cus_idempotent');
+});
+
 it('creates an idempotent off-session payment intent for a saved method', function (): void {
     $paymentIntents = new class
     {

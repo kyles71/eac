@@ -14,7 +14,7 @@ use Stripe\SetupIntent;
 
 interface StripeServiceContract
 {
-    public function createOrGetCustomer(User $user): Customer;
+    public function createOrGetCustomer(User $user, ?string $idempotencyKey = null): Customer;
 
     /**
      * Create an on-session PaymentIntent for the given user and amount.

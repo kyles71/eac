@@ -11,13 +11,13 @@ use App\Actions\Store\ProcessInstallmentPaymentAttempt;
 use App\Contracts\StripeServiceContract;
 use App\Enums\InstallmentPaymentAttemptOrigin;
 use App\Enums\InstallmentPaymentAttemptStatus;
-use App\Enums\InstallmentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Installment;
 use App\Models\InstallmentPaymentAttempt;
 use App\Models\PaymentPlan;
 use App\Models\User;
 use BackedEnum;
+use DomainException;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Infolists\Components\TextEntry;
@@ -30,6 +30,7 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Auth\Access\AuthorizationException;
+use InvalidArgumentException;
 use Throwable;
 
 final class PayPaymentPlan extends Page
@@ -90,9 +91,7 @@ final class PayPaymentPlan extends Page
                     Actions::make([
                         $this->preparePaymentAction(),
                     ])
-                        ->visible(fn (): bool => $this->paymentAttempt === null
-                            && $this->eligibleInstallments()->isNotEmpty()
-                            && ! in_array($this->paymentPlan->order?->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true)),
+                        ->visible(fn (): bool => $this->canPreparePayment()),
                     TextEntry::make('nothing_due')
                         ->hiddenLabel()
                         ->state('There are no failed or overdue installments to pay.')
@@ -170,6 +169,9 @@ final class PayPaymentPlan extends Page
                     Actions::make([
                         Action::make('startAgain')
                             ->label('Try Again')
+                            ->visible(fn (): bool => $this->paymentAttempt?->status === InstallmentPaymentAttemptStatus::Failed
+                                || ($this->paymentAttempt?->status === InstallmentPaymentAttemptStatus::Error
+                                    && $this->paymentAttempt->stripe_payment_intent_id === null))
                             ->action(function (): void {
                                 $this->paymentAttempt = null;
                                 $this->clientSecret = null;
@@ -177,7 +179,10 @@ final class PayPaymentPlan extends Page
                             }),
                     ]),
                 ])
-                ->visible(fn (): bool => $this->paymentAttempt?->status === InstallmentPaymentAttemptStatus::Failed),
+                ->visible(fn (): bool => in_array($this->paymentAttempt?->status, [
+                    InstallmentPaymentAttemptStatus::Failed,
+                    InstallmentPaymentAttemptStatus::Error,
+                ], true)),
         ]);
     }
 
@@ -314,7 +319,10 @@ final class PayPaymentPlan extends Page
                 } catch (Throwable $exception) {
                     Notification::make()
                         ->title('Could not start payment')
-                        ->body($exception->getMessage())
+                        ->body(self::customerSafeExceptionMessage(
+                            $exception,
+                            'Stripe could not prepare the secure payment form. Please try again shortly.',
+                        ))
                         ->danger()
                         ->send();
 
@@ -332,6 +340,17 @@ final class PayPaymentPlan extends Page
                 ->color('gray')
                 ->url(Billing::getUrl()),
         ];
+    }
+
+    private static function customerSafeExceptionMessage(Throwable $exception, string $fallback): string
+    {
+        if ($exception instanceof AuthorizationException
+            || $exception instanceof DomainException
+            || $exception instanceof InvalidArgumentException) {
+            return $exception->getMessage();
+        }
+
+        return $fallback;
     }
 
     private function cancelPayment(): void
@@ -361,7 +380,10 @@ final class PayPaymentPlan extends Page
         } catch (Throwable $exception) {
             Notification::make()
                 ->title('Could not cancel payment')
-                ->body($exception->getMessage())
+                ->body(self::customerSafeExceptionMessage(
+                    $exception,
+                    'Stripe could not cancel this payment. Please try again shortly.',
+                ))
                 ->danger()
                 ->send();
         }
@@ -441,6 +463,17 @@ final class PayPaymentPlan extends Page
             && $this->clientSecret === null;
     }
 
+    private function canPreparePayment(): bool
+    {
+        if ($this->paymentAttempt !== null
+            && $this->paymentAttempt->status !== InstallmentPaymentAttemptStatus::Succeeded) {
+            return false;
+        }
+
+        return $this->eligibleInstallments()->isNotEmpty()
+            && ! in_array($this->paymentPlan->order?->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true);
+    }
+
     private function setPaymentSecrets(): void
     {
         if ($this->paymentAttempt === null || ! $this->paymentAttempt->status->isActive()) {
@@ -467,8 +500,7 @@ final class PayPaymentPlan extends Page
     private function eligibleInstallments(): \Illuminate\Database\Eloquent\Collection
     {
         return $this->paymentPlan->installments()
-            ->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue])
-            ->notBlockedByRefundCancellation()
+            ->collectibleMissed()
             ->orderBy('due_date')
             ->orderBy('installment_number')
             ->get();

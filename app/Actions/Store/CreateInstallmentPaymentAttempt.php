@@ -101,7 +101,7 @@ final readonly class CreateInstallmentPaymentAttempt
                 throw new DomainException('A payment for one or more selected installments is already in progress.');
             }
 
-            $stripeCustomerId = $lockedPaymentPlan->order?->user?->stripe_id
+            $stripeCustomerId = $lockedPaymentPlan->order?->user->stripe_id
                 ?? $lockedPaymentPlan->stripe_customer_id;
 
             if ($origin !== InstallmentPaymentAttemptOrigin::Customer

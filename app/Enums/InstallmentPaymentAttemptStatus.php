@@ -15,6 +15,7 @@ enum InstallmentPaymentAttemptStatus: string implements HasColor, HasLabel
     case Processing = 'Processing';
     case Succeeded = 'Succeeded';
     case Failed = 'Failed';
+    case Error = 'Error';
     case Cancelled = 'Cancelled';
 
     public function isActive(): bool
@@ -32,6 +33,7 @@ enum InstallmentPaymentAttemptStatus: string implements HasColor, HasLabel
         return match ($this) {
             self::RequiresPaymentMethod => 'Needs payment method',
             self::RequiresAction => 'Needs customer action',
+            self::Error => 'System error',
             default => $this->value,
         };
     }
@@ -40,7 +42,7 @@ enum InstallmentPaymentAttemptStatus: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Succeeded => 'success',
-            self::Failed => 'danger',
+            self::Failed, self::Error => 'danger',
             self::Cancelled => 'gray',
             default => 'warning',
         };

@@ -7,6 +7,7 @@ use App\Actions\Store\FinalizeInstallmentPaymentAttempt;
 use App\Actions\Store\ProcessInstallmentPaymentAttempt;
 use App\Actions\Store\SendPaymentPlanPayNowLink;
 use App\Contracts\StripeServiceContract;
+use App\Enums\InstallmentPaymentAttemptEmailStatus;
 use App\Enums\InstallmentPaymentAttemptOrigin;
 use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
@@ -18,6 +19,8 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Stripe\Exception\AuthenticationException;
+use Stripe\Exception\RateLimitException;
 use Stripe\PaymentIntent;
 
 beforeEach(function (): void {
@@ -97,6 +100,9 @@ it('collects selected missed installments in one payment and saves the method fo
         ->and($overdue->refresh()->status)->toBe(InstallmentStatus::Paid)
         ->and($overdue->stripe_payment_intent_id)->toBe('pi_combined')
         ->and($paymentPlan->refresh()->stripe_payment_method_id)->toBe('pm_new');
+
+    expect($paymentAttempt->refresh()->success_email_status)->toBe(InstallmentPaymentAttemptEmailStatus::Queued)
+        ->and($paymentAttempt->success_email_sent_at)->not->toBeNull();
 
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'payment-plan-catch-up-succeeded'
         && $mail->hasTo($customer->email));
@@ -306,4 +312,142 @@ it('queues a managed pay now link for the payment plan customer', function (): v
             && str_contains($rendered->html, (string) $paymentPlan->id)
             && str_contains($rendered->html, '/payment-plans/');
     });
+});
+
+it('never resurrects a cancelled installment when Stripe reports a late success', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create(['stripe_customer_id' => 'cus_late_success']);
+    $installment = Installment::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentStatus::Cancelled,
+        'amount' => 3200,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::Pending,
+        'total_amount' => 3200,
+        'stripe_customer_id' => 'cus_late_success',
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => 3200,
+    ]);
+    $paymentIntent = PaymentIntent::constructFrom([
+        'id' => 'pi_late_cancelled_success',
+        'status' => 'succeeded',
+        'amount' => 3200,
+        'currency' => 'usd',
+        'customer' => 'cus_late_success',
+        'metadata' => ['payment_attempt_id' => (string) $paymentAttempt->id],
+    ]);
+
+    $result = app(FinalizeInstallmentPaymentAttempt::class)->handle($paymentAttempt, $paymentIntent);
+
+    expect($result->status)->toBe(InstallmentPaymentAttemptStatus::Error)
+        ->and($result->stripe_status)->toBe('succeeded')
+        ->and($result->success_email_status)->toBeNull()
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Cancelled)
+        ->and($installment->paid_at)->toBeNull();
+
+    Mail::assertNothingQueued();
+});
+
+it('preserves a cancelled attempt when a late failure or system error is recorded', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create(['stripe_customer_id' => 'cus_cancelled_failure']);
+    $installment = Installment::factory()->failed(1)->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'amount' => 2400,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::Cancelled,
+        'total_amount' => 2400,
+        'stripe_customer_id' => 'cus_cancelled_failure',
+        'completed_at' => now(),
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => 2400,
+    ]);
+    $finalizer = app(FinalizeInstallmentPaymentAttempt::class);
+
+    $finalizer->failWithoutPaymentIntent($paymentAttempt, 'Card declined', 'card_declined');
+    $finalizer->recordOperationalError($paymentAttempt, 'Stripe configuration error.');
+
+    expect($paymentAttempt->refresh()->status)->toBe(InstallmentPaymentAttemptStatus::Cancelled)
+        ->and($paymentAttempt->failure_recorded_at)->toBeNull()
+        ->and($paymentAttempt->failure_email_status)->toBeNull()
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Failed)
+        ->and($installment->retry_count)->toBe(1);
+    Mail::assertNothingQueued();
+});
+
+it('keeps recoverable Stripe API failures active without consuming an installment retry', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create(['stripe_customer_id' => 'cus_rate_limited']);
+    $installment = Installment::factory()->failed()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'retry_count' => 1,
+        'amount' => 2800,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'origin' => InstallmentPaymentAttemptOrigin::Administrator,
+        'status' => InstallmentPaymentAttemptStatus::Pending,
+        'total_amount' => 2800,
+        'stripe_customer_id' => 'cus_rate_limited',
+        'stripe_payment_method_id' => 'pm_rate_limited',
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => 2800,
+    ]);
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $stripe->shouldReceive('chargePaymentMethod')
+        ->once()
+        ->andThrow(RateLimitException::factory('Too many requests.', 429));
+    $this->app->instance(StripeServiceContract::class, $stripe);
+
+    expect(fn () => app(ProcessInstallmentPaymentAttempt::class)->handle($paymentAttempt))
+        ->toThrow(RateLimitException::class);
+
+    expect($paymentAttempt->refresh()->status)->toBe(InstallmentPaymentAttemptStatus::Pending)
+        ->and($paymentAttempt->failure_reason)->toContain('reconciled automatically')
+        ->and($paymentAttempt->failure_email_status)->toBeNull()
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Failed)
+        ->and($installment->retry_count)->toBe(1);
+});
+
+it('records deterministic Stripe API failures as operational errors', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create(['stripe_customer_id' => 'cus_auth_error']);
+    $installment = Installment::factory()->failed()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'retry_count' => 1,
+        'amount' => 2800,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'origin' => InstallmentPaymentAttemptOrigin::Administrator,
+        'status' => InstallmentPaymentAttemptStatus::Pending,
+        'total_amount' => 2800,
+        'stripe_customer_id' => 'cus_auth_error',
+        'stripe_payment_method_id' => 'pm_auth_error',
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => 2800,
+    ]);
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $stripe->shouldReceive('chargePaymentMethod')
+        ->once()
+        ->andThrow(AuthenticationException::factory('Invalid API key.', 401));
+    $this->app->instance(StripeServiceContract::class, $stripe);
+
+    $result = app(ProcessInstallmentPaymentAttempt::class)->handle($paymentAttempt);
+
+    expect($result->status)->toBe(InstallmentPaymentAttemptStatus::Error)
+        ->and($result->failure_reason)->toContain('system configuration error')
+        ->and($result->failure_email_status)->toBeNull()
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Failed)
+        ->and($installment->retry_count)->toBe(1);
+
+    Mail::assertNothingQueued();
 });

@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Orders\Pages;
 
 use App\Actions\Store\IssueOrderRefundAction;
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Enrollment;
+use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -30,7 +32,7 @@ final class ViewOrder extends ViewRecord
 
     protected function getHeaderActions(): array
     {
-        /** @var \App\Models\Order $record */
+        /** @var Order $record */
         $record = $this->getRecord();
 
         return [
@@ -108,7 +110,10 @@ final class ViewOrder extends ViewRecord
                                 ->visible(fn (): bool => ($record->credit_applied + $record->restricted_credit_applied) > 0),
                             Toggle::make('cancel_remaining_installments')
                                 ->label('Cancel remaining payment-plan installments')
-                                ->helperText('Stops unpaid, failed, and overdue installments after the refund succeeds.')
+                                ->helperText(fn (): string => self::hasActiveInstallmentPaymentAttempt($record)
+                                    ? 'Unavailable while an installment payment is in progress.'
+                                    : 'Stops unpaid, failed, and overdue installments after the refund succeeds.')
+                                ->disabled(fn (): bool => self::hasActiveInstallmentPaymentAttempt($record))
                                 ->live()
                                 ->visible(fn (): bool => $record->hasChargeableInstallments()),
                             CheckboxList::make('enrollment_ids')
@@ -178,7 +183,7 @@ final class ViewOrder extends ViewRecord
     /**
      * @return array<int, string>
      */
-    private static function enrollmentOptions(\App\Models\Order $order): array
+    private static function enrollmentOptions(Order $order): array
     {
         return $order->orderItems()
             ->with(['enrollments.course', 'enrollments.student'])
@@ -193,5 +198,27 @@ final class ViewOrder extends ViewRecord
                 return [$enrollment->id => "{$student} — {$course}"];
             })
             ->all();
+    }
+
+    private static function hasActiveInstallmentPaymentAttempt(Order $order): bool
+    {
+        $paymentPlan = $order->paymentPlan;
+
+        if ($paymentPlan === null) {
+            return false;
+        }
+
+        return $paymentPlan->installments()
+            ->reschedulable()
+            ->whereHas(
+                'paymentAttemptAllocations.paymentAttempt',
+                fn ($query) => $query->whereIn('status', [
+                    InstallmentPaymentAttemptStatus::Pending,
+                    InstallmentPaymentAttemptStatus::RequiresPaymentMethod,
+                    InstallmentPaymentAttemptStatus::RequiresAction,
+                    InstallmentPaymentAttemptStatus::Processing,
+                ]),
+            )
+            ->exists();
     }
 }

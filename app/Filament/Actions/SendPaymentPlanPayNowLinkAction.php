@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Actions;
 
 use App\Actions\Store\SendPaymentPlanPayNowLink;
-use App\Enums\InstallmentStatus;
 use App\Models\PaymentPlan;
 use DomainException;
 use Filament\Actions\Action;
@@ -23,10 +22,7 @@ final class SendPaymentPlanPayNowLinkAction extends Action
             ->label('Send Pay Now Link')
             ->icon(Heroicon::OutlinedPaperAirplane)
             ->authorize('sendPaymentLink')
-            ->visible(fn (?PaymentPlan $record): bool => $record instanceof PaymentPlan
-                && $record->installments()
-                    ->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue])
-                    ->exists())
+            ->visible(fn (?PaymentPlan $record): bool => $record?->hasCollectibleMissedInstallments() ?? false)
             ->requiresConfirmation()
             ->modalHeading('Send Pay Now link?')
             ->modalDescription('The customer will receive a billing link and must sign in to select and pay missed installments.')

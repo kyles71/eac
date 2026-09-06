@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Actions\Store\MarkInstallmentsPaid;
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Filament\Actions\AdjustPaymentPlanDueDatesAction;
 use App\Filament\Actions\RetryPaymentPlanAction;
@@ -87,6 +89,31 @@ it('can mark an installment as paid via header action', function () {
     expect($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
 });
 
+it('cannot manually mark an installment paid while a payment attempt is active', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create();
+    $installment = Installment::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentStatus::Pending,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::Processing,
+        'total_amount' => $installment->amount,
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => $installment->amount,
+    ]);
+
+    expect(fn () => app(MarkInstallmentsPaid::class)->handle($paymentPlan, [$installment->id]))
+        ->toThrow(DomainException::class, 'already in progress');
+
+    expect($installment->refresh()->status)->toBe(InstallmentStatus::Pending);
+
+    livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
+        ->assertActionHidden('markInstallmentPaid');
+});
+
 it('exposes and enforces the adjust due dates permission', function (): void {
     expect(FilamentShield::getResourcePolicyActionsWithPermissions(PaymentPlanResource::class))
         ->toHaveKey('adjustDueDates', 'AdjustDueDates:PaymentPlan');
@@ -120,6 +147,35 @@ it('exposes retry and payment link actions only for missed installments', functi
     livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
         ->assertActionHidden(RetryPaymentPlanAction::class)
         ->assertActionHidden(SendPaymentPlanPayNowLinkAction::class);
+});
+
+it('hides retry and payment link actions when the only missed installment is already active', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create();
+    $installment = Installment::factory()->overdue()->create(['payment_plan_id' => $paymentPlan->id]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::RequiresAction,
+        'total_amount' => $installment->amount,
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => $installment->amount,
+    ]);
+
+    livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
+        ->assertActionHidden(RetryPaymentPlanAction::class)
+        ->assertActionHidden(SendPaymentPlanPayNowLinkAction::class);
+});
+
+it('hides retry and payment link actions for cancelled orders', function (): void {
+    $paymentPlan = PaymentPlan::factory()->create();
+    Installment::factory()->overdue()->create(['payment_plan_id' => $paymentPlan->id]);
+    $paymentPlan->order()->update(['status' => App\Enums\OrderStatus::Cancelled]);
+
+    livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
+        ->assertActionHidden(RetryPaymentPlanAction::class)
+        ->assertActionHidden(SendPaymentPlanPayNowLinkAction::class)
+        ->assertActionHidden(AdjustPaymentPlanDueDatesAction::class);
 });
 
 it('warns before saving without email and requires explicit confirmation', function (): void {
