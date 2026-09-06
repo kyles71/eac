@@ -131,6 +131,7 @@
         @if($this->getBoard()->getPositionIdentifierAttribute() && $this->canMoveCards())
             x-sortable
             x-sortable-group="cards"
+            x-init="$nextTick(() => configureCardTouchDragging($el))"
             @end.stop="handleSortableEnd($event)"
         @endif
         @if(isset($column['total']) && $column['total'] > count($column['items']))
