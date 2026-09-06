@@ -10,7 +10,9 @@
     "nightwatch": false,
     "packages": [
         "filament/filament",
-        "barryvdh/laravel-debugbar"
+        "barryvdh/laravel-debugbar",
+        "relaticle/flowforge",
+        "spatie/laravel-backup"
     ],
     "sail": false
 }
