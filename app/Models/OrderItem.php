@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\OrderItemStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,7 @@ final class OrderItem extends Model
         'stripe_allocated' => 'integer',
         'custom_gift_card_amount' => 'integer',
         'status' => OrderItemStatus::class,
+        'fulfillment_workflow' => FulfillmentWorkflow::class,
         'purchase_notification_requested' => 'boolean',
     ];
 
@@ -68,6 +70,73 @@ final class OrderItem extends Model
         return $this->hasMany(ProductQuestionAnswer::class)
             ->orderBy('unit_number')
             ->orderBy('question_order');
+    }
+
+    /** @return HasMany<OrderItemFulfillment, $this> */
+    public function fulfillments(): HasMany
+    {
+        return $this->hasMany(OrderItemFulfillment::class)->orderBy('unit_number')->orderBy('id');
+    }
+
+    /** @return HasMany<OrderItemFulfillment, $this> */
+    public function activeFulfillments(): HasMany
+    {
+        return $this->fulfillments()->whereNull('voided_at');
+    }
+
+    /** @return list<int> */
+    public function fulfilledUnitNumbers(): array
+    {
+        return $this->activeFulfillments()
+            ->pluck('unit_number')
+            ->map(fn (mixed $unitNumber): int => (int) $unitNumber)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /** @return list<int> */
+    public function remainingUnitNumbers(): array
+    {
+        $fulfilledUnitNumbers = $this->fulfilledUnitNumbers();
+
+        if ($this->status === OrderItemStatus::Fulfilled && $fulfilledUnitNumbers === []) {
+            return [];
+        }
+
+        return collect(range(1, $this->quantity))
+            ->reject(fn (int $unitNumber): bool => in_array($unitNumber, $fulfilledUnitNumbers, true))
+            ->values()
+            ->all();
+    }
+
+    public function fulfilledQuantity(): int
+    {
+        if ($this->status === OrderItemStatus::Fulfilled && $this->activeFulfillments()->doesntExist()) {
+            return $this->quantity;
+        }
+
+        return count($this->fulfilledUnitNumbers());
+    }
+
+    public function remainingQuantity(): int
+    {
+        return max(0, $this->quantity - $this->fulfilledQuantity());
+    }
+
+    public function syncFulfillmentStatus(): void
+    {
+        $fulfilledQuantity = count($this->fulfilledUnitNumbers());
+        $status = match (true) {
+            $fulfilledQuantity === 0 => OrderItemStatus::Pending,
+            $fulfilledQuantity < $this->quantity => OrderItemStatus::PartiallyFulfilled,
+            default => OrderItemStatus::Fulfilled,
+        };
+
+        if ($this->status !== $status) {
+            $this->update(['status' => $status]);
+        }
     }
 
     /**

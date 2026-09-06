@@ -20,6 +20,8 @@ use App\Mail\Types\HandcraftedEmailType;
 use App\Mail\Types\InstallmentPaymentFailedEmailType;
 use App\Mail\Types\InstallmentPaymentSucceededEmailType;
 use App\Mail\Types\OpenEnrollmentReminderEmailType;
+use App\Mail\Types\OrderFulfillmentReopenedEmailType;
+use App\Mail\Types\OrderFulfillmentScheduledEmailType;
 use App\Mail\Types\OrderReceiptEmailType;
 use App\Mail\Types\PasswordResetEmailType;
 use App\Mail\Types\PastDueInstallmentEmailType;
@@ -68,6 +70,8 @@ final class MailManagerServiceProvider extends ServiceProvider
             HandcraftedEmailType::class,
             InstallmentPaymentFailedEmailType::class,
             InstallmentPaymentSucceededEmailType::class,
+            OrderFulfillmentReopenedEmailType::class,
+            OrderFulfillmentScheduledEmailType::class,
             OrderReceiptEmailType::class,
             OpenEnrollmentReminderEmailType::class,
             PastDueInstallmentEmailType::class,

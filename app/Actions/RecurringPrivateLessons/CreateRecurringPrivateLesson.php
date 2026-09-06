@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\RecurringPrivateLessons;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Enums\CourseSemester;
+use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Enums\RecurringPrivateLessonStatus;
 use App\Enums\ScheduleFrequency;
 use App\Models\AcademicTerm;
@@ -26,6 +28,7 @@ final readonly class CreateRecurringPrivateLesson
     public function __construct(
         private HolidayConflictService $holidayConflictService,
         private SynchronizeRecurringPrivateLessonCharges $synchronizeCharges,
+        private ManageEventTeacherAssignments $teacherAssignments,
     ) {}
 
     /** @param list<int> $teacherIds */
@@ -41,6 +44,7 @@ final readonly class CreateRecurringPrivateLesson
         int $durationMinutes,
         CarbonInterface $repeatThrough,
         ScheduleFrequency $frequency,
+        CourseTeacherAssignmentStrategy $teacherAssignmentStrategy = CourseTeacherAssignmentStrategy::AllTeachers,
     ): RecurringPrivateLesson {
         if ($student->user_id !== $household->id) {
             throw new InvalidArgumentException('The selected dancer does not belong to this household.');
@@ -89,6 +93,7 @@ final readonly class CreateRecurringPrivateLesson
             $durationMinutes,
             $lastDate,
             $frequency,
+            $teacherAssignmentStrategy,
         ): RecurringPrivateLesson {
             $course = Course::query()->create([
                 'name' => $name,
@@ -96,9 +101,10 @@ final readonly class CreateRecurringPrivateLesson
                 'academic_term_id' => $academicTerm->id,
                 'capacity' => 1,
                 'is_private' => true,
+                'teacher_assignment_strategy' => $teacherAssignmentStrategy,
             ]);
             $course->syncTagsWithType([Calendar::SLUG_STAFF], Course::CALENDAR_TAG_TYPE);
-            $course->teachers()->sync($teacherIds);
+            $this->teacherAssignments->updateCourseRoster($course, $teacherIds, $teacherAssignmentStrategy);
 
             $recurringPrivateLesson = RecurringPrivateLesson::query()->create([
                 'course_id' => $course->id,
@@ -125,7 +131,7 @@ final readonly class CreateRecurringPrivateLesson
                     $endsAt,
                     $course->id,
                 ) === null) {
-                    Event::query()->create([
+                    $event = Event::query()->create([
                         'name' => $course->name,
                         'description' => $course->description,
                         'start_time' => $occurrence->timezone(config('app.timezone'))->toDateTimeString(),
@@ -133,6 +139,7 @@ final readonly class CreateRecurringPrivateLesson
                         'calendar_id' => is_int($calendarId) ? $calendarId : null,
                         'course_id' => $course->id,
                     ]);
+                    $this->teacherAssignments->initializeCourseEvent($event);
                 }
 
                 $occurrence = $occurrence->addWeeks(

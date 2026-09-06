@@ -293,7 +293,7 @@ return [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
             OrderResource::class => [
-                'viewAny', 'view', 'refund',
+                'viewAny', 'view', 'refund', 'fulfill',
             ],
             PaymentPlanResource::class => [
                 'viewAny', 'view', 'adjustDueDates',

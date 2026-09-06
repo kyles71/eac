@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Orders;
 
 use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
+use App\Filament\Admin\Resources\Orders\Pages\OrderFulfillment;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Orders\Schemas\OrderInfolist;
 use App\Filament\Admin\Resources\Orders\Tables\OrdersTable;
@@ -46,6 +47,7 @@ final class OrderResource extends Resource
     {
         return [
             'index' => ListOrders::route('/'),
+            'fulfillment' => OrderFulfillment::route('/fulfillment'),
             'view' => ViewOrder::route('/{record}'),
         ];
     }

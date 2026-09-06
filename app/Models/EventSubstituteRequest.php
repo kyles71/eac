@@ -19,6 +19,7 @@ final class EventSubstituteRequest extends Model
     /** @var array<string, string> */
     protected $casts = [
         'event_id' => 'integer',
+        'event_substitute_coverage_id' => 'integer',
         'teacher_id' => 'integer',
         'requested_by_user_id' => 'integer',
         'response_recorded_by_user_id' => 'integer',
@@ -34,6 +35,12 @@ final class EventSubstituteRequest extends Model
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
+    }
+
+    /** @return BelongsTo<EventSubstituteCoverage, $this> */
+    public function coverage(): BelongsTo
+    {
+        return $this->belongsTo(EventSubstituteCoverage::class, 'event_substitute_coverage_id');
     }
 
     /** @return BelongsTo<User, $this> */

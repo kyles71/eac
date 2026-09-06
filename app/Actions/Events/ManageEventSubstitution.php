@@ -7,11 +7,13 @@ namespace App\Actions\Events;
 use App\Actions\Mail\QueueManagedEmail;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Models\Event;
+use App\Models\EventSubstituteCoverage;
 use App\Models\EventSubstituteRequest;
 use App\Models\User;
 use App\Services\Mail\EventSubstituteContentService;
-use App\Services\SubstituteTeacherConflictService;
+use App\Services\TeacherScheduleConflictService;
 use DomainException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
@@ -19,61 +21,85 @@ use InvalidArgumentException;
 final readonly class ManageEventSubstitution
 {
     public function __construct(
-        private SubstituteTeacherConflictService $conflicts,
+        private TeacherScheduleConflictService $conflicts,
+        private ManageEventTeacherAssignments $teacherAssignments,
         private EventSubstituteContentService $content,
         private QueueManagedEmail $managedEmail,
     ) {}
 
-    public function markNeeded(Event $event, User $actor): Event
+    public function markNeeded(Event $event, User $coveredTeacher, ?User $actor = null): EventSubstituteCoverage
     {
-        return DB::transaction(function () use ($event, $actor): Event {
+        if (! $actor instanceof User) {
+            $actor = $coveredTeacher;
+            $coveredTeacher = $this->onlyRegularTeacher($event, $actor);
+        }
+
+        return DB::transaction(function () use ($event, $coveredTeacher, $actor): EventSubstituteCoverage {
             $lockedEvent = $this->lockedEvent($event);
             Gate::forUser($actor)->authorize('update', $lockedEvent);
             $this->ensureRequestable($lockedEvent);
+            $this->ensureCoveredTeacher($lockedEvent, $coveredTeacher);
+            $this->teacherAssignments->pinForSubstituteCoverage($lockedEvent);
 
-            if ($lockedEvent->substitute_needed_at === null) {
-                $lockedEvent->update(['substitute_needed_at' => now()]);
-            }
-
-            return $lockedEvent;
+            return $this->ensureActiveCoverage($lockedEvent, $coveredTeacher);
         });
     }
 
-    public function requestSubstitute(Event $event, User $teacher, User $requestedBy, ?string $reason = null): EventSubstituteRequest
-    {
-        return DB::transaction(function () use ($event, $teacher, $requestedBy, $reason): EventSubstituteRequest {
+    public function requestSubstitute(
+        Event $event,
+        User $coveredTeacherOrSubstitute,
+        User $substituteOrRequestedBy,
+        User|string|null $requestedByOrReason = null,
+        ?string $reason = null,
+    ): EventSubstituteRequest {
+        if ($requestedByOrReason instanceof User) {
+            $coveredTeacher = $coveredTeacherOrSubstitute;
+            $substitute = $substituteOrRequestedBy;
+            $requestedBy = $requestedByOrReason;
+        } else {
+            $substitute = $coveredTeacherOrSubstitute;
+            $requestedBy = $substituteOrRequestedBy;
+            $reason = is_string($requestedByOrReason) ? $requestedByOrReason : $reason;
+            $this->ensureTeacher($substitute);
+            $coveredTeacher = $this->onlyRegularTeacher($event, $requestedBy);
+        }
+
+        return DB::transaction(function () use ($event, $coveredTeacher, $substitute, $requestedBy, $reason): EventSubstituteRequest {
             $lockedEvent = $this->lockedEvent($event);
             Gate::forUser($requestedBy)->authorize('update', $lockedEvent);
             $this->ensureRequestable($lockedEvent);
-            $this->ensureTeacher($teacher);
+            $this->ensureCoveredTeacher($lockedEvent, $coveredTeacher);
+            $this->ensureTeacher($substitute);
 
-            if ($lockedEvent->substitute_teacher_id === $teacher->id) {
-                throw new DomainException('This teacher is already the confirmed substitute.');
+            if ($coveredTeacher->is($substitute)) {
+                throw new DomainException('A teacher cannot substitute for their own assignment.');
             }
 
-            if ($lockedEvent->pendingSubstituteRequest() instanceof EventSubstituteRequest) {
-                throw new DomainException('This event already has a pending substitute request.');
+            $this->teacherAssignments->pinForSubstituteCoverage($lockedEvent);
+            $coverage = $this->ensureActiveCoverage($lockedEvent, $coveredTeacher);
+
+            if ($coverage->substitute_teacher_id === $substitute->id) {
+                throw new DomainException('This teacher is already the confirmed substitute for this assignment.');
+            }
+
+            if ($coverage->pendingRequest() instanceof EventSubstituteRequest) {
+                throw new DomainException('This teacher assignment already has a pending substitute request.');
             }
 
             $reason = $this->cleanText($reason);
 
-            if ($lockedEvent->substitute_teacher_id !== null && $reason === null) {
+            if ($coverage->substitute_teacher_id !== null && $reason === null) {
                 throw new InvalidArgumentException('A replacement reason is required.');
             }
 
-            $this->ensureNoConflict($lockedEvent, $teacher);
-
-            $request = $lockedEvent->substituteRequests()->create([
-                'teacher_id' => $teacher->id,
+            $this->ensureAvailableSubstitute($lockedEvent, $substitute);
+            $request = $coverage->requests()->create([
+                'event_id' => $lockedEvent->id,
+                'teacher_id' => $substitute->id,
                 'requested_by_user_id' => $requestedBy->id,
                 'status' => EventSubstituteRequestStatus::Pending,
                 'request_reason' => $reason,
             ]);
-
-            $lockedEvent->update([
-                'substitute_needed_at' => $lockedEvent->substitute_needed_at ?? now(),
-            ]);
-
             $this->queueRequestEmail($request);
 
             return $request;
@@ -103,6 +129,7 @@ final readonly class ManageEventSubstitution
         return DB::transaction(function () use ($request, $teacher, $accept, $note): EventSubstituteRequest {
             $lockedRequest = $this->lockedRequest($request);
             $event = $this->lockedEvent($lockedRequest->event);
+            $coverage = $this->lockedCoverage($lockedRequest->coverage);
 
             if ($lockedRequest->teacher_id !== $teacher->id) {
                 throw new DomainException('This substitute request belongs to another teacher.');
@@ -112,7 +139,7 @@ final readonly class ManageEventSubstitution
                 throw new DomainException('This substitute request has already been answered.');
             }
 
-            if (! $event->canAcceptSubstituteRequestAt()) {
+            if (! $coverage->isActive() || ! $event->canAcceptSubstituteRequestAt()) {
                 throw new DomainException('This substitute request can no longer be answered.');
             }
 
@@ -130,8 +157,8 @@ final readonly class ManageEventSubstitution
             }
 
             $this->ensureTeacher($teacher);
-            $this->ensureNoConflict($event, $teacher);
-            $outgoingRequest = $event->currentSubstituteRequest();
+            $this->ensureAvailableSubstitute($event, $teacher);
+            $outgoingRequest = $coverage->currentSubstituteRequest();
 
             if ($outgoingRequest instanceof EventSubstituteRequest && $outgoingRequest->teacher_id !== $teacher->id) {
                 $this->closeRequest(
@@ -148,11 +175,7 @@ final readonly class ManageEventSubstitution
                 'responded_at' => now(),
                 'response_recorded_by_user_id' => $teacher->id,
             ]);
-
-            $event->update([
-                'substitute_teacher_id' => $teacher->id,
-                'substitute_needed_at' => $event->substitute_needed_at ?? now(),
-            ]);
+            $coverage->update(['substitute_teacher_id' => $teacher->id]);
 
             if ($outgoingRequest instanceof EventSubstituteRequest && $outgoingRequest->teacher_id !== $teacher->id) {
                 $this->queueRemovedEmail(
@@ -165,15 +188,16 @@ final readonly class ManageEventSubstitution
         });
     }
 
-    public function withdrawPending(Event $event, User $actor, string $reason): EventSubstituteRequest
+    public function withdrawPending(Event|EventSubstituteCoverage $target, User $actor, string $reason): EventSubstituteRequest
     {
-        return DB::transaction(function () use ($event, $actor, $reason): EventSubstituteRequest {
-            $lockedEvent = $this->lockedEvent($event);
-            Gate::forUser($actor)->authorize('update', $lockedEvent);
-            $pendingRequest = $lockedEvent->pendingSubstituteRequest();
+        return DB::transaction(function () use ($target, $actor, $reason): EventSubstituteRequest {
+            $coverage = $this->coverageFromTarget($target, requirePending: true);
+            $event = $this->lockedEvent($coverage->event);
+            Gate::forUser($actor)->authorize('update', $event);
+            $pendingRequest = $coverage->pendingRequest();
 
             if (! $pendingRequest instanceof EventSubstituteRequest) {
-                throw new DomainException('This event does not have a pending substitute request.');
+                throw new DomainException('This teacher assignment does not have a pending substitute request.');
             }
 
             $this->closeRequest($pendingRequest, EventSubstituteRequestStatus::Withdrawn, $actor, $this->requiredText($reason));
@@ -182,16 +206,18 @@ final readonly class ManageEventSubstitution
         });
     }
 
-    public function requestRelease(Event $event, User $teacher, string $reason): EventSubstituteRequest
+    public function requestRelease(Event|EventSubstituteCoverage $target, User $teacher, string $reason): EventSubstituteRequest
     {
-        return DB::transaction(function () use ($event, $teacher, $reason): EventSubstituteRequest {
-            $lockedEvent = $this->lockedEvent($event);
+        return DB::transaction(function () use ($target, $teacher, $reason): EventSubstituteRequest {
+            $coverage = $target instanceof Event
+                ? $this->coverageForSubstitute($target, $teacher)
+                : $this->lockedCoverage($target);
 
-            if ($lockedEvent->substitute_teacher_id !== $teacher->id) {
-                throw new DomainException('You are not the confirmed substitute for this event.');
+            if ($coverage->substitute_teacher_id !== $teacher->id || ! $coverage->isActive()) {
+                throw new DomainException('You are not the confirmed substitute for this teacher assignment.');
             }
 
-            $request = $lockedEvent->currentSubstituteRequest();
+            $request = $coverage->currentSubstituteRequest();
 
             if (! $request instanceof EventSubstituteRequest) {
                 throw new DomainException('The confirmed substitute assignment could not be found.');
@@ -206,15 +232,16 @@ final readonly class ManageEventSubstitution
         });
     }
 
-    public function dismissReleaseRequest(Event $event, User $actor): EventSubstituteRequest
+    public function dismissReleaseRequest(Event|EventSubstituteCoverage $target, User $actor): EventSubstituteRequest
     {
-        return DB::transaction(function () use ($event, $actor): EventSubstituteRequest {
-            $lockedEvent = $this->lockedEvent($event);
-            Gate::forUser($actor)->authorize('update', $lockedEvent);
-            $request = $lockedEvent->currentSubstituteRequest();
+        return DB::transaction(function () use ($target, $actor): EventSubstituteRequest {
+            $coverage = $this->coverageFromTarget($target, requireRelease: true);
+            $event = $this->lockedEvent($coverage->event);
+            Gate::forUser($actor)->authorize('update', $event);
+            $request = $coverage->currentSubstituteRequest();
 
             if (! $request instanceof EventSubstituteRequest || ! $request->hasReleaseRequest()) {
-                throw new DomainException('This event does not have a substitute release request.');
+                throw new DomainException('This teacher assignment does not have a substitute release request.');
             }
 
             $request->update([
@@ -226,42 +253,56 @@ final readonly class ManageEventSubstitution
         });
     }
 
-    public function removeCurrent(Event $event, User $actor, string $reason, bool $keepNeeded = true): Event
-    {
-        return DB::transaction(function () use ($event, $actor, $reason, $keepNeeded): Event {
-            $lockedEvent = $this->lockedEvent($event);
-            Gate::forUser($actor)->authorize('update', $lockedEvent);
+    public function removeCurrent(
+        Event|EventSubstituteCoverage $target,
+        User $actor,
+        string $reason,
+        bool $keepNeeded = true,
+    ): EventSubstituteCoverage {
+        return DB::transaction(function () use ($target, $actor, $reason, $keepNeeded): EventSubstituteCoverage {
+            $coverage = $this->coverageFromTarget($target);
+            $event = $this->lockedEvent($coverage->event);
+            Gate::forUser($actor)->authorize('update', $event);
 
-            if ($lockedEvent->isCompletedAt()) {
+            if ($event->isCompletedAt()) {
                 throw new DomainException('Completed events require an owner historical correction.');
             }
 
             $reason = $this->requiredText($reason);
-            $pendingRequest = $lockedEvent->pendingSubstituteRequest();
+            $pendingRequest = $coverage->pendingRequest();
 
             if ($pendingRequest instanceof EventSubstituteRequest) {
                 $this->closeRequest($pendingRequest, EventSubstituteRequestStatus::Withdrawn, $actor, $reason);
             }
 
-            $currentRequest = $lockedEvent->currentSubstituteRequest();
+            $currentRequest = $coverage->currentSubstituteRequest();
 
             if ($currentRequest instanceof EventSubstituteRequest) {
                 $this->closeRequest($currentRequest, EventSubstituteRequestStatus::Removed, $actor, $reason);
                 $this->queueRemovedEmail($currentRequest, $reason);
             }
 
-            $lockedEvent->update([
-                'substitute_teacher_id' => null,
-                'substitute_needed_at' => $keepNeeded ? ($lockedEvent->substitute_needed_at ?? now()) : null,
-            ]);
+            $coverage->update($keepNeeded
+                ? ['substitute_teacher_id' => null]
+                : [
+                    'substitute_teacher_id' => null,
+                    'closed_at' => now(),
+                    'closed_by_user_id' => $actor->id,
+                    'closure_reason' => $reason,
+                ]);
 
-            return $lockedEvent;
+            return $coverage;
         });
     }
 
-    public function recordHistoricalCorrection(Event $event, ?User $teacher, User $owner, string $reason): ?EventSubstituteRequest
-    {
-        return DB::transaction(function () use ($event, $teacher, $owner, $reason): ?EventSubstituteRequest {
+    public function recordHistoricalCorrection(
+        Event $event,
+        ?User $teacher,
+        User $owner,
+        string $reason,
+        ?User $coveredTeacher = null,
+    ): ?EventSubstituteRequest {
+        return DB::transaction(function () use ($event, $teacher, $owner, $reason, $coveredTeacher): ?EventSubstituteRequest {
             $lockedEvent = $this->lockedEvent($event);
             Gate::forUser($owner)->authorize('update', $lockedEvent);
 
@@ -273,18 +314,39 @@ final readonly class ManageEventSubstitution
                 throw new DomainException('Historical substitute corrections are only available after the event ends.');
             }
 
+            $coveredTeacher ??= $this->onlyRegularTeacher($lockedEvent, $owner);
+            $this->ensureCoveredTeacher($lockedEvent, $coveredTeacher);
+
             if ($teacher instanceof User) {
                 $this->ensureTeacher($teacher);
             }
 
             $reason = $this->requiredText($reason);
-            $pendingRequest = $lockedEvent->pendingSubstituteRequest();
+            $coverage = $lockedEvent->substituteCoverages()
+                ->where('covered_teacher_id', $coveredTeacher->id)
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
 
-            if ($pendingRequest instanceof EventSubstituteRequest) {
+            if (! $coverage instanceof EventSubstituteCoverage) {
+                $coverage = $lockedEvent->substituteCoverages()
+                    ->whereNull('covered_teacher_id')
+                    ->lockForUpdate()
+                    ->latest('id')
+                    ->first();
+                $coverage?->update(['covered_teacher_id' => $coveredTeacher->id]);
+            }
+
+            $coverage ??= $lockedEvent->substituteCoverages()->create([
+                'covered_teacher_id' => $coveredTeacher->id,
+                'needed_at' => $lockedEvent->start_time ?? now(),
+            ]);
+
+            foreach ($coverage->requests()->pending()->get() as $pendingRequest) {
                 $this->closeRequest($pendingRequest, EventSubstituteRequestStatus::Expired, $owner, $reason);
             }
 
-            $currentRequest = $lockedEvent->currentSubstituteRequest();
+            $currentRequest = $coverage->currentSubstituteRequest();
 
             if ($currentRequest instanceof EventSubstituteRequest) {
                 $status = $teacher instanceof User
@@ -293,16 +355,19 @@ final readonly class ManageEventSubstitution
                 $this->closeRequest($currentRequest, $status, $owner, $reason);
             }
 
-            if (! $teacher instanceof User) {
-                $lockedEvent->update([
-                    'substitute_teacher_id' => null,
-                    'substitute_needed_at' => null,
-                ]);
+            $coverage->update([
+                'substitute_teacher_id' => $teacher?->id,
+                'closed_at' => now(),
+                'closed_by_user_id' => $owner->id,
+                'closure_reason' => $reason,
+            ]);
 
+            if (! $teacher instanceof User) {
                 return null;
             }
 
-            $request = $lockedEvent->substituteRequests()->create([
+            return $coverage->requests()->create([
+                'event_id' => $lockedEvent->id,
                 'teacher_id' => $teacher->id,
                 'requested_by_user_id' => $owner->id,
                 'response_recorded_by_user_id' => $owner->id,
@@ -311,14 +376,104 @@ final readonly class ManageEventSubstitution
                 'response_note' => 'Recorded as an owner historical correction.',
                 'responded_at' => now(),
             ]);
-
-            $lockedEvent->update([
-                'substitute_teacher_id' => $teacher->id,
-                'substitute_needed_at' => $lockedEvent->substitute_needed_at ?? now(),
-            ]);
-
-            return $request;
         });
+    }
+
+    private function activeCoverage(Event $event, User $coveredTeacher): ?EventSubstituteCoverage
+    {
+        return $event->substituteCoverages()
+            ->active()
+            ->where('covered_teacher_id', $coveredTeacher->id)
+            ->lockForUpdate()
+            ->first();
+    }
+
+    private function ensureActiveCoverage(Event $event, User $coveredTeacher): EventSubstituteCoverage
+    {
+        $coverage = $this->activeCoverage($event, $coveredTeacher)
+            ?? $event->substituteCoverages()
+                ->where('covered_teacher_id', $coveredTeacher->id)
+                ->lockForUpdate()
+                ->first();
+
+        if (! $coverage instanceof EventSubstituteCoverage) {
+            return $event->substituteCoverages()->create([
+                'covered_teacher_id' => $coveredTeacher->id,
+                'needed_at' => now(),
+            ]);
+        }
+
+        if (! $coverage->isActive()) {
+            $coverage->update([
+                'needed_at' => now(),
+                'substitute_teacher_id' => null,
+                'closed_at' => null,
+                'closed_by_user_id' => null,
+                'closure_reason' => null,
+            ]);
+        }
+
+        return $coverage;
+    }
+
+    private function coverageFromTarget(
+        Event|EventSubstituteCoverage $target,
+        bool $requirePending = false,
+        bool $requireRelease = false,
+    ): EventSubstituteCoverage {
+        if ($target instanceof EventSubstituteCoverage) {
+            return $this->lockedCoverage($target);
+        }
+
+        $query = $target->substituteCoverages()->active();
+
+        if ($requirePending) {
+            $query->whereHas('requests', fn (Builder $query): Builder => $query
+                ->where('status', EventSubstituteRequestStatus::Pending));
+        }
+
+        if ($requireRelease) {
+            $query->whereHas('requests', fn (Builder $query): Builder => $query
+                ->where('status', EventSubstituteRequestStatus::Accepted)
+                ->whereNotNull('release_requested_at'));
+        }
+
+        $coverages = $query->lockForUpdate()->get();
+
+        if ($coverages->count() !== 1) {
+            throw new DomainException('Select the teacher coverage to update.');
+        }
+
+        return $coverages->firstOrFail();
+    }
+
+    private function coverageForSubstitute(Event $event, User $teacher): EventSubstituteCoverage
+    {
+        $coverages = $event->substituteCoverages()
+            ->active()
+            ->where('substitute_teacher_id', $teacher->id)
+            ->lockForUpdate()
+            ->get();
+
+        if ($coverages->count() !== 1) {
+            throw new DomainException('Select the teacher coverage to update.');
+        }
+
+        return $coverages->firstOrFail();
+    }
+
+    private function lockedCoverage(EventSubstituteCoverage $coverage): EventSubstituteCoverage
+    {
+        $lockedCoverage = EventSubstituteCoverage::query()
+            ->with('event')
+            ->lockForUpdate()
+            ->find($coverage->getKey());
+
+        if (! $lockedCoverage instanceof EventSubstituteCoverage) {
+            throw new InvalidArgumentException('The substitute coverage could not be found.');
+        }
+
+        return $lockedCoverage;
     }
 
     private function lockedEvent(Event $event): Event
@@ -335,15 +490,43 @@ final readonly class ManageEventSubstitution
     private function lockedRequest(EventSubstituteRequest $request): EventSubstituteRequest
     {
         $lockedRequest = EventSubstituteRequest::query()
-            ->with('event')
+            ->with(['event', 'coverage'])
             ->lockForUpdate()
             ->find($request->getKey());
 
-        if (! $lockedRequest instanceof EventSubstituteRequest) {
+        if (! $lockedRequest instanceof EventSubstituteRequest
+            || ! $lockedRequest->coverage instanceof EventSubstituteCoverage) {
             throw new InvalidArgumentException('The substitute request could not be found.');
         }
 
         return $lockedRequest;
+    }
+
+    private function onlyRegularTeacher(Event $event, ?User $legacyFallback = null): User
+    {
+        $teachers = $event->teachers()->get();
+
+        if ($teachers->isEmpty()
+            && $event->course_id === null
+            && $legacyFallback instanceof User
+            && $legacyFallback->hasAnyRole(['teacher', 'owner', 'super_admin'])) {
+            $this->teacherAssignments->assignCustom($event, [$legacyFallback->id]);
+
+            return $legacyFallback;
+        }
+
+        if ($teachers->count() !== 1) {
+            throw new DomainException('Select the teacher being covered.');
+        }
+
+        return $teachers->firstOrFail();
+    }
+
+    private function ensureCoveredTeacher(Event $event, User $teacher): void
+    {
+        if (! $event->teacherAssignments()->where('teacher_id', $teacher->id)->exists()) {
+            throw new DomainException('The covered teacher must be assigned to this event.');
+        }
     }
 
     private function ensureRequestable(Event $event): void
@@ -360,8 +543,18 @@ final readonly class ManageEventSubstitution
         }
     }
 
-    private function ensureNoConflict(Event $event, User $teacher): void
+    private function ensureAvailableSubstitute(Event $event, User $teacher): void
     {
+        if ($event->isAssignedTeacher($teacher)) {
+            throw new DomainException("{$teacher->fullName} is already teaching this event.");
+        }
+
+        if ($event->activeSubstituteCoverages()
+            ->where('substitute_teacher_id', $teacher->id)
+            ->exists()) {
+            throw new DomainException("{$teacher->fullName} is already substituting for this event.");
+        }
+
         $conflict = $this->conflicts->conflictingEvent($event, $teacher);
 
         if ($conflict instanceof Event) {
