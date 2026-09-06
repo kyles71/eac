@@ -6,6 +6,8 @@ namespace App\Filament\Admin\Resources\PaymentPlans\Pages;
 
 use App\Enums\InstallmentStatus;
 use App\Filament\Actions\AdjustPaymentPlanDueDatesAction;
+use App\Filament\Actions\RetryPaymentPlanAction;
+use App\Filament\Actions\SendPaymentPlanPayNowLinkAction;
 use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Models\Installment;
 use Filament\Actions\Action;
@@ -24,6 +26,8 @@ final class ViewPaymentPlan extends ViewRecord
         $record = $this->getRecord();
 
         return [
+            RetryPaymentPlanAction::make(),
+            SendPaymentPlanPayNowLinkAction::make(),
             AdjustPaymentPlanDueDatesAction::make(),
             Action::make('markInstallmentPaid')
                 ->label('Mark Installment Paid')
@@ -31,6 +35,7 @@ final class ViewPaymentPlan extends ViewRecord
                 ->color('success')
                 ->visible(fn (): bool => $record->installments()
                     ->whereIn('status', [InstallmentStatus::Pending, InstallmentStatus::Failed, InstallmentStatus::Overdue])
+                    ->withoutActivePaymentAttempt()
                     ->exists())
                 ->form([
                     CheckboxList::make('installment_ids')
@@ -39,6 +44,7 @@ final class ViewPaymentPlan extends ViewRecord
                             /** @var \Illuminate\Database\Eloquent\Collection<int, Installment> $installments */
                             $installments = $record->installments()
                                 ->whereIn('status', [InstallmentStatus::Pending, InstallmentStatus::Failed, InstallmentStatus::Overdue])
+                                ->withoutActivePaymentAttempt()
                                 ->get();
 
                             return $installments
@@ -52,6 +58,8 @@ final class ViewPaymentPlan extends ViewRecord
                 ->action(function (array $data) use ($record): void {
                     $installments = $record->installments()
                         ->whereIn('id', $data['installment_ids'])
+                        ->whereIn('status', [InstallmentStatus::Pending, InstallmentStatus::Failed, InstallmentStatus::Overdue])
+                        ->withoutActivePaymentAttempt()
                         ->get();
 
                     /** @var Installment $installment */

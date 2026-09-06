@@ -258,6 +258,58 @@ it('shows refund status for fully and partially refunded installments', function
         ->and($secondInstallment->status)->toBe(InstallmentStatus::Paid);
 });
 
+it('groups combined installment payments into one refundable source and allocates refunds newest first', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 6000,
+        'total' => 6000,
+        'stripe_payment_intent_id' => null,
+    ]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'total_amount' => 6000,
+        'number_of_installments' => 2,
+    ]);
+    $older = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'amount' => 3000,
+        'stripe_payment_intent_id' => 'pi_combined_installments',
+        'paid_at' => now()->subMinute(),
+    ]);
+    $newer = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 3,
+        'amount' => 3000,
+        'stripe_payment_intent_id' => 'pi_combined_installments',
+        'paid_at' => now(),
+    ]);
+
+    expect($order->refundablePaymentSources())->toBe([
+        ['payment_intent_id' => 'pi_combined_installments', 'amount' => 6000],
+    ]);
+
+    $refund = App\Models\OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 4000,
+        'status' => OrderRefundStatus::Succeeded,
+        'completed_at' => now(),
+    ]);
+    OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'stripe_payment_intent_id' => 'pi_combined_installments',
+        'amount' => 4000,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+
+    expect($newer->refundedAmount())->toBe(3000)
+        ->and($newer->paymentStatusLabel())->toBe('Refund')
+        ->and($older->refundedAmount())->toBe(1000)
+        ->and($older->paymentStatusLabel())->toBe('Partial Refund')
+        ->and($order->refundablePaymentSources())->toBe([
+            ['payment_intent_id' => 'pi_combined_installments', 'amount' => 2000],
+        ]);
+});
+
 it('optionally restores applied store credit after a full Stripe refund', function (): void {
     $order = Order::factory()->completed()->create([
         'subtotal' => 6000,

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 use App\Enums\InstallmentStatus;
 use App\Filament\Actions\AdjustPaymentPlanDueDatesAction;
+use App\Filament\Actions\RetryPaymentPlanAction;
+use App\Filament\Actions\SendPaymentPlanPayNowLinkAction;
 use App\Filament\Admin\Resources\PaymentPlans\Pages\ListPaymentPlans;
 use App\Filament\Admin\Resources\PaymentPlans\Pages\ViewPaymentPlan;
 use App\Filament\Admin\Resources\PaymentPlans\PaymentPlanResource;
 use App\Models\Installment;
 use App\Models\InstallmentDueDateAdjustment;
+use App\Models\InstallmentPaymentAttempt;
 use App\Models\PaymentPlan;
 use App\Models\User;
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
@@ -46,6 +49,27 @@ it('can view a payment plan', function () {
         ->assertOk();
 });
 
+it('shows payment attempt history on the payment plan', function (): void {
+    $plan = PaymentPlan::factory()->create();
+    $installment = Installment::factory()->overdue()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'stripe_payment_intent_id' => 'pi_admin_history',
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => $installment->amount,
+    ]);
+
+    livewire(ViewPaymentPlan::class, ['record' => $plan->id])
+        ->assertOk()
+        ->assertSee('Payment Attempt History')
+        ->assertSee('pi_admin_history');
+});
+
 it('can mark an installment as paid via header action', function () {
     $plan = PaymentPlan::factory()->create();
     $installment = Installment::factory()->create([
@@ -75,6 +99,27 @@ it('exposes and enforces the adjust due dates permission', function (): void {
 
     livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
         ->assertActionHidden('adjustPaymentPlanDueDates');
+});
+
+it('exposes retry and payment link actions only for missed installments', function (): void {
+    expect(FilamentShield::getResourcePolicyActionsWithPermissions(PaymentPlanResource::class))
+        ->toHaveKey('retryPayment', 'RetryPayment:PaymentPlan')
+        ->toHaveKey('sendPaymentLink', 'SendPaymentLink:PaymentPlan');
+
+    $paymentPlan = PaymentPlan::factory()->create();
+    Installment::factory()->overdue()->create(['payment_plan_id' => $paymentPlan->id]);
+
+    livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
+        ->assertActionVisible(RetryPaymentPlanAction::class)
+        ->assertActionVisible(SendPaymentPlanPayNowLinkAction::class);
+
+    $unauthorizedUser = User::factory()->create();
+    $unauthorizedUser->givePermissionTo(['ViewAny:PaymentPlan', 'View:PaymentPlan']);
+    $this->actingAs($unauthorizedUser);
+
+    livewire(ViewPaymentPlan::class, ['record' => $paymentPlan->id])
+        ->assertActionHidden(RetryPaymentPlanAction::class)
+        ->assertActionHidden(SendPaymentPlanPayNowLinkAction::class);
 });
 
 it('warns before saving without email and requires explicit confirmation', function (): void {

@@ -45,6 +45,20 @@ final class Installment extends Model
         return $this->hasMany(InstallmentDueDateAdjustment::class);
     }
 
+    /** @return HasMany<InstallmentPaymentAttemptAllocation, $this> */
+    public function paymentAttemptAllocations(): HasMany
+    {
+        return $this->hasMany(InstallmentPaymentAttemptAllocation::class);
+    }
+
+    public function scopeWithoutActivePaymentAttempt(Builder $query): void
+    {
+        $query->whereDoesntHave(
+            'paymentAttemptAllocations.paymentAttempt',
+            fn (Builder $query): Builder => $query->active(),
+        );
+    }
+
     /**
      * Scope to installments that are due (due date <= today and still pending).
      */
@@ -157,7 +171,7 @@ final class Installment extends Model
             return 0;
         }
 
-        return $this->resolvedRefundedAmount ??= (int) OrderRefundPayment::query()
+        $refundedAmount = (int) OrderRefundPayment::query()
             ->where('stripe_payment_intent_id', $paymentIntentId)
             ->where('status', OrderRefundPaymentStatus::Succeeded)
             ->whereHas(
@@ -165,6 +179,30 @@ final class Installment extends Model
                 fn (Builder $query): Builder => $query->where('order_id', $this->paymentPlan->order_id),
             )
             ->sum('amount');
+
+        if ($this->stripe_payment_intent_id === null) {
+            return $this->resolvedRefundedAmount ??= min($this->amount, $refundedAmount);
+        }
+
+        $newerInstallmentAmount = (int) self::query()
+            ->where('payment_plan_id', $this->payment_plan_id)
+            ->where('stripe_payment_intent_id', $paymentIntentId)
+            ->where('status', InstallmentStatus::Paid)
+            ->where(function (Builder $query): void {
+                $query
+                    ->where('paid_at', '>', $this->paid_at)
+                    ->orWhere(function (Builder $query): void {
+                        $query
+                            ->where('paid_at', $this->paid_at)
+                            ->where('id', '>', $this->id);
+                    });
+            })
+            ->sum('amount');
+
+        return $this->resolvedRefundedAmount ??= min(
+            $this->amount,
+            max(0, $refundedAmount - $newerInstallmentAmount),
+        );
     }
 
     public function paymentStatusLabel(): string

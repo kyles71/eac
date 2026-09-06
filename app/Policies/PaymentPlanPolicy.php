@@ -30,4 +30,20 @@ final class PaymentPlanPolicy
                 ->where('status', '!=', InstallmentStatus::Paid->value)
                 ->exists();
     }
+
+    public function retryPayment(AuthUser $authUser, PaymentPlan $paymentPlan): bool
+    {
+        return $authUser->can('RetryPayment:PaymentPlan')
+            && $paymentPlan->installments()
+                ->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue])
+                ->exists();
+    }
+
+    public function sendPaymentLink(AuthUser $authUser, PaymentPlan $paymentPlan): bool
+    {
+        return $authUser->can('SendPaymentLink:PaymentPlan')
+            && $paymentPlan->installments()
+                ->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue])
+                ->exists();
+    }
 }

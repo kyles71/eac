@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Contracts\StripeServiceContract;
+use App\Enums\InstallmentPaymentAttemptOrigin;
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
@@ -41,6 +43,7 @@ final class ProcessInstallments
         $dueInstallments = Installment::query()
             ->due()
             ->notBlockedByRefundCancellation()
+            ->withoutActivePaymentAttempt()
             ->with('paymentPlan.order.user')
             ->get();
 
@@ -48,6 +51,7 @@ final class ProcessInstallments
         $retryableInstallments = Installment::query()
             ->retryable()
             ->notBlockedByRefundCancellation()
+            ->withoutActivePaymentAttempt()
             ->with('paymentPlan.order.user')
             ->get();
 
@@ -142,61 +146,20 @@ final class ProcessInstallments
         }
 
         try {
-            $paymentIntent = $this->stripeService->chargePaymentMethod(
-                customerId: $customerId,
-                paymentMethodId: $paymentMethodId,
-                amount: $installment->amount,
-                description: "Installment #{$installment->installment_number} for Order #{$paymentPlan->order_id}",
-                metadata: [
-                    'installment_id' => (string) $installment->id,
-                    'payment_plan_id' => (string) $paymentPlan->id,
-                    'order_id' => (string) $paymentPlan->order_id,
-                ],
-            );
-        } catch (Throwable $exception) {
-            Log::error("Failed to charge installment #{$installment->id}: {$exception->getMessage()}");
-            $this->markFailedAndNotify(
-                installment: $installment,
-                stripeCustomerId: $customerId,
+            $paymentAttempt = app(CreateInstallmentPaymentAttempt::class)->handle(
+                paymentPlan: $paymentPlan,
+                installmentIds: [$installment->id],
+                origin: InstallmentPaymentAttemptOrigin::Scheduled,
                 stripePaymentMethodId: $paymentMethodId,
-                failureReason: $this->customerFailureReason($exception),
-                failureCode: $this->failureCode($exception),
             );
+            $paymentAttempt = app(ProcessInstallmentPaymentAttempt::class)->handle($paymentAttempt);
+
+            return $paymentAttempt->status === InstallmentPaymentAttemptStatus::Succeeded;
+        } catch (Throwable $exception) {
+            Log::error("Failed to process payment attempt for installment #{$installment->id}: {$exception->getMessage()}");
 
             return false;
         }
-
-        if ($paymentIntent->status === 'succeeded') {
-            $installment->markPaid(stripePaymentIntentId: $paymentIntent->id);
-            Log::info("Installment #{$installment->id} paid via auto-charge.", [
-                'payment_intent_id' => $paymentIntent->id,
-            ]);
-            $this->queuePaymentEmail(
-                installment: $installment,
-                successful: true,
-                stripeStatus: $paymentIntent->status,
-                stripePaymentIntentId: $paymentIntent->id,
-                stripeCustomerId: $customerId,
-                stripePaymentMethodId: $paymentMethodId,
-            );
-
-            return true;
-        }
-
-        Log::warning("Auto-charge for installment #{$installment->id} did not succeed immediately.", [
-            'status' => $paymentIntent->status,
-        ]);
-        $this->markFailedAndNotify(
-            installment: $installment,
-            stripeStatus: $paymentIntent->status,
-            stripePaymentIntentId: $paymentIntent->id,
-            stripeCustomerId: $customerId,
-            stripePaymentMethodId: $paymentMethodId,
-            failureReason: "Stripe returned a {$paymentIntent->status} status instead of completing the payment.",
-            failureCode: $paymentIntent->status,
-        );
-
-        return false;
     }
 
     private function markFailedAndNotify(

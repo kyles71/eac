@@ -49,6 +49,86 @@ it('creates a new payment intent without preassigning a saved payment method', f
     ])->not->toHaveKey('payment_method');
 });
 
+it('creates an idempotent off-session payment intent for a saved method', function (): void {
+    $paymentIntents = new class
+    {
+        /** @var array<string, mixed> */
+        public array $createdWith = [];
+
+        /** @var array<string, mixed> */
+        public array $requestOptions = [];
+
+        /**
+         * @param  array<string, mixed>  $params
+         * @param  array<string, mixed>  $options
+         */
+        public function create(array $params, array $options): PaymentIntent
+        {
+            $this->createdWith = $params;
+            $this->requestOptions = $options;
+
+            return PaymentIntent::constructFrom(['id' => 'pi_installment']);
+        }
+    };
+
+    $service = new StripeService(stripeClientForTest(['paymentIntents' => $paymentIntents]));
+
+    $service->chargePaymentMethod(
+        customerId: 'cus_installment',
+        paymentMethodId: 'pm_installment',
+        amount: 4500,
+        description: 'Missed installments',
+        metadata: ['payment_attempt_id' => '42'],
+        idempotencyKey: 'installment-payment-attempt-uuid',
+    );
+
+    expect($paymentIntents->createdWith)->toBe([
+        'customer' => 'cus_installment',
+        'payment_method' => 'pm_installment',
+        'amount' => 4500,
+        'currency' => 'usd',
+        'description' => 'Missed installments',
+        'metadata' => ['payment_attempt_id' => '42'],
+        'off_session' => true,
+        'confirm' => true,
+    ])->and($paymentIntents->requestOptions)->toBe([
+        'stripe_version' => '2026-05-27.dahlia',
+        'idempotency_key' => 'installment-payment-attempt-uuid',
+    ]);
+});
+
+it('updates whether a payment intent saves its payment method for future use', function (): void {
+    $paymentIntents = new class
+    {
+        /** @var list<array{paymentIntentId: string, params: array<string, mixed>}> */
+        public array $updates = [];
+
+        /** @param array<string, mixed> $params */
+        public function update(string $paymentIntentId, array $params): PaymentIntent
+        {
+            $this->updates[] = compact('paymentIntentId', 'params');
+
+            return PaymentIntent::constructFrom(['id' => $paymentIntentId]);
+        }
+    };
+
+    $service = new StripeService(stripeClientForTest(['paymentIntents' => $paymentIntents]));
+
+    $service->updatePaymentIntentSetupFutureUsage('pi_test', true);
+    $service->updatePaymentIntentSetupFutureUsage('pi_test', false);
+
+    expect($paymentIntents->updates)->toBe([
+        [
+            'paymentIntentId' => 'pi_test',
+            'params' => ['setup_future_usage' => 'off_session'],
+        ],
+        [
+            'paymentIntentId' => 'pi_test',
+            'params' => ['setup_future_usage' => ''],
+        ],
+    ]);
+});
+
 it('redisplays every attached customer payment method while disabling removal', function () {
     $customerSessions = new class
     {

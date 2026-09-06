@@ -49,6 +49,12 @@ final class PaymentPlan extends Model
             ->latest('installment_due_date_adjustments.created_at');
     }
 
+    /** @return HasMany<InstallmentPaymentAttempt, $this> */
+    public function paymentAttempts(): HasMany
+    {
+        return $this->hasMany(InstallmentPaymentAttempt::class);
+    }
+
     /**
      * Check if all installments have been paid.
      */
