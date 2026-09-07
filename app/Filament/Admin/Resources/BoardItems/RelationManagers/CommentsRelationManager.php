@@ -78,6 +78,7 @@ final class CommentsRelationManager extends RelationManager
                 TextColumn::make('body')
                     ->label('Comment')
                     ->html()
+                    ->extraAttributes(['class' => 'fi-prose'])
                     ->wrap(),
                 TextColumn::make('attachments')
                     ->state(fn (BoardItemComment $record): string => $record->getMedia('attachments')

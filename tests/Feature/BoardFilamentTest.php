@@ -16,12 +16,14 @@ use App\Filament\Admin\Resources\Boards\Pages\BoardLanding;
 use App\Filament\Admin\Resources\Boards\Schemas\BoardMembershipForm;
 use App\Models\Board;
 use App\Models\BoardItem;
+use App\Models\BoardItemComment;
 use App\Models\BoardMembership;
 use App\Models\BoardStage;
 use App\Models\User;
 use App\Support\Filament\BoardWorkspace;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Schemas\Components\Grid;
@@ -516,6 +518,48 @@ it('lets contributors hold discussions on a card', function (): void {
         'author_id' => $contributor->id,
         'body' => '<p>This would solve our workflow problem.</p>',
     ]);
+});
+
+it('only allows comment authors to edit their comments', function (): void {
+    $board = Board::factory()->create();
+    $stage = BoardStage::factory()->for($board)->default()->create();
+    $manager = User::factory()->isTeacher()->create();
+    $otherAuthor = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($manager)->manager()->create();
+    $item = BoardItem::factory()->for($board)->for($stage, 'stage')->create();
+    $ownComment = BoardItemComment::factory()->for($item, 'item')->for($manager, 'author')->create();
+    $otherComment = BoardItemComment::factory()->for($item, 'item')->for($otherAuthor, 'author')->create();
+    $this->actingAs($manager);
+
+    expect($manager->can('update', $ownComment))->toBeTrue()
+        ->and($manager->can('update', $otherComment))->toBeFalse();
+
+    livewire(CommentsRelationManager::class, [
+        'ownerRecord' => $item,
+        'pageClass' => ViewBoardItem::class,
+    ])
+        ->assertActionVisible(TestAction::make(EditAction::class)->table($ownComment))
+        ->assertActionHidden(TestAction::make(EditAction::class)->table($otherComment));
+});
+
+it('renders comment formatting in the discussion table', function (): void {
+    $board = Board::factory()->create();
+    $stage = BoardStage::factory()->for($board)->default()->create();
+    $author = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($author)->create();
+    $item = BoardItem::factory()->for($board)->for($stage, 'stage')->create();
+    BoardItemComment::factory()->for($item, 'item')->for($author, 'author')->create([
+        'body' => '<p><strong>Important</strong></p><ul><li>First item</li></ul>',
+    ]);
+    $this->actingAs($author);
+
+    livewire(CommentsRelationManager::class, [
+        'ownerRecord' => $item,
+        'pageClass' => ViewBoardItem::class,
+    ])
+        ->loadTable()
+        ->assertSee('fi-prose', escape: false)
+        ->assertSee('<p><strong>Important</strong></p><ul><li>First item</li></ul>', escape: false);
 });
 
 it('denies moderated contributor drag and cross-board item pages', function (): void {
