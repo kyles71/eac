@@ -7,6 +7,7 @@ use App\Enums\ReportCategory;
 use App\Enums\ReportExportFormat;
 use App\Enums\ReportKey;
 use App\Enums\ReportWidgetKey;
+use App\Filament\Admin\Pages\Reports\ClassRosters;
 use App\Filament\Admin\Pages\Reports\ClassSafetyRoster;
 use App\Filament\Admin\Pages\Reports\EmergencyTextsByCourse;
 use App\Filament\Admin\Pages\Reports\InstructorClassAssignments;
@@ -185,6 +186,7 @@ it('builds class roster, safety, and emergency text reports from current waiver 
     $student = Student::factory()->for($guardian)->create([
         'first_name' => 'Avery',
         'last_name' => 'Dancer',
+        'nickname' => 'Ave',
     ]);
     Enrollment::factory()->create([
         'course_id' => $course->id,
@@ -247,7 +249,12 @@ it('builds class roster, safety, and emergency text reports from current waiver 
 
     expect($roster->rows[0])->toMatchArray([
         'dancer_name' => 'Avery Dancer',
+        'dancer_nickname' => 'Ave',
         'media_release' => 'On File — Approved',
+    ])->and($roster->headers)->toBe([
+        'dancer_name' => 'Dancer Name',
+        'dancer_nickname' => 'Dancer Nickname',
+        'media_release' => 'Media Release',
     ])->and($safety->headers)->toHaveKeys([
         'emergency_contact_1_name',
         'emergency_contact_2_name',
@@ -276,6 +283,13 @@ it('builds class roster, safety, and emergency text reports from current waiver 
         ->and($unfilteredTexts->rows[0]['dancer_name'])->toBe('Avery Dancer');
 
     $this->actingAs($owner);
+
+    livewire(ClassRosters::class)
+        ->loadTable()
+        ->filterTable('academic_term_id', $term->id)
+        ->filterTable('course_id', $course->id)
+        ->assertSee('Dancer Nickname')
+        ->assertSee('Ave');
 
     livewire(EmergencyTextsByCourse::class)
         ->loadTable()
