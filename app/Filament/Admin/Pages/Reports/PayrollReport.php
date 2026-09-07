@@ -22,7 +22,7 @@ final class PayrollReport extends FinanceReportPage
                     TextColumn::make('course_name')->label('Course Name')->searchable()->sortable()->toggleable(),
                     TextColumn::make('enrollment_count')->label('Number of Enrollments')->numeric()->sortable()->toggleable(),
                     TextColumn::make('event_date')->label('Event Date')->date('l, Y-m-d')->sortable()->toggleable(),
-                    TextColumn::make('assigned_instructors')->label('Assigned Instructor(s)')->searchable()->sortable()->toggleable(),
+                    TextColumn::make('assigned_instructors')->label('Assigned Instructor')->searchable()->sortable()->toggleable(),
                     TextColumn::make('sub_instructor')->label('Sub Instructor')->searchable()->sortable()->toggleable(),
                     TextColumn::make('sub_reason')->label('Sub Reason')->searchable()->wrap()->toggleable(),
                     TextColumn::make('hours')->numeric(decimalPlaces: 2)->sortable()->toggleable(),

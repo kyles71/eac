@@ -7,14 +7,19 @@ namespace App\Services\Reports;
 use App\Data\Reports\ReportDataset;
 use App\Enums\CreditTransactionType;
 use App\Enums\EventSubstituteRequestReason;
+use App\Enums\InstallmentStatus;
 use App\Enums\OrderItemStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Enums\ReportKey;
 use App\Models\AcademicTerm;
 use App\Models\Course;
+use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\Event;
 use App\Models\EventSubstituteRequest;
+use App\Models\GiftCard;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
@@ -32,11 +37,15 @@ final readonly class FinanceReportService
         private PaymentPlanBreakdownCalculator $paymentPlanBreakdownCalculator,
     ) {}
 
-    /** @return array{gross_enrollments: int, net_enrollment_purchases: int} */
+    /** @return array{gross_enrollments: int, net_enrollment_purchases: int, pending_payment_plan_income: int} */
     public function dashboard(?AcademicTerm $term): array
     {
         if (! $term instanceof AcademicTerm) {
-            return ['gross_enrollments' => 0, 'net_enrollment_purchases' => 0];
+            return [
+                'gross_enrollments' => 0,
+                'net_enrollment_purchases' => 0,
+                'pending_payment_plan_income' => 0,
+            ];
         }
 
         $courseMorphClass = (new Course)->getMorphClass();
@@ -58,18 +67,25 @@ final readonly class FinanceReportService
             ->with([
                 'orderItems' => fn ($query) => $query->orderBy('id'),
                 'orderItems.product.productable',
+                'paymentPlan.installments',
                 'paymentPlanTemplate',
+                'refunds.payments',
             ])
             ->get();
         $transactionsByOrder = $this->creditTransactionsByOrder($orders);
         $gross = 0;
-        $net = 0;
+        $discounts = 0;
+        $refunds = 0;
+        $pendingPaymentPlanIncome = 0;
 
         foreach ($orders as $order) {
             $allocations = $this->paymentAllocations(
                 $order,
                 $transactionsByOrder->get($order->id, collect()),
             );
+            $refundAllocations = $this->successfulRefundAllocations($order, $allocations);
+            $pendingPaymentPlanAllocations = $this->pendingPaymentPlanAllocations($order, $allocations);
+            [$paidPaymentPlanAmount, $paymentPlanTotal] = $this->paymentPlanProgress($order);
 
             foreach ($order->orderItems as $item) {
                 $course = $item->product->productable;
@@ -80,21 +96,25 @@ final readonly class FinanceReportService
                     continue;
                 }
 
-                $gross += $item->total_price;
                 $allocation = $allocations[$item->id] ?? $this->emptyAllocation();
-                $net += max(
-                    0,
-                    $item->total_price
-                        - $allocation['discount']
-                        - $allocation['restricted_credit']
-                        - $allocation['credit'],
-                );
+                $usesPaymentPlan = $this->usesPaymentPlan($order, $item);
+                $numerator = $usesPaymentPlan ? $paidPaymentPlanAmount : 1;
+                $denominator = $usesPaymentPlan ? $paymentPlanTotal : 1;
+
+                $gross += $this->prorate($item->total_price, $numerator, $denominator);
+                $discounts += $this->prorate($allocation['discount'], $numerator, $denominator);
+                $refunds += $refundAllocations[$item->id] ?? 0;
+                $pendingPaymentPlanIncome += $pendingPaymentPlanAllocations[$item->id] ?? 0;
             }
         }
 
         return [
             'gross_enrollments' => $gross,
-            'net_enrollment_purchases' => $net,
+            'net_enrollment_purchases' => $gross
+                - $discounts
+                - $this->storeCreditGrantedDuring($term)
+                - $refunds,
+            'pending_payment_plan_income' => $pendingPaymentPlanIncome,
         ];
     }
 
@@ -295,6 +315,170 @@ final readonly class FinanceReportService
         return ['discount' => 0, 'restricted_credit' => 0, 'credit' => 0];
     }
 
+    /** @return array{int, int} */
+    private function paymentPlanProgress(Order $order): array
+    {
+        $paymentPlan = $order->paymentPlan;
+
+        if ($paymentPlan === null || $paymentPlan->total_amount <= 0) {
+            return [0, 1];
+        }
+
+        $paidAmount = (int) $paymentPlan->installments
+            ->filter(fn ($installment): bool => $installment->status === InstallmentStatus::Paid)
+            ->sum('amount');
+
+        return [min($paidAmount, $paymentPlan->total_amount), $paymentPlan->total_amount];
+    }
+
+    private function usesPaymentPlan(Order $order, OrderItem $item): bool
+    {
+        return $order->paymentPlanTemplate?->matchesProduct($item->product, $item->total_price) ?? false;
+    }
+
+    private function prorate(int $amount, int $numerator, int $denominator): int
+    {
+        if ($amount <= 0 || $numerator <= 0 || $denominator <= 0) {
+            return 0;
+        }
+
+        if ($numerator >= $denominator) {
+            return $amount;
+        }
+
+        return intdiv(($amount * $numerator) + intdiv($denominator, 2), $denominator);
+    }
+
+    /**
+     * @param  array<int, array{discount: int, restricted_credit: int, credit: int}>  $paymentAllocations
+     * @return array<int, int>
+     */
+    private function pendingPaymentPlanAllocations(Order $order, array $paymentAllocations): array
+    {
+        $paymentPlan = $order->paymentPlan;
+
+        if ($paymentPlan === null
+            || $order->paymentPlanTemplate === null
+            || $this->remainingInstallmentsAreBeingCancelled($order)) {
+            return [];
+        }
+
+        $collectibleAmount = (int) $paymentPlan->installments
+            ->filter(fn ($installment): bool => in_array($installment->status, [
+                InstallmentStatus::Pending,
+                InstallmentStatus::Failed,
+                InstallmentStatus::Overdue,
+            ], true))
+            ->sum('amount');
+
+        if ($collectibleAmount <= 0) {
+            return [];
+        }
+
+        $amounts = $order->orderItems
+            ->filter(fn (OrderItem $item): bool => $this->usesPaymentPlan($order, $item))
+            ->mapWithKeys(function (OrderItem $item) use ($paymentAllocations): array {
+                $allocation = $paymentAllocations[$item->id] ?? $this->emptyAllocation();
+
+                return [$item->id => max(
+                    0,
+                    $item->total_price
+                        - $allocation['discount']
+                        - $allocation['restricted_credit']
+                        - $allocation['credit'],
+                )];
+            })
+            ->all();
+
+        if ($order->payment_plan_fee > 0) {
+            $amounts[0] = $order->payment_plan_fee;
+        }
+
+        $allocations = $this->allocateOrderItemPayments->allocateProportionally($amounts, $collectibleAmount);
+        unset($allocations[0]);
+
+        return $allocations;
+    }
+
+    private function remainingInstallmentsAreBeingCancelled(Order $order): bool
+    {
+        return $order->refunds->contains(
+            fn ($refund): bool => $refund->cancel_remaining_installments
+                && $refund->status !== OrderRefundStatus::Failed,
+        );
+    }
+
+    /**
+     * @param  array<int, array{discount: int, restricted_credit: int, credit: int}>  $paymentAllocations
+     * @return array<int, int>
+     */
+    private function successfulRefundAllocations(Order $order, array $paymentAllocations): array
+    {
+        $refundedAmount = (int) $order->refunds
+            ->flatMap->payments
+            ->filter(fn ($payment): bool => $payment->status === OrderRefundPaymentStatus::Succeeded)
+            ->sum('amount');
+
+        if ($refundedAmount <= 0) {
+            return [];
+        }
+
+        $amounts = $order->orderItems
+            ->mapWithKeys(function (OrderItem $item) use ($paymentAllocations): array {
+                $allocation = $paymentAllocations[$item->id] ?? $this->emptyAllocation();
+
+                return [$item->id => max(
+                    0,
+                    $item->total_price
+                        - $allocation['discount']
+                        - $allocation['restricted_credit']
+                        - $allocation['credit'],
+                )];
+            })
+            ->all();
+
+        if ($order->payment_plan_fee > 0) {
+            $amounts[0] = $order->payment_plan_fee;
+        }
+
+        return $this->allocateOrderItemPayments->allocateProportionally($amounts, $refundedAmount);
+    }
+
+    private function storeCreditGrantedDuring(AcademicTerm $term): int
+    {
+        [$startsAt, $endsAt] = $this->academicTermDateRange($term);
+        $giftCardMorphClass = (new GiftCard)->getMorphClass();
+        $today = now($this->displayTimezone())->toDateString();
+
+        return (int) CreditGrant::query()
+            ->whereBetween('created_at', [$startsAt, $endsAt])
+            ->whereNull('revoked_at')
+            ->where(function (Builder $query) use ($today): void {
+                $query
+                    ->whereNull('expires_on')
+                    ->orWhereDate('expires_on', '>=', $today);
+            })
+            ->where(function (Builder $query) use ($giftCardMorphClass): void {
+                $query
+                    ->whereNull('source_type')
+                    ->orWhere('source_type', '!=', $giftCardMorphClass);
+            })
+            ->sum('initial_amount');
+    }
+
+    /** @return array{CarbonImmutable, CarbonImmutable} */
+    private function academicTermDateRange(AcademicTerm $term): array
+    {
+        return [
+            CarbonImmutable::parse($term->starts_on->toDateString(), $this->displayTimezone())
+                ->startOfDay()
+                ->setTimezone((string) config('app.timezone', 'UTC')),
+            CarbonImmutable::parse($term->ends_on->toDateString(), $this->displayTimezone())
+                ->endOfDay()
+                ->setTimezone((string) config('app.timezone', 'UTC')),
+        ];
+    }
+
     /** @param array<string, mixed> $filters */
     private function payroll(array $filters): ReportDataset
     {
@@ -302,7 +486,7 @@ final readonly class FinanceReportService
             'course_name' => 'Course Name',
             'enrollment_count' => 'Number of Enrollments',
             'event_date' => 'Event Date',
-            'assigned_instructors' => 'Assigned Instructor(s)',
+            'assigned_instructors' => 'Assigned Instructor',
             'sub_instructor' => 'Sub Instructor',
             'sub_reason' => 'Sub Reason',
             'hours' => 'Hours',
@@ -322,20 +506,26 @@ final readonly class FinanceReportService
             ->orderBy('start_time')
             ->orderBy('id')
             ->get()
-            ->map(function (Event $event): array {
+            ->flatMap(function (Event $event): array {
                 $startsAt = $event->start_time->copy()->timezone($this->displayTimezone());
-
-                return [
-                    '_key' => "event_{$event->id}",
+                $baseRow = [
                     'course_name' => $event->course?->name ?? $event->name,
                     'enrollment_count' => (int) ($event->course?->enrollments_count ?? 0),
                     'event_date' => $startsAt->toDateString(),
-                    'assigned_instructors' => $this->assignedInstructorNames($event),
                     'sub_instructor' => $event->substituteTeacher?->fullName ?? '—',
                     'sub_reason' => $this->substituteReason($event),
                     'hours' => round(max(0.0, $event->start_time->diffInMinutes($event->end_time) / 60), 2),
                 ];
+
+                return $this->assignedInstructors($event)
+                    ->map(fn (array $instructor): array => [
+                        '_key' => "event_{$event->id}_{$instructor['key']}",
+                        ...$baseRow,
+                        'assigned_instructors' => $instructor['name'],
+                    ])
+                    ->all();
             })
+            ->values()
             ->all();
 
         return new ReportDataset($headers, $rows);
@@ -419,20 +609,32 @@ final readonly class FinanceReportService
         ];
     }
 
-    private function assignedInstructorNames(Event $event): string
+    /** @return Collection<int, array{key: string, name: string}> */
+    private function assignedInstructors(Event $event): Collection
     {
-        $names = $event->course?->teachers
-            ->map(fn (User $teacher): string => $teacher->fullName)
-            ->filter()
+        $instructors = $event->course?->teachers
+            ->map(fn (User $teacher): array => [
+                'key' => "teacher_{$teacher->id}",
+                'name' => $teacher->fullName,
+            ])
+            ->filter(fn (array $instructor): bool => filled($instructor['name']))
             ->values() ?? collect();
 
-        if ($names->isNotEmpty()) {
-            return $names->implode(', ');
+        if ($instructors->isNotEmpty()) {
+            return $instructors;
         }
 
-        return filled($event->course?->guest_teacher)
-            ? (string) $event->course->guest_teacher
-            : 'Unassigned';
+        if (filled($event->course?->guest_teacher)) {
+            return collect([[
+                'key' => 'guest_teacher',
+                'name' => (string) $event->course->guest_teacher,
+            ]]);
+        }
+
+        return collect([[
+            'key' => 'unassigned',
+            'name' => 'Unassigned',
+        ]]);
     }
 
     private function substituteReason(Event $event): string

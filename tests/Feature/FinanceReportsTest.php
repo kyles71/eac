@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 use App\Actions\Events\ManageEventSubstitution;
 use App\Enums\EventSubstituteRequestReason;
+use App\Enums\InstallmentStatus;
+use App\Enums\OrderRefundPaymentStatus;
+use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
+use App\Enums\ProductType;
 use App\Enums\ReportCategory;
 use App\Enums\ReportExportFormat;
 use App\Enums\ReportExportStatus;
@@ -16,11 +20,18 @@ use App\Filament\Admin\Pages\Reports\SickLeaveReport;
 use App\Filament\Admin\Widgets\Reports\FinanceOverview;
 use App\Models\AcademicTerm;
 use App\Models\Course;
+use App\Models\CreditGrant;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventSubstituteRequest;
+use App\Models\GiftCard;
+use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderRefund;
+use App\Models\OrderRefundPayment;
+use App\Models\PaymentPlan;
+use App\Models\PaymentPlanTemplate;
 use App\Models\Product;
 use App\Models\ReportExport;
 use App\Models\User;
@@ -73,7 +84,9 @@ it('allows finance widget permission without exposing either finance report', fu
 
     livewire(FinanceOverview::class)
         ->assertOk()
-        ->assertSee('Refunds are not included');
+        ->assertSee('Payment-plan income is recognized as installments are paid')
+        ->assertSee('Pending Payment Plan Income')
+        ->assertSee('payment-plan fees excluded');
 });
 
 it('renders the term selector before the finance widget and lists the reports', function (): void {
@@ -91,10 +104,17 @@ it('renders the term selector before the finance widget and lists the reports', 
     livewire(FinanceOverview::class)
         ->assertOk()
         ->assertSee('Gross Enrollments')
-        ->assertSee('Net Enrollment Purchases');
+        ->assertSee('Net Enrollment Purchases')
+        ->assertSee('Pending Payment Plan Income');
+
+    expect(app(FinanceReportService::class)->dashboard(null))->toBe([
+        'gross_enrollments' => 0,
+        'net_enrollment_purchases' => 0,
+        'pending_payment_plan_income' => 0,
+    ]);
 });
 
-it('calculates booked gross and net course purchases by academic term without deducting refunds', function (): void {
+it('calculates collected gross and net course purchases by academic term', function (): void {
     $term = AcademicTerm::factory()->create();
     $otherTerm = AcademicTerm::factory()->create();
     $course = Course::factory()->for($term)->create();
@@ -135,6 +155,16 @@ it('calculates booked gross and net course purchases by academic term without de
         'total_price' => 4000,
         'stripe_allocated' => 4000,
     ]);
+    $refund = OrderRefund::factory()->for($refundedOrder)->create([
+        'amount' => 4000,
+    ]);
+    OrderRefundPayment::factory()->for($refund)->create([
+        'amount' => 4000,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+    CreditGrant::factory()->amount(1000)->create([
+        'created_at' => $term->starts_on->addMonth(),
+    ]);
     $failedOrder = Order::factory()->failed()->create([
         'subtotal' => 3000,
         'total' => 3000,
@@ -147,11 +177,12 @@ it('calculates booked gross and net course purchases by academic term without de
 
     expect(app(FinanceReportService::class)->dashboard($term))->toBe([
         'gross_enrollments' => 14000,
-        'net_enrollment_purchases' => 12000,
+        'net_enrollment_purchases' => 8000,
+        'pending_payment_plan_income' => 0,
     ]);
 });
 
-it('reconstructs missing legacy discount and credit allocations', function (): void {
+it('reconstructs missing legacy discount allocations', function (): void {
     $term = AcademicTerm::factory()->create();
     $otherTerm = AcademicTerm::factory()->create();
     $course = Course::factory()->for($term)->create();
@@ -177,8 +208,197 @@ it('reconstructs missing legacy discount and credit allocations', function (): v
 
     expect(app(FinanceReportService::class)->dashboard($term))->toBe([
         'gross_enrollments' => 10000,
-        'net_enrollment_purchases' => 5000,
+        'net_enrollment_purchases' => 9000,
+        'pending_payment_plan_income' => 0,
     ]);
+});
+
+it('recognizes paid payment plan installments and eligible term credit while excluding fees', function (): void {
+    $term = AcademicTerm::factory()->create();
+    $course = Course::factory()->for($term)->create();
+    $product = Product::factory()->forCourse($course)->create(['price' => 10000]);
+    $template = PaymentPlanTemplate::factory()
+        ->forProductType(ProductType::Course)
+        ->create(['number_of_installments' => 4]);
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 10000,
+        'total' => 8240,
+        'discount_amount' => 2000,
+        'payment_plan_fee' => 240,
+        'payment_plan_principal' => 8000,
+        'payment_plan_subtotal' => 10000,
+        'payment_plan_discount_amount' => 2000,
+        'payment_plan_template_id' => $template->id,
+    ]);
+    OrderItem::factory()->fulfilled()->for($order)->for($product)->create([
+        'quantity' => 1,
+        'unit_price' => 10000,
+        'total_price' => 10000,
+        'discount_allocated' => 2000,
+        'stripe_allocated' => 8000,
+    ]);
+    $paymentPlan = PaymentPlan::factory()->for($order)->create([
+        'payment_plan_template_id' => $template->id,
+        'total_amount' => 8240,
+        'number_of_installments' => 4,
+    ]);
+    Installment::factory()->paid()->for($paymentPlan)->create([
+        'installment_number' => 1,
+        'amount' => 2060,
+    ]);
+    $futureInstallments = Installment::factory(3)->for($paymentPlan)->sequence(
+        ['installment_number' => 2],
+        ['installment_number' => 3],
+        ['installment_number' => 4],
+    )->create(['amount' => 2060]);
+    $refund = OrderRefund::factory()->for($order)->create(['amount' => 1530]);
+    OrderRefundPayment::factory()->for($refund)->create([
+        'amount' => 1030,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+    OrderRefundPayment::factory()->for($refund)->create([
+        'stripe_payment_intent_id' => 'pi_pending_refund',
+        'amount' => 500,
+        'status' => OrderRefundPaymentStatus::Pending,
+    ]);
+    CreditGrant::factory()->amount(500)->create([
+        'created_at' => $term->starts_on->addMonth(),
+    ]);
+    CreditGrant::factory()->amount(600)->expired()->create([
+        'created_at' => $term->starts_on->addMonth(),
+    ]);
+    CreditGrant::factory()->amount(700)->create([
+        'created_at' => $term->starts_on->addMonth(),
+        'revoked_at' => now(),
+    ]);
+    $giftCard = GiftCard::factory()->create();
+    CreditGrant::factory()->amount(800)->create([
+        'source_type' => $giftCard->getMorphClass(),
+        'source_id' => $giftCard->id,
+        'created_at' => $term->starts_on->addMonth(),
+    ]);
+    CreditGrant::factory()->amount(900)->create([
+        'created_at' => $term->starts_on->subDay(),
+    ]);
+
+    expect(app(FinanceReportService::class)->dashboard($term))->toBe([
+        'gross_enrollments' => 2500,
+        'net_enrollment_purchases' => 500,
+        'pending_payment_plan_income' => 6000,
+    ]);
+
+    $futureInstallments->first()->update([
+        'status' => InstallmentStatus::Paid,
+        'paid_at' => now(),
+    ]);
+
+    expect(app(FinanceReportService::class)->dashboard($term))->toBe([
+        'gross_enrollments' => 5000,
+        'net_enrollment_purchases' => 2500,
+        'pending_payment_plan_income' => 4000,
+    ]);
+
+    $futureInstallments->each->update([
+        'status' => InstallmentStatus::Paid,
+        'paid_at' => now(),
+    ]);
+
+    expect(app(FinanceReportService::class)->dashboard($term)['pending_payment_plan_income'])->toBe(0);
+});
+
+it('allocates all collectible installment states by course term and honors refund cancellation', function (): void {
+    $term = AcademicTerm::factory()->create();
+    $otherTerm = AcademicTerm::factory()->create();
+    $course = Course::factory()->for($term)->create();
+    $otherCourse = Course::factory()->for($otherTerm)->create();
+    $product = Product::factory()->forCourse($course)->create(['price' => 10000]);
+    $otherProduct = Product::factory()->forCourse($otherCourse)->create(['price' => 4000]);
+    $standaloneProduct = Product::factory()->create(['price' => 6000]);
+    $template = PaymentPlanTemplate::factory()->create([
+        'product_type' => ProductType::Any,
+        'min_price' => 0,
+        'max_price' => 50000,
+        'number_of_installments' => 5,
+    ]);
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 20000,
+        'total' => 18540,
+        'discount_amount' => 1000,
+        'credit_applied' => 1000,
+        'payment_plan_fee' => 540,
+        'payment_plan_principal' => 18000,
+        'payment_plan_subtotal' => 20000,
+        'payment_plan_discount_amount' => 1000,
+        'payment_plan_credit_applied' => 1000,
+        'payment_plan_template_id' => $template->id,
+    ]);
+    OrderItem::factory()->fulfilled()->for($order)->for($product)->create([
+        'quantity' => 1,
+        'unit_price' => 10000,
+        'total_price' => 10000,
+        'discount_allocated' => 1000,
+        'credit_allocated' => 1000,
+        'stripe_allocated' => 8000,
+    ]);
+    OrderItem::factory()->fulfilled()->for($order)->for($otherProduct)->create([
+        'quantity' => 1,
+        'unit_price' => 4000,
+        'total_price' => 4000,
+        'stripe_allocated' => 4000,
+    ]);
+    OrderItem::factory()->fulfilled()->for($order)->for($standaloneProduct)->create([
+        'quantity' => 1,
+        'unit_price' => 6000,
+        'total_price' => 6000,
+        'stripe_allocated' => 6000,
+    ]);
+    $paymentPlan = PaymentPlan::factory()->for($order)->create([
+        'payment_plan_template_id' => $template->id,
+        'total_amount' => 18540,
+        'number_of_installments' => 5,
+    ]);
+    Installment::factory()->paid()->for($paymentPlan)->create([
+        'installment_number' => 1,
+        'amount' => 3708,
+    ]);
+    Installment::factory()->for($paymentPlan)->create([
+        'installment_number' => 2,
+        'amount' => 3708,
+        'due_date' => $term->ends_on->addMonth(),
+        'status' => InstallmentStatus::Pending,
+    ]);
+    Installment::factory()->failed()->for($paymentPlan)->create([
+        'installment_number' => 3,
+        'amount' => 3708,
+    ]);
+    Installment::factory()->overdue()->for($paymentPlan)->create([
+        'installment_number' => 4,
+        'amount' => 3708,
+    ]);
+    Installment::factory()->for($paymentPlan)->create([
+        'installment_number' => 5,
+        'amount' => 3708,
+        'status' => InstallmentStatus::Cancelled,
+    ]);
+    $service = app(FinanceReportService::class);
+
+    expect($service->dashboard($term)['pending_payment_plan_income'])->toBe(4800)
+        ->and($service->dashboard($otherTerm)['pending_payment_plan_income'])->toBe(2400);
+
+    $cancellation = OrderRefund::factory()->for($order)->create([
+        'cancel_remaining_installments' => true,
+        'status' => OrderRefundStatus::Processing,
+    ]);
+
+    expect($service->dashboard($term)['pending_payment_plan_income'])->toBe(0);
+
+    $cancellation->update(['status' => OrderRefundStatus::Failed]);
+
+    expect($service->dashboard($term)['pending_payment_plan_income'])->toBe(4800);
+
+    $cancellation->update(['status' => OrderRefundStatus::Succeeded]);
+
+    expect($service->dashboard($term)['pending_payment_plan_income'])->toBe(0);
 });
 
 it('includes past and future payroll events in range while always excluding cancellations', function (): void {
@@ -189,11 +409,15 @@ it('includes past and future payroll events in range while always excluding canc
         'first_name' => 'Alex',
         'last_name' => 'Assigned',
     ]);
+    $coTeacher = User::factory()->isTeacher()->create([
+        'first_name' => 'Bailey',
+        'last_name' => 'CoTeacher',
+    ]);
     $substitute = User::factory()->isTeacher()->create([
         'first_name' => 'Sam',
         'last_name' => 'Substitute',
     ]);
-    $course->teachers()->sync([$assigned->id]);
+    $course->teachers()->sync([$assigned->id, $coTeacher->id]);
     Enrollment::factory(2)->for($course)->create();
     $past = Event::factory()->for($course)->create([
         'start_time' => '2040-09-03 14:00:00',
@@ -225,13 +449,18 @@ it('includes past and future payroll events in range while always excluding canc
         ],
     ]);
 
-    expect($dataset->rows)->toHaveCount(2)
+    expect($dataset->rows)->toHaveCount(4)
         ->and($dataset->rows[0])->toMatchArray([
             'course_name' => 'Payroll Jazz',
             'enrollment_count' => 2,
             'assigned_instructors' => 'Alex Assigned',
             'sub_instructor' => 'Sam Substitute',
             'sub_reason' => 'Instructor unavailable',
+            'hours' => 1.5,
+        ])
+        ->and($dataset->rows[1])->toMatchArray([
+            'course_name' => 'Payroll Jazz',
+            'assigned_instructors' => 'Bailey CoTeacher',
             'hours' => 1.5,
         ]);
 });
@@ -323,6 +552,7 @@ it('renders both finance report tables', function (): void {
         ->loadTable()
         ->assertOk()
         ->assertSee('Number of Enrollments')
+        ->assertSee('Assigned Instructor')
         ->assertSee('Sub Reason');
 
     livewire(SickLeaveReport::class)

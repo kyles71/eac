@@ -19,7 +19,7 @@ final class FinanceOverview extends StatsOverviewWidget
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $description = 'Booked course sales. Refunds are not included in either amount.';
+    protected ?string $description = 'Enrollment value collected so far. Payment-plan income is recognized as installments are paid.';
 
     public static function canView(): bool
     {
@@ -43,11 +43,14 @@ final class FinanceOverview extends StatsOverviewWidget
 
         return [
             Stat::make('Gross Enrollments', format_money($metrics['gross_enrollments']))
-                ->description($termName.' · Before discounts and store credit')
+                ->description($termName.' · Before discounts, eligible credit, and refunds')
                 ->descriptionIcon(Heroicon::OutlinedBanknotes),
             Stat::make('Net Enrollment Purchases', format_money($metrics['net_enrollment_purchases']))
-                ->description($termName.' · After discounts and store credit')
+                ->description($termName.' · After discounts, eligible credit granted, and successful refunds')
                 ->descriptionIcon(Heroicon::OutlinedReceiptPercent),
+            Stat::make('Pending Payment Plan Income', format_money($metrics['pending_payment_plan_income']))
+                ->description($termName.' · Collectible enrollment principal; payment-plan fees excluded')
+                ->descriptionIcon(Heroicon::OutlinedClock),
         ];
     }
 
