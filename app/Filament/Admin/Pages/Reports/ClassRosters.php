@@ -20,6 +20,7 @@ final class ClassRosters extends InstructorReportPage
             $table
                 ->columns([
                     TextColumn::make('dancer_name')->label('Dancer Name')->searchable()->sortable()->toggleable(),
+                    TextColumn::make('dancer_nickname')->label('Dancer Nickname')->searchable()->sortable()->toggleable(),
                     TextColumn::make('media_release')
                         ->label('Media Release')
                         ->badge()
