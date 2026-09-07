@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
+use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Enums\FormTypes;
 use App\Enums\ScheduleFrequency;
 use App\Models\AcademicTerm;
@@ -136,7 +138,28 @@ final class CourseForm
                                 labelFromRecord: fn (User $user): string => $user->fullName,
                                 modifyQueryUsing: fn (Builder $query): Builder => self::scopeTeacherOptions($query),
                                 orderBy: ['first_name', 'last_name'],
-                            ),
+                            )
+                            ->loadStateFromRelationshipsUsing(function (Select $component, ?Course $record): void {
+                                $component->state($record?->teachers()->pluck('users.id')->all() ?? []);
+                            })
+                            ->saveRelationshipsUsing(function (?Course $record, array $state): void {
+                                if (! $record instanceof Course) {
+                                    return;
+                                }
+
+                                app(ManageEventTeacherAssignments::class)->updateCourseRoster(
+                                    $record,
+                                    array_map('intval', $state),
+                                    $record->teacher_assignment_strategy,
+                                );
+                            })
+                            ->helperText('The selected order is used by teacher rotation.'),
+                        Select::make('teacher_assignment_strategy')
+                            ->label('Event Staffing')
+                            ->options(CourseTeacherAssignmentStrategy::class)
+                            ->default(CourseTeacherAssignmentStrategy::AllTeachers->value)
+                            ->required()
+                            ->selectablePlaceholder(false),
                         TextInput::make('guest_teacher')
                             ->label('Guest Teacher'),
                         SpatieTagsInput::make('tags')
@@ -186,7 +209,7 @@ final class CourseForm
 
         return $query->whereHas(
             'roles',
-            fn (Builder $query): Builder => $query->where('name', 'teacher'),
+            fn (Builder $query): Builder => $query->whereIn('name', ['teacher', 'owner', 'super_admin']),
         );
     }
 

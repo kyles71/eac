@@ -26,4 +26,14 @@ final class OrderPolicy
     {
         return $authUser->can('Refund:Order');
     }
+
+    public function fulfillAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('Fulfill:Order');
+    }
+
+    public function fulfill(AuthUser $authUser, Order $order): bool
+    {
+        return $authUser->can('Fulfill:Order');
+    }
 }

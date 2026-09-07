@@ -6,17 +6,26 @@ namespace App\Observers;
 
 use App\Contracts\Productable;
 use App\Models\Product;
+use Illuminate\Database\Eloquent\Model;
 
 final class ProductableObserver
 {
-    public function deleting(Productable $productable): bool
+    public function deleting(Model&Productable $productable): bool
     {
-        $product = $productable->product()->first();
+        $products = Product::query()
+            ->forProductable($productable)
+            ->get();
 
-        if (! $product instanceof Product) {
-            return true;
+        if ($products->contains(fn (Product $product): bool => ! $product->canBeDeleted())) {
+            return false;
         }
 
-        return $product->canBeDeleted() && (bool) $product->delete();
+        foreach ($products as $product) {
+            if (! $product->delete()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

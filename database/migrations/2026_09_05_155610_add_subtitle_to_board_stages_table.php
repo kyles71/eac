@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class() extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('board_stages', function (Blueprint $table): void {
+            $table->string('subtitle', 160)->nullable()->after('name');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('board_stages', function (Blueprint $table): void {
+            $table->dropColumn('subtitle');
+        });
+    }
+};

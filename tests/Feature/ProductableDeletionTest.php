@@ -70,6 +70,34 @@ it('deletes an inactive unsold linked product with its item', function (string $
     assertDatabaseMissing(Product::class, ['id' => $product->id]);
 })->with('productable types');
 
+it('deletes all inactive unsold Product listings with their Gear', function () {
+    $gear = Gear::factory()->create();
+    $products = Product::factory(2)->forGear($gear)->inactive()->create();
+
+    expect(auth()->user()->can('delete', $gear))->toBeTrue()
+        ->and($gear->delete())->toBeTrue();
+
+    assertDatabaseMissing(Gear::class, ['id' => $gear->id]);
+
+    foreach ($products as $product) {
+        assertDatabaseMissing(Product::class, ['id' => $product->id]);
+    }
+});
+
+it('does not delete any Gear listings when one linked Product cannot be deleted', function () {
+    $gear = Gear::factory()->create();
+    $deletableProduct = Product::factory()->forGear($gear)->inactive()->create();
+    $soldProduct = Product::factory()->forGear($gear)->inactive()->create();
+    OrderItem::factory()->for($soldProduct)->create();
+
+    expect(auth()->user()->can('delete', $gear))->toBeFalse()
+        ->and($gear->delete())->toBeFalse();
+
+    assertDatabaseHas(Gear::class, ['id' => $gear->id]);
+    assertDatabaseHas(Product::class, ['id' => $deletableProduct->id]);
+    assertDatabaseHas(Product::class, ['id' => $soldProduct->id]);
+});
+
 it('warns that deleting a linked item also deletes its product', function (string $productableType, string $listPage) {
     $productable = $productableType::factory()->create();
 

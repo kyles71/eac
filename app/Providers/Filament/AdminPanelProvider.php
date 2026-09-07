@@ -34,6 +34,8 @@ final class AdminPanelProvider extends BasePanelProvider
             ->databaseNotifications()
             ->databaseNotificationsPolling('15s')
             ->spaUrlExceptions([
+                '*/admin/board-items/*/attachments/*',
+                '*/admin/board-item-comments/*/attachments/*',
                 '*/admin/report-exports/*/download*',
             ])
             ->strictAuthorization()

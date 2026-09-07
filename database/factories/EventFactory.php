@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\EventTeacherAssignmentMode;
 use App\Models\Course;
 use App\Models\Event;
 use Carbon\Carbon;
@@ -48,9 +49,30 @@ final class EventFactory extends Factory
             }
 
             if ($event->course !== null) {
-                $event->name = $event->course->name.' Class';
+                $event->name = $event->name !== '' ? $event->name : $event->course->name.' Class';
+                $event->teacher_assignment_mode = EventTeacherAssignmentMode::CourseDefaults;
+                $event->teacher_rotation_sequence = ((int) $event->course->events()
+                    ->whereKeyNot($event->id)
+                    ->max('teacher_rotation_sequence')) + 1;
                 $event->save();
+                $event->teachers()->sync($event->course->teachers()->pluck('users.id'));
+
+                $teacherIds = $event->teachers()->pluck('users.id');
+
+                if ($teacherIds->count() === 1) {
+                    $event->substituteCoverages()
+                        ->whereNull('covered_teacher_id')
+                        ->update(['covered_teacher_id' => $teacherIds->first()]);
+                }
             }
         });
+    }
+
+    public function standalone(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'name' => fake()->sentence(3),
+            'course_id' => null,
+        ]);
     }
 }

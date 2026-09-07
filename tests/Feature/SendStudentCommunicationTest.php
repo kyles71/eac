@@ -82,7 +82,7 @@ it('records and queues an immutable first aid communication to each recipient', 
             && str_contains($rendered->html, 'Applied an ice pack.')
             && str_contains($rendered->html, 'Jamie Teacher')
             && str_contains($rendered->html, 'August 3, 2026 7:30 PM EDT')
-            && str_contains($rendered->html, 'Ballet 2 Class');
+            && str_contains($rendered->html, 'Ballet Class');
     });
 });
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Enums\DashboardAudience;
+use App\Enums\FulfillmentWorkflow;
 use App\Models\Course;
 use App\Models\Gear;
 use App\Models\GiftCardType;
@@ -34,6 +35,7 @@ final class ProductFactory extends Factory
             'allows_payment_plan' => true,
             'include_productable_images' => false,
             'send_purchase_notification' => false,
+            'fulfillment_workflow' => FulfillmentWorkflow::Manual,
             'available_from' => null,
             'available_until' => null,
             'productable_type' => null,
@@ -53,6 +55,7 @@ final class ProductFactory extends Factory
                 'name' => $course->name,
                 'productable_type' => Course::class,
                 'productable_id' => $course->id,
+                'fulfillment_workflow' => FulfillmentWorkflow::Automatic,
             ];
         });
     }
@@ -70,6 +73,7 @@ final class ProductFactory extends Factory
                 'productable_type' => GiftCardType::class,
                 'productable_id' => $giftCardType->id,
                 'price' => $giftCardType->allows_custom_amount ? null : $giftCardType->denomination,
+                'fulfillment_workflow' => FulfillmentWorkflow::Automatic,
             ];
         });
     }

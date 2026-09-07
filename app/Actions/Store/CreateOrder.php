@@ -129,11 +129,13 @@ final class CreateOrder
                 $orderItems[] = [
                     'attributes' => [
                         'product_id' => $product->id,
+                        'product_name' => $product->name,
                         'course_hold_id' => $cartItem->course_hold_id,
                         'quantity' => $cartItem->quantity,
                         'unit_price' => $unitPrice,
                         'total_price' => $totalPrice,
                         'custom_gift_card_amount' => $cartItem->custom_gift_card_amount,
+                        'fulfillment_workflow' => $product->fulfillmentWorkflow(),
                         'purchase_notification_requested' => $product->send_purchase_notification,
                     ],
                     'question_answers' => $this->productQuestionAnswers->orderRows(

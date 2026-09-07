@@ -4,10 +4,12 @@
 
 @source '../../../../app/Filament/Admin/**/*';
 @source '../../../../resources/views/filament/admin/**/*';
+@source '../../../../resources/views/vendor/flowforge/**/*.blade.php';
 @source '../../../../vendor/charlieetienne/filament-font-picker/resources/**/*.blade.php';
 @source '../../../../vendor/awcodes/mason/resources/**/*.blade.php';
 @source '../../../../vendor/guava/filament-icon-picker/resources/**/*';
 @source '../../../../vendor/kyle/filament-mail-manager/resources/**/*.blade.php';
+@source '../../../../vendor/relaticle/flowforge/resources/views/**/*.blade.php';
 
 @media (min-width: 1280px) {
     .managed-banner-preview-pane {

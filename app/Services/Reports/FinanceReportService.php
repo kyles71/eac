@@ -18,6 +18,7 @@ use App\Models\Course;
 use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\Event;
+use App\Models\EventSubstituteCoverage;
 use App\Models\EventSubstituteRequest;
 use App\Models\GiftCard;
 use App\Models\Order;
@@ -499,9 +500,9 @@ final readonly class FinanceReportService
             ->whereBetween('start_time', [$startsAt, $endsAt])
             ->with([
                 'course' => fn ($query) => $query->withCount('enrollments'),
-                'course.teachers:id,first_name,last_name',
-                'substituteTeacher:id,first_name,last_name',
-                'substituteRequests',
+                'teachers:id,first_name,last_name',
+                'substituteCoverages.substituteTeacher:id,first_name,last_name',
+                'substituteCoverages.requests',
             ])
             ->orderBy('start_time')
             ->orderBy('id')
@@ -512,17 +513,23 @@ final readonly class FinanceReportService
                     'course_name' => $event->course?->name ?? $event->name,
                     'enrollment_count' => (int) ($event->course?->enrollments_count ?? 0),
                     'event_date' => $startsAt->toDateString(),
-                    'sub_instructor' => $event->substituteTeacher?->fullName ?? '—',
-                    'sub_reason' => $this->substituteReason($event),
                     'hours' => round(max(0.0, $event->start_time->diffInMinutes($event->end_time) / 60), 2),
                 ];
 
                 return $this->assignedInstructors($event)
-                    ->map(fn (array $instructor): array => [
-                        '_key' => "event_{$event->id}_{$instructor['key']}",
-                        ...$baseRow,
-                        'assigned_instructors' => $instructor['name'],
-                    ])
+                    ->map(function (array $instructor) use ($baseRow, $event): array {
+                        $coverage = $this->payrollCoverage($event, $instructor['user_id']);
+
+                        return [
+                            '_key' => "event_{$event->id}_{$instructor['key']}",
+                            ...$baseRow,
+                            'assigned_instructors' => $instructor['name'],
+                            'sub_instructor' => $coverage?->substituteTeacher?->fullName ?? '—',
+                            'sub_reason' => $coverage instanceof EventSubstituteCoverage
+                                ? $this->substituteReason($coverage)
+                                : '—',
+                        ];
+                    })
                     ->all();
             })
             ->values()
@@ -558,7 +565,9 @@ final readonly class FinanceReportService
             ])
             ->orderBy('id')
             ->get()
-            ->unique('event_id');
+            ->unique(fn (EventSubstituteRequest $request): string => $request->event_substitute_coverage_id !== null
+                ? "coverage_{$request->event_substitute_coverage_id}"
+                : "event_{$request->event_id}");
         $rows = $requests
             ->filter(function (EventSubstituteRequest $request) use ($status): bool {
                 if (! is_string($status) || $status === '') {
@@ -571,7 +580,7 @@ final readonly class FinanceReportService
                 $event = $request->event;
 
                 return [
-                    '_key' => "event_{$event->id}",
+                    '_key' => "substitute_request_{$request->id}",
                     'instructor_name' => $request->sickInstructor?->fullName ?? '—',
                     'attribution_status' => $request->sick_instructor_id === null ? 'Unreconciled' : 'Reconciled',
                     'requested_by' => $request->requestedBy?->fullName ?? '—',
@@ -609,12 +618,13 @@ final readonly class FinanceReportService
         ];
     }
 
-    /** @return Collection<int, array{key: string, name: string}> */
+    /** @return Collection<int, array{key: string, user_id: int|null, name: string}> */
     private function assignedInstructors(Event $event): Collection
     {
-        $instructors = $event->course?->teachers
+        $instructors = $event->teachers
             ->map(fn (User $teacher): array => [
                 'key' => "teacher_{$teacher->id}",
+                'user_id' => $teacher->id,
                 'name' => $teacher->fullName,
             ])
             ->filter(fn (array $instructor): bool => filled($instructor['name']))
@@ -627,19 +637,40 @@ final readonly class FinanceReportService
         if (filled($event->course?->guest_teacher)) {
             return collect([[
                 'key' => 'guest_teacher',
+                'user_id' => null,
                 'name' => (string) $event->course->guest_teacher,
             ]]);
         }
 
         return collect([[
             'key' => 'unassigned',
+            'user_id' => null,
             'name' => 'Unassigned',
         ]]);
     }
 
-    private function substituteReason(Event $event): string
+    private function payrollCoverage(Event $event, ?int $teacherId): ?EventSubstituteCoverage
     {
-        $requests = $event->substituteRequests->sortByDesc('id');
+        $coverages = $event->substituteCoverages->sortByDesc('id');
+
+        if ($teacherId !== null) {
+            $coverage = $coverages->first(
+                fn (EventSubstituteCoverage $coverage): bool => $coverage->covered_teacher_id === $teacherId,
+            );
+
+            if ($coverage instanceof EventSubstituteCoverage) {
+                return $coverage;
+            }
+        }
+
+        return $coverages->first(
+            fn (EventSubstituteCoverage $coverage): bool => $coverage->covered_teacher_id === null,
+        );
+    }
+
+    private function substituteReason(EventSubstituteCoverage $coverage): string
+    {
+        $requests = $coverage->requests->sortByDesc('id');
         $reason = $requests->pluck('request_reason')->first(fn (mixed $reason): bool => filled($reason))
             ?? $requests->pluck('release_reason')->first(fn (mixed $reason): bool => filled($reason))
             ?? $requests->pluck('closure_reason')->first(fn (mixed $reason): bool => filled($reason));

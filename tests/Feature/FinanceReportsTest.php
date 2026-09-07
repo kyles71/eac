@@ -23,6 +23,7 @@ use App\Models\Course;
 use App\Models\CreditGrant;
 use App\Models\Enrollment;
 use App\Models\Event;
+use App\Models\EventSubstituteCoverage;
 use App\Models\EventSubstituteRequest;
 use App\Models\GiftCard;
 use App\Models\Installment;
@@ -503,13 +504,19 @@ it('persists sick attribution and surfaces ambiguous requests as unreconciled', 
         'start_time' => '2040-09-08 14:00:00',
         'end_time' => '2040-09-08 15:00:00',
     ]);
-    app(ManageEventSubstitution::class)->requestSubstitute(
-        $ambiguousEvent,
-        User::factory()->isTeacher()->create(),
-        $owner,
-        'Sick',
-        EventSubstituteRequestReason::Sick,
-    );
+    $ambiguousCoverage = EventSubstituteCoverage::factory()->for($ambiguousEvent)->create([
+        'covered_teacher_id' => null,
+    ]);
+    EventSubstituteRequest::factory()
+        ->for($ambiguousEvent)
+        ->for($ambiguousCoverage, 'coverage')
+        ->create([
+            'teacher_id' => User::factory()->isTeacher(),
+            'requested_by_user_id' => $owner->id,
+            'reason_type' => EventSubstituteRequestReason::Sick,
+            'request_reason' => 'Sick',
+            'sick_instructor_id' => null,
+        ]);
     $cancelledEvent = Event::factory()->for($course)->create([
         'start_time' => '2040-09-09 14:00:00',
         'end_time' => '2040-09-09 15:00:00',
