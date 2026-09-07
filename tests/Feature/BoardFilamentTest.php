@@ -13,18 +13,25 @@ use App\Filament\Admin\Resources\BoardItems\RelationManagers\CommentsRelationMan
 use App\Filament\Admin\Resources\Boards\BoardResource;
 use App\Filament\Admin\Resources\Boards\Pages\BoardKanban;
 use App\Filament\Admin\Resources\Boards\Pages\BoardLanding;
+use App\Filament\Admin\Resources\Boards\Schemas\BoardForm;
 use App\Filament\Admin\Resources\Boards\Schemas\BoardMembershipForm;
+use App\Filament\Admin\Resources\Boards\Schemas\BoardStageForm;
 use App\Models\Board;
 use App\Models\BoardItem;
+use App\Models\BoardItemComment;
 use App\Models\BoardMembership;
 use App\Models\BoardStage;
 use App\Models\User;
 use App\Support\Filament\BoardWorkspace;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Grid;
+use Filament\Support\Colors\Color;
 
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
@@ -135,6 +142,7 @@ it('renders workspace stage controls and counts matching search results', functi
     $backlog = BoardStage::factory()->for($board)->default()->create([
         'name' => 'Backlog',
         'subtitle' => 'Work waiting to begin',
+        'color' => 'purple',
         'sort_order' => 10,
     ]);
     $manager = User::factory()->isTeacher()->create();
@@ -146,7 +154,9 @@ it('renders workspace stage controls and counts matching search results', functi
     $component = livewire(BoardKanban::class, ['record' => $board->slug])
         ->assertOk()
         ->assertSee('Work waiting to begin')
-        ->assertSee('flowforge-column-header flex items-center justify-between border-b border-gray-200 bg-white', escape: false)
+        ->assertSee('flowforge-column-header flex items-center justify-between border-b border-gray-200', escape: false)
+        ->assertSee('bg-custom-50 dark:bg-custom-950', escape: false)
+        ->assertSee(Color::Purple[50], escape: false)
         ->assertSee('aria-label="View Matching card"', escape: false)
         ->assertSee('x-on:click="Livewire.navigate(', escape: false)
         ->assertSee('class="justify-self-end" x-on:click.stop x-on:keydown.stop', escape: false)
@@ -191,6 +201,22 @@ it('renders workspace stage controls and counts matching search results', functi
         ->and($cardRows[0])->toBeInstanceOf(Grid::class)
         ->and($cardRows[0]->getColumns('lg'))->toBe(2)
         ->and(collect($detailEntries)->map->getName()->all())->toBe(['assignees.full_name', 'due_date']);
+});
+
+it('offers previewed stage color options', function (): void {
+    $colorField = collect(BoardStageForm::components())
+        ->first(fn (mixed $component): bool => $component instanceof Select && $component->getName() === 'color');
+
+    expect($colorField)->toBeInstanceOf(Select::class);
+
+    /** @var Select $colorField */
+    $options = $colorField->getOptions();
+
+    expect($colorField->isHtmlAllowed())->toBeTrue()
+        ->and(array_keys($options))->toContain('white', 'orange', 'teal', 'purple', 'pink')
+        ->and($options['white'])->toContain('background-color: #ffffff')
+        ->and($options['purple'])->toContain('background-color: '.Color::Purple[500])
+        ->and(array_keys(BoardForm::colorOptions()))->toBe(array_keys($options));
 });
 
 it('automatically orders cards by urgency due date and age', function (): void {
@@ -516,6 +542,76 @@ it('lets contributors hold discussions on a card', function (): void {
         'author_id' => $contributor->id,
         'body' => '<p>This would solve our workflow problem.</p>',
     ]);
+});
+
+it('shows the newest discussion comments first with a single create action', function (): void {
+    $board = Board::factory()->create();
+    $stage = BoardStage::factory()->for($board)->default()->create();
+    $contributor = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($contributor)->create();
+    $item = BoardItem::factory()->for($board)->for($stage, 'stage')->create();
+    $olderComment = BoardItemComment::factory()->for($item, 'item')->for($contributor, 'author')->create([
+        'created_at' => now()->subDay(),
+    ]);
+    $newerComment = BoardItemComment::factory()->for($item, 'item')->for($contributor, 'author')->create([
+        'created_at' => now(),
+    ]);
+    $this->actingAs($contributor);
+
+    $component = livewire(CommentsRelationManager::class, [
+        'ownerRecord' => $item,
+        'pageClass' => ViewBoardItem::class,
+    ])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$newerComment, $olderComment], inOrder: true);
+
+    $createAction = $component->instance()->getTable()->getHeaderActions()[0] ?? null;
+
+    expect($createAction)->toBeInstanceOf(CreateAction::class)
+        ->and($createAction?->canCreateAnother())->toBeFalse()
+        ->and($component->instance()->getTable()->getDefaultSortDirection())->toBe('desc');
+});
+
+it('only allows comment authors to edit their comments', function (): void {
+    $board = Board::factory()->create();
+    $stage = BoardStage::factory()->for($board)->default()->create();
+    $manager = User::factory()->isTeacher()->create();
+    $otherAuthor = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($manager)->manager()->create();
+    $item = BoardItem::factory()->for($board)->for($stage, 'stage')->create();
+    $ownComment = BoardItemComment::factory()->for($item, 'item')->for($manager, 'author')->create();
+    $otherComment = BoardItemComment::factory()->for($item, 'item')->for($otherAuthor, 'author')->create();
+    $this->actingAs($manager);
+
+    expect($manager->can('update', $ownComment))->toBeTrue()
+        ->and($manager->can('update', $otherComment))->toBeFalse();
+
+    livewire(CommentsRelationManager::class, [
+        'ownerRecord' => $item,
+        'pageClass' => ViewBoardItem::class,
+    ])
+        ->assertActionVisible(TestAction::make(EditAction::class)->table($ownComment))
+        ->assertActionHidden(TestAction::make(EditAction::class)->table($otherComment));
+});
+
+it('renders comment formatting in the discussion table', function (): void {
+    $board = Board::factory()->create();
+    $stage = BoardStage::factory()->for($board)->default()->create();
+    $author = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($author)->create();
+    $item = BoardItem::factory()->for($board)->for($stage, 'stage')->create();
+    BoardItemComment::factory()->for($item, 'item')->for($author, 'author')->create([
+        'body' => '<p><strong>Important</strong></p><ul><li>First item</li></ul>',
+    ]);
+    $this->actingAs($author);
+
+    livewire(CommentsRelationManager::class, [
+        'ownerRecord' => $item,
+        'pageClass' => ViewBoardItem::class,
+    ])
+        ->loadTable()
+        ->assertSee('fi-prose', escape: false)
+        ->assertSee('<p><strong>Important</strong></p><ul><li>First item</li></ul>', escape: false);
 });
 
 it('denies moderated contributor drag and cross-board item pages', function (): void {
