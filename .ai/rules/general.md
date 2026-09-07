@@ -19,3 +19,6 @@ For direct quality-tool runs use output suited to agent logs: `vendor/bin/pest -
 
 ## Require focused automated verification
 Every behavior-changing code or configuration change needs a new or updated automated test, followed by the smallest relevant test run. Documentation- or rule-only changes may instead use a deterministic structural check; do not create application tests that merely assert documentation text.
+
+## Require focused PHPStan before completion
+A turn that changes PHP is not complete until PHPStan is clean for every touched PHP file. Run a focused `vendor/bin/phpstan analyse --no-progress --error-format=raw <touched paths...>` before the broader relevant analysis; fix all new findings rather than relying only on a full-suite cache or unrelated scope.

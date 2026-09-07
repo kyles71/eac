@@ -37,3 +37,6 @@ Define custom permissions in `config/filament-shield.php` or the relevant report
 
 ## Queue application email through the shared mail actions
 Send managed templates through `QueueManagedEmail` and handcrafted messages through `QueueHandcraftedEmail`; do not mail directly from domain workflows. These boundaries enforce Mail Manager enablement, normalized/deduplicated recipients, archive-copy behavior (including Textmagic limitations), and `afterCommit()` delivery.
+
+## Use ApplicationDateTime for timezone boundaries
+Use `App\Support\ApplicationDateTime` when converting between user-facing business times and stored instants. Choose the source-aware method explicitly: `fromDisplayInput()` for local form input, `fromStorage()` for persisted/dehydrated values, `forDisplay()` for presentation, and `endOfDisplayDay()` for inclusive local date boundaries; do not guess a string's source timezone.

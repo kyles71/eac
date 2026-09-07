@@ -37,7 +37,7 @@ final class HolidayConflictService
         $scope = $this->normalizeScope($scope);
         $boundaries = $this->holidayBoundaries($startsOn, $endsOn);
 
-        if ($scope === null || $boundaries === null) {
+        if (! $scope instanceof HolidayEventScope || $boundaries === null) {
             return $query->whereRaw('0 = 1');
         }
 
@@ -94,6 +94,51 @@ final class HolidayConflictService
             ->orderBy('starts_on')
             ->orderBy('id')
             ->first();
+    }
+
+    /**
+     * @param  list<array{start_time: CarbonInterface, end_time: CarbonInterface|null}>  $intervals
+     * @return list<array{start_time: CarbonInterface, end_time: CarbonInterface|null}>
+     */
+    public function withoutConflicts(array $intervals, mixed $courseId): array
+    {
+        $dateRanges = collect($intervals)
+            ->map(fn (array $interval): ?array => $this->eventDateRange(
+                $interval['start_time'],
+                $interval['end_time'],
+            ))
+            ->filter()
+            ->values();
+
+        if ($dateRanges->isEmpty()) {
+            return $intervals;
+        }
+
+        $startsOn = $dateRanges->min(fn (array $range): string => $range[0]);
+        $endsOn = $dateRanges->max(fn (array $range): string => $range[1]);
+        $holidays = Holiday::query()
+            ->whereDate('starts_on', '<=', $endsOn)
+            ->whereDate('ends_on', '>=', $startsOn)
+            ->where(function (Builder $query) use ($courseId): void {
+                $query->where('scope', HolidayEventScope::AllEvents->value);
+
+                if (is_numeric($courseId)) {
+                    $query->orWhere('scope', HolidayEventScope::CourseClassesOnly->value);
+                }
+            })
+            ->get();
+
+        return collect($intervals)
+            ->reject(function (array $interval) use ($holidays): bool {
+                $range = $this->eventDateRange($interval['start_time'], $interval['end_time']);
+
+                return $range !== null && $holidays->contains(
+                    fn (Holiday $holiday): bool => $holiday->starts_on->toDateString() <= $range[1]
+                        && $holiday->ends_on->toDateString() >= $range[0],
+                );
+            })
+            ->values()
+            ->all();
     }
 
     public function deleteConflictingEvents(Holiday $holiday): int
