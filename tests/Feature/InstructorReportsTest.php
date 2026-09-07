@@ -20,6 +20,7 @@ use App\Models\AcademicTerm;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
 use App\Models\Course;
+use App\Models\CourseHoldSeat;
 use App\Models\EmergencyContact;
 use App\Models\Enrollment;
 use App\Models\Event;
@@ -29,6 +30,7 @@ use App\Models\Form;
 use App\Models\FormAssignment;
 use App\Models\FormResponse;
 use App\Models\FormVersion;
+use App\Models\RecurringPrivateLesson;
 use App\Models\ReportExport;
 use App\Models\Student;
 use App\Models\StudentWaiver;
@@ -127,6 +129,48 @@ it('renders the academic term selector before the instructor dashboard widgets',
             'Dashboard Academic Term',
             'Instructor Class Assignments',
         ]);
+});
+
+it('counts holds but not private lessons in instructor enrollment columns', function (): void {
+    $owner = User::factory()->isOwner()->create();
+    $teacher = User::factory()->isTeacher()->create();
+    $term = AcademicTerm::factory()->create([
+        'year' => 2040,
+        'starts_on' => '2040-09-01',
+        'ends_on' => '2040-12-31',
+    ]);
+    $groupCourse = Course::factory()->for($term)->create(['name' => 'Group Jazz']);
+    $privateLesson = Course::factory()->for($term)->create([
+        'name' => 'Recurring Private Jazz',
+        'is_private' => true,
+    ]);
+    $groupCourse->teachers()->sync([$teacher->id]);
+    $privateLesson->teachers()->sync([$teacher->id]);
+    Enrollment::factory()->for($groupCourse)->create();
+    CourseHoldSeat::factory(2)->for($groupCourse)->create();
+    Enrollment::factory()->for($privateLesson)->create();
+    RecurringPrivateLesson::factory()->for($privateLesson)->create();
+    Event::factory()->for($groupCourse)->create([
+        'start_time' => '2040-10-01 14:00:00',
+        'end_time' => '2040-10-01 15:00:00',
+    ]);
+    Event::factory()->for($privateLesson)->create([
+        'start_time' => '2040-10-02 14:00:00',
+        'end_time' => '2040-10-02 15:00:00',
+    ]);
+    $filters = [
+        'academic_term_id' => ['value' => $term->id],
+        'instructor_id' => ['value' => $teacher->id],
+    ];
+    $service = app(InstructorReportService::class);
+    $assignments = collect($service->dataset(ReportKey::InstructorClassAssignments, $owner, $filters)->rows);
+    $schedule = collect($service->dataset(ReportKey::InstructorSchedule, $owner, $filters)->rows);
+    $teaching = collect($service->dataset(ReportKey::InstructorTeachingSchedule, $owner, $filters)->rows);
+
+    foreach ([$assignments, $schedule, $teaching] as $rows) {
+        expect($rows->firstWhere('course_name', 'Group Jazz')['enrollment_count'])->toBe(3)
+            ->and($rows->firstWhere('course_name', 'Recurring Private Jazz')['enrollment_count'])->toBe(0);
+    }
 });
 
 it('builds class roster, safety, and emergency text reports from current waiver data', function (): void {
@@ -376,7 +420,7 @@ it('reports course schedules and owner-only substitute reasons', function (): vo
             'enrollment_count' => 2,
             'additional_instructors' => 'Co Teacher',
         ])->and($subReport->rows[0])->toMatchArray([
-            'original_instructor' => 'Co Teacher, Primary Teacher',
+            'original_instructor' => 'Original teacher not recorded',
             'course_name' => 'Monday Ballet',
             'reason' => 'Primary teacher is unavailable',
             'substitute_instructor' => 'Sub Teacher',

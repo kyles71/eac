@@ -26,6 +26,8 @@ use App\Filament\Admin\Pages\Reports\TermEmailList;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
 use App\Filament\Admin\Pages\SubstituteRequest;
 use App\Filament\Admin\Pages\Updates;
+use App\Filament\Admin\Resources\BoardItems\BoardItemResource;
+use App\Filament\Admin\Resources\Boards\BoardResource;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -227,6 +229,12 @@ return [
     'resources' => [
         'subject' => 'model',
         'manage' => [
+            BoardResource::class => [
+                'viewAny', 'view', 'create', 'update', 'delete',
+            ],
+            BoardItemResource::class => [
+                'viewAny', 'view', 'update',
+            ],
             CalendarResource::class => [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
@@ -237,7 +245,7 @@ return [
                 'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             GearResource::class => [
-                'viewAny', 'create', 'update', 'delete', 'deleteAny',
+                'viewAny', 'view', 'create', 'update', 'delete', 'deleteAny',
             ],
             CourseHoldResource::class => [
                 'viewAny', 'view', 'create', 'update',
@@ -285,7 +293,7 @@ return [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
             OrderResource::class => [
-                'viewAny', 'view', 'refund',
+                'viewAny', 'view', 'refund', 'fulfill',
             ],
             PaymentPlanResource::class => [
                 'viewAny', 'view', 'adjustDueDates',
@@ -399,6 +407,7 @@ return [
     */
 
     'custom_permissions' => [
+        'ManageMembers:Board' => 'Manage Board Members',
         'Manage:DashboardAppearance' => 'Manage Dashboard Appearance',
         'Manage:MailManager' => 'Manage Mail Manager',
         'Manage:ThemeBuilder' => 'Manage Theme Builder',

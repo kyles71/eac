@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Enums\ReportKey;
 use App\Enums\ReportWidgetKey;
+use App\Filament\Admin\Resources\BoardItems\BoardItemResource;
+use App\Filament\Admin\Resources\Boards\BoardResource;
 use App\Filament\Admin\Resources\Calendars\CalendarResource;
 use App\Filament\Admin\Resources\CompetitionSeasons\CompetitionSeasonResource;
 use App\Filament\Admin\Resources\CompetitionTeams\CompetitionTeamResource;
@@ -50,10 +52,12 @@ it('uses the exact strict authorization resource matrix', function (): void {
     $fiveAbilities = ['viewAny', 'create', 'update', 'delete', 'deleteAny'];
 
     $expected = [
+        BoardResource::class => ['viewAny', 'view', 'create', 'update', 'delete'],
+        BoardItemResource::class => ['viewAny', 'view', 'update'],
         CalendarResource::class => $fiveAbilities,
         CompetitionSeasonResource::class => $sixAbilities,
         CompetitionTeamResource::class => $sixAbilities,
-        GearResource::class => $fiveAbilities,
+        GearResource::class => $sixAbilities,
         CourseHoldResource::class => ['viewAny', 'view', 'create', 'update'],
         CourseResource::class => $sixAbilities,
         CreditGrantResource::class => ['viewAny', 'view', 'create', 'revoke'],
@@ -69,7 +73,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         HolidayResource::class => $fiveAbilities,
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
-        OrderResource::class => ['viewAny', 'view', 'refund'],
+        OrderResource::class => ['viewAny', 'view', 'refund', 'fulfill'],
         PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
@@ -121,12 +125,14 @@ it('keeps the database and super administrator synchronized to the catalog', fun
         ->and($superAdminPermissions)->toBe($desired)
         ->and($desired)->toContain(
             'Manage:DashboardAppearance',
+            'ManageMembers:Board',
             'Manage:MailManager',
             'Manage:ThemeBuilder',
             'Manage:UserAccess',
             'Publish:LegalDocument',
             'Send:Email',
             'AdjustDueDates:PaymentPlan',
+            'View:Gear',
             'View:AppUpdatesPage',
             'View:StaffNote',
             ReportKey::EnrollmentsByTerm->permission(),

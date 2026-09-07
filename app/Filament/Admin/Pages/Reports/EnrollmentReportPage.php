@@ -40,8 +40,7 @@ abstract class EnrollmentReportPage extends ReportPage
     {
         return SelectFilter::make('course_id')
             ->label('Enrolled in Course')
-            ->options(fn (): array => app(EnrollmentReportService::class)
-                ->courseOptions($this->authenticatedUser()))
+            ->options(fn (): array => app(EnrollmentReportService::class)->courseOptions())
             ->searchable()
             ->preload();
     }

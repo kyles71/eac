@@ -161,7 +161,13 @@ enum ReportKey: string
 
     public function canView(User $user): bool
     {
-        return $user->can($this->permission());
+        if (! $user->can($this->permission())) {
+            return false;
+        }
+
+        return $this !== self::CompetitionEnrollments
+            || ! $user->hasCourseRestrictedAdminAccess()
+            || $user->competitionTeams()->exists();
     }
 
     /** @return list<string> */

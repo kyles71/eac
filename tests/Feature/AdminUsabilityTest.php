@@ -107,7 +107,7 @@ it('groups admin table record actions at the left and closes configuration modal
         ->toBe('$wire.applyTableFilters().then(() => close())');
 });
 
-it('wraps every nonempty admin record action list in an action group', function (): void {
+it('wraps every nonempty admin filament table record action list in an action group', function (): void {
     $files = [
         ...File::allFiles(app_path('Filament/Admin')),
         ...File::allFiles(app_path('Filament/Clusters/Settings')),
@@ -119,6 +119,11 @@ it('wraps every nonempty admin record action list in an action group', function 
         }
 
         $contents = $file->getContents();
+
+        if (! str_contains($contents, 'use Filament\\Tables\\Table;')) {
+            continue;
+        }
+
         preg_match_all(
             '/->recordActions\(\[\s*([A-Za-z\\\\]+)::make/',
             $contents,

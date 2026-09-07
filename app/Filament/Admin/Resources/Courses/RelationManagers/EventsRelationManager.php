@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\RelationManagers;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Events\Tables\EventsTable;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -11,6 +12,7 @@ use App\Models\Course;
 use App\Models\Event;
 use App\Models\User;
 use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -37,7 +39,9 @@ final class EventsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-        return EventsTable::configure($table)
+        return EventsTable::configure($table, [
+            EditAction::make(),
+        ])
             ->headerActions([
                 CreateAction::make()
                     ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
@@ -46,6 +50,7 @@ final class EventsRelationManager extends RelationManager
                             $record = new Event($data);
 
                             $this->course()->events()->save($record);
+                            app(ManageEventTeacherAssignments::class)->initializeCourseEvent($record);
                         });
                     }),
             ]);

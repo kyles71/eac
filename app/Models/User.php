@@ -18,6 +18,7 @@ use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
@@ -141,6 +142,39 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(SavedReportView::class);
     }
 
+    /** @return HasMany<BoardMembership, $this> */
+    public function boardMemberships(): HasMany
+    {
+        return $this->hasMany(BoardMembership::class);
+    }
+
+    /** @return BelongsTo<Board, $this> */
+    public function lastViewedBoard(): BelongsTo
+    {
+        return $this->belongsTo(Board::class, 'last_viewed_board_id');
+    }
+
+    /** @return BelongsToMany<Board, $this> */
+    public function boards(): BelongsToMany
+    {
+        return $this->belongsToMany(Board::class, 'board_memberships')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /** @return BelongsToMany<BoardItem, $this> */
+    public function assignedBoardItems(): BelongsToMany
+    {
+        return $this->belongsToMany(BoardItem::class, 'board_item_assignees')
+            ->withTimestamps();
+    }
+
+    /** @return HasMany<BoardItemSubscription, $this> */
+    public function boardItemSubscriptions(): HasMany
+    {
+        return $this->hasMany(BoardItemSubscription::class);
+    }
+
     /** @return HasMany<ReportExport, $this> */
     public function reportExports(): HasMany
     {
@@ -164,10 +198,38 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
             ->withTimestamps();
     }
 
-    /** @return HasMany<Event, $this> */
-    public function substituteEvents(): HasMany
+    /** @return HasMany<EventTeacherAssignment, $this> */
+    public function eventTeacherAssignments(): HasMany
     {
-        return $this->hasMany(Event::class, 'substitute_teacher_id');
+        return $this->hasMany(EventTeacherAssignment::class, 'teacher_id');
+    }
+
+    /** @return BelongsToMany<Event, $this> */
+    public function teachingEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Event::class,
+            'event_teacher_assignments',
+            'teacher_id',
+            'event_id',
+        )->withTimestamps();
+    }
+
+    /** @return HasMany<EventSubstituteCoverage, $this> */
+    public function substituteCoverages(): HasMany
+    {
+        return $this->hasMany(EventSubstituteCoverage::class, 'substitute_teacher_id');
+    }
+
+    /** @return BelongsToMany<Event, $this> */
+    public function substituteEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Event::class,
+            'event_substitute_coverages',
+            'substitute_teacher_id',
+            'event_id',
+        )->wherePivotNotNull('substitute_teacher_id');
     }
 
     /** @return HasMany<EventSubstituteRequest, $this> */
@@ -291,6 +353,7 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return [
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'last_viewed_board_id' => 'integer',
             'password' => 'hashed',
             'store_view' => StoreView::class,
             'table_preferences' => 'array',

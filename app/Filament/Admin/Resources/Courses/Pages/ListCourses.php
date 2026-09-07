@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Pages;
 
+use App\Actions\Events\ManageEventTeacherAssignments;
 use App\Filament\Admin\Resources\Courses\CourseResource;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
 use App\Models\Calendar;
@@ -16,6 +17,7 @@ use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 final class ListCourses extends ListRecords
 {
@@ -96,23 +98,31 @@ final class ListCourses extends ListRecords
             return [];
         }
 
-        $events = app(HolidayConflictService::class)->conflictingHolidayFor(
-            $eventData['start_time'],
-            $eventData['end_time'],
-            $eventData['course_id'],
-        ) === null
-            ? [Event::query()->create($eventData)]
-            : [];
+        return DB::transaction(function () use ($eventData): array {
+            $createEvent = function (array $data): Event {
+                $event = Event::query()->create($data);
+                app(ManageEventTeacherAssignments::class)->initializeCourseEvent($event);
 
-        return [
-            ...$events,
-            ...$this->createRecurring(
-                $eventData,
-                $this->repeat_through,
-                $this->repeat_frequency,
-                fn (array $data): Event => Event::query()->create($data),
-            ),
-        ];
+                return $event;
+            };
+            $events = app(HolidayConflictService::class)->conflictingHolidayFor(
+                $eventData['start_time'],
+                $eventData['end_time'],
+                $eventData['course_id'],
+            ) === null
+                ? [$createEvent($eventData)]
+                : [];
+
+            return [
+                ...$events,
+                ...$this->createRecurring(
+                    $eventData,
+                    $this->repeat_through,
+                    $this->repeat_frequency,
+                    $createEvent,
+                ),
+            ];
+        });
     }
 
     /**

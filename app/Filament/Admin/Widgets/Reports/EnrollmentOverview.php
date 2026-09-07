@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Widgets\Reports;
 
 use App\Enums\ReportWidgetKey;
 use App\Filament\Admin\Pages\Reports\TotalEnrollmentsByClass;
+use App\Filament\Admin\Resources\Enrollments\EnrollmentResource;
 use App\Models\AcademicTerm;
 use App\Models\User;
 use App\Services\Reports\EnrollmentReportService;
@@ -57,11 +58,11 @@ final class EnrollmentOverview extends StatsOverviewWidget
                 ->description(number_format($metrics['average_classes_per_dancer'], 2).' classes per dancer')
                 ->descriptionIcon(Heroicon::OutlinedUsers),
             Stat::make('Sold Out', number_format($metrics['sold_out_count']))
-                ->description('Classes at or above capacity')
+                ->description('*includes Competition team courses')
                 ->color($metrics['sold_out_count'] > 0 ? 'danger' : 'gray')
                 ->url($this->capacityStatusUrl($term, 'sold_out')),
             Stat::make('Near Sold Out', number_format($metrics['near_sold_out_count']))
-                ->description('Classes close to capacity')
+                ->description('*includes Competition team courses')
                 ->color($metrics['near_sold_out_count'] > 0 ? 'warning' : 'gray')
                 ->url($this->capacityStatusUrl($term, 'near_sold_out')),
             Stat::make('Not Running', number_format($metrics['not_running_count']))
@@ -70,21 +71,20 @@ final class EnrollmentOverview extends StatsOverviewWidget
                 ->url($this->capacityStatusUrl($term, 'not_running')),
             Stat::make('Unassigned Enrollments', number_format($metrics['unassigned_count']))
                 ->description('Seats without an assigned dancer')
-                ->color($metrics['unassigned_count'] > 0 ? 'warning' : 'gray'),
+                ->color($metrics['unassigned_count'] > 0 ? 'warning' : 'gray')
+                ->url(EnrollmentResource::getUrl('index', ['tab' => 'open'])),
         ];
 
-        if (! $user->hasCourseRestrictedAdminAccess()) {
-            if ($metrics['target_remaining'] !== null) {
-                $stats[] = Stat::make('To Enrollment Target', number_format($metrics['target_remaining']))
-                    ->description($metrics['target_remaining'] === 0 ? 'Target reached' : 'Enrollments remaining')
-                    ->color($metrics['target_remaining'] === 0 ? 'success' : 'gray');
-            }
+        if ($metrics['target_remaining'] !== null) {
+            $stats[] = Stat::make('To Enrollment Target', number_format($metrics['target_remaining']))
+                ->description($metrics['target_remaining'] === 0 ? 'Target reached' : 'Enrollments remaining')
+                ->color($metrics['target_remaining'] === 0 ? 'success' : 'gray');
+        }
 
-            if ($metrics['stretch_remaining'] !== null) {
-                $stats[] = Stat::make('To Stretch Goal', number_format($metrics['stretch_remaining']))
-                    ->description($metrics['stretch_remaining'] === 0 ? 'Stretch goal reached' : 'Enrollments remaining')
-                    ->color($metrics['stretch_remaining'] === 0 ? 'success' : 'gray');
-            }
+        if ($metrics['stretch_remaining'] !== null) {
+            $stats[] = Stat::make('To Stretch Goal', number_format($metrics['stretch_remaining']))
+                ->description($metrics['stretch_remaining'] === 0 ? 'Stretch goal reached' : 'Enrollments remaining')
+                ->color($metrics['stretch_remaining'] === 0 ? 'success' : 'gray');
         }
 
         return $stats;

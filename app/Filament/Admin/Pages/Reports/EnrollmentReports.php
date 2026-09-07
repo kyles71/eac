@@ -87,7 +87,7 @@ final class EnrollmentReports extends Page
         return $schema->components([
             Grid::make([
                 'default' => 1,
-                'xl' => 2,
+                'lg' => 2,
             ])
                 ->schema(fn (): array => $this->getWidgetsSchemaComponents($this->dashboardWidgetConfigurations()))
                 ->columnSpanFull(),

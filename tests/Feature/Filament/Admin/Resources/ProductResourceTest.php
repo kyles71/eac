@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\DashboardAudience;
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\ProductQuestionType;
 use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
@@ -41,6 +42,17 @@ it('can render the product view page', function () {
         ->assertOk();
 });
 
+it('offers purchase reports only from Gear Product detail pages', function () {
+    $gearProduct = Product::factory()->forGear()->create();
+    $courseProduct = Product::factory()->forCourse()->create();
+
+    livewire(ViewProduct::class, ['record' => $gearProduct->id])
+        ->assertActionVisible('downloadPurchaseReport');
+
+    livewire(ViewProduct::class, ['record' => $courseProduct->id])
+        ->assertActionHidden('downloadPurchaseReport');
+});
+
 it('can list products', function () {
     $products = Product::factory(3)->create();
 
@@ -52,7 +64,7 @@ it('can list products', function () {
 it('has required columns', function (string $column) {
     livewire(ListProducts::class)
         ->assertTableColumnExists($column);
-})->with(['name', 'price', 'is_active', 'availability_status', 'productable_type', 'available_from', 'available_until', 'created_at', 'updated_at']);
+})->with(['name', 'price', 'is_active', 'availability_status', 'productable_type', 'fulfillment_workflow', 'available_from', 'available_until', 'created_at', 'updated_at']);
 
 it('has an include linked item images field on the product form', function () {
     livewire(ListProducts::class)
@@ -60,6 +72,29 @@ it('has an include linked item images field on the product form', function () {
         ->assertSchemaComponentExists('include_productable_images')
         ->assertSchemaComponentDoesNotExist('ask_purchaser_questions_when_adding_to_cart')
         ->assertSchemaComponentStateSet('include_productable_images', false);
+});
+
+it('configures fulfillment workflows while keeping automatic products locked', function (): void {
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentStateSet('fulfillment_workflow', FulfillmentWorkflow::Manual->value)
+        ->fillForm([
+            'productable_type' => null,
+            'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent->value,
+        ])
+        ->assertSchemaComponentExists(
+            'fulfillment_workflow',
+            checkComponentUsing: fn (Select $select): bool => ! $select->isDisabled(),
+        );
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm(['productable_type' => Course::class])
+        ->assertSchemaComponentExists(
+            'fulfillment_workflow',
+            checkComponentUsing: fn (Select $select): bool => $select->isDisabled(),
+        )
+        ->assertSchemaComponentStateSet('fulfillment_workflow', FulfillmentWorkflow::Automatic->value);
 });
 
 it('shows linked item controls before store details on the product form', function () {
@@ -332,7 +367,7 @@ it('requires a linked item when a product type is selected', function () {
         ->assertHasActionErrors(['productable_id' => 'required']);
 });
 
-it('only offers linked items without an existing product', function (string $productableType) {
+it('only offers singular linked items without an existing product', function (string $productableType) {
     $availableProductable = $productableType::factory()->create();
     $linkedProductable = $productableType::factory()->create();
 
@@ -353,10 +388,24 @@ it('only offers linked items without an existing product', function (string $pro
             ],
         );
 })->with([
-    Course::class,
-    GiftCardType::class,
-    Gear::class,
+    'Course' => [Course::class],
+    'Gift Card Type' => [GiftCardType::class],
 ]);
+
+it('offers Gear that already has Product listings', function () {
+    $gear = Gear::factory()->create(['name' => 'Competition Jacket']);
+    Product::factory()->forGear($gear)->create();
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm(['productable_type' => Gear::class])
+        ->assertSchemaComponentExists(
+            'productable_id',
+            checkComponentUsing: fn (Select $select): bool => $select->getOptions() === [
+                $gear->id => 'Competition Jacket',
+            ],
+        );
+});
 
 it('keeps the current linked item available when editing a product', function () {
     $currentCourse = Course::factory()->create(['name' => 'Current Linked Course']);

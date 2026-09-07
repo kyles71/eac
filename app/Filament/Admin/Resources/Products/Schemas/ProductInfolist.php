@@ -125,6 +125,10 @@ final class ProductInfolist
                         TextEntry::make('productable.name')
                             ->label('Linked To')
                             ->visible(fn (Product $record): bool => $record->productable !== null),
+                        TextEntry::make('fulfillment_workflow')
+                            ->label('Fulfillment Workflow')
+                            ->state(fn (Product $record) => $record->fulfillmentWorkflow())
+                            ->badge(),
                         TextEntry::make('include_productable_images')
                             ->label('Includes Linked Images')
                             ->badge()

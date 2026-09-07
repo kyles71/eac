@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\RecurringPrivateLessons\Schemas;
 
 use App\Enums\CourseSemester;
+use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Enums\RecurringPrivateLessonStatus;
 use App\Enums\ScheduleFrequency;
 use App\Models\RecurringPrivateLesson;
@@ -82,6 +83,13 @@ final class RecurringPrivateLessonForm
                                 ->all())
                             ->required()
                             ->formatStateUsing(fn (mixed $state, ?RecurringPrivateLesson $record): mixed => $record?->course->teachers->pluck('id')->all() ?? $state),
+                        Select::make('teacher_assignment_strategy')
+                            ->label('Event Staffing')
+                            ->options(CourseTeacherAssignmentStrategy::class)
+                            ->default(CourseTeacherAssignmentStrategy::AllTeachers->value)
+                            ->required()
+                            ->selectablePlaceholder(false)
+                            ->formatStateUsing(fn (mixed $state, ?RecurringPrivateLesson $record): mixed => $record?->course->teacher_assignment_strategy ?? $state),
                         TextInput::make('lesson_price_dollars')
                             ->label('Price Per Lesson')
                             ->prefix('$')

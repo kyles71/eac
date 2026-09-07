@@ -23,6 +23,7 @@ final class TotalEnrollmentsByClass extends EnrollmentReportPage
                 ->columns([
                     TextColumn::make('course_name')->label('Course Name')->searchable()->sortable()->toggleable(),
                     TextColumn::make('enrollment_count')->label('Enrollments')->numeric()->sortable()->toggleable(),
+                    TextColumn::make('holds_count')->label('Holds')->numeric()->sortable()->toggleable(),
                     TextColumn::make('capacity')->numeric()->sortable()->toggleable(),
                     TextColumn::make('available')->numeric()->sortable()->toggleable(),
                     TextColumn::make('utilization')->sortable()->toggleable(),

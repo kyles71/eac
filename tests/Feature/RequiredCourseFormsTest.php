@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Forms\AssignFormManually;
 use App\Actions\RecurringPrivateLessons\HandleRecurringPrivateLessonEventCancellation;
 use App\Actions\RecurringPrivateLessons\SynchronizeRecurringPrivateLessonCharges;
+use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Jobs\ReconcileRequiredFormsForCourses;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -254,6 +255,7 @@ it('dispatches reconciliation after event changes for every affected course', fu
         app(SynchronizeRecurringPrivateLessonCharges::class),
         app(HandleRecurringPrivateLessonEventCancellation::class),
         $bus,
+        app(VoidOrderItemFulfillment::class),
     );
     $observer->saved($event);
 

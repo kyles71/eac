@@ -8,6 +8,7 @@ use App\Enums\EventSubstituteCoverageStatus;
 use App\Filament\Actions\CancelEventAction;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Models\Event;
+use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -19,7 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class EventsTable
 {
-    public static function configure(Table $table): Table
+    /** @param array<Action | ActionGroup> $additionalRecordActions */
+    public static function configure(Table $table, array $additionalRecordActions = []): Table
     {
         return $table
             ->recordUrl(fn (Event $record): ?string => EventResource::canView($record)
@@ -27,7 +29,8 @@ final class EventsTable
                 : null)
             ->columns([
                 TextColumn::make('name')
-                    ->icon(fn (Event $record): ?Heroicon => $record->substitute_teacher_id !== null
+                    ->icon(fn (Event $record): ?Heroicon => $record->activeSubstituteCoverages()
+                        ->whereNotNull('substitute_teacher_id')->exists()
                         ? Heroicon::OutlinedUser
                         : null)
                     ->iconColor('success')
@@ -48,13 +51,20 @@ final class EventsTable
                 TextColumn::make('course.name')
                     ->label('Course')
                     ->searchable(),
+                TextColumn::make('teachers.fullName')
+                    ->label('Teachers')
+                    ->listWithLineBreaks()
+                    ->searchable(['first_name', 'last_name'])
+                    ->toggleable(),
                 TextColumn::make('substitute_coverage_status')
                     ->label('Substitute')
-                    ->state(fn (Event $record) => $record->substituteCoverageStatus())
+                    ->state(fn (Event $record): string => $record->substituteCoverageLabel())
                     ->badge()
+                    ->color(fn (Event $record): string => $record->substituteCoverageStatus()->getColor())
                     ->toggleable(),
-                TextColumn::make('substituteTeacher.fullName')
-                    ->label('Confirmed Substitute')
+                TextColumn::make('substituteTeachers.fullName')
+                    ->label('Confirmed Substitutes')
+                    ->listWithLineBreaks()
                     ->searchable(['first_name', 'last_name'])
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('calendar.name')
@@ -82,6 +92,7 @@ final class EventsTable
             ])
             ->recordActions([
                 ActionGroup::make([
+                    ...$additionalRecordActions,
                     CancelEventAction::make(),
                 ]),
             ])

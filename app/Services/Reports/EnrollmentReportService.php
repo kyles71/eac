@@ -26,6 +26,7 @@ use Spatie\Tags\Tag;
 final readonly class EnrollmentReportService
 {
     public function __construct(
+        private EnrollmentCountService $enrollmentCounts,
         private ReportingSettings $settings,
         private StudentProfileService $studentProfiles,
     ) {}
@@ -63,13 +64,14 @@ final readonly class EnrollmentReportService
             ];
         }
 
-        $courses = $this->courseQuery($term, $user)
-            ->with(['tags'])
-            ->withCount('enrollments')
+        $courses = $this->enrollmentCounts
+            ->withCounts($this->courseQuery($term)->with(['tags']))
             ->get()
             ->reject(fn (Course $course): bool => $this->isExcludedFromDashboard($course));
         $courseIds = $courses->modelKeys();
-        $enrollmentCount = (int) $courses->sum('enrollments_count');
+        $enrollmentCount = (int) $courses->sum(
+            fn (Course $course): int => $this->enrollmentCounts->count($course),
+        );
         $totalCapacity = (int) $courses->sum('capacity');
         $dancerCount = $courseIds === []
             ? 0
@@ -102,13 +104,13 @@ final readonly class EnrollmentReportService
                 ? null
                 : max(0, $term->stretch_goal_enrollments - $enrollmentCount),
             'sold_out_count' => $courses->filter(
-                fn (Course $course): bool => (int) $course->enrollments_count >= $course->capacity,
+                fn (Course $course): bool => $this->enrollmentCounts->count($course) >= $course->capacity,
             )->count(),
             'not_running_count' => $courses->filter(
-                fn (Course $course): bool => (int) $course->enrollments_count <= $this->settings->not_running_maximum_enrollments,
+                fn (Course $course): bool => $this->enrollmentCounts->count($course) <= $this->settings->not_running_maximum_enrollments,
             )->count(),
             'near_sold_out_count' => $courses->filter(function (Course $course): bool {
-                $remaining = $course->capacity - (int) $course->enrollments_count;
+                $remaining = $course->capacity - $this->enrollmentCounts->count($course);
 
                 return $remaining >= 1
                     && $remaining <= $this->settings->near_sold_out_maximum_remaining;
@@ -161,9 +163,8 @@ final readonly class EnrollmentReportService
             return $this->tagCapacities(collect(), $tagSlugs);
         }
 
-        $courses = $this->courseQuery($term, $user)
-            ->with('tags')
-            ->withCount('enrollments')
+        $courses = $this->enrollmentCounts
+            ->withCounts($this->courseQuery($term)->with('tags'))
             ->get()
             ->reject(fn (Course $course): bool => $this->isExcludedFromDashboard($course));
 
@@ -235,16 +236,9 @@ final readonly class EnrollmentReportService
     }
 
     /** @return array<string, array<int, string>> */
-    public function courseOptions(User $user): array
+    public function courseOptions(): array
     {
-        return Course::query()
-            ->when(
-                $user->hasCourseRestrictedAdminAccess(),
-                fn (Builder $query): Builder => $query->whereHas(
-                    'teachers',
-                    fn (Builder $query): Builder => $query->whereKey($user->id),
-                ),
-            )
+        return $this->enrollmentCounts->onlyReportableCourses(Course::query())
             ->with('academicTerm.academicYear')
             ->orderByDesc('academic_term_id')
             ->orderBy('name')
@@ -301,8 +295,8 @@ final readonly class EnrollmentReportService
             return new ReportDataset($baseHeaders, []);
         }
 
-        $courses = $this->courseQuery($term, $user)
-            ->withCount('enrollments')
+        $courses = $this->enrollmentCounts
+            ->withCounts($this->courseQuery($term))
             ->orderBy('name')
             ->orderBy('id')
             ->get();
@@ -386,7 +380,7 @@ final readonly class EnrollmentReportService
         foreach ($courses as $course) {
             $totalRow["course_{$course->id}"] = collect($rows)
                 ->where("course_{$course->id}", 'X')
-                ->count();
+                ->count() + $this->enrollmentCounts->holdCount($course);
             $capacityRow["course_{$course->id}"] = $course->capacity;
         }
 
@@ -402,6 +396,7 @@ final readonly class EnrollmentReportService
         $headers = [
             'course_name' => 'Course Name',
             'enrollment_count' => 'Enrollments',
+            'holds_count' => 'Holds',
             'capacity' => 'Capacity',
             'available' => 'Available',
             'utilization' => 'Utilization',
@@ -412,12 +407,11 @@ final readonly class EnrollmentReportService
         }
 
         $tag = $this->filterValue($filters, 'course_tag');
-        $courses = $this->courseQuery($term, $user)
+        $courses = $this->enrollmentCounts->withCounts($this->courseQuery($term)
             ->when(filled($tag), fn (Builder $query): Builder => $query->withAnyTags(
                 (string) $tag,
                 Course::GENERAL_TAG_TYPE,
-            ))
-            ->withCount('enrollments')
+            )))
             ->orderBy('name')
             ->orderBy('id')
             ->get();
@@ -426,12 +420,14 @@ final readonly class EnrollmentReportService
         $rows = $courses
             ->filter(fn (Course $course): bool => $this->matchesCapacityStatus($course, $capacityStatus))
             ->map(function (Course $course): array {
-                $enrollmentCount = (int) $course->enrollments_count;
+                $enrollmentCount = $this->enrollmentCounts->count($course);
+                $holdsCount = $this->enrollmentCounts->holdCount($course);
 
                 return [
                     '_key' => "course_{$course->id}",
                     'course_name' => $course->name,
                     'enrollment_count' => $enrollmentCount,
+                    'holds_count' => $holdsCount,
                     'capacity' => $course->capacity,
                     'available' => max(0, $course->capacity - $enrollmentCount),
                     'utilization' => $this->percentage($enrollmentCount, $course->capacity) === null
@@ -460,7 +456,7 @@ final readonly class EnrollmentReportService
             return new ReportDataset($headers, []);
         }
 
-        $courseIds = $this->courseQuery($term, $user)->pluck('id');
+        $courseIds = $this->courseQuery($term)->pluck('id');
         $enrollments = Enrollment::query()
             ->whereIn('course_id', $courseIds)
             ->whereNotNull('student_id')
@@ -506,7 +502,7 @@ final readonly class EnrollmentReportService
             return new ReportDataset($headers, []);
         }
 
-        $courseIds = $this->courseQuery($term, $user)->pluck('id');
+        $courseIds = $this->courseQuery($term)->pluck('id');
         $enrollments = Enrollment::query()
             ->whereIn('course_id', $courseIds)
             ->with([
@@ -593,17 +589,11 @@ final readonly class EnrollmentReportService
     }
 
     /** @return Builder<Course> */
-    private function courseQuery(AcademicTerm $term, User $user): Builder
+    private function courseQuery(AcademicTerm $term): Builder
     {
-        return Course::query()
-            ->where('academic_term_id', $term->id)
-            ->when(
-                $user->hasCourseRestrictedAdminAccess(),
-                fn (Builder $query): Builder => $query->whereHas(
-                    'teachers',
-                    fn (Builder $query): Builder => $query->whereKey($user->id),
-                ),
-            );
+        return $this->enrollmentCounts->onlyReportableCourses(
+            Course::query()->where('academic_term_id', $term->id),
+        );
     }
 
     /**
@@ -625,7 +615,9 @@ final readonly class EnrollmentReportService
                     ->contains(fn (Model $courseTag): bool => $courseTag instanceof Tag
                         && $courseTag->type === Course::GENERAL_TAG_TYPE
                         && $courseTag->matchesString($slug)));
-                $enrollmentCount = (int) $tagCourses->sum('enrollments_count');
+                $enrollmentCount = (int) $tagCourses->sum(
+                    fn (Course $course): int => $this->enrollmentCounts->count($course),
+                );
                 $capacity = (int) $tagCourses->sum('capacity');
 
                 return [
@@ -656,7 +648,7 @@ final readonly class EnrollmentReportService
 
     private function matchesCapacityStatus(Course $course, mixed $status): bool
     {
-        $enrollments = (int) $course->enrollments_count;
+        $enrollments = $this->enrollmentCounts->count($course);
         $remaining = $course->capacity - $enrollments;
 
         return match ($status) {
