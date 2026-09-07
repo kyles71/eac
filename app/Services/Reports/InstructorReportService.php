@@ -473,6 +473,7 @@ final readonly class InstructorReportService
     {
         $headers = [
             'dancer_name' => 'Dancer Name',
+            'dancer_nickname' => 'Dancer Nickname',
             'media_release' => 'Media Release',
         ];
         $course = $this->selectedCourse($user, $filters);
@@ -490,6 +491,7 @@ final readonly class InstructorReportService
             ->map(fn (Enrollment $enrollment): array => [
                 '_key' => "enrollment_{$enrollment->id}",
                 'dancer_name' => $enrollment->student->fullName,
+                'dancer_nickname' => $enrollment->student->nickname,
                 'media_release' => $this->mediaReleaseStatus($enrollment->student),
             ])
             ->sortBy('dancer_name')
