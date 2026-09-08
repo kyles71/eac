@@ -11,10 +11,14 @@ const phpunitConfiguration = readFileSync(
     'utf8',
 );
 
-test('provides an application key for clean test environments', () => {
+test('provides application and Stripe configuration for clean test environments', () => {
     assert.match(
         phpunitConfiguration,
         /<env name="APP_KEY" value="base64:[A-Za-z0-9+/]+={0,2}"\/>/,
+    );
+    assert.match(
+        phpunitConfiguration,
+        /<env name="STRIPE_SECRET" value="stripe-testing-placeholder"\/>/,
     );
 });
 
@@ -33,5 +37,12 @@ test('caps browser test execution time', () => {
     assert.match(
         workflow,
         /- name: Run browser tests\n\s+timeout-minutes: 10\n/,
+    );
+});
+
+test('links public storage before running browser tests', () => {
+    assert.match(
+        workflow,
+        /- name: Link public storage\n\s+run: php artisan storage:link --no-interaction/,
     );
 });
