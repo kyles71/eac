@@ -5,6 +5,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
+        "test:workflows": "node --test --test-isolation=none .github/scripts/*workflow.test.mjs",
         "test:update-notes": "node --test --test-isolation=none .github/scripts/update-notes.test.mjs"
     },
     "devDependencies": {

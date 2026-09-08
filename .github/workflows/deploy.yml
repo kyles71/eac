@@ -38,7 +38,7 @@ jobs:
         run: composer validate --strict
 
       - name: Run Pest unit and feature tests
-        run: vendor/bin/pest --no-progress tests/Unit tests/Feature
+        run: vendor/bin/pest --no-progress --parallel --processes=4 --exclude-testsuite=Browser
 
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress --error-format=raw --memory-limit=2G
@@ -53,6 +53,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Validate workflow configuration
+        run: npm run test:workflows
 
       - name: Build frontend assets
         run: npm run build
@@ -138,7 +141,8 @@ jobs:
           npm run build
 
       - name: Run browser tests
-        run: vendor/bin/pest --no-progress tests/Browser
+        timeout-minutes: 10
+        run: vendor/bin/pest --no-progress tests/Browser --parallel --processes=4
 
   deploy:
     needs:
