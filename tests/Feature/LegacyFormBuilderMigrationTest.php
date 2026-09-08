@@ -193,6 +193,31 @@ it('performs the production-shaped waiver cutover once and creates clean default
         ->toThrow(RuntimeException::class, 'Restore the mandatory pre-deployment database snapshot');
 });
 
+it('migrates an unfilled legacy assignment without emergency contacts as an empty draft', function (): void {
+    Carbon::setTestNow('2026-07-15 12:00:00 UTC');
+    createProductionLegacyFormFixture();
+    DB::table('emergency_contacts')->where('student_waiver_id', 503)->delete();
+    $service = app(LegacyFormMigration::class);
+    $report = $service->preflight();
+
+    recordLegacyCutoverTestSnapshot($report);
+    $service->migrate();
+
+    $pending = FormResponse::query()->findOrFail(1003);
+
+    expect($pending->status)->toBe(FormResponseStatus::Draft)
+        ->and($pending->answerGroups()->count())->toBe(0);
+});
+
+it('rejects a submitted legacy assignment without emergency contacts', function (): void {
+    Carbon::setTestNow('2026-07-15 12:00:00 UTC');
+    createProductionLegacyFormFixture();
+    DB::table('emergency_contacts')->where('student_waiver_id', 501)->delete();
+
+    expect(fn () => app(LegacyFormMigration::class)->preflight())
+        ->toThrow(RuntimeException::class, 'Legacy assignment [1001] has no emergency contact.');
+});
+
 it('aborts before writes for multiple waiver generations and unexpected showcase data', function (): void {
     Carbon::setTestNow('2026-07-15 12:00:00 UTC');
     createProductionLegacyFormFixture();

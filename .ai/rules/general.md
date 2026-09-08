@@ -25,3 +25,6 @@ When a defect originates in an internal `kyle/*` package—including `kyle/filam
 
 ## Keep merge and follow-up commits focused
 Commits may be made as work progresses. For a conflicted merge, resolve and verify the conflicts, then complete the merge commit before doing additional research, cleanup, warning removal, dependency upgrades, or unrelated hardening; put each follow-up concern in its own focused commit with a message explaining what changed and why. Keep follow-up work inside the merge commit only when it is required to make the resolution coherent or Kyle explicitly asks for one commit.
+
+## Run socket-based quality tools with elevated permissions
+In this managed workspace, Pest and PHPStan open local listening sockets for browser/bootstrap or parallel workers and fail inside the default sandbox. Run `vendor/bin/pest --no-progress ...` and `vendor/bin/phpstan analyse --memory-limit=2G --no-progress --error-format=raw ...` with elevated sandbox permissions on the first attempt. The 2G PHPStan memory limit is the project standard and prevents parallel worker crashes at the default 128M limit.
