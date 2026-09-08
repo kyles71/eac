@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +28,7 @@ jobs:
 
       - name: Configure Composer GitHub auth
         env:
-          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
         run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
 
       - name: Install PHP dependencies
@@ -60,6 +61,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     services:
       mysql:
         image: mysql:8.4
@@ -93,7 +95,7 @@ jobs:
 
       - name: Configure Composer GitHub auth
         env:
-          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
         run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
 
       - name: Install PHP dependencies
@@ -106,7 +108,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
-
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
 
@@ -118,7 +120,7 @@ jobs:
 
       - name: Configure Composer GitHub auth
         env:
-          GITHUB_TOKEN: ${{ secrets.THEMES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
         run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
 
       - name: Install PHP dependencies
