@@ -28,6 +28,7 @@ use App\Support\PaymentPlans\PaymentPlanBreakdownCalculator;
 use App\Support\Store\AllocateOrderItemPayments;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -168,10 +169,10 @@ final readonly class FinanceReportService
     }
 
     /**
-     * @param  Collection<int, Order>  $orders
-     * @return Collection<int, Collection<int, CreditTransaction>>
+     * @param  EloquentCollection<int, Order>  $orders
+     * @return Collection<int|string, Collection<int, CreditTransaction>>
      */
-    private function creditTransactionsByOrder(Collection $orders): Collection
+    private function creditTransactionsByOrder(EloquentCollection $orders): Collection
     {
         if ($orders->isEmpty()) {
             return collect();
@@ -184,6 +185,7 @@ final readonly class FinanceReportService
             ->with('creditGrant.products')
             ->orderBy('id')
             ->get()
+            ->toBase()
             ->groupBy(fn (CreditTransaction $transaction): int => (int) $transaction->reference_id);
     }
 
@@ -509,22 +511,29 @@ final readonly class FinanceReportService
             ->get()
             ->flatMap(function (Event $event): array {
                 $startsAt = $event->start_time->copy()->timezone($this->displayTimezone());
+                $course = $event->course_id !== null ? $event->course : null;
                 $baseRow = [
-                    'course_name' => $event->course?->name ?? $event->name,
-                    'enrollment_count' => (int) ($event->course?->enrollments_count ?? 0),
+                    'course_name' => $course instanceof Course ? $course->name : $event->name,
+                    'enrollment_count' => $course instanceof Course ? (int) $course->enrollments_count : 0,
                     'event_date' => $startsAt->toDateString(),
                     'hours' => round(max(0.0, $event->start_time->diffInMinutes($event->end_time) / 60), 2),
                 ];
 
-                return $this->assignedInstructors($event)
+                return collect($this->assignedInstructors($event))
                     ->map(function (array $instructor) use ($baseRow, $event): array {
                         $coverage = $this->payrollCoverage($event, $instructor['user_id']);
+                        $substituteTeacher = $coverage instanceof EventSubstituteCoverage
+                            && $coverage->substitute_teacher_id !== null
+                                ? $coverage->substituteTeacher
+                                : null;
 
                         return [
                             '_key' => "event_{$event->id}_{$instructor['key']}",
                             ...$baseRow,
                             'assigned_instructors' => $instructor['name'],
-                            'sub_instructor' => $coverage?->substituteTeacher?->fullName ?? '—',
+                            'sub_instructor' => $substituteTeacher instanceof User
+                                ? $substituteTeacher->fullName
+                                : '—',
                             'sub_reason' => $coverage instanceof EventSubstituteCoverage
                                 ? $this->substituteReason($coverage)
                                 : '—',
@@ -578,17 +587,24 @@ final readonly class FinanceReportService
             })
             ->map(function (EventSubstituteRequest $request): array {
                 $event = $request->event;
+                $course = $event->course_id !== null ? $event->course : null;
+                $sickInstructor = $request->sick_instructor_id !== null
+                    ? $request->sickInstructor
+                    : null;
+                $requestedBy = $request->requested_by_user_id !== null
+                    ? $request->requestedBy
+                    : null;
 
                 return [
                     '_key' => "substitute_request_{$request->id}",
-                    'instructor_name' => $request->sickInstructor?->fullName ?? '—',
+                    'instructor_name' => $sickInstructor instanceof User ? $sickInstructor->fullName : '—',
                     'attribution_status' => $request->sick_instructor_id === null ? 'Unreconciled' : 'Reconciled',
-                    'requested_by' => $request->requestedBy?->fullName ?? '—',
+                    'requested_by' => $requestedBy instanceof User ? $requestedBy->fullName : '—',
                     'sick_leave_date' => $event->start_time?->copy()
                         ->timezone($this->displayTimezone())
                         ->toDateString() ?? '—',
-                    'course_name' => $event->course?->name ?? $event->name,
-                    'enrollment_count' => (int) ($event->course?->enrollments_count ?? 0),
+                    'course_name' => $course instanceof Course ? $course->name : $event->name,
+                    'enrollment_count' => $course instanceof Course ? (int) $course->enrollments_count : 0,
                 ];
             })
             ->values()
@@ -618,35 +634,44 @@ final readonly class FinanceReportService
         ];
     }
 
-    /** @return Collection<int, array{key: string, user_id: int|null, name: string}> */
-    private function assignedInstructors(Event $event): Collection
+    /** @return array<int, array{key: string, user_id: int|null, name: string}> */
+    private function assignedInstructors(Event $event): array
     {
         $instructors = $event->teachers
-            ->map(fn (User $teacher): array => [
-                'key' => "teacher_{$teacher->id}",
-                'user_id' => $teacher->id,
-                'name' => $teacher->fullName,
-            ])
+            ->map(fn (User $teacher): array => $this->instructorAttribution(
+                "teacher_{$teacher->id}",
+                $teacher->id,
+                $teacher->fullName,
+            ))
             ->filter(fn (array $instructor): bool => filled($instructor['name']))
-            ->values() ?? collect();
+            ->values();
 
         if ($instructors->isNotEmpty()) {
-            return $instructors;
+            return $instructors->all();
         }
 
-        if (filled($event->course?->guest_teacher)) {
-            return collect([[
-                'key' => 'guest_teacher',
-                'user_id' => null,
-                'name' => (string) $event->course->guest_teacher,
-            ]]);
+        $course = $event->course_id !== null ? $event->course : null;
+        $guestTeacher = $course?->guest_teacher;
+
+        if (filled($guestTeacher)) {
+            return [$this->instructorAttribution(
+                'guest_teacher',
+                null,
+                (string) $guestTeacher,
+            )];
         }
 
-        return collect([[
-            'key' => 'unassigned',
-            'user_id' => null,
-            'name' => 'Unassigned',
-        ]]);
+        return [$this->instructorAttribution('unassigned', null, 'Unassigned')];
+    }
+
+    /** @return array{key: string, user_id: int|null, name: string} */
+    private function instructorAttribution(string $key, ?int $userId, string $name): array
+    {
+        return [
+            'key' => $key,
+            'user_id' => $userId,
+            'name' => $name,
+        ];
     }
 
     private function payrollCoverage(Event $event, ?int $teacherId): ?EventSubstituteCoverage

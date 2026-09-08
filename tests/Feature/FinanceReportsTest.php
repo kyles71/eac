@@ -434,6 +434,11 @@ it('includes past and future payroll events in range while always excluding canc
         'start_time' => '2040-09-10 14:00:00',
         'end_time' => '2040-09-10 15:00:00',
     ]);
+    Event::factory()->standalone()->create([
+        'name' => 'Standalone Workshop',
+        'start_time' => '2040-09-12 14:00:00',
+        'end_time' => '2040-09-12 15:00:00',
+    ]);
     Event::factory()->for($course)->create([
         'start_time' => '2040-09-05 14:00:00',
         'end_time' => '2040-09-05 15:00:00',
@@ -450,7 +455,7 @@ it('includes past and future payroll events in range while always excluding canc
         ],
     ]);
 
-    expect($dataset->rows)->toHaveCount(4)
+    expect($dataset->rows)->toHaveCount(5)
         ->and($dataset->rows[0])->toMatchArray([
             'course_name' => 'Payroll Jazz',
             'enrollment_count' => 2,
@@ -463,6 +468,12 @@ it('includes past and future payroll events in range while always excluding canc
             'course_name' => 'Payroll Jazz',
             'assigned_instructors' => 'Bailey CoTeacher',
             'hours' => 1.5,
+        ])
+        ->and(collect($dataset->rows)->firstWhere('course_name', 'Standalone Workshop'))->toMatchArray([
+            'enrollment_count' => 0,
+            'assigned_instructors' => 'Unassigned',
+            'sub_instructor' => '—',
+            'hours' => 1.0,
         ]);
 });
 

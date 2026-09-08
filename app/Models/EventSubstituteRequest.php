@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int|null $requested_by_user_id
+ * @property int|null $sick_instructor_id
+ */
 final class EventSubstituteRequest extends Model
 {
     /** @use HasFactory<EventSubstituteRequestFactory> */
