@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Filament\Admin\Resources\Courses\Pages\ViewCourse;
+use App\Filament\Admin\Resources\Courses\RelationManagers\EnrollmentsRelationManager;
 use App\Filament\Admin\Resources\Enrollments\Pages\ListEnrollments;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Product;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
@@ -21,6 +25,26 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     Carbon::setTestNow();
+});
+
+it('only offers deletion when removing enrollments from a course', function (): void {
+    $course = Course::factory()->create();
+    $enrollment = Enrollment::factory()->create(['course_id' => $course->id]);
+
+    livewire(EnrollmentsRelationManager::class, [
+        'ownerRecord' => $course,
+        'pageClass' => ViewCourse::class,
+    ])
+        ->loadTable()
+        ->assertCanSeeTableRecords([$enrollment])
+        ->assertActionDoesNotExist(TestAction::make(DissociateBulkAction::class)->table()->bulk())
+        ->assertActionExists(
+            TestAction::make(DeleteBulkAction::class)->table()->bulk(),
+            fn (DeleteBulkAction $action): bool => $action->getLabel() === 'Delete enrollments'
+                && $action->getModalDescription() === 'Enrollments cannot exist without a course. This permanently deletes the selected enrollments from this course.',
+        );
+
+    expect($enrollment->refresh()->course_id)->toBe($course->id);
 });
 
 it('lists every assigned enrollment for the same active course', function (): void {

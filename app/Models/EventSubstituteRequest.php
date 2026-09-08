@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\EventSubstituteRequestReason;
 use App\Enums\EventSubstituteRequestStatus;
 use Database\Factories\EventSubstituteRequestFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,8 +23,10 @@ final class EventSubstituteRequest extends Model
         'event_substitute_coverage_id' => 'integer',
         'teacher_id' => 'integer',
         'requested_by_user_id' => 'integer',
+        'sick_instructor_id' => 'integer',
         'response_recorded_by_user_id' => 'integer',
         'status' => EventSubstituteRequestStatus::class,
+        'reason_type' => EventSubstituteRequestReason::class,
         'responded_at' => 'datetime',
         'reminder_processed_at' => 'datetime',
         'release_requested_at' => 'datetime',
@@ -53,6 +56,12 @@ final class EventSubstituteRequest extends Model
     public function requestedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function sickInstructor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sick_instructor_id');
     }
 
     /** @return BelongsTo<User, $this> */
