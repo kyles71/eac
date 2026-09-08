@@ -111,6 +111,7 @@ final class OrderFulfillment extends Page implements HasTable
                     ->default([
                         OrderItemStatus::Pending->value,
                         OrderItemStatus::PartiallyFulfilled->value,
+                        OrderItemStatus::Fulfilled->value,
                     ]),
                 SelectFilter::make('fulfillment_workflow')
                     ->label('Workflow')

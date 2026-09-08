@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Events;
 
 use App\Actions\Mail\QueueManagedEmail;
+use App\Enums\EventSubstituteRequestReason;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Models\Event;
 use App\Models\EventSubstituteCoverage;
@@ -50,21 +51,29 @@ final readonly class ManageEventSubstitution
         User $coveredTeacherOrSubstitute,
         User $substituteOrRequestedBy,
         User|string|null $requestedByOrReason = null,
-        ?string $reason = null,
+        string|EventSubstituteRequestReason|null $reasonOrReasonType = null,
+        ?EventSubstituteRequestReason $reasonType = null,
     ): EventSubstituteRequest {
+        $reasonType = $reasonOrReasonType instanceof EventSubstituteRequestReason
+            ? $reasonOrReasonType
+            : $reasonType;
+
         if ($requestedByOrReason instanceof User) {
             $coveredTeacher = $coveredTeacherOrSubstitute;
             $substitute = $substituteOrRequestedBy;
             $requestedBy = $requestedByOrReason;
+            $reason = is_string($reasonOrReasonType) ? $reasonOrReasonType : null;
         } else {
             $substitute = $coveredTeacherOrSubstitute;
             $requestedBy = $substituteOrRequestedBy;
-            $reason = is_string($requestedByOrReason) ? $requestedByOrReason : $reason;
+            $reason = is_string($requestedByOrReason)
+                ? $requestedByOrReason
+                : (is_string($reasonOrReasonType) ? $reasonOrReasonType : null);
             $this->ensureTeacher($substitute);
             $coveredTeacher = $this->onlyRegularTeacher($event, $requestedBy);
         }
 
-        return DB::transaction(function () use ($event, $coveredTeacher, $substitute, $requestedBy, $reason): EventSubstituteRequest {
+        return DB::transaction(function () use ($event, $coveredTeacher, $substitute, $requestedBy, $reason, $reasonType): EventSubstituteRequest {
             $lockedEvent = $this->lockedEvent($event);
             Gate::forUser($requestedBy)->authorize('update', $lockedEvent);
             $this->ensureRequestable($lockedEvent);
@@ -98,7 +107,9 @@ final readonly class ManageEventSubstitution
                 'teacher_id' => $substitute->id,
                 'requested_by_user_id' => $requestedBy->id,
                 'status' => EventSubstituteRequestStatus::Pending,
+                'reason_type' => $reasonType,
                 'request_reason' => $reason,
+                'sick_instructor_id' => $this->sickInstructorId($lockedEvent, $coveredTeacher, $reasonType),
             ]);
             $this->queueRequestEmail($request);
 
@@ -485,6 +496,18 @@ final readonly class ManageEventSubstitution
         }
 
         return $lockedEvent;
+    }
+
+    private function sickInstructorId(
+        Event $event,
+        User $coveredTeacher,
+        ?EventSubstituteRequestReason $reasonType,
+    ): ?int {
+        if ($reasonType !== EventSubstituteRequestReason::Sick || $event->course_id === null) {
+            return null;
+        }
+
+        return $coveredTeacher->id;
     }
 
     private function lockedRequest(EventSubstituteRequest $request): EventSubstituteRequest
