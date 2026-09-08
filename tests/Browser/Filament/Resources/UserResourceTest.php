@@ -211,14 +211,67 @@ it('persists table columns and their order across browser sessions', function ()
 it('temporarily collapses the theme builder sidebar and restores its previous state', function (): void {
     $page = visit('/admin/users')
         ->assertNoJavaScriptErrors();
+    $waitForSidebarStateCapture = function (bool $expected) use ($page): bool {
+        $script = str_replace('__EXPECTED__', $expected ? 'true' : 'false', <<<'JS'
+            async () => {
+                const expected = __EXPECTED__
+
+                for (let attempt = 0; attempt < 50; attempt++) {
+                    const builder = document.querySelector('.fi-theme-builder')
+                    const state = builder ? Alpine.$data(builder) : null
+                    const captured = state?.previousSidebarState
+
+                    if (captured?.isOpen === expected && captured?.isOpenDesktop === expected) {
+                        return true
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 20))
+                }
+
+                return false
+            }
+            JS);
+
+        return (bool) $page->script($script);
+    };
+    $waitForSidebarState = function (bool $expected) use ($page): bool {
+        $script = str_replace('__EXPECTED__', $expected ? 'true' : 'false', <<<'JS'
+            async () => {
+                const expected = __EXPECTED__
+
+                for (let attempt = 0; attempt < 50; attempt++) {
+                    const sidebar = Alpine.store('sidebar')
+
+                    if (sidebar.isOpen === expected && sidebar.isOpenDesktop === expected) {
+                        return true
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 20))
+                }
+
+                return false
+            }
+            JS);
+
+        return (bool) $page->script($script);
+    };
 
     $page->script(<<<'JS'
-        Alpine.store('sidebar').open()
-        Livewire.navigate('/admin/theme-builder')
+        async () => {
+            Alpine.store('sidebar').open()
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+            await new Promise((resolve) => {
+                document.addEventListener('livewire:navigated', resolve, { once: true })
+                Livewire.navigate('/admin/theme-builder')
+            })
+        }
         JS);
     $page
         ->assertSee('Live Preview')
         ->wait(0.1);
+
+    expect($waitForSidebarStateCapture(true))->toBeTrue();
 
     expect($page->script(<<<'JS'
         ({
@@ -230,34 +283,81 @@ it('temporarily collapses the theme builder sidebar and restores its previous st
         'sidebarDisplay' => 'flex',
     ]);
 
-    $page->script(<<<'JS'
-        Livewire.navigate('/admin/users')
+    $restoredOpenState = $page->script(<<<'JS'
+        async () => {
+            await new Promise((resolve) => {
+                document.addEventListener('livewire:navigated', resolve, { once: true })
+                Livewire.navigate('/admin/users')
+            })
+
+            const immediate = {
+                isOpen: Alpine.store('sidebar').isOpen,
+                isOpenDesktop: Alpine.store('sidebar').isOpenDesktop,
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 500))
+
+            return {
+                builderExists: document.querySelector('.fi-theme-builder') !== null,
+                immediate,
+                delayed: {
+                    isOpen: Alpine.store('sidebar').isOpen,
+                    isOpenDesktop: Alpine.store('sidebar').isOpenDesktop,
+                },
+            }
+        }
         JS);
     $page
         ->assertSee('New User')
         ->wait(0.1);
 
-    expect($page->script("Alpine.store('sidebar').isOpen"))->toBeTrue();
+    expect($restoredOpenState)->toBe([
+        'builderExists' => false,
+        'immediate' => [
+            'isOpen' => true,
+            'isOpenDesktop' => true,
+        ],
+        'delayed' => [
+            'isOpen' => true,
+            'isOpenDesktop' => true,
+        ],
+    ]);
 
     $page->script(<<<'JS'
-        Alpine.store('sidebar').close()
-        Livewire.navigate('/admin/theme-builder')
+        async () => {
+            Alpine.store('sidebar').close()
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+            await new Promise((resolve) => {
+                document.addEventListener('livewire:navigated', resolve, { once: true })
+                Livewire.navigate('/admin/theme-builder')
+            })
+        }
         JS);
     $page
         ->assertSee('Live Preview')
         ->wait(0.1);
 
-    expect($page->script("Alpine.store('sidebar').isOpen"))->toBeFalse();
+    expect($waitForSidebarStateCapture(false))->toBeTrue();
+
+    expect($waitForSidebarState(false))->toBeTrue();
 
     $page->script(<<<'JS'
-        Alpine.store('sidebar').open()
-        Livewire.navigate('/admin/users')
+        async () => {
+            Alpine.store('sidebar').open()
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+            await new Promise((resolve) => {
+                document.addEventListener('livewire:navigated', resolve, { once: true })
+                Livewire.navigate('/admin/users')
+            })
+        }
         JS);
     $page
         ->assertSee('New User')
         ->wait(0.1);
 
-    expect($page->script("Alpine.store('sidebar').isOpen"))->toBeFalse();
+    expect($waitForSidebarState(false))->toBeTrue();
 });
 
 it('shows a floating scrollbar while a wide table extends below the viewport', function (): void {

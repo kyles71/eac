@@ -190,12 +190,12 @@ final class ViewStudent extends ViewRecord implements HasTable
                     ->badge(),
                 TextEntry::make('medical_waiver_updated_at')
                     ->label('Last Updated')
-                    ->state(fn () => $this->student()->currentMedicalWaiver()?->updated_at)
+                    ->state(fn () => $this->student()->currentMedicalWaiver()?->latestSubmittedResponse?->submitted_at)
                     ->dateTime()
                     ->placeholder('Never'),
                 Actions::make([
                     Action::make('viewMedicalWaiver')
-                        ->label('View current medical waiver')
+                        ->label('View waiver history')
                         ->url(fn (): ?string => $this->student()->currentMedicalWaiver() === null
                             ? null
                             : FormUserResource::getUrl('view', ['record' => $this->student()->currentMedicalWaiver()]))
@@ -205,8 +205,7 @@ final class ViewStudent extends ViewRecord implements HasTable
                         ->url(fn (): ?string => $this->student()->pendingMedicalWaiver() === null
                             ? null
                             : FormUserResource::getUrl('edit', ['record' => $this->student()->pendingMedicalWaiver()]))
-                        ->visible(fn (): bool => $this->student()->currentMedicalWaiver() === null
-                            && $this->student()->pendingMedicalWaiver() !== null),
+                        ->visible(fn (): bool => $this->student()->pendingMedicalWaiver() !== null),
                     Action::make('updateMedicalWaiver')
                         ->label('Update')
                         ->url(fn (): ?string => $this->student()->latestValidCompletedMedicalWaiver() === null

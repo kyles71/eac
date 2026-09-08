@@ -12,7 +12,7 @@ use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Filament\User\Resources\Students\Schemas\StudentForm;
 use App\Models\Course;
 use App\Models\Enrollment;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Student;
@@ -395,7 +395,7 @@ final class CheckoutSuccess extends Page
                 ->state('Some required forms are ready for the students assigned to this course purchase.'),
             Actions::make(
                 $pendingForms
-                    ->map(fn (FormUser $formUser): Action => $this->completeFormAction($formUser))
+                    ->map(fn (FormAssignment $assignment): Action => $this->completeFormAction($assignment))
                     ->all()
             )
                 ->fullWidth()
@@ -421,18 +421,33 @@ final class CheckoutSuccess extends Page
             });
     }
 
-    private function completeFormAction(FormUser $formUser): Action
+    private function completeFormAction(FormAssignment $assignment): Action
     {
-        $formUser->loadMissing(['form', 'student']);
+        $assignment->loadMissing(['form', 'subject']);
 
-        $label = $formUser->student === null
-            ? "Complete {$formUser->form->name}"
-            : "Complete {$formUser->form->name} for {$formUser->student->first_name}";
+        $label = $assignment->subject === null
+            ? "Complete {$assignment->form->name}"
+            : "Complete {$assignment->form->name} for {$this->formSubjectLabel($assignment)}";
 
-        return Action::make("completeForm{$formUser->id}")
+        return Action::make("completeForm{$assignment->id}")
             ->label($label)
             ->icon(Heroicon::OutlinedDocumentText)
-            ->url(FormUserResource::getUrl('edit', ['record' => $formUser]));
+            ->url(FormUserResource::getUrl('edit', ['record' => $assignment]));
+    }
+
+    private function formSubjectLabel(FormAssignment $assignment): string
+    {
+        $subject = $assignment->subject;
+
+        if ($subject instanceof Student) {
+            return $subject->first_name;
+        }
+
+        if ($subject !== null && filled($subject->getAttribute('name'))) {
+            return (string) $subject->getAttribute('name');
+        }
+
+        return 'assigned subject';
     }
 
     private function assignmentLabel(Enrollment $enrollment): string
@@ -498,7 +513,7 @@ final class CheckoutSuccess extends Page
     }
 
     /**
-     * @return Collection<int, FormUser>
+     * @return Collection<int, FormAssignment>
      */
     private function pendingFormsForOrderStudents(): Collection
     {
@@ -523,11 +538,11 @@ final class CheckoutSuccess extends Page
 
         return app(UserAttention::class)
             ->pendingFormsForStudents($user, $studentIds)
-            ->filter(function (FormUser $formUser) use ($requiredFormIdsByStudent): bool {
-                $studentId = $formUser->student_id;
+            ->filter(function (FormAssignment $assignment) use ($requiredFormIdsByStudent): bool {
+                $studentId = $assignment->subject_id;
 
                 return $studentId !== null
-                    && in_array($formUser->form_id, $requiredFormIdsByStudent[$studentId] ?? [], true);
+                    && in_array($assignment->form_id, $requiredFormIdsByStudent[$studentId] ?? [], true);
             })
             ->values();
     }

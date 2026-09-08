@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Enums\FormTypes;
-use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\Student;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 final readonly class UserAttention
@@ -21,21 +19,21 @@ final readonly class UserAttention
     }
 
     /**
-     * @return Collection<int, FormUser>
+     * @return Collection<int, FormAssignment>
      */
     public function pendingForms(User $user): Collection
     {
-        return FormUser::query()
-            ->with(['form', 'student'])
-            ->where('user_id', $user->id)
+        return FormAssignment::query()
+            ->with(['form', 'subject'])
+            ->accessibleBy($user)
             ->pending()
-            ->whereHas('form', fn (Builder $query): Builder => Form::applyActiveConstraint($query))
+            ->formIsActive()
             ->get();
     }
 
     /**
      * @param  array<int, int>  $studentIds
-     * @return Collection<int, FormUser>
+     * @return Collection<int, FormAssignment>
      */
     public function pendingFormsForStudents(User $user, array $studentIds): Collection
     {
@@ -44,29 +42,30 @@ final readonly class UserAttention
         }
 
         return $this->pendingForms($user)
-            ->whereIn('student_id', $studentIds)
+            ->filter(fn (FormAssignment $assignment): bool => $assignment->subject_type === (new Student())->getMorphClass()
+                && in_array($assignment->subject_id, $studentIds, true))
             ->values();
     }
 
     /**
-     * @param  Collection<int, FormUser>  $pendingForms
-     * @return Collection<int, FormUser>
+     * @param  Collection<int, FormAssignment>  $pendingForms
+     * @return Collection<int, FormAssignment>
      */
-    public function assignmentsForFormType(Collection $pendingForms, FormTypes $formType): Collection
+    public function assignmentsForKey(Collection $pendingForms, string $formKey): Collection
     {
         return $pendingForms
-            ->filter(fn (FormUser $formUser): bool => $formUser->form?->form_type === $formType)
+            ->filter(fn (FormAssignment $assignment): bool => $assignment->form->key === $formKey)
             ->values();
     }
 
     /**
-     * @param  Collection<int, FormUser>  $pendingForms
-     * @return Collection<int, FormUser>
+     * @param  Collection<int, FormAssignment>  $pendingForms
+     * @return Collection<int, FormAssignment>
      */
     public function genericForms(Collection $pendingForms): Collection
     {
         return $pendingForms
-            ->reject(fn (FormUser $formUser): bool => $formUser->form?->form_type->getBannerView() !== null)
+            ->reject(fn (FormAssignment $assignment): bool => $assignment->form->key === 'student-waiver')
             ->values();
     }
 }

@@ -9,7 +9,17 @@
 @source '../../../../vendor/awcodes/mason/resources/**/*.blade.php';
 @source '../../../../vendor/guava/filament-icon-picker/resources/**/*';
 @source '../../../../vendor/kyle/filament-mail-manager/resources/**/*.blade.php';
+@source '../../../../vendor/kyle/filament-form-builder/src/**/*.php';
+@source '../../../../vendor/kyle/filament-form-builder/resources/**/*.blade.php';
 @source '../../../../vendor/relaticle/flowforge/resources/views/**/*.blade.php';
+
+.fi-panel-admin.fi-form-builder-designer-page.fi-body-has-topbar .fi-layout {
+    height: calc(100dvh - 4rem - var(--eac-managed-banner-height, 0px));
+}
+
+.fi-panel-admin.fi-form-builder-designer-page .fi-main [data-managed-banners-location] {
+    display: none !important;
+}
 
 @media (min-width: 1280px) {
     .managed-banner-preview-pane {

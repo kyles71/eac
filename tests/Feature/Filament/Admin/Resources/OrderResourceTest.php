@@ -96,15 +96,15 @@ it('has required columns', function (string $column) {
 ]);
 
 it('can search orders by customer name', function () {
-    $user1 = User::factory()->create(['first_name' => 'John', 'last_name' => 'Doe']);
-    $user2 = User::factory()->create(['first_name' => 'Jane', 'last_name' => 'Smith']);
+    $user1 = User::factory()->create(['first_name' => 'ZebulonReleaseSearch', 'last_name' => 'Customer']);
+    $user2 = User::factory()->create(['first_name' => 'UnmatchedReleaseCustomer', 'last_name' => 'Customer']);
 
     $order1 = Order::factory()->completed()->create(['user_id' => $user1->id]);
     $order2 = Order::factory()->completed()->create(['user_id' => $user2->id]);
 
     livewire(ListOrders::class)
         ->loadTable()
-        ->searchTable('John')
+        ->searchTable('ZebulonReleaseSearch')
         ->assertCanSeeTableRecords([$order1])
         ->assertCanNotSeeTableRecords([$order2]);
 });

@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Actions\Mail\SendCourseHoldEmail;
 use App\Models\CourseHold;
+use App\Models\CourseHoldSeat;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -23,7 +24,7 @@ final class SendCourseHoldRemindersCommand extends Command
             ->whereNull('reminder_sent_at')
             ->where('expires_at', '>', now())
             ->where('expires_at', '<=', now()->addDay())
-            ->whereHas('seats', fn (Builder $query): Builder => $query->available())
+            ->whereHas('seats', fn (Builder $query): Builder => CourseHoldSeat::applyAvailableConstraint($query))
             ->with(['user', 'seats.course', 'seats.enrollment'])
             ->lazyById()
             ->each(function (CourseHold $hold) use ($sendEmail, &$sent): void {

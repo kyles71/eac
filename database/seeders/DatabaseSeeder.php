@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\CreditTransactionType;
-use App\Enums\FormTypes;
 use App\Enums\ProductType;
+use App\Forms\DefaultFormDefinitions;
 use App\Models\Calendar;
 use App\Models\CartItem;
 use App\Models\CompetitionSeason;
@@ -20,7 +20,8 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormResponse;
 use App\Models\Gear;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
@@ -49,6 +50,8 @@ use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Spatie\Tags\Tag;
 use Symfony\Component\Finder\SplFileInfo;
 
@@ -62,9 +65,6 @@ final class DatabaseSeeder extends Seeder
         ]);
 
         $this->seedSystemCalendars();
-
-        Form::factory()
-            ->create(['name' => 'Student Waiver 25-26', 'form_type' => FormTypes::StudentWaiver->value]);
 
         LegalDocument::query()->firstOrCreate(
             ['key' => 'payment_plan_terms'],
@@ -106,8 +106,11 @@ final class DatabaseSeeder extends Seeder
         )
             ->assignRole('super_admin');
 
+        $this->seedLegalDocumentVersions();
+        $defaultForms = $this->seedDefaultForms();
+
         if (config('app.env') !== 'production' && config('app.seed_demo_data')) {
-            $this->seedDevData($adminUser);
+            $this->seedDevData($adminUser, $defaultForms);
         }
 
     }
@@ -125,7 +128,49 @@ final class DatabaseSeeder extends Seeder
         Tag::findOrCreate(Calendar::SLUG_COMP, Course::CALENDAR_TAG_TYPE);
     }
 
-    private function seedDevData(User $adminUser): void
+    /**
+     * @return Collection<int, LegalDocumentVersion>
+     */
+    private function seedLegalDocumentVersions(): Collection
+    {
+        return LegalDocument::query()
+            ->orderBy('id')
+            ->get()
+            ->values()
+            ->map(function (LegalDocument $legalDocument): LegalDocumentVersion {
+                $existingVersion = $legalDocument->latestPublishedVersion()->first();
+
+                if ($existingVersion instanceof LegalDocumentVersion) {
+                    return $existingVersion;
+                }
+
+                return $legalDocument->publishVersion(
+                    title: "{$legalDocument->name} v1",
+                    content: '<p>Seeded legal document content.</p>',
+                );
+            });
+    }
+
+    /**
+     * @return array{waiver: Form, showcase: Form}
+     */
+    private function seedDefaultForms(): array
+    {
+        $this->call([
+            StudentWaiverFormSeeder::class,
+            ShowcaseParticipationFormSeeder::class,
+        ]);
+
+        return [
+            'waiver' => Form::query()->where('key', 'student-waiver')->firstOrFail(),
+            'showcase' => Form::query()->where('key', 'showcase-participation')->firstOrFail(),
+        ];
+    }
+
+    /**
+     * @param  array{waiver: Form, showcase: Form}  $defaultForms
+     */
+    private function seedDevData(User $adminUser, array $defaultForms): void
     {
         // ── Tier 0: Root entities ──
 
@@ -151,28 +196,10 @@ final class DatabaseSeeder extends Seeder
 
         $calendars = Calendar::all();
 
-        $waiverForm = Form::first();
-        $showcaseForm = Form::factory()->create([
-            'name' => 'Showcase Participation 25-26',
-            'form_type' => FormTypes::ShowcaseParticipation->value,
-        ]);
+        $waiverForm = $defaultForms['waiver'];
+        $showcaseForm = $defaultForms['showcase'];
 
-        $legalDocumentVersions = LegalDocument::query()
-            ->orderBy('id')
-            ->get()
-            ->values()
-            ->map(function (LegalDocument $legalDocument): LegalDocumentVersion {
-                $existingVersion = $legalDocument->latestPublishedVersion()->first();
-
-                if ($existingVersion instanceof LegalDocumentVersion) {
-                    return $existingVersion;
-                }
-
-                return $legalDocument->publishVersion(
-                    title: "{$legalDocument->name} v1",
-                    content: '<p>Seeded legal document content.</p>',
-                );
-            });
+        $legalDocumentVersions = $this->seedLegalDocumentVersions();
 
         $giftCardTypes = collect([
             GiftCardType::factory()->denomination(2500)->create(),
@@ -292,8 +319,26 @@ final class DatabaseSeeder extends Seeder
         // Attach forms to courses
         $waiverCourses = $courses->take(5);
         $showcaseCourses = $courses->skip(5)->take(5);
+        $seededWaiverCourse = $waiverCourses->firstOrFail();
+
+        $students->take(2)->each(function (Student $student) use ($seededWaiverCourse): void {
+            Enrollment::query()->firstOrCreate(
+                [
+                    'course_id' => $seededWaiverCourse->id,
+                    'student_id' => $student->id,
+                ],
+                ['user_id' => $student->user_id],
+            );
+        });
+
+        $seededWaiverCourse->events()->firstOrFail()->update([
+            'start_time' => now()->addWeek(),
+            'end_time' => now()->addWeek()->addHour(),
+        ]);
+
         $waiverCourses->each(fn (Course $course) => $course->forms()->attach($waiverForm->id));
         $showcaseCourses->each(fn (Course $course) => $course->forms()->attach($showcaseForm->id));
+        $this->seedSubmittedFormResponses($waiverForm, $showcaseForm);
 
         // Orders — mix of statuses
         $completedOrders = Order::factory(10)->completed()->sequence(
@@ -500,12 +545,13 @@ final class DatabaseSeeder extends Seeder
             );
         });
 
-        $studentWaivers = FormUser::query()
-            ->where('form_id', $waiverForm->id)
-            ->with('responseable')
+        $studentWaivers = FormResponse::query()
+            ->where('status', FormResponseStatus::Submitted)
+            ->whereHas('assignment', fn ($query) => $query->where('form_id', $waiverForm->id))
+            ->with('projection')
             ->get()
-            ->map(fn (FormUser $formUser) => $formUser->responseable)
-            ->filter(fn ($responseable): bool => $responseable instanceof StudentWaiver);
+            ->map(fn (FormResponse $response) => $response->projection)
+            ->filter(fn ($projection): bool => $projection instanceof StudentWaiver);
 
         $versionByKey = $legalDocumentVersions->keyBy(
             fn (LegalDocumentVersion $version): string => $version->document->key
@@ -590,6 +636,78 @@ final class DatabaseSeeder extends Seeder
             'managed_banner_id' => $managedBanners->first()->id,
             'user_id' => $customGiftCardOwner->id,
         ]);
+    }
+
+    private function seedSubmittedFormResponses(Form $waiverForm, Form $showcaseForm): void
+    {
+        FormAssignment::query()
+            ->where('form_id', $waiverForm->id)
+            ->pending()
+            ->with('subject')
+            ->limit(5)
+            ->get()
+            ->each(function (FormAssignment $assignment): void {
+                app(SubmitFormResponse::class)->handle($assignment, $this->sampleMedicalWaiverState());
+            });
+
+        FormAssignment::query()
+            ->where('form_id', $showcaseForm->id)
+            ->pending()
+            ->limit(5)
+            ->get()
+            ->each(function (FormAssignment $assignment): void {
+                $today = now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
+
+                app(SubmitFormResponse::class)->handle($assignment, [
+                    'answers' => [
+                        DefaultFormDefinitions::ShowcaseParticipation => fake()->boolean(),
+                    ],
+                    'signature' => fake()->name(),
+                    'date_signed' => $today,
+                ]);
+            });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sampleMedicalWaiverState(): array
+    {
+        $today = now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
+
+        return [
+            'answers' => [
+                DefaultFormDefinitions::SignerRelationship => fake()->randomElement([
+                    'Mother',
+                    'Father',
+                    'Legal Guardian',
+                    'Self - I am 18+',
+                ]),
+                DefaultFormDefinitions::StudentHomeAddress => fake()->streetAddress().', '.fake()->city().', '.fake()->stateAbbr().' '.fake()->postcode(),
+                DefaultFormDefinitions::EmergencyContacts => [
+                    [
+                        'name' => fake()->name(),
+                        'relationship' => fake()->randomElement(['Mother', 'Father', 'Guardian']),
+                        'phone_number' => fake()->numerify('(###) ###-####'),
+                        'email' => fake()->safeEmail(),
+                        'wants_text_updates' => fake()->boolean(),
+                    ],
+                ],
+                DefaultFormDefinitions::Allergies => fake()->randomElement(['N/A', 'Peanuts', 'Seasonal allergies']),
+                DefaultFormDefinitions::MedicalConditions => fake()->randomElement(['N/A', 'Asthma']),
+                DefaultFormDefinitions::PastInjuries => fake()->randomElement(['N/A', 'Sprained ankle in 2024']),
+                DefaultFormDefinitions::Medications => fake()->randomElement(['N/A', 'Inhaler as needed']),
+                DefaultFormDefinitions::MedicalReleaseConsent => true,
+                DefaultFormDefinitions::BehavioralNotes => fake()->optional()->sentence(),
+                DefaultFormDefinitions::MedicalReleaseSignedOn => $today,
+                DefaultFormDefinitions::HealthSafetyPolicyConsent => true,
+                DefaultFormDefinitions::HealthSafetyPolicySignedOn => $today,
+                DefaultFormDefinitions::MediaReleaseConsent => fake()->boolean(),
+                DefaultFormDefinitions::MediaReleaseSignedOn => $today,
+            ],
+            'signature' => fake()->name(),
+            'date_signed' => $today,
+        ];
     }
 
     /**

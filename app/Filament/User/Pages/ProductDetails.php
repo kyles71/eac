@@ -290,11 +290,11 @@ final class ProductDetails extends Page
             return 0;
         }
 
-        return CourseHoldSeat::query()
+        $query = CourseHoldSeat::query()
             ->where('course_id', $this->product->productable->id)
-            ->whereHas('hold', fn ($query) => $query->where('user_id', auth()->id()))
-            ->claimable()
-            ->count();
+            ->whereHas('hold', fn ($query) => $query->where('user_id', auth()->id()));
+
+        return CourseHoldSeat::applyClaimableConstraint($query)->count();
     }
 
     private function firstActiveHold(): ?CourseHold
@@ -305,10 +305,10 @@ final class ProductDetails extends Page
 
         return CourseHold::query()
             ->where('user_id', auth()->id())
-            ->whereHas('seats', fn ($query) => $query
-                ->where('course_id', $this->product->productable->id)
-                ->claimable())
-            ->current()
+            ->whereHas('seats', fn ($query) => CourseHoldSeat::applyClaimableConstraint(
+                $query->where('course_id', $this->product->productable->id),
+            ))
+            ->tap(fn ($query) => CourseHold::applyCurrentConstraint($query))
             ->orderBy('expires_at')
             ->first();
     }

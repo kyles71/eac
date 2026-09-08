@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-use App\Enums\FormTypes;
 use App\Filament\User\Pages\CheckoutSuccess;
 use App\Filament\User\Widgets\UserBanners;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormVersion;
 use App\Models\ManagedBanner;
 use App\Models\Order;
 use App\Models\Student;
@@ -21,19 +21,40 @@ beforeEach(function (): void {
     Filament::setCurrentPanel('user');
 });
 
+function createBannerForm(string $key, string $name = 'Required Form'): Form
+{
+    $form = Form::factory()->create([
+        'name' => $name,
+        'key' => $key,
+    ]);
+
+    FormVersion::factory()
+        ->for($form)
+        ->published()
+        ->create();
+
+    return $form->refresh();
+}
+
+function createBannerAssignment(Form $form, Student $student): FormAssignment
+{
+    return FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $form->refresh()->currentVersion->id,
+        'respondent_type' => $student->user->getMorphClass(),
+        'respondent_id' => $student->user_id,
+        'subject_type' => $student->getMorphClass(),
+        'subject_id' => $student->id,
+    ]);
+}
+
 it('shows dedicated waiver banners before the generic forms fallback', function (): void {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
-    $waiverForm = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
-    $genericForm = Form::factory()->create(['form_type' => FormTypes::ShowcaseParticipation]);
+    $waiverForm = createBannerForm('student-waiver');
+    $genericForm = createBannerForm('showcase-participation');
 
-    FormUser::factory()->forStudent($student)->unsigned()->create([
-        'form_id' => $waiverForm->id,
-        'user_id' => auth()->id(),
-    ]);
-    FormUser::factory()->forStudent($student)->unsigned()->create([
-        'form_id' => $genericForm->id,
-        'user_id' => auth()->id(),
-    ]);
+    createBannerAssignment($waiverForm, $student);
+    createBannerAssignment($genericForm, $student);
 
     $this->get('/dancefam')
         ->assertOk()
@@ -45,17 +66,14 @@ it('shows dedicated waiver banners before the generic forms fallback', function 
 
 it('does not render global banners on the checkout success page', function (): void {
     $student = Student::factory()->create(['user_id' => auth()->id()]);
-    $waiverForm = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $waiverForm = createBannerForm('student-waiver');
     $order = Order::factory()->completed()->create(['user_id' => auth()->id()]);
 
     Enrollment::factory()->create([
         'user_id' => auth()->id(),
         'student_id' => null,
     ]);
-    FormUser::factory()->forStudent($student)->unsigned()->create([
-        'form_id' => $waiverForm->id,
-        'user_id' => auth()->id(),
-    ]);
+    createBannerAssignment($waiverForm, $student);
     ManagedBanner::factory()
         ->forScope(CheckoutSuccess::class)
         ->create([
@@ -80,7 +98,7 @@ it('refreshes enrollment and form banners without a page navigation', function (
         'start_time' => now()->addMonth(),
         'end_time' => now()->addMonth()->addHour(),
     ]);
-    $form = Form::factory()->create(['form_type' => FormTypes::StudentWaiver]);
+    $form = createBannerForm('student-waiver');
     $course->forms()->attach($form);
     $enrollment = Enrollment::factory()->create([
         'course_id' => $course->id,

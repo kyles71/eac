@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\FormUsers\Tables;
 
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
@@ -14,13 +15,19 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class FormUsersTable
 {
-    public static function configure(Table $table, bool $only_my_forms = false): Table
+    public static function configure(Table $table, bool $onlyMyForms = false): Table
     {
         return $table
-            ->query(fn () => FormUser::query()
-                ->with(['form', 'student', 'user'])
-                ->when($only_my_forms, function ($query): void {
-                    $query->where('user_id', auth()->id());
+            ->query(fn () => FormAssignment::query()
+                ->with(['form', 'respondent', 'subject', 'version', 'latestSubmittedResponse'])
+                ->when($onlyMyForms, function ($query): void {
+                    $user = auth()->user();
+
+                    $query->when(
+                        $user instanceof User,
+                        fn ($query) => $query->accessibleBy($user),
+                        fn ($query) => $query->whereRaw('1 = 0'),
+                    );
                 })
             )
             ->columns([
@@ -30,24 +37,26 @@ final class FormUsersTable
                     ->sortable(),
                 TextColumn::make('completion_status')
                     ->label('Status')
-                    ->state(fn (FormUser $record): string => $record->isCompleted() ? 'Completed' : 'Needs signature')
+                    ->state(fn (FormAssignment $record): string => $record->isCompleted() ? 'Completed' : 'Needs signature')
                     ->badge()
-                    ->color(fn (FormUser $record): string => $record->isCompleted() ? 'success' : 'warning')
+                    ->color(fn (FormAssignment $record): string => $record->isCompleted() ? 'success' : 'warning')
                     ->searchable(false)
                     ->sortable(false),
-                TextColumn::make('user.full_name')
+                TextColumn::make('respondent_label')
                     ->label('Parent / User')
-                    ->hidden($only_my_forms)
-                    ->searchable(['first_name', 'last_name'])
-                    ->sortable(['first_name', 'last_name']),
-                TextColumn::make('student.full_name')
+                    ->hidden($onlyMyForms)
+                    ->state(fn (FormAssignment $record): string => self::modelLabel($record->respondent)),
+                TextColumn::make('subject_label')
                     ->label('Student')
                     ->placeholder('Family / user-level form')
-                    ->searchable(['first_name', 'last_name'])
-                    ->sortable(['first_name', 'last_name']),
-                TextColumn::make('signature')
+                    ->state(fn (FormAssignment $record): string => self::modelLabel($record->subject)),
+                TextColumn::make('version.version')
+                    ->label('Version'),
+                TextColumn::make('latestSubmittedResponse.signature')
+                    ->label('Signature')
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('date_signed')
+                TextColumn::make('latestSubmittedResponse.date_signed')
+                    ->label('Date Signed')
                     ->date()
                     ->placeholder('Not signed')
                     ->sortable()
@@ -68,10 +77,14 @@ final class FormUsersTable
                         'completed' => 'Completed',
                         'pending' => 'Needs signature',
                     ])
-                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
-                        'completed' => FormUser::applyCompletedConstraint($query),
-                        'pending' => FormUser::applyPendingConstraint($query),
-                        default => $query,
+                    ->query(function (Builder $query, array $data): Builder {
+                        match ($data['value'] ?? null) {
+                            'completed' => FormAssignment::applyCompletedConstraint($query),
+                            'pending' => FormAssignment::applyPendingConstraint($query),
+                            default => null,
+                        };
+
+                        return $query;
                     }),
                 SelectFilter::make('form_id')
                     ->label('Form')
@@ -88,5 +101,26 @@ final class FormUsersTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function modelLabel(?\Illuminate\Database\Eloquent\Model $model): string
+    {
+        if ($model === null) {
+            return '-';
+        }
+
+        if (method_exists($model, 'displayName')) {
+            return (string) $model->displayName();
+        }
+
+        if (filled($model->getAttribute('fullName'))) {
+            return (string) $model->getAttribute('fullName');
+        }
+
+        if (filled($model->getAttribute('name'))) {
+            return (string) $model->getAttribute('name');
+        }
+
+        return class_basename($model).' #'.$model->getKey();
     }
 }

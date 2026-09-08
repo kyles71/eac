@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/** @property-read int $available_seats_count */
 final class CourseHold extends Model
 {
     /** @use HasFactory<\Database\Factories\CourseHoldFactory> */
@@ -24,6 +25,12 @@ final class CourseHold extends Model
         'reminder_sent_at' => 'datetime',
         'expired_email_sent_at' => 'datetime',
     ];
+
+    public static function applyCurrentConstraint(Builder $query): Builder
+    {
+        return $query->where('expires_at', '>', now())
+            ->whereHas('seats', fn (Builder $query): Builder => CourseHoldSeat::applyAvailableConstraint($query));
+    }
 
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
@@ -46,8 +53,7 @@ final class CourseHold extends Model
     /** @param Builder<CourseHold> $query */
     public function scopeCurrent(Builder $query): void
     {
-        $query->where('expires_at', '>', now())
-            ->whereHas('seats', fn (Builder $query): Builder => $query->available());
+        self::applyCurrentConstraint($query);
     }
 
     public function status(): CourseHoldStatus

@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace App\Filament\User\Resources\FormUsers\Pages;
 
 use App\Filament\User\Resources\FormUsers\FormUserResource;
-use App\Models\FormUser;
+use App\Filament\User\Resources\FormUsers\Schemas\FormUserForm;
+use App\Models\FormAssignment;
 use App\Support\UserAttention;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Schema;
-use LogicException;
+use Kyle\FilamentFormBuilder\Actions\SaveFormResponseDraft;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
+use Kyle\FilamentFormBuilder\Support\FormDefinition;
 
 final class EditFormUser extends EditRecord
 {
@@ -17,7 +23,7 @@ final class EditFormUser extends EditRecord
 
     public function getTitle(): string
     {
-        $record = $this->formUser()->loadMissing('form');
+        $record = $this->assignment()->loadMissing('form');
         $verb = $record->isCompleted() ? 'Update' : 'Complete';
 
         return "{$verb} {$record->form->name}";
@@ -25,21 +31,88 @@ final class EditFormUser extends EditRecord
 
     public function form(Schema $schema): Schema
     {
-        $record = $this->formUser();
+        return FormUserForm::configure($schema, $this->assignment());
+    }
 
-        $record->loadMissing(['form']);
+    public function save(bool $shouldRedirect = true, bool $shouldSendSavedNotification = true): void
+    {
+        $this->authorizeAccess();
 
-        return self::getResource()::form($schema, $record->form->form_type);
+        $response = app(SubmitFormResponse::class)->handle($this->assignment(), $this->form->getState());
+
+        if ($shouldSendSavedNotification) {
+            Notification::make()
+                ->title('Form submitted')
+                ->success()
+                ->send();
+        }
+
+        $this->dispatch(UserAttention::UPDATED_EVENT);
+        $this->dispatch('refresh-sidebar');
+
+        if ($shouldRedirect) {
+            $this->redirect($this->getResource()::getUrl('view', ['record' => $response->assignment]));
+        }
     }
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        if ($this->formUser()->formCanBeUpdated()) {
-            $data['signature'] = null;
-            $data['date_signed'] = null;
+        $assignment = $this->assignment();
+        $response = $assignment->responses()
+            ->where('form_version_id', $assignment->form_version_id)
+            ->where('status', FormResponseStatus::Draft)
+            ->latest('id')
+            ->first()
+            ?? $assignment->responses()
+                ->where('form_version_id', $assignment->form_version_id)
+                ->where('status', FormResponseStatus::Submitted)
+                ->latest('submitted_at')
+                ->latest('id')
+                ->first();
+
+        if ($response === null) {
+            return [];
         }
 
-        return $data;
+        $state = $response->response_state;
+
+        if ($response->status === FormResponseStatus::Submitted) {
+            $today = now((string) config('app.display_timezone'))->toDateString();
+            $state['signature'] = null;
+            $state['date_signed'] = $today;
+
+            foreach (app(FormDefinition::class)->fields($assignment->version->schema) as $field) {
+                if (is_string($field['mapping']) && str_ends_with($field['mapping'], '_signed_on')) {
+                    $state['answers'][$field['key']] = $today;
+                }
+            }
+        }
+
+        return $state;
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('saveDraft')
+                ->label('Save Draft')
+                ->keyBindings(['mod+s'])
+                ->action(function (): void {
+                    app(SaveFormResponseDraft::class)->handle($this->assignment(), $this->form->getRawState());
+                    $this->rememberData();
+                    Notification::make()->title('Draft saved')->success()->send();
+                }),
+        ];
+    }
+
+    protected function getSaveFormAction(): Action
+    {
+        return parent::getSaveFormAction()
+            ->label('Submit Form')
+            ->keyBindings(null)
+            ->requiresConfirmation()
+            ->modalHeading('Submit this form?')
+            ->modalDescription('Please confirm that your answers are complete and ready to submit.');
     }
 
     protected function getRedirectUrl(): string
@@ -47,20 +120,11 @@ final class EditFormUser extends EditRecord
         return $this->getResource()::getUrl('index');
     }
 
-    protected function afterSave(): void
+    private function assignment(): FormAssignment
     {
-        $this->dispatch(UserAttention::UPDATED_EVENT);
-        $this->dispatch('refresh-sidebar');
-    }
+        /** @var FormAssignment $assignment */
+        $assignment = $this->getRecord();
 
-    private function formUser(): FormUser
-    {
-        $record = $this->getRecord();
-
-        if (! $record instanceof FormUser) {
-            throw new LogicException('Form user edit pages require a form user record.');
-        }
-
-        return $record;
+        return $assignment;
     }
 }

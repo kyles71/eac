@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 use App\Models\GiftCardType;
 use App\Models\Product;
+use App\Support\MediaDisks;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     $this->withVite();
+    config(['filesystems.disks.public.url' => '/storage']);
+    Storage::forgetDisk(MediaDisks::public());
 
     $giftCardType = GiftCardType::factory()
         ->denomination(5000)
@@ -35,8 +39,22 @@ afterEach(function () {
 it('opens, zooms, and navigates the product gallery lightbox', function () {
     $page = visit("/dancefam/store/products/{$this->product->id}")
         ->assertVisible('[data-product-gallery-item]:first-child')
-        ->wait(1)
-        ->assertNoJavaScriptErrors();
+        ->wait(1);
+
+    expect($page->script(<<<'JS'
+        Array.from(document.querySelectorAll('[data-product-gallery-item] img')).map((image) => [
+            new URL(image.src).origin === window.location.origin,
+            image.complete,
+            image.naturalWidth,
+            image.naturalHeight,
+        ])
+        JS))->toBe([
+        [true, true, 800, 600],
+        [true, true, 900, 600],
+        [true, true, 600, 900],
+    ]);
+
+    $page->assertNoJavaScriptErrors();
 
     expect($page->script("customElements.get('eac-product-gallery') !== undefined"))->toBeTrue();
     expect($page->script("document.querySelector('eac-product-gallery').dataset.productGalleryReady"))->toBe('true');
@@ -51,6 +69,7 @@ it('opens, zooms, and navigates the product gallery lightbox', function () {
     ))->toBe('true');
 
     $page
+        ->assertVisible('.pswp__button--zoom')
         ->click('.pswp__button--zoom')
         ->wait(0.5);
 

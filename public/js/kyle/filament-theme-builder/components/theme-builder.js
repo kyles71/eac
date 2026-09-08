@@ -1,3 +1,36 @@
+let capturedSidebarState = null
+let sidebarRestorationListenersRegistered = false
+
+const restoreCapturedSidebarState = () => {
+    const sidebar = window.Alpine?.store('sidebar')
+
+    if (!sidebar || !capturedSidebarState) {
+        return
+    }
+
+    sidebar.isOpen = capturedSidebarState.isOpen
+    sidebar.isOpenDesktop = capturedSidebarState.isOpenDesktop
+    capturedSidebarState = null
+}
+
+const restoreSidebarAfterNavigation = () => {
+    if (document.querySelector('.fi-theme-builder')) {
+        return
+    }
+
+    restoreCapturedSidebarState()
+}
+
+const registerSidebarRestorationListeners = () => {
+    if (sidebarRestorationListenersRegistered) {
+        return
+    }
+
+    sidebarRestorationListenersRegistered = true
+    document.addEventListener('livewire:navigated', restoreSidebarAfterNavigation)
+    window.addEventListener('beforeunload', restoreCapturedSidebarState)
+}
+
 export default function filamentThemeBuilder(state = {}) {
     return {
         css: state.css || '',
@@ -11,8 +44,6 @@ export default function filamentThemeBuilder(state = {}) {
         resizeTopbarListener: null,
         topbarResizeObserver: null,
         previousSidebarState: null,
-        restoreSidebarOnNavigate: null,
-        restoreSidebarOnUnload: null,
 
         init() {
             this.collapseSidebarForBuilder()
@@ -61,36 +92,18 @@ export default function filamentThemeBuilder(state = {}) {
                 return
             }
 
-            this.previousSidebarState = {
+            capturedSidebarState ??= {
                 isOpen: sidebar.isOpen,
                 isOpenDesktop: sidebar.isOpenDesktop,
             }
-            this.restoreSidebarOnNavigate = () => this.restoreSidebar()
-            this.restoreSidebarOnUnload = () => this.restoreSidebar()
-
-            document.addEventListener('livewire:navigating', this.restoreSidebarOnNavigate, { once: true })
-            window.addEventListener('beforeunload', this.restoreSidebarOnUnload, { once: true })
+            this.previousSidebarState = capturedSidebarState
+            registerSidebarRestorationListeners()
             sidebar.close()
         },
 
         restoreSidebar() {
-            const sidebar = window.Alpine?.store('sidebar')
-
-            if (!sidebar || !this.previousSidebarState) {
-                return
-            }
-
-            sidebar.isOpen = this.previousSidebarState.isOpen
-            sidebar.isOpenDesktop = this.previousSidebarState.isOpenDesktop
+            restoreCapturedSidebarState()
             this.previousSidebarState = null
-
-            if (this.restoreSidebarOnNavigate) {
-                document.removeEventListener('livewire:navigating', this.restoreSidebarOnNavigate)
-            }
-
-            if (this.restoreSidebarOnUnload) {
-                window.removeEventListener('beforeunload', this.restoreSidebarOnUnload)
-            }
         },
 
         updatePreview(css, scheme) {

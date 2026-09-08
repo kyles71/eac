@@ -126,6 +126,7 @@ it('reopens scheduled fulfillment and explains that the reason is user visible',
     $student = Student::factory()->create(['user_id' => $order->user_id]);
     $orderItem = OrderItem::factory()->create([
         'order_id' => $order->id,
+        'quantity' => 1,
         'fulfillment_workflow' => FulfillmentWorkflow::ScheduledEvent,
     ]);
     ProductQuestionAnswer::factory()->create([
@@ -155,6 +156,8 @@ it('reopens scheduled fulfillment and explains that the reason is user visible',
 
     livewire(OrderFulfillment::class)
         ->loadTable()
+        ->filterTable('status', [OrderItemStatus::Fulfilled->value])
+        ->assertActionVisible(TestAction::make('reopenFulfillment')->table($orderItem))
         ->mountAction(TestAction::make('reopenFulfillment')->table($orderItem))
         ->assertSchemaComponentExists(
             'reason',
@@ -170,6 +173,7 @@ it('reopens scheduled fulfillment and explains that the reason is user visible',
 
     livewire(OrderFulfillment::class)
         ->loadTable()
+        ->filterTable('status', [OrderItemStatus::Fulfilled->value])
         ->callAction(TestAction::make('reopenFulfillment')->table($orderItem), [
             'fulfillment_ids' => [$fulfillment->id],
             'reason' => 'Teacher conflict; EAC will contact you with options.',

@@ -15,9 +15,9 @@ final class StudentWaiver extends Model
     /** @use HasFactory<StudentWaiverFactory> */
     use HasFactory;
 
-    public function userForm(): MorphOne
+    public function formResponse(): MorphOne
     {
-        return $this->morphOne(FormUser::class, 'responseable');
+        return $this->morphOne(FormResponse::class, 'projection');
     }
 
     /** @return HasMany<EmergencyContact, $this> */

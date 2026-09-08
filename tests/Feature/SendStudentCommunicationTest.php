@@ -73,16 +73,21 @@ it('records and queues an immutable first aid communication to each recipient', 
 
     Mail::assertQueued(ManagedMail::class, 2);
     Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
+        if (! $mail->hasTo('family@example.com')) {
+            return false;
+        }
+
         $rendered = $mail->getRenderedEmail();
 
-        return $mail->hasTo('family@example.com')
-            && $mail->hasBcc('archive@example.com')
-            && $rendered->emailTypeKey === 'student-first-aid-note'
-            && str_contains($rendered->subject, 'INJURY Note for Alex')
-            && str_contains($rendered->html, 'Applied an ice pack.')
-            && str_contains($rendered->html, 'Jamie Teacher')
-            && str_contains($rendered->html, 'August 3, 2026 7:30 PM EDT')
-            && str_contains($rendered->html, 'Ballet Class');
+        expect($mail->hasBcc('archive@example.com'))->toBeTrue()
+            ->and($rendered->emailTypeKey)->toBe('student-first-aid-note')
+            ->and($rendered->subject)->toContain('INJURY Note for Alex')
+            ->and($rendered->html)->toContain('Applied an ice pack.')
+            ->and($rendered->html)->toContain('Jamie Teacher')
+            ->and($rendered->html)->toContain('August 3, 2026 7:30 PM EDT')
+            ->and($rendered->html)->toContain('Ballet Class');
+
+        return true;
     });
 });
 

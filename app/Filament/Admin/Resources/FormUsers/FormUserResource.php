@@ -6,10 +6,9 @@ namespace App\Filament\Admin\Resources\FormUsers;
 
 use App\Filament\Admin\Resources\FormUsers\Pages\ListFormUsers;
 use App\Filament\Admin\Resources\FormUsers\Pages\ViewFormUser;
-use App\Filament\Admin\Resources\FormUsers\Schemas\FormUserForm;
 use App\Filament\Admin\Resources\FormUsers\Schemas\FormUserInfolist;
 use App\Filament\Admin\Resources\FormUsers\Tables\FormUsersTable;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
 use App\Support\Filament\AdminNavigation;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -22,7 +21,7 @@ final class FormUserResource extends Resource
 {
     protected static ?string $slug = 'user-forms';
 
-    protected static ?string $model = FormUser::class;
+    protected static ?string $model = FormAssignment::class;
 
     protected static ?string $modelLabel = 'Form Assignment';
 
@@ -38,7 +37,7 @@ final class FormUserResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return FormUserForm::configure($schema);
+        return $schema;
     }
 
     public static function infolist(Schema $schema): Schema

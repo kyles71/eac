@@ -19,7 +19,7 @@ final readonly class CreateCourseHold
     public function __construct(private SendCourseHoldEmail $sendEmail) {}
 
     /**
-     * @param  list<array{course_id: int, quantity: int, student_ids?: list<int|null>}>  $lines
+     * @param  list<array{course_id?: int, quantity?: int, student_ids?: list<int|null>}>  $lines
      */
     public function handle(
         User $user,
@@ -62,7 +62,7 @@ final readonly class CreateCourseHold
                     throw new InvalidArgumentException("Not enough unreserved seats remain in \"{$course->name}\".");
                 }
 
-                $studentIds = $this->validatedStudentIds($user, $line['student_ids'] ?? []);
+                $studentIds = $this->validatedStudentIds($user, $line['student_ids']);
 
                 for ($index = 0; $index < $line['quantity']; $index++) {
                     $hold->seats()->create([
@@ -82,7 +82,7 @@ final readonly class CreateCourseHold
     }
 
     /**
-     * @param  list<array{course_id: int, quantity: int, student_ids?: list<int|null>}>  $lines
+     * @param  list<array{course_id?: int, quantity?: int, student_ids?: list<int|null>}>  $lines
      * @return list<array{course_id: int, quantity: int, student_ids: list<int|null>}>
      */
     private function normalizedLines(array $lines): array
@@ -99,7 +99,7 @@ final readonly class CreateCourseHold
                 return [
                     'course_id' => $courseId,
                     'quantity' => $quantity,
-                    'student_ids' => array_values($line['student_ids'] ?? []),
+                    'student_ids' => $line['student_ids'] ?? [],
                 ];
             })
             ->groupBy('course_id')
@@ -133,7 +133,7 @@ final readonly class CreateCourseHold
         $ids = collect($studentIds)->filter()->map(fn (mixed $id): int => (int) $id)->values();
 
         if ($ids->isEmpty()) {
-            return array_values($studentIds);
+            return $studentIds;
         }
 
         $validIds = Student::query()

@@ -4,52 +4,44 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Resources\FormUsers\Schemas;
 
-use App\Enums\FormTypes;
+use App\Models\FormAssignment;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Kyle\FilamentFormBuilder\Support\FormSchemaCompiler;
 
 final class FormUserForm
 {
-    public static function configure(Schema $schema, ?FormTypes $form_type = null, bool $withRelationships = true): Schema
+    public static function configure(Schema $schema, FormAssignment $assignment): Schema
     {
-        $form_inputs = [];
-
-        if ($form_type) {
-            $responseable = Grid::make()
-                ->columnSpanFull()
-                ->components(
-                    $form_type->getFormSchemaClass()::configure($schema, $withRelationships)->getComponents()
-                );
-
-            $withRelationships
-                ? $responseable->relationship('responseable', relatedModel: $form_type->value)
-                : $responseable->statePath('responseable');
-
-            $form_inputs = [
-                $responseable,
-            ];
-        }
+        $assignment->loadMissing(['form', 'version', 'subject']);
+        $components = app(FormSchemaCompiler::class)->components($assignment->version, $assignment);
 
         return $schema
             ->columns(2)
             ->components([
-                ...$form_inputs,
-                TextInput::make('signature')
-                    ->required(),
-                DatePicker::make('date_signed')
-                    ->label('Date')
-                    ->date()
-                    ->required()
-                    ->when(
-                        $withRelationships,
-                        fn (DatePicker $component): DatePicker => $component
-                            ->default(fn (): string => now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
-                            ->afterStateHydrated(fn (DatePicker $component, mixed $state) => blank($state)
-                                ? $component->state(now((string) config('app.display_timezone', config('app.timezone')))->toDateString())
-                                : null),
-                    ),
+                ...$components,
+                Section::make('Signature')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->visible($assignment->version->requires_signature)
+                    ->schema([
+                        TextInput::make('signature')
+                            ->required($assignment->version->requires_signature),
+                        DatePicker::make('date_signed')
+                            ->label('Date Signed')
+                            ->default(fn (): string => self::today())
+                            ->afterStateHydrated(fn (DatePicker $component, mixed $state): mixed => blank($state)
+                                ? $component->state(self::today())
+                                : null)
+                            ->required($assignment->version->requires_signature),
+                    ]),
             ]);
+    }
+
+    private static function today(): string
+    {
+        return now((string) config('app.display_timezone', config('app.timezone')))->toDateString();
     }
 }

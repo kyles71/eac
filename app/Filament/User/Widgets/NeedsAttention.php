@@ -14,7 +14,7 @@ use App\Filament\User\Pages\MyEnrollments;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Models\CourseHold;
 use App\Models\Enrollment;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
 use App\Models\Installment;
 use App\Models\RecurringPrivateLessonCharge;
 use App\Models\User;
@@ -57,21 +57,19 @@ final class NeedsAttention extends Widget
                 'color' => 'danger',
             ]);
 
-        $forms = FormUser::query()
-            ->with(['form', 'student'])
-            ->where('user_id', $user->id)
+        $forms = FormAssignment::query()
+            ->with(['form', 'subject'])
+            ->accessibleBy($user)
             ->pending()
-            ->whereHas('form', fn ($query) => $query
-                ->whereNull('valid_until')
-                ->orWhere('valid_until', '>', now()))
+            ->formIsActive()
             ->latest()
             ->get()
-            ->map(fn (FormUser $formUser): array => [
-                'title' => $formUser->form->name,
-                'description' => $formUser->student === null
+            ->map(fn (FormAssignment $assignment): array => [
+                'title' => $assignment->form->name,
+                'description' => $assignment->subject === null
                     ? 'Complete this required form.'
-                    : "Complete for {$formUser->student->first_name} {$formUser->student->last_name}.",
-                'url' => FormUserResource::getUrl('edit', ['record' => $formUser]),
+                    : "Complete for {$this->modelLabel($assignment->subject)}.",
+                'url' => FormUserResource::getUrl('edit', ['record' => $assignment]),
                 'action' => 'Complete form',
                 'color' => 'warning',
             ]);
@@ -140,5 +138,26 @@ final class NeedsAttention extends Widget
             ->concat($privateLessons)
             ->values()
             ->all();
+    }
+
+    private function modelLabel(?\Illuminate\Database\Eloquent\Model $model): string
+    {
+        if ($model === null) {
+            return '-';
+        }
+
+        if (method_exists($model, 'displayName')) {
+            return (string) $model->displayName();
+        }
+
+        if (filled($model->getAttribute('fullName'))) {
+            return (string) $model->getAttribute('fullName');
+        }
+
+        if (filled($model->getAttribute('name'))) {
+            return (string) $model->getAttribute('name');
+        }
+
+        return class_basename($model).' #'.$model->getKey();
     }
 }

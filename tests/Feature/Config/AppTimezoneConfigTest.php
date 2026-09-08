@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Models\FormUser;
+use App\Models\FormResponse;
 use Carbon\CarbonInterface;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Infolists\Components\TextEntry;
@@ -33,13 +33,13 @@ it('applies the display timezone to Filament datetime components by default', fu
         ->and(TextEntry::make('starts_at')->dateTime()->getTimezone())->toBe($displayTimezone);
 });
 
-it('casts form signature dates as dates instead of datetimes', function (): void {
-    $formUser = FormUser::factory()->create([
+it('casts form response signature dates as dates instead of datetimes', function (): void {
+    $formResponse = FormResponse::factory()->create([
         'date_signed' => '2026-05-24',
     ]);
 
-    expect($formUser->date_signed)
+    expect($formResponse->date_signed)
         ->toBeInstanceOf(CarbonInterface::class)
-        ->and($formUser->date_signed->toDateString())->toBe('2026-05-24')
-        ->and($formUser->date_signed->format('H:i:s'))->toBe('00:00:00');
+        ->and($formResponse->date_signed->toDateString())->toBe('2026-05-24')
+        ->and($formResponse->date_signed->format('H:i:s'))->toBe('00:00:00');
 });
