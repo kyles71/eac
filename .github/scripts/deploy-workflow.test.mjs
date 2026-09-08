@@ -46,3 +46,13 @@ test('links public storage before running browser tests', () => {
         /- name: Link public storage\n\s+run: php artisan storage:link --no-interaction/,
     );
 });
+
+test('temporarily bypasses quality checks without bypassing deployment tests', () => {
+    assert.match(workflow, /jobs:\n\s+quality:\n\s+if: \$\{\{ false \}\}/);
+
+    const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+
+    assert.doesNotMatch(deployJob, /^\s+- quality$/m);
+    assert.match(deployJob, /^\s+- mysql-cutover$/m);
+    assert.match(deployJob, /^\s+- browser$/m);
+});

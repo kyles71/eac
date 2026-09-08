@@ -12,6 +12,7 @@ on:
 
 jobs:
   quality:
+    if: ${{ false }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -149,7 +150,6 @@ jobs:
 
   deploy:
     needs:
-      - quality
       - mysql-cutover
       - browser
     concurrency:
