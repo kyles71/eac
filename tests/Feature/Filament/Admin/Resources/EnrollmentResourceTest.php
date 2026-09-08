@@ -40,7 +40,7 @@ it('only offers deletion when removing enrollments from a course', function (): 
         ->assertActionDoesNotExist(TestAction::make(DissociateBulkAction::class)->table()->bulk())
         ->assertActionExists(
             TestAction::make(DeleteBulkAction::class)->table()->bulk(),
-            fn (DeleteBulkAction $action): bool => $action->getLabel() === 'Delete selected enrollments'
+            fn (DeleteBulkAction $action): bool => $action->getLabel() === 'Delete enrollments'
                 && $action->getModalDescription() === 'Enrollments cannot exist without a course. This permanently deletes the selected enrollments from this course.',
         );
 

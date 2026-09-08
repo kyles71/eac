@@ -74,7 +74,7 @@ final class EnrollmentsRelationManager extends RelationManager
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->label('Delete selected enrollments')
+                        ->label('Delete enrollments')
                         ->modalDescription('Enrollments cannot exist without a course. This permanently deletes the selected enrollments from this course.'),
                 ]),
             ]);
