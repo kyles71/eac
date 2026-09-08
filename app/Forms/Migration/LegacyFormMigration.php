@@ -82,7 +82,6 @@ final readonly class LegacyFormMigration
             healthSafetyPolicyReference: EacFormContentProvider::healthSafetyPolicyReference($healthPolicy),
             textMessageUpdatesPolicyReference: EacFormContentProvider::textMessageUpdatesPolicyReference($textPolicy),
         );
-        $this->assertWaiverRuntimeWindow($waiver, $blueprint->deactivatesAt);
         $this->formDefinition->validate($blueprint->schema);
         $this->contract->assertMatches($blueprint->schema);
         $this->assertDestinationEmpty();
@@ -336,14 +335,6 @@ final readonly class LegacyFormMigration
         }
 
         return $version;
-    }
-
-    private function assertWaiverRuntimeWindow(object $waiver, ?CarbonInterface $expectedEnd): void
-    {
-        if ($expectedEnd === null
-            || ($waiver->valid_until !== null && ! $expectedEnd->equalTo($waiver->valid_until))) {
-            throw new RuntimeException('The legacy waiver runtime does not match the current approved student-waiver season.');
-        }
     }
 
     private function assertDestinationEmpty(): void

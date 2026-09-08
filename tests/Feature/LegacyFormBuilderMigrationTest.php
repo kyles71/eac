@@ -282,7 +282,7 @@ it('discards only inert legacy showcase assignments and projections', function (
         ->and(DB::table('course_forms')->where('form_id', 201)->exists())->toBeFalse();
 });
 
-it('accepts an indefinite active waiver but rejects a conflicting explicit season end', function (): void {
+it('normalizes one active legacy waiver to the current academic year', function (): void {
     Carbon::setTestNow('2026-07-15 12:00:00 UTC');
     createProductionLegacyFormFixture();
     $waiverType = (new StudentWaiver)->getMorphClass();
@@ -290,10 +290,22 @@ it('accepts an indefinite active waiver but rejects a conflicting explicit seaso
 
     expect(app(LegacyFormMigration::class)->preflight()['source_present'])->toBeTrue();
 
-    DB::table('forms')->where('form_type', $waiverType)->update(['valid_until' => '2027-09-01 04:00:00']);
+    DB::table('forms')->where('form_type', $waiverType)->update(['valid_until' => '2026-07-15 11:59:59']);
 
     expect(fn () => app(LegacyFormMigration::class)->preflight())
-        ->toThrow(RuntimeException::class, 'runtime does not match');
+        ->toThrow(RuntimeException::class, 'not currently active');
+
+    DB::table('forms')->where('form_type', $waiverType)->update(['valid_until' => '2026-08-01 04:00:00']);
+    $service = app(LegacyFormMigration::class);
+    $report = $service->preflight();
+    recordLegacyCutoverTestSnapshot($report);
+    $service->migrate();
+
+    $version = Form::query()->where('key', 'student-waiver')->firstOrFail()->versions()->sole();
+
+    expect($version->version_key)->toBe('2025-2026')
+        ->and($version->activation_starts_at?->toDateTimeString())->toBe('2025-09-01 04:00:00')
+        ->and($version->activation_ends_at?->toDateTimeString())->toBe('2026-09-01 04:00:00');
 });
 
 it('accepts an absent destination schema before migrations and rejects a partial installation', function (): void {
