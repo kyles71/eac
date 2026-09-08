@@ -54,6 +54,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 it('seeds the development database with all models', function (): void {
+    config(['app.seed_demo_data' => true]);
     Storage::fake(MediaDisks::public());
 
     $this->seed();
