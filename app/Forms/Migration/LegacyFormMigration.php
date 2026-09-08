@@ -241,7 +241,8 @@ final readonly class LegacyFormMigration
                 throw new RuntimeException("Legacy assignment [{$formUser->id}] has an incomplete signature.");
             }
 
-            if (! DB::table('emergency_contacts')->where('student_waiver_id', $formUser->responseable_id)->exists()) {
+            if ($this->isSubmitted($formUser)
+                && ! DB::table('emergency_contacts')->where('student_waiver_id', $formUser->responseable_id)->exists()) {
                 throw new RuntimeException("Legacy assignment [{$formUser->id}] has no emergency contact.");
             }
         }
