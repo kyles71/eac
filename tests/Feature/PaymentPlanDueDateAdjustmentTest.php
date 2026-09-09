@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Actions\Store\AdjustPaymentPlanDueDates;
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Models\Installment;
 use App\Models\InstallmentDueDateAdjustment;
+use App\Models\InstallmentPaymentAttempt;
 use App\Models\Order;
 use App\Models\PaymentPlan;
 use App\Models\User;
@@ -192,7 +194,7 @@ it('rejects invalid schedules without partial changes', function (): void {
         $actor,
         [$paymentPlan->installments()->firstOrFail()->id => '2026-08-09', $failedInstallment->id => '2026-08-12'],
         'Attempts to alter a paid installment.',
-    ))->toThrow(InvalidArgumentException::class, 'every unpaid installment');
+    ))->toThrow(InvalidArgumentException::class, 'every reschedulable installment');
 
     expect($failedInstallment->refresh()->due_date->toDateString())->toBe('2026-08-10')
         ->and($failedInstallment->status)->toBe(InstallmentStatus::Failed)
@@ -201,6 +203,93 @@ it('rejects invalid schedules without partial changes', function (): void {
         ->and(InstallmentDueDateAdjustment::query()->count())->toBe(0);
 
     Mail::assertNothingQueued();
+});
+
+it('does not include cancelled installments in a revised schedule', function (): void {
+    [$paymentPlan, $failedInstallment, $overdueInstallment] = paymentPlanAdjustmentFixture();
+    $cancelledInstallment = Installment::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 4,
+        'status' => InstallmentStatus::Cancelled,
+        'due_date' => '2026-09-01',
+    ]);
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    app(AdjustPaymentPlanDueDates::class)->handle(
+        paymentPlan: $paymentPlan,
+        adjustedBy: $actor,
+        dueDates: [
+            $failedInstallment->id => '2026-08-12',
+            $overdueInstallment->id => '2026-08-25',
+        ],
+        reason: 'Move the remaining collectible installments.',
+    );
+
+    expect($cancelledInstallment->refresh()->status)->toBe(InstallmentStatus::Cancelled)
+        ->and($cancelledInstallment->due_date->toDateString())->toBe('2026-09-01')
+        ->and($cancelledInstallment->dueDateAdjustments()->exists())->toBeFalse();
+});
+
+it('rejects a due date change while its installment has an active payment attempt', function (): void {
+    [$paymentPlan, $failedInstallment, $overdueInstallment] = paymentPlanAdjustmentFixture();
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::RequiresAction,
+        'total_amount' => $failedInstallment->amount,
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $failedInstallment->id,
+        'amount' => $failedInstallment->amount,
+    ]);
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    expect(fn () => app(AdjustPaymentPlanDueDates::class)->handle(
+        paymentPlan: $paymentPlan,
+        adjustedBy: $actor,
+        dueDates: [
+            $failedInstallment->id => '2026-08-12',
+            $overdueInstallment->id => '2026-08-25',
+        ],
+        reason: 'Attempt a conflicting schedule change.',
+    ))->toThrow(DomainException::class, 'already in progress');
+
+    expect($failedInstallment->refresh()->due_date->toDateString())->toBe('2026-08-10')
+        ->and($overdueInstallment->refresh()->due_date->toDateString())->toBe('2026-08-20')
+        ->and(InstallmentDueDateAdjustment::query()->count())->toBe(0);
+});
+
+it('allows another installment to be rescheduled while an unchanged installment is active', function (): void {
+    [$paymentPlan, $failedInstallment, $overdueInstallment] = paymentPlanAdjustmentFixture();
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::RequiresAction,
+        'total_amount' => $failedInstallment->amount,
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $failedInstallment->id,
+        'amount' => $failedInstallment->amount,
+    ]);
+    $actor = auth()->user();
+
+    expect($actor)->toBeInstanceOf(User::class);
+
+    $result = app(AdjustPaymentPlanDueDates::class)->handle(
+        paymentPlan: $paymentPlan,
+        adjustedBy: $actor,
+        dueDates: [
+            $failedInstallment->id => '2026-08-10',
+            $overdueInstallment->id => '2026-08-25',
+        ],
+        reason: 'Move only the later installment.',
+    );
+
+    expect($result['adjusted'])->toBe(1)
+        ->and($failedInstallment->refresh()->due_date->toDateString())->toBe('2026-08-10')
+        ->and($overdueInstallment->refresh()->due_date->toDateString())->toBe('2026-08-25');
 });
 
 it('enforces adjustment authorization at the domain boundary', function (): void {

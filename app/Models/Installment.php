@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderRefundStatus;
@@ -43,6 +44,53 @@ final class Installment extends Model
     public function dueDateAdjustments(): HasMany
     {
         return $this->hasMany(InstallmentDueDateAdjustment::class);
+    }
+
+    /** @return HasMany<InstallmentPaymentAttemptAllocation, $this> */
+    public function paymentAttemptAllocations(): HasMany
+    {
+        return $this->hasMany(InstallmentPaymentAttemptAllocation::class);
+    }
+
+    public function scopeWithoutActivePaymentAttempt(Builder $query): void
+    {
+        $query->whereDoesntHave(
+            'paymentAttemptAllocations.paymentAttempt',
+            fn (Builder $query): Builder => $query->whereIn('status', [
+                InstallmentPaymentAttemptStatus::Pending,
+                InstallmentPaymentAttemptStatus::RequiresPaymentMethod,
+                InstallmentPaymentAttemptStatus::RequiresAction,
+                InstallmentPaymentAttemptStatus::Processing,
+            ]),
+        );
+    }
+
+    public function scopeReschedulable(Builder $query): void
+    {
+        $query->whereIn('status', [
+            InstallmentStatus::Pending,
+            InstallmentStatus::Failed,
+            InstallmentStatus::Overdue,
+        ]);
+    }
+
+    public function scopeCollectibleMissed(Builder $query): void
+    {
+        $query->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue]);
+        $this->scopeNotBlockedByRefundCancellation($query);
+        $this->scopeWithoutActivePaymentAttempt($query);
+    }
+
+    public function hasActivePaymentAttempt(): bool
+    {
+        return $this->paymentAttemptAllocations()
+            ->whereHas('paymentAttempt', fn (Builder $query): Builder => $query->whereIn('status', [
+                InstallmentPaymentAttemptStatus::Pending,
+                InstallmentPaymentAttemptStatus::RequiresPaymentMethod,
+                InstallmentPaymentAttemptStatus::RequiresAction,
+                InstallmentPaymentAttemptStatus::Processing,
+            ]))
+            ->exists();
     }
 
     /**
@@ -157,7 +205,7 @@ final class Installment extends Model
             return 0;
         }
 
-        return $this->resolvedRefundedAmount ??= (int) OrderRefundPayment::query()
+        $refundedAmount = (int) OrderRefundPayment::query()
             ->where('stripe_payment_intent_id', $paymentIntentId)
             ->where('status', OrderRefundPaymentStatus::Succeeded)
             ->whereHas(
@@ -165,6 +213,30 @@ final class Installment extends Model
                 fn (Builder $query): Builder => $query->where('order_id', $this->paymentPlan->order_id),
             )
             ->sum('amount');
+
+        if ($this->stripe_payment_intent_id === null) {
+            return $this->resolvedRefundedAmount ??= min($this->amount, $refundedAmount);
+        }
+
+        $newerInstallmentAmount = (int) self::query()
+            ->where('payment_plan_id', $this->payment_plan_id)
+            ->where('stripe_payment_intent_id', $paymentIntentId)
+            ->where('status', InstallmentStatus::Paid)
+            ->where(function (Builder $query): void {
+                $query
+                    ->where('paid_at', '>', $this->paid_at)
+                    ->orWhere(function (Builder $query): void {
+                        $query
+                            ->where('paid_at', $this->paid_at)
+                            ->where('id', '>', $this->id);
+                    });
+            })
+            ->sum('amount');
+
+        return $this->resolvedRefundedAmount ??= min(
+            $this->amount,
+            max(0, $refundedAmount - $newerInstallmentAmount),
+        );
     }
 
     public function paymentStatusLabel(): string

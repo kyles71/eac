@@ -74,7 +74,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
         OrderResource::class => ['viewAny', 'view', 'refund', 'fulfill'],
-        PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates'],
+        PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates', 'retryPayment', 'sendPaymentLink'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
         RoleResource::class => $sixAbilities,
@@ -133,6 +133,8 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'Publish:LegalDocument',
             'Send:Email',
             'AdjustDueDates:PaymentPlan',
+            'RetryPayment:PaymentPlan',
+            'SendPaymentLink:PaymentPlan',
             'View:Gear',
             'View:AppUpdatesPage',
             'View:StaffNote',
@@ -155,6 +157,11 @@ it('keeps the database and super administrator synchronized to the catalog', fun
     foreach ($desired as $permission) {
         expect($permission)->not->toMatch('/^(Restore|RestoreAny|ForceDelete|ForceDeleteAny|Replicate|Reorder):/');
     }
+
+    expect(Role::findByName(Role::OWNER)->hasAllPermissions([
+        'RetryPayment:PaymentPlan',
+        'SendPaymentLink:PaymentPlan',
+    ]))->toBeTrue();
 });
 
 it('supports a non-mutating permission synchronization dry run', function (): void {

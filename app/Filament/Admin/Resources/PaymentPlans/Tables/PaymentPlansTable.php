@@ -6,10 +6,15 @@ namespace App\Filament\Admin\Resources\PaymentPlans\Tables;
 
 use App\Enums\InstallmentStatus;
 use App\Enums\PaymentPlanFrequency;
+use App\Filament\Actions\RetryPaymentPlanAction;
+use App\Filament\Actions\SendPaymentPlanPayNowLinkAction;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
 use Carbon\CarbonInterface;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -94,7 +99,14 @@ final class PaymentPlansTable
                     ->query(fn (Builder $query, array $data): Builder => self::applyStatusFilter($query, $data['value'] ?? null)),
                 SelectFilter::make('frequency')
                     ->options(PaymentPlanFrequency::class),
-            ]);
+            ])
+            ->recordActions([
+                ActionGroup::make([
+                    ViewAction::make(),
+                    RetryPaymentPlanAction::make(),
+                    SendPaymentPlanPayNowLinkAction::make(),
+                ]),
+            ], RecordActionsPosition::BeforeCells);
     }
 
     private static function status(PaymentPlan $record): string

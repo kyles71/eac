@@ -300,7 +300,7 @@ return [
                 'viewAny', 'view', 'refund', 'fulfill',
             ],
             PaymentPlanResource::class => [
-                'viewAny', 'view', 'adjustDueDates',
+                'viewAny', 'view', 'adjustDueDates', 'retryPayment', 'sendPaymentLink',
             ],
             PaymentPlanTemplateResource::class => [
                 'viewAny', 'create', 'update',

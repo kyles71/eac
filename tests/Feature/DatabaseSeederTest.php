@@ -61,6 +61,9 @@ it('seeds the development database with all models', function (): void {
 
     $seededProductImageCounts = Product::all()
         ->map(fn (Product $product): int => $product->getMedia('images')->count());
+    $seededPaymentPlans = PaymentPlan::query()
+        ->withSum('installments', 'amount')
+        ->get();
 
     expect(User::count())->toBeGreaterThanOrEqual(16)
         ->and(Student::count())->toBeGreaterThanOrEqual(15)
@@ -110,6 +113,9 @@ it('seeds the development database with all models', function (): void {
         ->and(CartItem::query()->where('custom_gift_card_amount', '>', 0)->exists())->toBeTrue()
         ->and(GiftCard::count())->toBe(7)
         ->and(PaymentPlan::count())->toBe(3)
+        ->and($seededPaymentPlans->every(
+            fn (PaymentPlan $paymentPlan): bool => $paymentPlan->total_amount === (int) $paymentPlan->getAttribute('installments_sum_amount')
+        ))->toBeTrue()
         ->and(Installment::count())->toBeGreaterThanOrEqual(9)
         ->and(EventAttendee::count())->toBeGreaterThanOrEqual(20)
         ->and(CreditGrant::count())->toBe(11)

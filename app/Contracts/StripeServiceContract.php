@@ -14,7 +14,7 @@ use Stripe\SetupIntent;
 
 interface StripeServiceContract
 {
-    public function createOrGetCustomer(User $user): Customer;
+    public function createOrGetCustomer(User $user, ?string $idempotencyKey = null): Customer;
 
     /**
      * Create an on-session PaymentIntent for the given user and amount.
@@ -26,6 +26,7 @@ interface StripeServiceContract
         int $amount,
         array $metadata = [],
         bool $setupFutureUsage = false,
+        ?string $idempotencyKey = null,
     ): PaymentIntent;
 
     /**
@@ -73,6 +74,14 @@ interface StripeServiceContract
     public function retrievePaymentIntent(string $paymentIntentId): PaymentIntent;
 
     /**
+     * Configure whether a PaymentIntent's payment method is saved for off-session use.
+     */
+    public function updatePaymentIntentSetupFutureUsage(
+        string $paymentIntentId,
+        bool $setupFutureUsage,
+    ): PaymentIntent;
+
+    /**
      * Charge a saved payment method off-session.
      *
      * @param  array<string, string>  $metadata
@@ -83,6 +92,7 @@ interface StripeServiceContract
         int $amount,
         string $description = '',
         array $metadata = [],
+        ?string $idempotencyKey = null,
     ): PaymentIntent;
 
     /**
