@@ -283,20 +283,19 @@ final class Order extends Model
                 ->orderByDesc('id')
                 ->get();
 
-            /** @var Installment $installment */
-            foreach ($installments as $installment) {
-                $paymentIntentId = $installment->stripe_payment_intent_id;
+            $installments
+                ->groupBy('stripe_payment_intent_id')
+                ->sortByDesc(fn ($group) => $group->max('paid_at'))
+                ->each(function ($group, string $paymentIntentId) use (&$sources, $reservedByPaymentIntent): void {
+                    $amount = max(
+                        0,
+                        (int) $group->sum('amount') - (int) ($reservedByPaymentIntent[$paymentIntentId] ?? 0),
+                    );
 
-                if (! is_string($paymentIntentId)) {
-                    continue;
-                }
-
-                $amount = max(0, $installment->amount - (int) ($reservedByPaymentIntent[$paymentIntentId] ?? 0));
-
-                if ($amount > 0) {
-                    $sources[] = ['payment_intent_id' => $paymentIntentId, 'amount' => $amount];
-                }
-            }
+                    if ($amount > 0) {
+                        $sources[] = ['payment_intent_id' => $paymentIntentId, 'amount' => $amount];
+                    }
+                });
         }
 
         if ($this->stripe_payment_intent_id !== null) {

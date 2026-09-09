@@ -64,15 +64,15 @@ final readonly class AdjustPaymentPlanDueDates
 
             /** @var Collection<int, Installment> $installments */
             $installments = $lockedPaymentPlan->installments()
+                ->reschedulable()
+                ->notBlockedByRefundCancellation()
                 ->orderBy('installment_number')
                 ->lockForUpdate()
                 ->get();
-            $unpaidInstallments = $installments
-                ->where('status', '!=', InstallmentStatus::Paid);
             $normalizedDueDates = $this->normalizeDueDates($dueDates);
 
-            if ($normalizedDueDates->keys()->sort()->values()->all() !== $unpaidInstallments->values()->modelKeys()) {
-                throw new InvalidArgumentException('A due date is required for every unpaid installment on this payment plan.');
+            if ($normalizedDueDates->keys()->sort()->values()->all() !== collect($installments->modelKeys())->sort()->values()->all()) {
+                throw new InvalidArgumentException('A due date is required for every reschedulable installment on this payment plan.');
             }
 
             $tomorrow = now()
@@ -81,21 +81,21 @@ final readonly class AdjustPaymentPlanDueDates
                 ->addDay()
                 ->toDateString();
 
-            foreach ($unpaidInstallments as $installment) {
+            foreach ($installments as $installment) {
                 $newDueDate = $normalizedDueDates->get($installment->id);
 
                 if (! $newDueDate instanceof CarbonImmutable || $newDueDate->toDateString() < $tomorrow) {
-                    throw new InvalidArgumentException('Every unpaid installment due date must be tomorrow or later.');
+                    throw new InvalidArgumentException('Every reschedulable installment due date must be tomorrow or later.');
                 }
             }
 
             $previousDueDate = null;
 
-            foreach ($unpaidInstallments as $installment) {
+            foreach ($installments as $installment) {
                 $dueDate = $normalizedDueDates->get($installment->id);
 
                 if (! $dueDate instanceof CarbonImmutable) {
-                    throw new InvalidArgumentException('A due date is required for every unpaid installment on this payment plan.');
+                    throw new InvalidArgumentException('A due date is required for every reschedulable installment on this payment plan.');
                 }
 
                 if ($previousDueDate instanceof CarbonImmutable && ! $dueDate->gt($previousDueDate)) {
@@ -105,7 +105,7 @@ final readonly class AdjustPaymentPlanDueDates
                 $previousDueDate = $dueDate;
             }
 
-            $changes = $unpaidInstallments
+            $changes = $installments
                 ->filter(fn (Installment $installment): bool => ! $normalizedDueDates
                     ->get($installment->id)?->isSameDay($installment->due_date))
                 ->map(fn (Installment $installment): array => [
@@ -118,6 +118,19 @@ final readonly class AdjustPaymentPlanDueDates
 
             if ($changes->isEmpty()) {
                 throw new DomainException('At least one installment due date must be changed.');
+            }
+
+            $changedInstallmentIds = $changes
+                ->map(fn (array $change): int => $change['installment']->id)
+                ->values()
+                ->all();
+            $hasActiveAttempt = Installment::query()
+                ->whereKey($changedInstallmentIds)
+                ->withoutActivePaymentAttempt()
+                ->count() !== count($changedInstallmentIds);
+
+            if ($hasActiveAttempt) {
+                throw new DomainException('A payment for one or more changed installments is already in progress. Wait for it to finish before adjusting due dates.');
             }
 
             foreach ($changes as $change) {

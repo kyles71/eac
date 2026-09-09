@@ -643,6 +643,16 @@ final class Billing extends Page
                                     ->visible($hasMultipleTermsVersions),
                             ]),
                         Actions::make([
+                            Action::make("pay_missed_installments_{$plan->id}")
+                                ->label('Pay Now')
+                                ->icon(Heroicon::OutlinedCreditCard)
+                                ->color('warning')
+                                ->url(PayPaymentPlan::getUrl(['paymentPlan' => $plan]))
+                                ->visible(fn (): bool => $plan->installments
+                                    ->contains(fn (Installment $installment): bool => in_array($installment->status, [
+                                        InstallmentStatus::Failed,
+                                        InstallmentStatus::Overdue,
+                                    ], true))),
                             $this->changePaymentMethodAction($plan),
                             $this->installmentsAction($plan),
                         ]),
