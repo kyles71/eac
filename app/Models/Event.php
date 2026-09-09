@@ -24,6 +24,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Tags\Tag;
 
+/** @property int|null $course_id */
 final class Event extends Model implements HasMedia
 {
     use HasFactory, InteractsWithMedia;
