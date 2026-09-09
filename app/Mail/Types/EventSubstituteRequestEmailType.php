@@ -24,7 +24,7 @@ final class EventSubstituteRequestEmailType implements EmailTypeContract
             new Token('event.starts_at', 'Event start date and time', example: 'August 12, 2026 6:00 PM EDT'),
             new Token('event.ends_at', 'Event end date and time', example: 'August 12, 2026 7:00 PM EDT'),
             new Token('course.name', 'Course name when applicable', example: 'Ballet 2'),
-            new Token('request.reason', 'Optional request or replacement reason', example: 'The regular teacher is unavailable.'),
+            new Token('request.reason', 'Optional reason for the substitute request', example: 'The teacher is unavailable.'),
         ];
     }
 

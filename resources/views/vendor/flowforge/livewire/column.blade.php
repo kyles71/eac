@@ -24,7 +24,14 @@
     x-bind:class="isStageCollapsed(stageId) ? 'w-14 min-w-14' : 'w-[300px] min-w-[300px]'"
 >
     <div
-        class="flowforge-column-header flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900"
+        @if($resolvedColor !== null)
+            @style([Filament\Support\get_color_css_variables($resolvedColor, shades: [50, 950])])
+        @endif
+        @class([
+            'flowforge-column-header flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700',
+            'bg-custom-50 dark:bg-custom-950' => $resolvedColor !== null,
+            'bg-white dark:bg-gray-900' => $resolvedColor === null,
+        ])
         x-show="! isStageCollapsed(stageId)"
     >
         <div
@@ -92,7 +99,14 @@
     </div>
 
     <div
-        class="flex h-full flex-col items-center gap-3 px-2 py-3"
+        @if($resolvedColor !== null)
+            @style([Filament\Support\get_color_css_variables($resolvedColor, shades: [50, 950])])
+        @endif
+        @class([
+            'flex h-full flex-col items-center gap-3 px-2 py-3',
+            'bg-custom-50 dark:bg-custom-950' => $resolvedColor !== null,
+            'bg-white dark:bg-gray-900' => $resolvedColor === null,
+        ])
         x-cloak
         x-show="isStageCollapsed(stageId)"
     >
@@ -131,6 +145,7 @@
         @if($this->getBoard()->getPositionIdentifierAttribute() && $this->canMoveCards())
             x-sortable
             x-sortable-group="cards"
+            x-init="$nextTick(() => configureCardTouchDragging($el))"
             @end.stop="handleSortableEnd($event)"
         @endif
         @if(isset($column['total']) && $column['total'] > count($column['items']))

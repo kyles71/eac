@@ -111,6 +111,12 @@ final class Student extends Model
         return $this->morphMany(EventAttendee::class, 'attendee');
     }
 
+    /** @return BelongsToMany<OrderItemFulfillment, $this> */
+    public function orderItemFulfillments(): BelongsToMany
+    {
+        return $this->belongsToMany(OrderItemFulfillment::class)->withTimestamps();
+    }
+
     public function hasCourseOrEventHistory(): bool
     {
         return $this->enrollments()->exists()

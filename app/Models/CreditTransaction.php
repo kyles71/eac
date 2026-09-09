@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
+/** @property-read CreditGrant|null $creditGrant */
 final class CreditTransaction extends Model
 {
     /** @use HasFactory<CreditTransactionFactory> */
@@ -30,6 +31,7 @@ final class CreditTransaction extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<CreditGrant, $this> */
     public function creditGrant(): BelongsTo
     {
         return $this->belongsTo(CreditGrant::class);

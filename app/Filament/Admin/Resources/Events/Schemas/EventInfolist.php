@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Schemas;
 
+use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Event;
 use App\Models\EventSubstituteRequest;
+use App\Models\Order;
+use App\Models\OrderItemFulfillment;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -42,6 +45,10 @@ final class EventInfolist
                         TextEntry::make('course.name')
                             ->label('Course')
                             ->placeholder('None'),
+                        TextEntry::make('teachers.fullName')
+                            ->label('Teachers')
+                            ->listWithLineBreaks()
+                            ->placeholder('Unassigned'),
                         TextEntry::make('calendar.name')
                             ->label('Calendar')
                             ->placeholder('None'),
@@ -76,33 +83,74 @@ final class EventInfolist
                             ->columnSpanFull()
                             ->visible(fn (Event $record): bool => $record->getMedia('documents')->isNotEmpty()),
                     ]),
+                Section::make('Order Fulfillment')
+                    ->columnSpanFull()
+                    ->schema([
+                        RepeatableEntry::make('orderItemFulfillments')
+                            ->hiddenLabel()
+                            ->columns(6)
+                            ->schema([
+                                TextEntry::make('orderItem.order.id')
+                                    ->label('Order #')
+                                    ->url(fn (OrderItemFulfillment $record): string => OrderResource::getUrl('view', [
+                                        'record' => $record->orderItem->order_id,
+                                    ])),
+                                TextEntry::make('orderItem.order.user.full_name')
+                                    ->label('Purchaser'),
+                                TextEntry::make('orderItem.product.name')
+                                    ->label('Product'),
+                                TextEntry::make('unit_number')
+                                    ->label('Unit'),
+                                TextEntry::make('fulfilled_at')
+                                    ->label('Linked At')
+                                    ->dateTime(),
+                                TextEntry::make('link_status')
+                                    ->label('Status')
+                                    ->state(fn (OrderItemFulfillment $record): string => $record->isActive() ? 'Active' : 'Reopened')
+                                    ->badge()
+                                    ->color(fn (OrderItemFulfillment $record): string => $record->isActive() ? 'success' : 'gray'),
+                            ]),
+                    ])
+                    ->visible(fn (Event $record): bool => Gate::allows('viewAny', Order::class)
+                        && $record->orderItemFulfillments()->exists()),
                 Section::make('Substitute Coverage')
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('substitute_coverage_status')
                             ->label('Status')
-                            ->state(fn (Event $record) => $record->substituteCoverageStatus())
-                            ->badge(),
-                        TextEntry::make('substituteTeacher.fullName')
-                            ->label('Confirmed Substitute')
-                            ->placeholder('None'),
-                        TextEntry::make('pending_substitute')
-                            ->label('Pending Request')
-                            ->state(fn (Event $record): ?string => $record->pendingSubstituteRequest()?->teacher?->fullName)
-                            ->placeholder('None'),
-                        TextEntry::make('substitute_needed_at')
-                            ->label('Coverage Needed Since')
-                            ->dateTime()
-                            ->placeholder('Not marked as needed'),
-                        TextEntry::make('release_reason')
-                            ->label('Release Request')
-                            ->state(fn (Event $record): ?string => $record->currentSubstituteRequest()?->release_reason)
-                            ->placeholder('None')
+                            ->state(fn (Event $record): string => $record->substituteCoverageLabel())
+                            ->badge()
+                            ->color(fn (Event $record): string => $record->substituteCoverageStatus()->getColor()),
+                        RepeatableEntry::make('substituteCoverages')
+                            ->label('Coverage by Teacher')
+                            ->table([
+                                TableColumn::make('Teacher'),
+                                TableColumn::make('Confirmed Substitute'),
+                                TableColumn::make('Needed At'),
+                                TableColumn::make('Closed At'),
+                            ])
+                            ->schema([
+                                TextEntry::make('coveredTeacher.fullName')
+                                    ->label('Teacher')
+                                    ->placeholder('Original teacher not recorded'),
+                                TextEntry::make('substituteTeacher.fullName')
+                                    ->label('Confirmed Substitute')
+                                    ->placeholder('Uncovered'),
+                                TextEntry::make('needed_at')
+                                    ->label('Needed At')
+                                    ->dateTime(),
+                                TextEntry::make('closed_at')
+                                    ->label('Closed At')
+                                    ->dateTime()
+                                    ->placeholder('Active'),
+                            ])
+                            ->contained(false)
                             ->columnSpanFull(),
                         RepeatableEntry::make('substituteRequests')
                             ->label('Request History')
                             ->table([
+                                TableColumn::make('Teacher Covered'),
                                 TableColumn::make('Teacher'),
                                 TableColumn::make('Status'),
                                 TableColumn::make('Requested By'),
@@ -110,6 +158,9 @@ final class EventInfolist
                                 TableColumn::make('Reason / Note'),
                             ])
                             ->schema([
+                                TextEntry::make('coverage.coveredTeacher.fullName')
+                                    ->label('Teacher Covered')
+                                    ->placeholder('Original teacher not recorded'),
                                 TextEntry::make('teacher.fullName')
                                     ->label('Teacher')
                                     ->placeholder('Deleted user'),
@@ -133,7 +184,7 @@ final class EventInfolist
                             ->columnSpanFull(),
                     ])
                     ->visible(fn (Event $record): bool => Gate::allows('update', $record)
-                        && ($record->substitute_needed_at !== null
+                        && ($record->substituteCoverages()->exists()
                             || $record->substituteRequests()->exists())),
                 Section::make('Cancellation')
                     ->columns(2)

@@ -73,7 +73,7 @@ it('uses the exact strict authorization resource matrix', function (): void {
         HolidayResource::class => $fiveAbilities,
         LegalDocumentResource::class => ['viewAny', 'publish'],
         ManagedBannerResource::class => $fiveAbilities,
-        OrderResource::class => ['viewAny', 'view', 'refund'],
+        OrderResource::class => ['viewAny', 'view', 'refund', 'fulfill'],
         PaymentPlanResource::class => ['viewAny', 'view', 'adjustDueDates', 'retryPayment', 'sendPaymentLink'],
         PaymentPlanTemplateResource::class => ['viewAny', 'create', 'update'],
         ProductResource::class => $sixAbilities,
@@ -139,7 +139,10 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'View:StaffNote',
             ReportKey::EnrollmentsByTerm->permission(),
             ReportKey::InstructorHoursSummary->permission(),
+            ReportKey::Payroll->permission(),
+            ReportKey::SickLeave->permission(),
             ReportWidgetKey::EnrollmentCapacityMetrics->permission(),
+            ReportWidgetKey::FinanceOverview->permission(),
             ReportWidgetKey::InstructorOverview->permission(),
         )
         ->and($desired)->not->toContain(
