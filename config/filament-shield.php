@@ -273,7 +273,7 @@ return [
                 'viewAny', 'create', 'update', 'delete', 'deleteAny',
             ],
             EventResource::class => [
-                'viewAny', 'view', 'create', 'update', 'deleteAny', 'cancel',
+                'viewAny', 'view', 'create', 'update', 'deleteAny', 'cancel', 'overrideScheduleConflicts',
             ],
             FormResource::class => [
                 'viewAny', 'view', 'create', 'update', 'deleteAny',
