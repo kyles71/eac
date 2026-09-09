@@ -77,6 +77,7 @@ final readonly class FinanceReportService
         $transactionsByOrder = $this->creditTransactionsByOrder($orders);
         $gross = 0;
         $discounts = 0;
+        $eligibleStoreCredit = 0;
         $refunds = 0;
         $pendingPaymentPlanIncome = 0;
 
@@ -84,6 +85,11 @@ final readonly class FinanceReportService
             $allocations = $this->paymentAllocations(
                 $order,
                 $transactionsByOrder->get($order->id, collect()),
+            );
+            $eligibleStoreCreditAllocations = $this->eligibleStoreCreditAllocations(
+                $order,
+                $transactionsByOrder->get($order->id, collect()),
+                $allocations,
             );
             $refundAllocations = $this->successfulRefundAllocations($order, $allocations);
             $pendingPaymentPlanAllocations = $this->pendingPaymentPlanAllocations($order, $allocations);
@@ -105,6 +111,7 @@ final readonly class FinanceReportService
 
                 $gross += $this->prorate($item->total_price, $numerator, $denominator);
                 $discounts += $this->prorate($allocation['discount'], $numerator, $denominator);
+                $eligibleStoreCredit += $eligibleStoreCreditAllocations[$item->id] ?? 0;
                 $refunds += $refundAllocations[$item->id] ?? 0;
                 $pendingPaymentPlanIncome += $pendingPaymentPlanAllocations[$item->id] ?? 0;
             }
@@ -114,7 +121,7 @@ final readonly class FinanceReportService
             'gross_enrollments' => $gross,
             'net_enrollment_purchases' => $gross
                 - $discounts
-                - $this->storeCreditGrantedDuring($term)
+                - $eligibleStoreCredit
                 - $refunds,
             'pending_payment_plan_income' => $pendingPaymentPlanIncome,
         ];
@@ -318,6 +325,101 @@ final readonly class FinanceReportService
         return ['discount' => 0, 'restricted_credit' => 0, 'credit' => 0];
     }
 
+    /**
+     * @param  Collection<int, CreditTransaction>  $transactions
+     * @param  array<int, array{discount: int, restricted_credit: int, credit: int}>  $paymentAllocations
+     * @return array<int, int>
+     */
+    private function eligibleStoreCreditAllocations(
+        Order $order,
+        Collection $transactions,
+        array $paymentAllocations,
+    ): array {
+        $eligibleAllocations = array_fill_keys($order->orderItems->modelKeys(), 0);
+        $remainingRestrictedAllocations = collect($paymentAllocations)
+            ->map(fn (array $allocation): int => $allocation['restricted_credit'])
+            ->all();
+        $remainingUnrestrictedAllocations = collect($paymentAllocations)
+            ->map(fn (array $allocation): int => $allocation['credit'])
+            ->all();
+
+        foreach ($transactions as $transaction) {
+            $grant = $transaction->creditGrant;
+
+            if (! $grant instanceof CreditGrant) {
+                continue;
+            }
+
+            $allocated = $grant->hasRestrictions()
+                ? $this->allocateCreditTransaction(
+                    $order->orderItems,
+                    $remainingRestrictedAllocations,
+                    abs($transaction->amount),
+                    $grant,
+                )
+                : $this->allocateCreditTransaction(
+                    $order->orderItems,
+                    $remainingUnrestrictedAllocations,
+                    abs($transaction->amount),
+                );
+
+            if (! $this->isEligibleEnrollmentCredit($grant)) {
+                continue;
+            }
+
+            foreach ($allocated as $itemId => $amount) {
+                $eligibleAllocations[$itemId] += $amount;
+            }
+        }
+
+        return $eligibleAllocations;
+    }
+
+    /**
+     * @param  Collection<int, OrderItem>  $items
+     * @param  array<int, int>  $remainingAllocations
+     * @return array<int, int>
+     */
+    private function allocateCreditTransaction(
+        Collection $items,
+        array &$remainingAllocations,
+        int $amount,
+        ?CreditGrant $restrictedGrant = null,
+    ): array {
+        $allocated = [];
+
+        foreach ($items as $item) {
+            if ($amount <= 0) {
+                break;
+            }
+
+            if ($restrictedGrant instanceof CreditGrant && ! $restrictedGrant->appliesToProduct($item->product)) {
+                continue;
+            }
+
+            $applied = min($remainingAllocations[$item->id] ?? 0, $amount);
+
+            if ($applied <= 0) {
+                continue;
+            }
+
+            $remainingAllocations[$item->id] -= $applied;
+            $allocated[$item->id] = $applied;
+            $amount -= $applied;
+        }
+
+        return $allocated;
+    }
+
+    private function isEligibleEnrollmentCredit(CreditGrant $grant): bool
+    {
+        $today = now($this->displayTimezone())->toDateString();
+
+        return $grant->revoked_at === null
+            && ($grant->expires_on === null || $grant->expires_on->toDateString() >= $today)
+            && $grant->source_type !== (new GiftCard)->getMorphClass();
+    }
+
     /** @return array{int, int} */
     private function paymentPlanProgress(Order $order): array
     {
@@ -445,41 +547,6 @@ final readonly class FinanceReportService
         }
 
         return $this->allocateOrderItemPayments->allocateProportionally($amounts, $refundedAmount);
-    }
-
-    private function storeCreditGrantedDuring(AcademicTerm $term): int
-    {
-        [$startsAt, $endsAt] = $this->academicTermDateRange($term);
-        $giftCardMorphClass = (new GiftCard)->getMorphClass();
-        $today = now($this->displayTimezone())->toDateString();
-
-        return (int) CreditGrant::query()
-            ->whereBetween('created_at', [$startsAt, $endsAt])
-            ->whereNull('revoked_at')
-            ->where(function (Builder $query) use ($today): void {
-                $query
-                    ->whereNull('expires_on')
-                    ->orWhereDate('expires_on', '>=', $today);
-            })
-            ->where(function (Builder $query) use ($giftCardMorphClass): void {
-                $query
-                    ->whereNull('source_type')
-                    ->orWhere('source_type', '!=', $giftCardMorphClass);
-            })
-            ->sum('initial_amount');
-    }
-
-    /** @return array{CarbonImmutable, CarbonImmutable} */
-    private function academicTermDateRange(AcademicTerm $term): array
-    {
-        return [
-            CarbonImmutable::parse($term->starts_on->toDateString(), $this->displayTimezone())
-                ->startOfDay()
-                ->setTimezone((string) config('app.timezone', 'UTC')),
-            CarbonImmutable::parse($term->ends_on->toDateString(), $this->displayTimezone())
-                ->endOfDay()
-                ->setTimezone((string) config('app.timezone', 'UTC')),
-        ];
     }
 
     /** @param array<string, mixed> $filters */

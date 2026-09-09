@@ -21,6 +21,7 @@ use App\Filament\Admin\Widgets\Reports\FinanceOverview;
 use App\Models\AcademicTerm;
 use App\Models\Course;
 use App\Models\CreditGrant;
+use App\Models\CreditTransaction;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventSubstituteCoverage;
@@ -86,7 +87,10 @@ it('allows finance widget permission without exposing either finance report', fu
     livewire(FinanceOverview::class)
         ->assertOk()
         ->assertSee('Payment-plan income is recognized as installments are paid')
-        ->assertSee('Pending Payment Plan Income')
+        ->assertSee('Pending Course Payment Plan Income')
+        ->assertSee('Course purchases before discounts')
+        ->assertSee('Course purchases after discounts')
+        ->assertSee('Remaining collectible course principal')
         ->assertSee('payment-plan fees excluded');
 });
 
@@ -106,7 +110,7 @@ it('renders the term selector before the finance widget and lists the reports', 
         ->assertOk()
         ->assertSee('Gross Enrollments')
         ->assertSee('Net Enrollment Purchases')
-        ->assertSee('Pending Payment Plan Income');
+        ->assertSee('Pending Course Payment Plan Income');
 
     expect(app(FinanceReportService::class)->dashboard(null))->toBe([
         'gross_enrollments' => 0,
@@ -163,8 +167,26 @@ it('calculates collected gross and net course purchases by academic term', funct
         'amount' => 4000,
         'status' => OrderRefundPaymentStatus::Succeeded,
     ]);
-    CreditGrant::factory()->amount(1000)->create([
-        'created_at' => $term->starts_on->addMonth(),
+    $restrictedGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(500)
+        ->restrictedTo(ProductType::Course)
+        ->create(['remaining_amount' => 0]);
+    CreditTransaction::factory()->checkoutDebit()->for($restrictedGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -500,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
+    ]);
+    $unrestrictedGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(500)
+        ->create(['remaining_amount' => 0]);
+    CreditTransaction::factory()->checkoutDebit()->for($unrestrictedGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -500,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
     ]);
     $failedOrder = Order::factory()->failed()->create([
         'subtotal' => 3000,
@@ -214,7 +236,116 @@ it('reconstructs missing legacy discount allocations', function (): void {
     ]);
 });
 
-it('recognizes paid payment plan installments and eligible term credit while excluding fees', function (): void {
+it('limits gross and net to selected-term course purchases and eligible store credit used on them', function (): void {
+    $term = AcademicTerm::factory()->create();
+    $otherTerm = AcademicTerm::factory()->create();
+    $course = Course::factory()->for($term)->create();
+    $otherCourse = Course::factory()->for($otherTerm)->create();
+    $courseProduct = Product::factory()->forCourse($course)->create();
+    $otherCourseProduct = Product::factory()->forCourse($otherCourse)->create();
+    $gearProduct = Product::factory()->create();
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 15000,
+        'total' => 5500,
+        'discount_amount' => 1500,
+        'credit_applied' => 8000,
+    ]);
+    OrderItem::factory()->fulfilled()->for($order)->for($gearProduct)->create([
+        'quantity' => 1,
+        'unit_price' => 5000,
+        'total_price' => 5000,
+        'discount_allocated' => 500,
+        'credit_allocated' => 3000,
+        'stripe_allocated' => 1500,
+    ]);
+    OrderItem::factory()->fulfilled()->for($order)->for($courseProduct)->create([
+        'quantity' => 1,
+        'unit_price' => 10000,
+        'total_price' => 10000,
+        'discount_allocated' => 1000,
+        'credit_allocated' => 5000,
+        'stripe_allocated' => 4000,
+    ]);
+
+    $eligibleGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(4000)
+        ->create([
+            'remaining_amount' => 0,
+            'created_at' => $term->starts_on->subYear(),
+        ]);
+    CreditTransaction::factory()->checkoutDebit()->for($eligibleGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -4000,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
+    ]);
+
+    $giftCard = GiftCard::factory()->create();
+    $giftCardGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(2000)
+        ->create([
+            'remaining_amount' => 0,
+            'source_type' => $giftCard->getMorphClass(),
+            'source_id' => $giftCard->id,
+        ]);
+    CreditTransaction::factory()->checkoutDebit()->for($giftCardGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -2000,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
+    ]);
+
+    $expiredGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(1000)
+        ->expired()
+        ->create(['remaining_amount' => 0]);
+    CreditTransaction::factory()->checkoutDebit()->for($expiredGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -1000,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
+    ]);
+
+    $revokedGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(2000)
+        ->create([
+            'remaining_amount' => 1000,
+            'revoked_at' => now(),
+        ]);
+    CreditTransaction::factory()->checkoutDebit()->for($revokedGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -1000,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
+    ]);
+
+    CreditGrant::factory()->for($order->user)->amount(50000)->create([
+        'created_at' => $term->starts_on->addDay(),
+    ]);
+
+    $otherOrder = Order::factory()->completed()->create([
+        'subtotal' => 7000,
+        'total' => 7000,
+    ]);
+    OrderItem::factory()->fulfilled()->for($otherOrder)->for($otherCourseProduct)->create([
+        'quantity' => 1,
+        'unit_price' => 7000,
+        'total_price' => 7000,
+        'stripe_allocated' => 7000,
+    ]);
+
+    expect(app(FinanceReportService::class)->dashboard($term))->toBe([
+        'gross_enrollments' => 10000,
+        'net_enrollment_purchases' => 8000,
+        'pending_payment_plan_income' => 0,
+    ]);
+});
+
+it('recognizes paid payment plan installments and eligible credit used while excluding fees', function (): void {
     $term = AcademicTerm::factory()->create();
     $course = Course::factory()->for($term)->create();
     $product = Product::factory()->forCourse($course)->create(['price' => 10000]);
@@ -223,12 +354,14 @@ it('recognizes paid payment plan installments and eligible term credit while exc
         ->create(['number_of_installments' => 4]);
     $order = Order::factory()->completed()->create([
         'subtotal' => 10000,
-        'total' => 8240,
+        'total' => 7416,
         'discount_amount' => 2000,
-        'payment_plan_fee' => 240,
-        'payment_plan_principal' => 8000,
+        'credit_applied' => 800,
+        'payment_plan_fee' => 216,
+        'payment_plan_principal' => 7200,
         'payment_plan_subtotal' => 10000,
         'payment_plan_discount_amount' => 2000,
+        'payment_plan_credit_applied' => 800,
         'payment_plan_template_id' => $template->id,
     ]);
     OrderItem::factory()->fulfilled()->for($order)->for($product)->create([
@@ -236,34 +369,45 @@ it('recognizes paid payment plan installments and eligible term credit while exc
         'unit_price' => 10000,
         'total_price' => 10000,
         'discount_allocated' => 2000,
-        'stripe_allocated' => 8000,
+        'credit_allocated' => 800,
+        'stripe_allocated' => 7200,
+    ]);
+    $creditGrant = CreditGrant::factory()
+        ->for($order->user)
+        ->amount(800)
+        ->create([
+            'remaining_amount' => 0,
+            'created_at' => $term->starts_on->subMonth(),
+        ]);
+    CreditTransaction::factory()->checkoutDebit()->for($creditGrant)->create([
+        'user_id' => $order->user_id,
+        'amount' => -800,
+        'reference_type' => $order->getMorphClass(),
+        'reference_id' => $order->id,
     ]);
     $paymentPlan = PaymentPlan::factory()->for($order)->create([
         'payment_plan_template_id' => $template->id,
-        'total_amount' => 8240,
+        'total_amount' => 7416,
         'number_of_installments' => 4,
     ]);
     Installment::factory()->paid()->for($paymentPlan)->create([
         'installment_number' => 1,
-        'amount' => 2060,
+        'amount' => 1854,
     ]);
     $futureInstallments = Installment::factory(3)->for($paymentPlan)->sequence(
         ['installment_number' => 2],
         ['installment_number' => 3],
         ['installment_number' => 4],
-    )->create(['amount' => 2060]);
-    $refund = OrderRefund::factory()->for($order)->create(['amount' => 1530]);
+    )->create(['amount' => 1854]);
+    $refund = OrderRefund::factory()->for($order)->create(['amount' => 1427]);
     OrderRefundPayment::factory()->for($refund)->create([
-        'amount' => 1030,
+        'amount' => 927,
         'status' => OrderRefundPaymentStatus::Succeeded,
     ]);
     OrderRefundPayment::factory()->for($refund)->create([
         'stripe_payment_intent_id' => 'pi_pending_refund',
         'amount' => 500,
         'status' => OrderRefundPaymentStatus::Pending,
-    ]);
-    CreditGrant::factory()->amount(500)->create([
-        'created_at' => $term->starts_on->addMonth(),
     ]);
     CreditGrant::factory()->amount(600)->expired()->create([
         'created_at' => $term->starts_on->addMonth(),
@@ -284,8 +428,8 @@ it('recognizes paid payment plan installments and eligible term credit while exc
 
     expect(app(FinanceReportService::class)->dashboard($term))->toBe([
         'gross_enrollments' => 2500,
-        'net_enrollment_purchases' => 500,
-        'pending_payment_plan_income' => 6000,
+        'net_enrollment_purchases' => 300,
+        'pending_payment_plan_income' => 5400,
     ]);
 
     $futureInstallments->first()->update([
@@ -295,8 +439,8 @@ it('recognizes paid payment plan installments and eligible term credit while exc
 
     expect(app(FinanceReportService::class)->dashboard($term))->toBe([
         'gross_enrollments' => 5000,
-        'net_enrollment_purchases' => 2500,
-        'pending_payment_plan_income' => 4000,
+        'net_enrollment_purchases' => 2300,
+        'pending_payment_plan_income' => 3600,
     ]);
 
     $futureInstallments->each->update([
@@ -304,7 +448,11 @@ it('recognizes paid payment plan installments and eligible term credit while exc
         'paid_at' => now(),
     ]);
 
-    expect(app(FinanceReportService::class)->dashboard($term)['pending_payment_plan_income'])->toBe(0);
+    expect(app(FinanceReportService::class)->dashboard($term))->toBe([
+        'gross_enrollments' => 10000,
+        'net_enrollment_purchases' => 6300,
+        'pending_payment_plan_income' => 0,
+    ]);
 });
 
 it('allocates all collectible installment states by course term and honors refund cancellation', function (): void {
@@ -383,7 +531,8 @@ it('allocates all collectible installment states by course term and honors refun
     ]);
     $service = app(FinanceReportService::class);
 
-    expect($service->dashboard($term)['pending_payment_plan_income'])->toBe(4800)
+    expect($paymentPlan->remainingBalance())->toBe(14832)
+        ->and($service->dashboard($term)['pending_payment_plan_income'])->toBe(4800)
         ->and($service->dashboard($otherTerm)['pending_payment_plan_income'])->toBe(2400);
 
     $cancellation = OrderRefund::factory()->for($order)->create([
