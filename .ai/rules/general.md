@@ -28,3 +28,6 @@ Commits may be made as work progresses. For a conflicted merge, resolve and veri
 
 ## Run socket-based quality tools with elevated permissions
 In this managed workspace, Pest and PHPStan open local listening sockets for browser/bootstrap or parallel workers and fail inside the default sandbox. Run `vendor/bin/pest --no-progress ...` and `vendor/bin/phpstan analyse --memory-limit=2G --no-progress --error-format=raw ...` with elevated sandbox permissions on the first attempt. The 2G PHPStan memory limit is the project standard and prevents parallel worker crashes at the default 128M limit.
+
+## Require focused PHPStan before completion
+A turn that changes PHP is not complete until PHPStan is clean for every touched PHP file. Run a focused `vendor/bin/phpstan analyse --no-progress --error-format=raw <touched paths...>` before the broader relevant analysis; fix all new findings rather than relying only on a full-suite cache or unrelated scope.
