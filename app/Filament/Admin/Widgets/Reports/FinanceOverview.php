@@ -43,13 +43,13 @@ final class FinanceOverview extends StatsOverviewWidget
 
         return [
             Stat::make('Gross Enrollments', format_money($metrics['gross_enrollments']))
-                ->description($termName.' · Before discounts, eligible credit, and refunds')
+                ->description($termName.' · Course purchases before discounts, store credit, and refunds')
                 ->descriptionIcon(Heroicon::OutlinedBanknotes),
             Stat::make('Net Enrollment Purchases', format_money($metrics['net_enrollment_purchases']))
-                ->description($termName.' · After discounts, eligible credit granted, and successful refunds')
+                ->description($termName.' · Course purchases after discounts, eligible store credit used, and successful refunds')
                 ->descriptionIcon(Heroicon::OutlinedReceiptPercent),
-            Stat::make('Pending Payment Plan Income', format_money($metrics['pending_payment_plan_income']))
-                ->description($termName.' · Collectible enrollment principal; payment-plan fees excluded')
+            Stat::make('Pending Course Payment Plan Income', format_money($metrics['pending_payment_plan_income']))
+                ->description($termName.' · Remaining collectible course principal; payment-plan fees excluded')
                 ->descriptionIcon(Heroicon::OutlinedClock),
         ];
     }

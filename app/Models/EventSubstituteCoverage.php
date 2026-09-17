@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/** @property int|null $substitute_teacher_id */
 final class EventSubstituteCoverage extends Model
 {
     /** @use HasFactory<EventSubstituteCoverageFactory> */
