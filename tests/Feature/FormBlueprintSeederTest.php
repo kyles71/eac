@@ -16,9 +16,11 @@ use App\Support\LegalDocuments\HealthSafetyPolicy;
 use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use Database\Seeders\ShowcaseParticipationFormSeeder;
 use Database\Seeders\StudentWaiverFormSeeder;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Livewire as LivewireSchemaComponent;
 use Illuminate\Support\Carbon;
@@ -328,6 +330,18 @@ it('compares seeded waiver versions containing repeatable blocks', function (): 
         ->assertNotified()
         ->call('setTab', 'preview');
 
+    $deleteAction = TestAction::make('deleteComponent')->arguments([
+        'key' => DefaultFormDefinitions::EmergencyContacts,
+        'label' => 'Emergency Contacts',
+    ]);
+
+    $page
+        ->call('setTab', 'build')
+        ->assertDontSeeHtml('wire:confirm')
+        ->mountAction($deleteAction)
+        ->assertActionMounted($deleteAction)
+        ->unmountAction();
+
     $preview = $page->instance()->getSchema('preview')->getComponent(
         findComponentUsing: fn (Component $component): bool => $component instanceof LivewireSchemaComponent,
         withActions: false,
@@ -370,7 +384,7 @@ it('renders a seeded waiver live preview independently from the editor', functio
     $this->seed(StudentWaiverFormSeeder::class);
     $version = Form::query()->where('key', 'student-waiver')->firstOrFail()->currentVersion;
 
-    livewire(FormVersionPreview::class, [
+    $preview = livewire(FormVersionPreview::class, [
         'version' => $version,
         'authoringState' => [
             'label' => $version->label,
@@ -381,6 +395,55 @@ it('renders a seeded waiver live preview independently from the editor', functio
         ->assertSee('Consent to Medical Treatment')
         ->assertSee('Emergency Contacts')
         ->assertSee('Signature');
+
+    expect($preview->instance())->toBeInstanceOf(HasActions::class);
+    $contactsBefore = data_get(
+        $preview->get('previewData'),
+        'answers.'.DefaultFormDefinitions::EmergencyContacts,
+        [],
+    );
+
+    $preview->mountAction(TestAction::make('add')->schemaComponent(
+        'answers.'.DefaultFormDefinitions::EmergencyContacts,
+        'preview',
+    ));
+
+    expect(data_get(
+        $preview->get('previewData'),
+        'answers.'.DefaultFormDefinitions::EmergencyContacts,
+        [],
+    ))->toHaveCount(count($contactsBefore) + 1);
+});
+
+it('shows EAC block configuration errors in the form editor', function (): void {
+    Filament::setCurrentPanel('admin');
+    $form = Form::factory()->create([
+        'updates_allowed' => false,
+        'update_strategy' => null,
+    ]);
+    $version = $form->createDraftVersion(schema: [[
+        'type' => 'emergency_contacts',
+        'data' => [
+            'key' => (string) Str::uuid(),
+            'label' => 'Emergency Contacts',
+            'min_items' => 1,
+            'default_items' => 2,
+        ],
+    ]]);
+    $message = 'Every emergency contacts block must select a published Text Message Updates Policy version.';
+
+    livewire(EditFormVersion::class, [
+        'record' => $form->id,
+        'version' => $version->id,
+    ])
+        ->call('save')
+        ->assertNotified(
+            Notification::make()
+                ->title('Form version could not be saved')
+                ->body($message)
+                ->danger()
+                ->persistent(),
+        );
 });
 
 /**
