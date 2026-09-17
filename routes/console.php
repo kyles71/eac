@@ -83,6 +83,13 @@ Schedule::command('cart:send-abandoned-reminders')
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
 
+Schedule::command('forms:reconcile-required')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->onOneServer()
+    ->name('reconcile-required-forms')
+    ->description('Reconcile course-required form assignments as event windows pass');
+
 Schedule::command('private-lessons:send-payment-reminders')
     ->dailyAt('08:00')
     ->timezone('America/New_York')

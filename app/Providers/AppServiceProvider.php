@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\StripeServiceContract;
+use App\Listeners\Forms\ReconcileRequiredFormsForPublishedVersion;
 use App\Models\Course;
 use App\Models\CourseForm;
 use App\Models\Enrollment;
 use App\Models\Event;
-use App\Models\Form;
 use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Holiday;
@@ -19,7 +19,6 @@ use App\Models\User;
 use App\Observers\CourseFormObserver;
 use App\Observers\EnrollmentObserver;
 use App\Observers\EventObserver;
-use App\Observers\FormObserver;
 use App\Observers\HolidayObserver;
 use App\Observers\ProductableObserver;
 use App\Observers\StudentObserver;
@@ -28,9 +27,11 @@ use App\Services\StripeService;
 use App\Support\PasswordRequirements;
 use App\Support\TextmagicMailTransportFactory;
 use BezhanSalleh\PanelSwitch\PanelSwitch;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Kyle\FilamentFormBuilder\Events\FormVersionActivated;
 use Stripe\StripeClient;
 
 final class AppServiceProvider extends ServiceProvider
@@ -54,13 +55,13 @@ final class AppServiceProvider extends ServiceProvider
         CourseForm::observe(CourseFormObserver::class);
         Enrollment::observe(EnrollmentObserver::class);
         Event::observe(EventObserver::class);
-        Form::observe(FormObserver::class);
         GiftCardType::observe(ProductableObserver::class);
         Holiday::observe(HolidayObserver::class);
         RecurringPrivateLessonCharge::observe(ProductableObserver::class);
         Student::observe(StudentObserver::class);
         Gear::observe(ProductableObserver::class);
         User::observe(UserObserver::class);
+        EventFacade::listen(FormVersionActivated::class, ReconcileRequiredFormsForPublishedVersion::class);
 
         Mail::extend('textmagic', fn (array $config) => TextmagicMailTransportFactory::make($config));
 

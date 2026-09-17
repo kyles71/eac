@@ -147,10 +147,6 @@ final readonly class ProductQuestionAnswerService
         for ($unitNumber = 1; $unitNumber <= $cartItem->quantity; $unitNumber++) {
             $storedAnswers = $storedUnits[$unitNumber] ?? [];
 
-            if (! is_array($storedAnswers)) {
-                $storedAnswers = [];
-            }
-
             $answers = [];
 
             /** @var ProductQuestion $question */
