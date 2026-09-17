@@ -97,17 +97,37 @@ it('renders the responsive Designer V2 workspace and temporary sidebar collapse'
 
     $desktop->script(<<<'JS'
         async () => {
-            const item = Array.from(document.querySelectorAll('[data-designer-node]'))
-                .find((element) => element.textContent.includes('Original preview question'))
+            const waitFor = async (callback, failureMessage) => {
+                const deadline = Date.now() + 10000
+
+                while (Date.now() < deadline) {
+                    const result = callback()
+
+                    if (result) {
+                        return result
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 50))
+                }
+
+                throw new Error(failureMessage)
+            }
+            const item = await waitFor(
+                () => Array.from(document.querySelectorAll('[data-designer-node]'))
+                    .find((element) => element.textContent.includes('Original preview question')),
+                'The preview question did not render on the designer canvas.',
+            )
 
             item.click()
 
-            await new Promise((resolve) => setTimeout(resolve, 300))
-            const input = Array.from(document.querySelectorAll('[data-designer-inspector] input'))
-                .find((element) => ['Original preview question', 'Updated preview question'].includes(element.value))
+            const input = await waitFor(
+                () => Array.from(document.querySelectorAll('[data-designer-inspector] input'))
+                    .find((element) => ['Original preview question', 'Updated preview question'].includes(element.value)),
+                'The selected question did not load in the inspector.',
+            )
             const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
 
-            if (input && input.value !== 'Updated preview question') {
+            if (input.value !== 'Updated preview question') {
                 input.focus()
                 valueSetter.call(input, 'Updated preview question')
                 input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -115,7 +135,11 @@ it('renders the responsive Designer V2 workspace and temporary sidebar collapse'
                 input.blur()
             }
 
-            await new Promise((resolve) => setTimeout(resolve, 1000))
+            await waitFor(
+                () => Array.from(document.querySelectorAll('[data-designer-node]'))
+                    .some((element) => element.textContent.includes('Updated preview question')),
+                'The updated question label did not render on the designer canvas.',
+            )
 
             return true
         }
