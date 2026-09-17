@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Schedule;
 
+Schedule::command('text-messages:recover')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('recover-text-messages')
+    ->description('Dispatch pending texts and flag interrupted submissions');
+
 Schedule::command('installments:process')
     ->dailyAt('10:00')
     ->timezone('America/New_York')

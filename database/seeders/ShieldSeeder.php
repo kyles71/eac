@@ -33,6 +33,8 @@ final class ShieldSeeder extends Seeder
             Permission::findByName('Manage:DashboardAppearance', 'web'),
             Permission::findByName('OverrideScheduleConflicts:Event', 'web'),
             Permission::findByName('Send:Email', 'web'),
+            Permission::findByName('Send:TextMessage', 'web'),
+            Permission::findByName('View:TextMessageHistory', 'web'),
             Permission::findByName('Update:Board', 'web'),
             Permission::findByName('Update:BoardItem', 'web'),
             Permission::findByName('Update:Event', 'web'),

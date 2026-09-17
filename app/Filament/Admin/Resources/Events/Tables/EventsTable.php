@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Events\Tables;
 
 use App\Enums\EventSubstituteCoverageStatus;
 use App\Filament\Actions\CancelEventAction;
+use App\Filament\Actions\SendTextMessageAction;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Models\Event;
 use Filament\Actions\Action;
@@ -93,6 +94,7 @@ final class EventsTable
             ->recordActions([
                 ActionGroup::make([
                     ...$additionalRecordActions,
+                    SendTextMessageAction::make()->forEvent(fn (?Event $record): ?Event => $record),
                     CancelEventAction::make(),
                 ]),
             ])

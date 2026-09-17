@@ -72,6 +72,8 @@ final class AdminNavigation
 
     public const int ToolsMailManager = 20;
 
+    public const int ToolsTextMessages = 25;
+
     public const int ToolsThemeBuilder = 30;
 
     public const int ToolsBoards = 35;

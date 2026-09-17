@@ -4,13 +4,29 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\FormTypes;
 use App\Models\EmergencyContact;
+use App\Models\Form;
+use App\Models\FormUser;
+use App\Models\Student;
 use App\Models\StudentWaiver;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /** @extends Factory<EmergencyContact> */
 final class EmergencyContactFactory extends Factory
 {
+    public function forStudent(Student $student): static
+    {
+        return $this->afterCreating(function (EmergencyContact $contact) use ($student): void {
+            FormUser::factory()
+                ->for(Form::factory()->create(['form_type' => FormTypes::StudentWaiver]), 'form')
+                ->for($student->user, 'user')
+                ->forStudent($student)
+                ->for($contact->studentWaiver, 'responseable')
+                ->create();
+        });
+    }
+
     public function definition(): array
     {
         return [

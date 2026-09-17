@@ -132,6 +132,8 @@ it('keeps the database and super administrator synchronized to the catalog', fun
             'OverrideScheduleConflicts:Event',
             'Publish:LegalDocument',
             'Send:Email',
+            'Send:TextMessage',
+            'View:TextMessageHistory',
             'AdjustDueDates:PaymentPlan',
             'View:Gear',
             'View:AppUpdatesPage',

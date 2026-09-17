@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Events\Pages;
 
+use App\Filament\Actions\SendTextMessageAction;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Admin\Resources\Events\Schemas\EventForm;
 use App\Filament\Admin\Resources\Traits\HasRecurring;
@@ -47,6 +48,7 @@ final class ListEvents extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            SendTextMessageAction::make('textEventsByDate')->forDate(),
             CreateAction::make()
                 ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
                 ->after(function (array $data, CreateAction $action): void {

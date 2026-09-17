@@ -7,6 +7,7 @@ namespace App\Filament\Admin\Resources\Events\Pages;
 use App\Filament\Actions\CancelEventAction;
 use App\Filament\Actions\EventSubstituteActions;
 use App\Filament\Actions\SendEmailAction;
+use App\Filament\Actions\SendTextMessageAction;
 use App\Filament\Actions\StudentContactActionGroup;
 use App\Filament\Admin\Resources\Events\EventResource;
 use App\Filament\Tables\Columns\AttendanceRadioColumn;
@@ -101,6 +102,7 @@ final class ViewEvent extends ViewRecord implements HasTable
                 ->to(fn (): array => app(EventEmailRecipientsService::class)->forEvent($this->event()))
                 ->visible(fn (): bool => Gate::allows('update', $this->event())),
             CancelEventAction::make(),
+            SendTextMessageAction::make()->forEvent(fn (): Event => $this->event()),
             EditAction::make()
                 ->visible(fn (): bool => ! $this->event()->isCancelled()),
         ];

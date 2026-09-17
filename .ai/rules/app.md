@@ -40,3 +40,6 @@ Send managed templates through `QueueManagedEmail` and handcrafted messages thro
 
 ## Use ApplicationDateTime for timezone boundaries
 Use `App\Support\ApplicationDateTime` when converting between user-facing business times and stored instants. Choose the source-aware method explicitly: `fromDisplayInput()` for local form input, `fromStorage()` for persisted/dehydrated values, `forDisplay()` for presentation, and `endOfDisplayDay()` for inclusive local date boundaries; do not guess a string's source timezone.
+
+## Keep event texting consent-aware and safe to resume
+Send event texts through QueueEventTextMessages and DeliverTextMessage. Resolve student rosters with EventAttendanceService and the latest completed waiver; only opted-in emergency contacts qualify. Normalize US numbers and enforce one recipient per batch/phone. Pin the provider and sender to the batch, claim each recipient atomically before submission, and never automatically resend uncertain or interrupted requests. Texting is separate from event cancellation; grant Send:TextMessage and View:TextMessageHistory to owners/super administrators by default.
