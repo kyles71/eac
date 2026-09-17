@@ -6,6 +6,7 @@ namespace App\Actions\Events;
 
 use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Enums\EventTeacherAssignmentMode;
+use App\Exceptions\TeacherScheduleConflictException;
 use App\Models\Course;
 use App\Models\Event;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Services\TeacherScheduleConflictService;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 final readonly class ManageEventTeacherAssignments
@@ -20,9 +22,12 @@ final readonly class ManageEventTeacherAssignments
     public function __construct(private TeacherScheduleConflictService $conflicts) {}
 
     /** @param list<int> $teacherIds */
-    public function assignCustom(Event $event, array $teacherIds): Event
-    {
-        return DB::transaction(function () use ($event, $teacherIds): Event {
+    public function assignCustom(
+        Event $event,
+        array $teacherIds,
+        ?User $scheduleConflictOverrideBy = null,
+    ): Event {
+        return DB::transaction(function () use ($event, $scheduleConflictOverrideBy, $teacherIds): Event {
             $lockedEvent = $this->lockedEvent($event);
             $teacherIds = $this->validTeacherIds($teacherIds);
 
@@ -31,7 +36,7 @@ final readonly class ManageEventTeacherAssignments
             }
 
             $this->ensureCoveredTeachersRemainAssigned($lockedEvent, $teacherIds);
-            $this->ensureNoConflicts($lockedEvent, $teacherIds);
+            $this->ensureNoConflicts($lockedEvent, $teacherIds, $scheduleConflictOverrideBy);
 
             $lockedEvent->update([
                 'teacher_assignment_mode' => EventTeacherAssignmentMode::Custom,
@@ -42,9 +47,9 @@ final readonly class ManageEventTeacherAssignments
         });
     }
 
-    public function useCourseDefaults(Event $event): Event
+    public function useCourseDefaults(Event $event, ?User $scheduleConflictOverrideBy = null): Event
     {
-        return DB::transaction(function () use ($event): Event {
+        return DB::transaction(function () use ($event, $scheduleConflictOverrideBy): Event {
             $lockedEvent = $this->lockedEvent($event);
             $course = $lockedEvent->course;
 
@@ -61,15 +66,15 @@ final readonly class ManageEventTeacherAssignments
                 'teacher_rotation_sequence' => $lockedEvent->teacher_rotation_sequence
                     ?? $this->nextRotationSequence($course),
             ]);
-            $this->syncDefaultAssignment($lockedEvent, $course);
+            $this->syncDefaultAssignment($lockedEvent, $course, $scheduleConflictOverrideBy);
 
             return $lockedEvent->refresh()->load('teachers');
         });
     }
 
-    public function initializeCourseEvent(Event $event): Event
+    public function initializeCourseEvent(Event $event, ?User $scheduleConflictOverrideBy = null): Event
     {
-        return DB::transaction(function () use ($event): Event {
+        return DB::transaction(function () use ($event, $scheduleConflictOverrideBy): Event {
             $lockedEvent = $this->lockedEvent($event);
             $course = $lockedEvent->course;
 
@@ -82,7 +87,7 @@ final readonly class ManageEventTeacherAssignments
                 'teacher_rotation_sequence' => $lockedEvent->teacher_rotation_sequence
                     ?? $this->nextRotationSequence($course, $lockedEvent),
             ]);
-            $this->syncDefaultAssignment($lockedEvent, $course);
+            $this->syncDefaultAssignment($lockedEvent, $course, $scheduleConflictOverrideBy);
 
             return $lockedEvent->refresh()->load('teachers');
         });
@@ -158,16 +163,22 @@ final readonly class ManageEventTeacherAssignments
         return [(int) $teacherIds[($sequence - 1) % $teacherIds->count()]];
     }
 
-    private function syncDefaultAssignment(Event $event, Course $course): void
-    {
+    private function syncDefaultAssignment(
+        Event $event,
+        Course $course,
+        ?User $scheduleConflictOverrideBy = null,
+    ): void {
         $teacherIds = $this->defaultTeacherIds($event, $course);
-        $this->ensureNoConflicts($event, $teacherIds);
+        $this->ensureNoConflicts($event, $teacherIds, $scheduleConflictOverrideBy);
         $event->teachers()->sync($teacherIds);
     }
 
     /** @param list<int> $teacherIds */
-    private function ensureNoConflicts(Event $event, array $teacherIds): void
-    {
+    private function ensureNoConflicts(
+        Event $event,
+        array $teacherIds,
+        ?User $scheduleConflictOverrideBy = null,
+    ): void {
         $assignedTeacherIds = collect($teacherIds)
             ->merge($event->activeSubstituteCoverages()
                 ->whereNotNull('substitute_teacher_id')
@@ -176,15 +187,27 @@ final readonly class ManageEventTeacherAssignments
             ->unique()
             ->values();
 
-        foreach (User::query()->whereKey($assignedTeacherIds)->get() as $teacher) {
-            $conflict = $this->conflicts->conflictingEvent($event, $teacher);
+        $conflicts = $this->conflicts->conflicts(
+            $event,
+            User::query()
+                ->whereKey($assignedTeacherIds)
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(),
+        );
 
-            if ($conflict instanceof Event) {
-                throw new DomainException(
-                    "{$teacher->fullName} is already assigned to the overlapping event \"{$conflict->name}\".",
-                );
-            }
+        if ($conflicts->isEmpty()) {
+            return;
         }
+
+        if ($scheduleConflictOverrideBy instanceof User) {
+            Gate::forUser($scheduleConflictOverrideBy)
+                ->authorize('overrideScheduleConflicts', Event::class);
+
+            return;
+        }
+
+        throw new TeacherScheduleConflictException($conflicts);
     }
 
     /** @param list<int> $teacherIds */
