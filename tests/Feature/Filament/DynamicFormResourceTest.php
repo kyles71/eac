@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Admin\Resources\Forms\FormResource;
 use App\Filament\Admin\Resources\Forms\Pages\EditFormVersion;
+use App\Filament\Admin\Resources\Forms\Pages\ListForms;
 use App\Filament\Admin\Resources\Forms\Pages\ViewForm;
 use App\Filament\Admin\Resources\Forms\Pages\ViewFormAnalytics;
 use App\Filament\Admin\Resources\Forms\Pages\ViewResponse;
@@ -46,6 +47,25 @@ use function Pest\Livewire\livewire;
 
 beforeEach(function (): void {
     Filament::setCurrentPanel('user');
+});
+
+it('groups the admin form list record actions', function (): void {
+    Filament::setCurrentPanel('admin');
+    $form = Form::factory()->create();
+    $page = livewire(ListForms::class)
+        ->loadTable()
+        ->assertCanSeeTableRecords([$form]);
+    $table = $page->instance()->getTable();
+    $recordActions = $table->getRecordActions();
+
+    expect($table->getRecordActionsPosition())->toBe(RecordActionsPosition::BeforeCells)
+        ->and($recordActions)->toHaveCount(1)
+        ->and($recordActions[0])->toBeInstanceOf(ActionGroup::class)
+        ->and(array_keys($recordActions[0]->getFlatActions()))->toBe([
+            'analytics',
+            'view',
+            'edit',
+        ]);
 });
 
 it('lists the signed-in users assignments from the package table', function (): void {
