@@ -25,6 +25,17 @@ it('includes shared Filament classes in both panel themes', function (): void {
         ->toContain('inset-block-start: var(--eac-managed-banner-height, 0px)');
 });
 
+it('includes form builder package classes in the admin theme', function (): void {
+    $adminTheme = file_get_contents(resource_path('css/filament/admin/theme.css'));
+
+    expect($adminTheme)
+        ->toContain("@source '../../../../vendor/kyle/filament-form-builder/src/**/*.php';")
+        ->toContain("@source '../../../../vendor/kyle/filament-form-builder/resources/**/*.blade.php';")
+        ->toContain('.fi-panel-admin.fi-form-builder-designer-page.fi-body-has-topbar .fi-layout')
+        ->toContain('height: calc(100dvh - 4rem - var(--eac-managed-banner-height, 0px))')
+        ->toContain('.fi-panel-admin.fi-form-builder-designer-page .fi-main [data-managed-banners-location]');
+});
+
 it('pins the user panel topbar on mobile viewports', function (): void {
     $userTheme = file_get_contents(resource_path('css/filament/user/theme.css'));
 

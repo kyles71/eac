@@ -196,9 +196,9 @@ trait InteractsWithSavedReportViews
     private function visibleReportColumnNames(): array
     {
         return collect($this->tableColumns)
-            ->filter(fn (array $column): bool => ($column['type'] ?? null) === 'column'
-                && ($column['isToggled'] ?? false)
-                && ! ($column['isHidden'] ?? false))
+            ->filter(fn (array $column): bool => $column['type'] === 'column'
+                && $column['isToggled']
+                && ! $column['isHidden'])
             ->pluck('name')
             ->filter(fn (mixed $name): bool => is_string($name))
             ->values()
@@ -229,8 +229,8 @@ trait InteractsWithSavedReportViews
                 continue;
             }
 
-            $column['isToggled'] = ! ($column['isToggleable'] ?? false)
-                && ! ($column['isHidden'] ?? false);
+            $column['isToggled'] = ! $column['isToggleable']
+                && ! $column['isHidden'];
             $columns->push($column);
         }
 

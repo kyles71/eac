@@ -31,6 +31,7 @@ final class ShieldSeeder extends Seeder
             Permission::findByName('Delete:StaffNote', 'web'),
             Permission::findByName('ManageMembers:Board', 'web'),
             Permission::findByName('Manage:DashboardAppearance', 'web'),
+            Permission::findByName('OverrideScheduleConflicts:Event', 'web'),
             Permission::findByName('RetryPayment:PaymentPlan', 'web'),
             Permission::findByName('Send:Email', 'web'),
             Permission::findByName('SendPaymentLink:PaymentPlan', 'web'),

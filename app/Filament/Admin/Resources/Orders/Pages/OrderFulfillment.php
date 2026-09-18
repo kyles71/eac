@@ -316,39 +316,36 @@ final class OrderFulfillment extends Page implements HasTable
                     ->with('source')
                     ->whereKey(array_map('intval', $data['fulfillment_ids'] ?? []))
                     ->get();
-                $reopenedFulfillments = new Collection;
                 $reason = (string) str((string) $data['reason'])->squish();
 
-                foreach ($fulfillments as $fulfillment) {
-                    $wasReopened = app(VoidOrderItemFulfillment::class)->handle(
+                $reopenedFulfillments = $fulfillments->filter(
+                    fn (OrderItemFulfillment $fulfillment): bool => app(VoidOrderItemFulfillment::class)->handle(
                         fulfillment: $fulfillment,
                         voidedBy: $this->authenticatedUser(),
                         reason: $reason,
-                    );
-
-                    if ($wasReopened) {
-                        $reopenedFulfillments->push($fulfillment);
-                    }
-                }
+                    ),
+                );
 
                 foreach ($reopenedFulfillments
                     ->filter(fn (OrderItemFulfillment $fulfillment): bool => $fulfillment->source instanceof Event)
                     ->groupBy('source_id') as $eventFulfillments) {
-                    $event = $eventFulfillments->first()?->source;
+                    $fulfillment = $eventFulfillments->firstOrFail();
 
-                    if ($event instanceof Event) {
-                        app(ReconcileReopenedFulfillmentEvent::class)->handle(
-                            $event,
-                            $eventFulfillments,
-                            $this->authenticatedUser(),
-                            $reason,
-                        );
-                        app(SendOrderFulfillmentEmail::class)->reopened(
-                            $event,
-                            $eventFulfillments,
-                            $reason,
-                        );
+                    if (! $fulfillment->source instanceof Event) {
+                        continue;
                     }
+
+                    app(ReconcileReopenedFulfillmentEvent::class)->handle(
+                        $fulfillment->source,
+                        $eventFulfillments,
+                        $this->authenticatedUser(),
+                        $reason,
+                    );
+                    app(SendOrderFulfillmentEmail::class)->reopened(
+                        $fulfillment->source,
+                        $eventFulfillments,
+                        $reason,
+                    );
                 }
 
                 $this->success('Fulfillment reopened');
@@ -366,9 +363,9 @@ final class OrderFulfillment extends Page implements HasTable
                     ->rows(3),
             ])
             ->action(function (array $data, Collection $records): void {
-                $this->ensureBulkWorkflow($records, FulfillmentWorkflow::Manual);
+                $orderItems = $this->ensureBulkWorkflow($records, FulfillmentWorkflow::Manual);
 
-                foreach ($records as $record) {
+                foreach ($orderItems as $record) {
                     Gate::authorize('fulfill', $record->order);
                     app(RecordOrderItemFulfillment::class)->handle(
                         orderItem: $record,
@@ -396,8 +393,10 @@ final class OrderFulfillment extends Page implements HasTable
                     ->selectablePlaceholder(false),
             ])
             ->action(function (array $data, Collection $records): void {
-                DB::transaction(function () use ($data, $records): void {
-                    foreach ($records as $record) {
+                $orderItems = $this->ensureBulkWorkflow($records);
+
+                DB::transaction(function () use ($data, $orderItems): void {
+                    foreach ($orderItems as $record) {
                         Gate::authorize('fulfill', $record->order);
                         $this->changeWorkflow($record, $data);
                     }
@@ -419,14 +418,14 @@ final class OrderFulfillment extends Page implements HasTable
                 ...$this->attendeeFields(),
             ])
             ->action(function (array $data, Collection $records): void {
-                $this->ensureBulkWorkflow($records, FulfillmentWorkflow::ScheduledEvent);
+                $orderItems = $this->ensureBulkWorkflow($records, FulfillmentWorkflow::ScheduledEvent);
                 Gate::authorize('create', Event::class);
 
-                $event = DB::transaction(function () use ($data, $records): Event {
+                $event = DB::transaction(function () use ($data, $orderItems): Event {
                     $event = $this->createEvent($data);
                     $this->addEventAttendees($event, $data);
 
-                    foreach ($records as $record) {
+                    foreach ($orderItems as $record) {
                         Gate::authorize('fulfill', $record->order);
                         $fulfillments = app(RecordOrderItemFulfillment::class)->handle(
                             orderItem: $record,
@@ -457,14 +456,14 @@ final class OrderFulfillment extends Page implements HasTable
                 ...$this->attendeeFields(),
             ])
             ->action(function (array $data, Collection $records): void {
-                $this->ensureBulkWorkflow($records, FulfillmentWorkflow::ScheduledEvent);
+                $orderItems = $this->ensureBulkWorkflow($records, FulfillmentWorkflow::ScheduledEvent);
                 $event = $this->selectedEvent($data);
                 Gate::authorize('update', $event);
 
-                DB::transaction(function () use ($data, $event, $records): void {
+                DB::transaction(function () use ($data, $event, $orderItems): void {
                     $this->addEventAttendees($event, $data);
 
-                    foreach ($records as $record) {
+                    foreach ($orderItems as $record) {
                         Gate::authorize('fulfill', $record->order);
                         $fulfillments = app(RecordOrderItemFulfillment::class)->handle(
                             orderItem: $record,
@@ -738,17 +737,36 @@ final class OrderFulfillment extends Page implements HasTable
             ->all();
     }
 
-    /** @param Collection<int, OrderItem> $records */
-    private function ensureBulkWorkflow(Collection $records, FulfillmentWorkflow $workflow): void
-    {
-        if ($records->isEmpty() || $records->contains(
-            fn (OrderItem $record): bool => $record->fulfillment_workflow !== $workflow
-                || $record->remainingQuantity() === 0,
-        )) {
+    /** @return Collection<int, OrderItem> */
+    private function ensureBulkWorkflow(
+        Collection $records,
+        ?FulfillmentWorkflow $workflow = null,
+    ): Collection {
+        $orderItems = [];
+
+        foreach ($records as $record) {
+            if (! $record instanceof OrderItem
+                || $record->remainingQuantity() === 0
+                || ($workflow !== null && $record->fulfillment_workflow !== $workflow)) {
+                $workflowLabel = $workflow?->getLabel();
+
+                throw ValidationException::withMessages([
+                    'records' => $workflowLabel === null
+                        ? 'Select only outstanding order items.'
+                        : 'Select only outstanding items that use the '.$workflowLabel.' workflow.',
+                ]);
+            }
+
+            $orderItems[] = $record;
+        }
+
+        if ($orderItems === []) {
             throw ValidationException::withMessages([
-                'records' => 'Select only outstanding items that use the '.$workflow->getLabel().' workflow.',
+                'records' => 'Select at least one outstanding order item.',
             ]);
         }
+
+        return new Collection($orderItems);
     }
 
     private function success(string $title, ?string $url = null): void

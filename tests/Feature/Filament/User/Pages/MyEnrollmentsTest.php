@@ -18,7 +18,6 @@ use Filament\Facades\Filament;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Illuminate\Contracts\Support\Htmlable;
-use InvalidArgumentException;
 
 use function Pest\Livewire\livewire;
 

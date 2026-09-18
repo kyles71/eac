@@ -1,14 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use App\Enums\FormTypes;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
+use Kyle\FilamentFormBuilder\Enums\FormUpdateStrategy;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Form>
  */
-class FormFactory extends Factory
+final class FormFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -18,10 +21,10 @@ class FormFactory extends Factory
     public function definition(): array
     {
         return [
+            'key' => Str::slug($this->faker->unique()->words(3, true)),
             'name' => $this->faker->sentence(3),
-            'form_type' => $this->faker->randomElement(array_column(FormTypes::cases(), 'value')),
-            'can_update' => $this->faker->boolean(),
-            'valid_until' => $this->faker->optional()->dateTimeBetween('now', '+1 year'),
+            'updates_allowed' => $this->faker->boolean(),
+            'update_strategy' => $this->faker->randomElement(FormUpdateStrategy::cases()),
         ];
     }
 }
