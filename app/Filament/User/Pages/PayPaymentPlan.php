@@ -14,6 +14,7 @@ use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\OrderStatus;
 use App\Models\Installment;
 use App\Models\InstallmentPaymentAttempt;
+use App\Models\InstallmentPaymentAttemptAllocation;
 use App\Models\PaymentPlan;
 use App\Models\User;
 use BackedEnum;
@@ -39,6 +40,8 @@ final class PayPaymentPlan extends Page
 
     public ?InstallmentPaymentAttempt $paymentAttempt = null;
 
+    public ?InstallmentPaymentAttempt $completedPaymentAttempt = null;
+
     public ?string $clientSecret = null;
 
     public ?string $customerSessionClientSecret = null;
@@ -63,11 +66,12 @@ final class PayPaymentPlan extends Page
 
         $redirectedPaymentIntentId = request()->query('payment_intent');
 
-        if (is_string($redirectedPaymentIntentId) && $redirectedPaymentIntentId !== '') {
-            $this->finalizeRedirectedPayment($redirectedPaymentIntentId);
-        }
+        $redirectedPaymentAttempt = is_string($redirectedPaymentIntentId) && $redirectedPaymentIntentId !== ''
+            ? $this->finalizeRedirectedPayment($redirectedPaymentIntentId)
+            : null;
 
         $this->loadPaymentState();
+        $this->loadCompletedPaymentConfirmation($redirectedPaymentAttempt?->id);
     }
 
     public function content(Schema $schema): Schema
@@ -80,13 +84,13 @@ final class PayPaymentPlan extends Page
                         ->schema([
                             TextEntry::make('missed_balance')
                                 ->label('Missed balance')
-                                ->state(fn (): string => format_money((int) $this->eligibleInstallments()->sum('amount'))),
+                                ->state(fn (): string => format_money((int) $this->missedInstallments()->sum('amount'))),
                             TextEntry::make('remaining_balance')
                                 ->label('Plan balance')
                                 ->state(fn (): string => format_money($this->paymentPlan->remainingBalance())),
                             TextEntry::make('missed_count')
                                 ->label('Missed installments')
-                                ->state(fn (): int => $this->eligibleInstallments()->count()),
+                                ->state(fn (): int => $this->missedInstallments()->count()),
                         ]),
                     Actions::make([
                         $this->preparePaymentAction(),
@@ -96,6 +100,13 @@ final class PayPaymentPlan extends Page
                         ->hiddenLabel()
                         ->state('There are no failed or overdue installments to pay.')
                         ->visible(fn (): bool => $this->paymentAttempt === null
+                            && $this->missedInstallments()->isEmpty()
+                            && ! in_array($this->paymentPlan->order?->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true)),
+                    TextEntry::make('payment_in_progress')
+                        ->hiddenLabel()
+                        ->state('A payment is already in progress for the missed installments. No additional payment is needed right now.')
+                        ->visible(fn (): bool => $this->paymentAttempt === null
+                            && $this->missedInstallments()->isNotEmpty()
                             && $this->eligibleInstallments()->isEmpty()
                             && ! in_array($this->paymentPlan->order?->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true)),
                     TextEntry::make('plan_not_collectible')
@@ -104,25 +115,35 @@ final class PayPaymentPlan extends Page
                         ->visible(fn (): bool => $this->paymentAttempt === null
                             && in_array($this->paymentPlan->order?->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true)),
                 ]),
-            Section::make('Payment completed')
-                ->description(fn (): string => format_money($this->paymentAttempt->total_amount ?? 0).' was applied to the selected installments.')
+            Section::make('Payment successful')
+                ->description(fn (): string => format_money($this->completedPaymentAttempt->total_amount ?? 0).' was applied to the selected installments.')
                 ->icon(Heroicon::OutlinedCheckCircle)
                 ->iconColor('success')
                 ->schema([
                     Actions::make([
+                        Action::make('payAnother')
+                            ->label('Pay another missed installment')
+                            ->icon(Heroicon::OutlinedCreditCard)
+                            ->visible(fn (): bool => $this->eligibleInstallments()->isNotEmpty())
+                            ->action(fn () => $this->payAnotherMissedInstallment()),
                         Action::make('returnToBilling')
                             ->label('Return to Billing')
                             ->url(Billing::getUrl()),
                     ]),
                 ])
-                ->visible(fn (): bool => $this->paymentAttempt?->status === InstallmentPaymentAttemptStatus::Succeeded),
-            Section::make('Complete payment')
-                ->description(fn (): string => 'Pay '.format_money($this->paymentAttempt->total_amount ?? 0).' for the selected missed installments.')
+                ->visible(fn (): bool => $this->completedPaymentAttempt !== null),
+            Section::make('Review and pay')
+                ->description('Confirm the selected installments and amount, then choose a payment method.')
                 ->schema([
-                    TextEntry::make('payment_status')
-                        ->label('Status')
-                        ->state(fn (): ?InstallmentPaymentAttemptStatus => $this->paymentAttempt?->status)
-                        ->badge(),
+                    Grid::make(2)
+                        ->schema([
+                            TextEntry::make('selected_installments')
+                                ->label('Selected installments')
+                                ->state(fn (): string => $this->selectedInstallmentsSummary()),
+                            TextEntry::make('amount_due_now')
+                                ->label('Amount due now')
+                                ->state(fn (): string => format_money($this->paymentAttempt->total_amount ?? 0)),
+                        ]),
                     TextEntry::make('payment_message')
                         ->hiddenLabel()
                         ->state(fn (): ?string => $this->paymentAttempt?->failure_reason)
@@ -201,6 +222,10 @@ final class PayPaymentPlan extends Page
             );
             $this->paymentPlan->refresh()->load('installments');
 
+            if ($this->paymentAttempt->status === InstallmentPaymentAttemptStatus::Succeeded) {
+                $this->queueCompletedPaymentConfirmation($this->paymentAttempt);
+            }
+
             return [
                 'status' => $this->paymentAttempt->status->value,
                 'message' => $this->paymentAttempt->failure_reason,
@@ -264,11 +289,16 @@ final class PayPaymentPlan extends Page
         }
 
         try {
-            app(FinalizeInstallmentPaymentAttempt::class)->handle(
+            $paymentAttempt = app(FinalizeInstallmentPaymentAttempt::class)->handle(
                 $this->paymentAttempt,
                 $this->stripeService()->retrievePaymentIntent($this->paymentAttempt->stripe_payment_intent_id),
             );
             $this->paymentPlan->refresh()->load('installments');
+
+            if ($paymentAttempt->status === InstallmentPaymentAttemptStatus::Succeeded) {
+                $this->loadCompletedPaymentConfirmation($paymentAttempt->id);
+            }
+
             $this->loadPaymentState();
         } catch (Throwable $exception) {
             report($exception);
@@ -331,6 +361,12 @@ final class PayPaymentPlan extends Page
             });
     }
 
+    public function payAnotherMissedInstallment(): void
+    {
+        $this->completedPaymentAttempt = null;
+        $this->mountAction('preparePayment');
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -389,25 +425,29 @@ final class PayPaymentPlan extends Page
         }
     }
 
-    private function finalizeRedirectedPayment(string $paymentIntentId): void
+    private function finalizeRedirectedPayment(string $paymentIntentId): ?InstallmentPaymentAttempt
     {
         $paymentAttempt = InstallmentPaymentAttempt::query()
             ->where('payment_plan_id', $this->paymentPlan->id)
+            ->where('origin', InstallmentPaymentAttemptOrigin::Customer)
+            ->where('initiated_by_user_id', auth()->id())
             ->where('stripe_payment_intent_id', $paymentIntentId)
             ->whereHas('paymentPlan.order', fn ($query) => $query->where('user_id', auth()->id()))
             ->first();
 
         if ($paymentAttempt === null) {
-            return;
+            return null;
         }
 
         try {
-            app(FinalizeInstallmentPaymentAttempt::class)->handle(
+            return app(FinalizeInstallmentPaymentAttempt::class)->handle(
                 $paymentAttempt,
                 $this->stripeService()->retrievePaymentIntent($paymentIntentId),
             );
         } catch (Throwable $exception) {
             report($exception);
+
+            return null;
         }
     }
 
@@ -415,19 +455,23 @@ final class PayPaymentPlan extends Page
     {
         $paymentAttempt = InstallmentPaymentAttempt::query()
             ->where('payment_plan_id', $this->paymentPlan->id)
+            ->where('origin', InstallmentPaymentAttemptOrigin::Customer)
+            ->where('initiated_by_user_id', auth()->id())
             ->active()
+            ->with('allocations.installment')
             ->latest('id')
-            ->first()
-            ?? InstallmentPaymentAttempt::query()
-                ->where('payment_plan_id', $this->paymentPlan->id)
-                ->latest('id')
-                ->first();
+            ->first();
 
-        $this->paymentAttempt = $paymentAttempt?->status === InstallmentPaymentAttemptStatus::Cancelled
-            ? null
-            : $paymentAttempt;
+        $this->paymentAttempt = $paymentAttempt;
 
-        if ($this->paymentAttempt?->status->isActive()) {
+        if ($this->paymentAttempt === null) {
+            $this->clientSecret = null;
+            $this->customerSessionClientSecret = null;
+
+            return;
+        }
+
+        if ($this->paymentAttempt->status->isActive()) {
             try {
                 $this->setPaymentSecrets();
             } catch (Throwable $exception) {
@@ -474,6 +518,73 @@ final class PayPaymentPlan extends Page
             && ! in_array($this->paymentPlan->order?->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true);
     }
 
+    private function loadCompletedPaymentConfirmation(?int $paymentAttemptId = null): void
+    {
+        $pendingSessionKey = $this->paymentConfirmationSessionKey('pending');
+
+        if ($paymentAttemptId === null) {
+            $pendingPaymentAttemptId = session()->pull($pendingSessionKey);
+            $paymentAttemptId = is_numeric($pendingPaymentAttemptId)
+                ? (int) $pendingPaymentAttemptId
+                : null;
+        } else {
+            session()->forget($pendingSessionKey);
+        }
+
+        if ($paymentAttemptId === null
+            || (int) session()->get($this->paymentConfirmationSessionKey('shown')) === $paymentAttemptId) {
+            return;
+        }
+
+        $paymentAttempt = InstallmentPaymentAttempt::query()
+            ->whereKey($paymentAttemptId)
+            ->where('payment_plan_id', $this->paymentPlan->id)
+            ->where('origin', InstallmentPaymentAttemptOrigin::Customer)
+            ->where('initiated_by_user_id', auth()->id())
+            ->where('status', InstallmentPaymentAttemptStatus::Succeeded)
+            ->with('allocations.installment')
+            ->first();
+
+        if ($paymentAttempt === null) {
+            return;
+        }
+
+        $this->completedPaymentAttempt = $paymentAttempt;
+        session()->put($this->paymentConfirmationSessionKey('shown'), $paymentAttempt->id);
+    }
+
+    private function queueCompletedPaymentConfirmation(InstallmentPaymentAttempt $paymentAttempt): void
+    {
+        if ($paymentAttempt->payment_plan_id !== $this->paymentPlan->id
+            || $paymentAttempt->initiated_by_user_id !== auth()->id()
+            || $paymentAttempt->origin !== InstallmentPaymentAttemptOrigin::Customer
+            || $paymentAttempt->status !== InstallmentPaymentAttemptStatus::Succeeded) {
+            return;
+        }
+
+        session()->put($this->paymentConfirmationSessionKey('pending'), $paymentAttempt->id);
+    }
+
+    private function paymentConfirmationSessionKey(string $state): string
+    {
+        return 'payment-plan-payments.'.auth()->id().".{$this->paymentPlan->id}.confirmation.{$state}";
+    }
+
+    private function selectedInstallmentsSummary(): string
+    {
+        if ($this->paymentAttempt === null) {
+            return '—';
+        }
+
+        $this->paymentAttempt->loadMissing('allocations.installment');
+
+        return $this->paymentAttempt->allocations
+            ->sortBy(fn (InstallmentPaymentAttemptAllocation $allocation): int => $allocation->installment->installment_number)
+            ->map(fn (InstallmentPaymentAttemptAllocation $allocation): string => '#'.$allocation->installment->installment_number
+                .' — due '.$allocation->installment->due_date->format('M j, Y'))
+            ->join('; ');
+    }
+
     private function setPaymentSecrets(): void
     {
         if ($this->paymentAttempt === null || ! $this->paymentAttempt->status->isActive()) {
@@ -501,6 +612,16 @@ final class PayPaymentPlan extends Page
     {
         return $this->paymentPlan->installments()
             ->collectibleMissed()
+            ->orderBy('due_date')
+            ->orderBy('installment_number')
+            ->get();
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Collection<int, Installment> */
+    private function missedInstallments(): \Illuminate\Database\Eloquent\Collection
+    {
+        return $this->paymentPlan->installments()
+            ->missed()
             ->orderBy('due_date')
             ->orderBy('installment_number')
             ->get();
