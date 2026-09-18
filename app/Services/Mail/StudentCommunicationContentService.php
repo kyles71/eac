@@ -37,7 +37,7 @@ final readonly class StudentCommunicationContentService
                 'event.course_name' => $event?->course instanceof Course ? $event->course->name : '',
                 'event.context_name' => $event?->course instanceof Course
                     ? $event->course->name
-                    : ($event?->name ?? 'No course selected'),
+                    : ($event instanceof Event ? $event->name : 'No course selected'),
                 'teacher.first_name' => $author instanceof User ? $author->first_name : '',
                 'teacher.full_name' => $author instanceof User ? $author->full_name : '',
                 'teacher.email' => $author instanceof User ? $author->email : '',

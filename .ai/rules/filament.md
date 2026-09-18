@@ -19,3 +19,6 @@ The admin panel uses `strictAuthorization()`, and a resource title attribute opt
 
 ## Enforce record scope beyond UI visibility
 Course-restricted staff, private courses/events, households, and board memberships require record-level query and policy scoping; hidden navigation or action visibility is not authorization. Cover list queries, global search, direct page access, and forged action submissions when a resource's access rules change.
+
+## Normalize mixed Filament datetime validation state
+A DateTimePicker custom validation rule can receive its own `$value` in the display timezone while sibling values read through `Get` are already dehydrated to the storage timezone. Normalize all datetime inputs to storage instants before comparing or combining them, and assert the displayed local interval in regression tests.

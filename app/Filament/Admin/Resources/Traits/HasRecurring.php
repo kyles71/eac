@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\Traits;
 
 use App\Enums\ScheduleFrequency;
 use App\Services\HolidayConflictService;
+use App\Services\ScheduleRecurrenceService;
 use Carbon\Carbon;
 use Closure;
 
@@ -51,34 +52,25 @@ trait HasRecurring
             return $return;
         }
 
-        $repeatThrough = $this->inclusiveRepeatThrough($repeat_through);
-        $firstStart = Carbon::parse($data[$start_field]);
-        $firstEnd = filled($data[$end_field] ?? null)
-            ? Carbon::parse($data[$end_field])
-            : null;
-        $durationInSeconds = $firstEnd instanceof Carbon
-            ? $firstStart->diffInSeconds($firstEnd, false)
-            : null;
-        $nextStart = $this->nextOccurrenceStart($firstStart, $repeat_frequency);
+        $intervals = app(ScheduleRecurrenceService::class)->recurringIntervals(
+            startsAt: $data[$start_field],
+            endsAt: $data[$end_field] ?? null,
+            repeatThrough: $repeat_through,
+            frequency: $repeat_frequency,
+        );
+        $intervals = app(HolidayConflictService::class)->withoutConflicts(
+            $intervals,
+            $data['course_id'] ?? null,
+        );
 
-        while ($nextStart->lte($repeatThrough)) {
-            $data[$start_field] = $nextStart->toDateTimeString();
+        foreach ($intervals as $interval) {
+            $data[$start_field] = $interval['start_time']->toDateTimeString();
 
-            if ($durationInSeconds !== null) {
-                $data[$end_field] = $nextStart->copy()
-                    ->addSeconds($durationInSeconds)
-                    ->toDateTimeString();
+            if ($interval['end_time'] instanceof Carbon) {
+                $data[$end_field] = $interval['end_time']->toDateTimeString();
             }
 
-            if (app(HolidayConflictService::class)->conflictingHolidayFor(
-                $data[$start_field],
-                $data[$end_field] ?? null,
-                $data['course_id'] ?? null,
-            ) === null) {
-                $return[] = $create_method($data);
-            }
-
-            $nextStart = $this->nextOccurrenceStart($nextStart, $repeat_frequency);
+            $return[] = $create_method($data);
         }
 
         return $return;
@@ -108,27 +100,6 @@ trait HasRecurring
         }
 
         return Carbon::parse($repeatThrough, $this->displayTimezone());
-    }
-
-    private function inclusiveRepeatThrough(Carbon $repeatThrough): Carbon
-    {
-        return $repeatThrough
-            ->copy()
-            ->timezone($this->displayTimezone())
-            ->endOfDay()
-            ->timezone(config('app.timezone'));
-    }
-
-    private function nextOccurrenceStart(Carbon $start, ScheduleFrequency $frequency): Carbon
-    {
-        $displayStart = $start->copy()->timezone($this->displayTimezone());
-
-        return (match ($frequency) {
-            ScheduleFrequency::Daily => $displayStart->addDay(),
-            ScheduleFrequency::Weekly => $displayStart->addWeek(),
-            ScheduleFrequency::Biweekly => $displayStart->addWeeks(2),
-            ScheduleFrequency::Monthly => $displayStart->addMonthNoOverflow(),
-        })->timezone(config('app.timezone'));
     }
 
     private function displayTimezone(): string
