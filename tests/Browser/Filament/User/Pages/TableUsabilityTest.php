@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Filament\User\Resources\Students\Pages\ListStudents;
+use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Student;
 use App\Models\User;
 
@@ -244,6 +246,42 @@ it('stacks both panel tables below the small breakpoint', function (): void {
         if ($url === '/admin/users') {
             expect($desktopMetrics['actionPosition'])->toBe('sticky');
         }
+    }
+});
+
+it('shows the compact attention summary and review slide-over at mobile and desktop widths', function (): void {
+    $course = Course::factory()->create(['name' => 'Mobile Ballet']);
+    Event::factory()->for($course)->create([
+        'start_time' => now()->addWeek(),
+        'end_time' => now()->addWeek()->addHour(),
+    ]);
+    Enrollment::factory()->create([
+        'course_id' => $course->id,
+        'student_id' => null,
+        'user_id' => auth()->id(),
+    ]);
+
+    foreach ([390, 1280] as $width) {
+        $page = visit('/dancefam', [
+            'viewport' => [
+                'width' => $width,
+                'height' => 844,
+            ],
+        ])
+            ->assertSee('1 item needs attention')
+            ->assertSee('1 class seat')
+            ->click('Review')
+            ->assertSee('Items Needing Attention')
+            ->assertSee('Class Assignments')
+            ->assertSee('Mobile Ballet')
+            ->assertSee('Assign student')
+            ->assertNoJavaScriptErrors();
+
+        $summaryDirection = $page->script(<<<'JS'
+            getComputedStyle(document.querySelector('[data-user-attention-summary]')).flexDirection
+            JS);
+
+        expect($summaryDirection)->toBe($width < 640 ? 'column' : 'row');
     }
 });
 

@@ -10,7 +10,6 @@ use App\Filament\Shared\Widgets\MessagesFromEac;
 use App\Filament\Shared\Widgets\QuickLinks;
 use App\Filament\User\Resources\Students\StudentResource;
 use App\Filament\User\Widgets\ComingUp;
-use App\Filament\User\Widgets\NeedsAttention;
 use App\Filament\User\Widgets\NextPayment;
 use App\Filament\User\Widgets\RecentStudentNotes;
 use Filament\Actions\Action;
@@ -33,7 +32,6 @@ final class Dashboard extends BaseDashboard
     public function getWidgets(): array
     {
         return [
-            NeedsAttention::class,
             RecentStudentNotes::class,
             MessagesFromEac::class,
             QuickLinks::class,
