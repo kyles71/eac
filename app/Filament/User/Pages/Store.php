@@ -93,6 +93,7 @@ final class Store extends TablePage
             ->columns($this->storeView === StoreView::Cards
                 ? $this->getCardColumns()
                 : $this->getListColumns())
+            ->stackedOnMobile($this->storeView === StoreView::List)
             ->reorderableColumns(false)
             ->contentGrid($this->storeView === StoreView::Cards
                 ? [

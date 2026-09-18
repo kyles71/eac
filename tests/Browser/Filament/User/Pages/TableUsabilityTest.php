@@ -93,6 +93,160 @@ it('persists user table columns and their order across browser sessions', functi
     ]);
 });
 
+it('keeps live table search text in entry order across server updates', function (): void {
+    Student::factory()->create([
+        'user_id' => auth()->id(),
+        'first_name' => 'Avery',
+    ]);
+
+    $search = '.fi-ta-header-toolbar .fi-ta-search-field input';
+    $page = visit('/dancefam/students', [
+        'viewport' => [
+            'width' => 390,
+            'height' => 844,
+        ],
+    ])
+        ->click($search)
+        ->typeSlowly($search, '1', 20)
+        ->wait(0.7);
+
+    expect($page->script(<<<'JS'
+        (() => {
+            const input = document.querySelector('.fi-ta-header-toolbar .fi-ta-search-field input')
+
+            return {
+                active: document.activeElement === input,
+                initialized: window.eacTableSearchInitialized ?? false,
+                selectionStart: input.selectionStart,
+                value: input.value,
+            }
+        })()
+        JS))->toBe([
+        'active' => true,
+        'initialized' => true,
+        'selectionStart' => 1,
+        'value' => '1',
+    ]);
+
+    $page
+        ->typeSlowly($search, '2', 20)
+        ->wait(0.7)
+        ->typeSlowly($search, '3', 20)
+        ->wait(0.7)
+        ->assertSee('Search: 123')
+        ->assertNoJavaScriptErrors();
+
+    expect($page->script("document.querySelector('{$search}').value"))->toBe('123');
+
+    $page
+        ->keys($search, ['Home', 'ArrowRight'])
+        ->typeSlowly($search, '0', 20)
+        ->wait(0.7)
+        ->assertSee('Search: 1023');
+
+    expect($page->script("document.querySelector('{$search}').value"))->toBe('1023');
+
+    $page
+        ->keys($search, ['End', 'Backspace'])
+        ->wait(0.7)
+        ->assertSee('Search: 102')
+        ->type($search, 'Avery')
+        ->keys($search, 'Enter')
+        ->wait(0.2)
+        ->assertSee('Avery')
+        ->type($search, '')
+        ->wait(0.7)
+        ->assertDontSee('Search:')
+        ->assertNoJavaScriptErrors();
+});
+
+it('stacks both panel tables below the small breakpoint', function (): void {
+    Student::factory()->create([
+        'user_id' => auth()->id(),
+        'first_name' => 'Avery',
+        'last_name' => 'A very long student name that should wrap on a phone',
+    ]);
+    User::factory()->create([
+        'first_name' => 'Mobile',
+        'last_name' => 'Table User',
+    ]);
+
+    foreach (['/dancefam/students' => 'Avery', '/admin/users' => 'Mobile'] as $url => $visibleRecord) {
+        foreach ([360, 390, 639] as $width) {
+            $mobile = visit($url, [
+                'viewport' => [
+                    'width' => $width,
+                    'height' => 844,
+                ],
+            ])
+                ->assertSee($visibleRecord)
+                ->assertNoJavaScriptErrors();
+
+            $mobileMetrics = $mobile->script(<<<'JS'
+                (() => {
+                    const table = document.querySelector('.fi-ta-table')
+                    const row = table?.querySelector('tbody > tr:has(.fi-ta-cell-content)')
+                    const dataCell = row?.querySelector('.fi-ta-cell:not(.fi-ta-selection-cell):not(:has(> .fi-ta-actions))')
+                    const actionCell = row?.querySelector('.fi-ta-cell:has(> .fi-ta-actions)')
+                    const search = document.querySelector('.fi-ta-header-toolbar .fi-ta-search-field')
+                    const rail = document.querySelector('.eac-table-scrollbar')
+
+                    return {
+                        actionPosition: actionCell ? getComputedStyle(actionCell).position : null,
+                        cellDisplay: dataCell ? getComputedStyle(dataCell).display : null,
+                        railHidden: rail?.hidden ?? null,
+                        rowDisplay: row ? getComputedStyle(row).display : null,
+                        searchWidth: search?.getBoundingClientRect().width ?? 0,
+                        stacked: table?.classList.contains('fi-ta-table-stacked-on-mobile') ?? false,
+                        tableDisplay: table ? getComputedStyle(table).display : null,
+                    }
+                })()
+                JS);
+
+            expect($mobileMetrics['stacked'])->toBeTrue()
+                ->and($mobileMetrics['tableDisplay'])->toBe('block')
+                ->and($mobileMetrics['rowDisplay'])->toBe('flex')
+                ->and($mobileMetrics['cellDisplay'])->toBe('grid')
+                ->and($mobileMetrics['searchWidth'])->toBeGreaterThan(250)
+                ->and($mobileMetrics['railHidden'])->toBeTrue();
+
+            if ($url === '/admin/users') {
+                expect($mobileMetrics['actionPosition'])->toBe('static');
+            }
+        }
+
+        $desktop = visit($url, [
+            'viewport' => [
+                'width' => 640,
+                'height' => 844,
+            ],
+        ])
+            ->assertSee($visibleRecord)
+            ->assertNoJavaScriptErrors();
+
+        $desktopMetrics = $desktop->script(<<<'JS'
+            (() => {
+                const table = document.querySelector('.fi-ta-table')
+                const row = table?.querySelector('tbody > tr:has(.fi-ta-cell-content)')
+                const actionCell = row?.querySelector('.fi-ta-cell:has(> .fi-ta-actions)')
+
+                return {
+                    actionPosition: actionCell ? getComputedStyle(actionCell).position : null,
+                    rowDisplay: row ? getComputedStyle(row).display : null,
+                    tableDisplay: table ? getComputedStyle(table).display : null,
+                }
+            })()
+            JS);
+
+        expect($desktopMetrics['tableDisplay'])->toBe('table')
+            ->and($desktopMetrics['rowDisplay'])->toBe('table-row');
+
+        if ($url === '/admin/users') {
+            expect($desktopMetrics['actionPosition'])->toBe('sticky');
+        }
+    }
+});
+
 it('shows a floating scrollbar while a wide user table extends below the viewport', function (): void {
     Enrollment::factory()->count(15)->create([
         'user_id' => auth()->id(),

@@ -60,6 +60,7 @@ it('defaults new users to card view', function () {
     $component = livewire(Store::class);
 
     expect($component->instance()->storeView)->toBe(StoreView::Cards)
+        ->and($component->instance()->getTable()->isStackedOnMobile())->toBeFalse()
         ->and($component->instance()->getTable()->getContentGrid())->toBe([
             'default' => 1,
             'md' => 2,
@@ -99,6 +100,7 @@ it('switches back to list view and persists the preference', function () {
         ->callAction(TestAction::make('listView')->table());
 
     expect($component->instance()->storeView)->toBe(StoreView::List)
+        ->and($component->instance()->getTable()->isStackedOnMobile())->toBeTrue()
         ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
         ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
 });

@@ -44,6 +44,7 @@ it('keeps the existing user panel record action layout', function (): void {
 
     expect($studentsTable->getRecordActionsPosition())
         ->not->toBe(RecordActionsPosition::BeforeCells)
+        ->and($studentsTable->isStackedOnMobile())->toBeTrue()
         ->and($studentsTable->getRecordActions()[0])
         ->not->toBeInstanceOf(ActionGroup::class);
 });
@@ -55,6 +56,8 @@ it('provides the floating scrollbar to both panels', function (): void {
     expect($script)
         ->toContain("'.fi-panel-admin .fi-ta-content-ctn'")
         ->toContain("'.fi-panel-user .fi-ta-content-ctn'")
+        ->toContain("el.matches('.fi-ta-search-field input[type=\"search\"]')")
+        ->toContain("window.matchMedia('(max-width: 639px)').matches")
         ->toContain("rail.className = 'eac-table-scrollbar'")
         ->and($theme)
         ->toContain('.eac-table-scrollbar')

@@ -49,56 +49,150 @@
     border-color: rgb(39 39 42);
 }
 
-.fi-panel-admin .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
+@media (min-width: 640px) {
+    .fi-panel-admin .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
     background-color: rgb(249 250 251);
     box-shadow: 1px 0 0 rgb(229 231 235);
     inset-inline-start: 0;
     position: sticky;
     z-index: 20;
-}
+    }
 
-.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    .fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
     background-color: rgb(255 255 255);
     box-shadow: 1px 0 0 rgb(229 231 235);
     inset-inline-start: 0;
     position: sticky;
     z-index: 10;
-}
+    }
 
-.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:hover,
-.fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:focus-within {
+    .fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:hover,
+    .fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child:focus-within {
     z-index: 40;
-}
+    }
 
-.fi-panel-admin .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
-.fi-panel-admin .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    .fi-panel-admin .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
+    .fi-panel-admin .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
     background-color: rgb(249 250 251);
-}
+    }
 
-@media (hover: hover) {
-    .fi-panel-admin .fi-ta-table>tbody>tr.fi-clickable:hover>.fi-ta-cell:has(> .fi-ta-actions):first-child {
-        background-color: rgb(249 250 251);
+    @media (hover: hover) {
+        .fi-panel-admin .fi-ta-table>tbody>tr.fi-clickable:hover>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+            background-color: rgb(249 250 251);
+        }
+    }
+
+    .dark .fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(17 24 39);
+    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
+    }
+
+    .dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
+    .dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+    background-color: rgb(255 255 255 / 0.05);
+    }
+
+    .dark .fi-panel-admin .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
+    background-color: rgb(255 255 255 / 0.05);
+    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
+    }
+
+    @media (hover: hover) {
+        .dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-clickable:hover>.fi-ta-cell:has(> .fi-ta-actions):first-child {
+            background-color: rgb(255 255 255 / 0.05);
+        }
     }
 }
 
-.dark .fi-panel-admin .fi-ta-table>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions):first-child {
-    background-color: rgb(17 24 39);
-    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
+@media (max-width: 639px) {
+    .fi-ta-header-toolbar {
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .fi-ta-header-toolbar>div:has(> .fi-ta-search-field) {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-inline-start: 0;
+        width: 100%;
+    }
+
+    .fi-ta-header-toolbar>div:has(> .fi-ta-search-field)>.fi-ta-search-field {
+        grid-column: 1 / -1;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .fi-ta-header-toolbar>div:has(> .fi-ta-search-field)>.fi-dropdown>.fi-dropdown-trigger>.fi-btn,
+    .fi-ta-header-toolbar>div:has(> .fi-ta-search-field)>.fi-modal>.fi-modal-trigger>.fi-btn {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .fi-ta-filters-dropdown .fi-dropdown-panel,
+    .fi-ta-col-manager-dropdown .fi-dropdown-panel {
+        max-inline-size: calc(100vw - 2rem);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr:not(.fi-ta-group-header-row):not(.fi-ta-summary-row) {
+        display: flex;
+        flex-direction: column;
+        padding-block: 0.625rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:not(.fi-ta-selection-cell):not(:has(> .fi-ta-actions)) {
+        align-items: start;
+        column-gap: 0.75rem;
+        display: grid;
+        grid-template-columns: minmax(6.5rem, 35%) minmax(0, 1fr);
+        padding-block: 0.25rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell>.fi-ta-cell-label {
+        padding-top: 0;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell>.fi-ta-cell-content {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:not(:has(> .fi-ta-cell-label))>.fi-ta-cell-content {
+        grid-column: 1 / -1;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-selection-cell+.fi-ta-cell {
+        padding-inline-end: 3rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions) {
+        border-top: 1px solid rgb(229 231 235);
+        margin: 0.5rem 1rem 0;
+        order: 2;
+        padding: 0.625rem 0 0;
+        position: static;
+        width: auto;
+        z-index: auto;
+    }
+
+    .dark .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions) {
+        border-top-color: rgb(255 255 255 / 0.1);
+    }
 }
 
-.dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-striped>.fi-ta-cell:has(> .fi-ta-actions):first-child,
-.dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-selected>.fi-ta-cell:has(> .fi-ta-actions):first-child {
-    background-color: rgb(255 255 255 / 0.05);
-}
+@media (pointer: coarse) {
+    .fi-ta-actions .fi-icon-btn,
+    .fi-ta-actions .fi-link,
+    .fi-ta-header-toolbar .fi-btn,
+    .fi-ta-header-toolbar .fi-icon-btn {
+        min-block-size: 2.75rem;
+        min-inline-size: 2.75rem;
+    }
 
-.dark .fi-panel-admin .fi-ta-table>thead>tr>.fi-ta-actions-header-cell:first-child {
-    background-color: rgb(255 255 255 / 0.05);
-    box-shadow: 1px 0 0 rgb(255 255 255 / 0.1);
-}
-
-@media (hover: hover) {
-    .dark .fi-panel-admin .fi-ta-table>tbody>tr.fi-clickable:hover>.fi-ta-cell:has(> .fi-ta-actions):first-child {
-        background-color: rgb(255 255 255 / 0.05);
+    .fi-ta-actions .fi-link>.fi-link-label {
+        align-self: center;
     }
 }
 

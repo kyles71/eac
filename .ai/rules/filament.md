@@ -22,3 +22,6 @@ Course-restricted staff, private courses/events, households, and board membershi
 
 ## Normalize mixed Filament datetime validation state
 A DateTimePicker custom validation rule can receive its own `$value` in the display timezone while sibling values read through `Get` are already dehydrated to the storage timezone. Normalize all datetime inputs to storage instants before comparing or combining them, and assert the displayed local interval in regression tests.
+
+## Keep Filament tables stacked and searchable on phones
+Shared Filament tables stack below 640px; preserve intentional custom card layouts by opting those tables out. Mobile table-search inputs must retain focus and selection across full and partial Livewire morphs so delayed live-search responses cannot reverse subsequent typing. Keep sticky record-action cells at 640px and above.
