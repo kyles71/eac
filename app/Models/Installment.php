@@ -74,10 +74,15 @@ final class Installment extends Model
         ]);
     }
 
-    public function scopeCollectibleMissed(Builder $query): void
+    public function scopeMissed(Builder $query): void
     {
         $query->whereIn('status', [InstallmentStatus::Failed, InstallmentStatus::Overdue]);
         $this->scopeNotBlockedByRefundCancellation($query);
+    }
+
+    public function scopeCollectibleMissed(Builder $query): void
+    {
+        $this->scopeMissed($query);
         $this->scopeWithoutActivePaymentAttempt($query);
     }
 
