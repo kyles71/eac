@@ -78,7 +78,7 @@ final class PayPaymentPlan extends Page
     {
         return $schema->components([
             Section::make("Payment plan for Order #{$this->paymentPlan->order_id}")
-                ->description('Choose one or more missed installments and pay them together in one secure payment.')
+                ->description('Click the Pay Now button to choose one or more missed installments to pay them together in one secure payment.')
                 ->schema([
                     Grid::make(3)
                         ->schema([

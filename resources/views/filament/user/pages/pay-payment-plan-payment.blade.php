@@ -22,9 +22,6 @@
         >
         <span>
             <span class="font-medium">Use the selected payment method for future installments on this plan</span>
-            <span class="block text-gray-500 dark:text-gray-400">
-                Future installments will be charged automatically using this payment method.
-            </span>
         </span>
     </label>
 
