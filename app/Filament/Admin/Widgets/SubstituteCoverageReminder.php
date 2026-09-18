@@ -70,8 +70,8 @@ final class SubstituteCoverageReminder extends Widget
         }
 
         return $query->whereHas(
-            'course.teachers',
-            fn (Builder $query): Builder => $query->whereKey($user->id),
+            'teacherAssignments',
+            fn (Builder $query): Builder => $query->where('teacher_id', $user->id),
         );
     }
 }

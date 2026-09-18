@@ -33,7 +33,7 @@ final class SubstituteRequest extends Page
     public function mount(EventSubstituteRequest $request): void
     {
         Gate::authorize('view', $request);
-        $request->loadMissing(['event.calendar', 'event.course', 'teacher', 'requestedBy']);
+        $request->loadMissing(['event.calendar', 'event.course', 'coverage.coveredTeacher', 'teacher', 'requestedBy']);
         $this->request = $request;
         $this->heading = 'Substitute Request';
         $this->subheading = $request->event->name;
@@ -74,6 +74,10 @@ final class SubstituteRequest extends Page
                     TextEntry::make('requested_by')
                         ->state($request->requestedBy?->fullName)
                         ->placeholder('Unknown'),
+                    TextEntry::make('covered_teacher')
+                        ->label('Teacher Being Covered')
+                        ->state($request->coverage?->coveredTeacher?->fullName)
+                        ->placeholder('Original teacher not recorded'),
                     TextEntry::make('description')
                         ->state($event->description)
                         ->placeholder('No public description was provided.')

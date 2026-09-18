@@ -6,7 +6,7 @@ namespace App\Filament\User\Widgets;
 
 use App\Filament\User\Pages\MyEnrollments;
 use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
 use App\Models\User;
 use App\Support\UserAttention;
 use Filament\Widgets\Widget;
@@ -34,7 +34,7 @@ final class UserBanners extends Widget
     }
 
     /**
-     * @return Collection<int, FormUser>
+     * @return Collection<int, FormAssignment>
      */
     public function pendingForms(): Collection
     {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Events;
 
 use App\Actions\Mail\QueueManagedEmail;
+use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Enums\EventSubstituteRequestStatus;
 use App\Models\Event;
 use App\Models\User;
@@ -21,6 +22,7 @@ final readonly class CancelEvent
         private EventCancellationRecipientsService $recipients,
         private EventCancellationContentService $content,
         private QueueManagedEmail $managedEmail,
+        private VoidOrderItemFulfillment $voidOrderItemFulfillment,
     ) {}
 
     public function handle(Event $event, User $cancelledBy, string $reason, bool $sendEmail): int
@@ -59,7 +61,6 @@ final readonly class CancelEvent
                 'cancellation_reason' => $reason,
                 'cancelled_at' => now(),
                 'cancelled_by_user_id' => $cancelledBy->id,
-                'substitute_needed_at' => null,
             ]);
 
             $lockedEvent->substituteRequests()
@@ -70,6 +71,20 @@ final readonly class CancelEvent
                     'closed_by_user_id' => $cancelledBy->id,
                     'closure_reason' => 'The event was cancelled.',
                 ]);
+
+            $lockedEvent->substituteCoverages()
+                ->active()
+                ->update([
+                    'closed_at' => now(),
+                    'closed_by_user_id' => $cancelledBy->id,
+                    'closure_reason' => 'The event was cancelled.',
+                ]);
+
+            $this->voidOrderItemFulfillment->forSource(
+                source: $lockedEvent,
+                voidedBy: $cancelledBy,
+                reason: 'Event cancelled: '.$reason,
+            );
 
             if (! $sendEmail) {
                 return 0;

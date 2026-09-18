@@ -99,6 +99,51 @@ final class PeopleAndGroupsPicker
         );
     }
 
+    /**
+     * @param  list<int>  $suggestedUserIds
+     * @return array<int, string>
+     */
+    public static function selectableUserOptions(array $suggestedUserIds = []): array
+    {
+        return self::prioritizedModelOptions(self::userQuery(self::authenticatedUser()), $suggestedUserIds);
+    }
+
+    /**
+     * @param  list<int>  $suggestedStudentIds
+     * @return array<int, string>
+     */
+    public static function selectableStudentOptions(array $suggestedStudentIds = []): array
+    {
+        return self::prioritizedModelOptions(self::studentQuery(self::authenticatedUser()), $suggestedStudentIds);
+    }
+
+    /**
+     * Add confirmed people to an event without removing its existing attendees.
+     *
+     * @param  list<int>  $userIds
+     * @param  list<int>  $studentIds
+     */
+    public static function addEventInvitations(Event $event, array $userIds, array $studentIds): void
+    {
+        $user = self::authenticatedUser();
+        $users = self::userQuery($user)->whereKey($userIds)->get();
+        $students = self::studentQuery($user)->whereKey($studentIds)->get();
+
+        if ($users->count() !== count(array_unique($userIds))
+            || $students->count() !== count(array_unique($studentIds))) {
+            throw ValidationException::withMessages([
+                'attendees' => 'You may only select attendees within your access.',
+            ]);
+        }
+
+        foreach ($users->merge($students) as $attendee) {
+            $event->attendees()->updateOrCreate([
+                'attendee_type' => $attendee->getMorphClass(),
+                'attendee_id' => $attendee->getKey(),
+            ]);
+        }
+    }
+
     /** @return array<int, array{attendee_type: string, attendee_id: int, label: string}> */
     public static function eventInvitationState(Event $event): array
     {
@@ -463,5 +508,26 @@ final class PeopleAndGroupsPicker
         $label = data_get($model, 'full_name') ?? data_get($model, 'fullName') ?? data_get($model, 'name');
 
         return is_string($label) ? $label : (string) $model->getKey();
+    }
+
+    /**
+     * @param  Builder<User|Student>  $query
+     * @param  list<int>  $suggestedIds
+     * @return array<int, string>
+     */
+    private static function prioritizedModelOptions(Builder $query, array $suggestedIds): array
+    {
+        return $query
+            ->get()
+            ->sortBy(fn (Model $model): array => [
+                in_array((int) $model->getKey(), $suggestedIds, true) ? 0 : 1,
+                mb_strtolower((string) data_get($model, 'first_name')),
+                mb_strtolower((string) data_get($model, 'last_name')),
+            ])
+            ->mapWithKeys(fn (Model $model): array => [
+                (int) $model->getKey() => self::modelLabel($model)
+                    .(in_array((int) $model->getKey(), $suggestedIds, true) ? ' — suggested' : ''),
+            ])
+            ->all();
     }
 }

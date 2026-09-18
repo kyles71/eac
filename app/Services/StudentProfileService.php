@@ -23,7 +23,7 @@ final class StudentProfileService
             return $this->medicalWaivers[$student->id];
         }
 
-        $response = $student->currentMedicalWaiver()?->responseable;
+        $response = $student->currentMedicalWaiver()?->latestSubmittedResponse?->projection;
 
         return $this->medicalWaivers[$student->id] = $response instanceof StudentWaiver
             ? $response

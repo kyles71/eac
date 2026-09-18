@@ -96,7 +96,7 @@ it('keeps private lessons off the public calendar and shows them to the househol
         ->and(Event::query()->visibleOnCalendar($myCalendar, $household)->count())->toBe(3)
         ->and(Event::query()->visibleOnCalendar($myCalendar, $unrelatedHousehold)->count())->toBe(0)
         ->and(Event::query()->visibleOnCalendar($staffCalendar, $teacher)->count())->toBe(3)
-        ->and(Event::query()->visibleOnCalendar($staffCalendar, $unrelatedTeacher)->count())->toBe(3)
+        ->and(Event::query()->visibleOnCalendar($staffCalendar, $unrelatedTeacher)->count())->toBe(0)
         ->and(Event::query()->visibleOnCalendar($staffCalendar, $owner)->count())->toBe(3)
         ->and($unrelatedTeacher->can('view', $series))->toBeFalse()
         ->and($teacher->can('view', $series))->toBeTrue()

@@ -90,6 +90,13 @@ Schedule::command('products:send-purchase-reminders')
     ->name('send-required-product-purchase-reminders')
     ->description('Remind households about outstanding required Product purchases');
 
+Schedule::command('forms:reconcile-required')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->onOneServer()
+    ->name('reconcile-required-forms')
+    ->description('Reconcile course-required form assignments as event windows pass');
+
 Schedule::command('private-lessons:send-payment-reminders')
     ->dailyAt('08:00')
     ->timezone('America/New_York')

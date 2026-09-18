@@ -12,7 +12,6 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -74,8 +73,9 @@ final class EnrollmentsRelationManager extends RelationManager
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DissociateBulkAction::make(),
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->label('Delete enrollments')
+                        ->modalDescription('Enrollments cannot exist without a course. This permanently deletes the selected enrollments from this course.'),
                 ]),
             ]);
     }

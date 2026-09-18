@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Orders\Pages;
 
 use App\Actions\Store\IssueOrderRefundAction;
+use App\Actions\Store\RecordOrderItemFulfillment;
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderRefundStatus;
 use App\Enums\OrderStatus;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\OrderItem;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -34,39 +37,68 @@ final class ViewOrder extends ViewRecord
         $record = $this->getRecord();
 
         return [
+            Action::make('manageFulfillment')
+                ->label('Order Fulfillment')
+                ->icon(Heroicon::OutlinedClipboardDocumentCheck)
+                ->color('gray')
+                ->authorize('fulfill')
+                ->visible(fn (): bool => in_array($record->status, [OrderStatus::Completed, OrderStatus::PartiallyRefunded], true)
+                    && $record->orderItems()->whereIn('status', [
+                        OrderItemStatus::Pending,
+                        OrderItemStatus::PartiallyFulfilled,
+                    ])->exists())
+                ->url(OrderResource::getUrl('fulfillment', [
+                    'tableSearch' => (string) $record->id,
+                ])),
             Action::make('markFulfilled')
                 ->label('Mark Items Fulfilled')
                 ->icon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
-                ->visible(fn (): bool => $record->status === OrderStatus::Completed
-                    && $record->orderItems()->where('status', OrderItemStatus::Pending)->exists())
+                ->authorize('fulfill')
+                ->visible(fn (): bool => in_array($record->status, [OrderStatus::Completed, OrderStatus::PartiallyRefunded], true)
+                    && $record->orderItems()
+                        ->where('fulfillment_workflow', FulfillmentWorkflow::Manual)
+                        ->whereIn('status', [OrderItemStatus::Pending, OrderItemStatus::PartiallyFulfilled])
+                        ->exists())
                 ->form([
                     CheckboxList::make('order_item_ids')
                         ->label('Select items to mark as fulfilled')
                         ->options(function () use ($record): array {
                             /** @var \Illuminate\Database\Eloquent\Collection<int, OrderItem> $items */
                             $items = $record->orderItems()
-                                ->where('status', OrderItemStatus::Pending)
+                                ->where('fulfillment_workflow', FulfillmentWorkflow::Manual)
+                                ->whereIn('status', [OrderItemStatus::Pending, OrderItemStatus::PartiallyFulfilled])
                                 ->with('product')
                                 ->get();
 
                             return $items
                                 ->mapWithKeys(fn (OrderItem $item): array => [
-                                    $item->id => "{$item->product->name} (x{$item->quantity})",
+                                    $item->id => "{$item->product->name} ({$item->remainingQuantity()} remaining)",
                                 ])
                                 ->all();
                         })
                         ->required(),
                 ])
                 ->action(function (array $data) use ($record): void {
+                    $user = auth()->user();
+
+                    if (! $user instanceof User) {
+                        return;
+                    }
+
                     $items = $record->orderItems()
                         ->whereIn('id', $data['order_item_ids'])
-                        ->where('status', OrderItemStatus::Pending)
+                        ->where('fulfillment_workflow', FulfillmentWorkflow::Manual)
+                        ->whereIn('status', [OrderItemStatus::Pending, OrderItemStatus::PartiallyFulfilled])
                         ->get();
 
                     /** @var OrderItem $item */
                     foreach ($items as $item) {
-                        $item->markFulfilled();
+                        app(RecordOrderItemFulfillment::class)->handle(
+                            orderItem: $item,
+                            unitNumbers: $item->remainingUnitNumbers(),
+                            fulfilledBy: $user,
+                        );
                     }
 
                     Notification::make()
@@ -83,7 +115,17 @@ final class ViewOrder extends ViewRecord
                 ->visible(fn (): bool => in_array($record->status, [OrderStatus::Completed, OrderStatus::PartiallyRefunded], true)
                     && $record->refundableAmount() > 0)
                 ->modalHeading('Refund Order')
-                ->modalDescription(fn (): string => 'Refund up to '.$record->formattedRefundableAmount().'. Stripe refunds cannot be undone.')
+                ->modalDescription(function () use ($record): string {
+                    $description = 'Refund up to '.$record->formattedRefundableAmount().'. Stripe refunds cannot be undone.';
+                    $hasScheduledEvent = $record->orderItems()
+                        ->whereHas('activeFulfillments', fn ($query) => $query
+                            ->where('source_type', (new Event)->getMorphClass()))
+                        ->exists();
+
+                    return $hasScheduledEvent
+                        ? $description.' This order has a linked event; detach or cancel it separately when appropriate.'
+                        : $description;
+                })
                 ->modalSubmitActionLabel('Issue refund')
                 ->schema([
                     Grid::make()

@@ -16,7 +16,7 @@ final readonly class UpdateCourseHold
 {
     public function __construct(private SendCourseHoldEmail $sendEmail) {}
 
-    /** @param list<array{course_id: int, quantity: int}> $additionalLines */
+    /** @param list<array{course_id?: int, quantity?: int}> $additionalLines */
     public function handle(
         CourseHold $hold,
         CarbonInterface $expiresAt,

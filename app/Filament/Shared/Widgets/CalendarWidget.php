@@ -176,10 +176,24 @@ final class CalendarWidget extends FullCalendarWidget
                     ->authorize('create')
                     ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
                     ->after(function (array $data, CreateAction $action): void {
-                        $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($action): void {
+                        $rawData = $action->getRawData();
+                        $teacherIds = is_array($rawData['teacher_ids'] ?? null)
+                            ? $rawData['teacher_ids']
+                            : [];
+                        $scheduleConflictOverrideBy = EventForm::scheduleConflictOverrideActor($rawData);
+
+                        $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($action, $scheduleConflictOverrideBy, $teacherIds): void {
                             $model = $action->getModel();
                             $record = new $model($data);
                             $record->save();
+
+                            if ($record instanceof Event) {
+                                EventForm::assignTeachers(
+                                    event: $record,
+                                    teacherIds: $teacherIds,
+                                    scheduleConflictOverrideBy: $scheduleConflictOverrideBy,
+                                );
+                            }
                         });
                         $this->refreshRecords();
                     }),
@@ -242,7 +256,7 @@ final class CalendarWidget extends FullCalendarWidget
         ];
     }
 
-    protected function viewAction(): Action
+    protected function viewAction(): ViewAction
     {
         $action = ViewAction::make()
             ->slideOver(false)

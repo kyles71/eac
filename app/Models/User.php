@@ -198,10 +198,38 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
             ->withTimestamps();
     }
 
-    /** @return HasMany<Event, $this> */
-    public function substituteEvents(): HasMany
+    /** @return HasMany<EventTeacherAssignment, $this> */
+    public function eventTeacherAssignments(): HasMany
     {
-        return $this->hasMany(Event::class, 'substitute_teacher_id');
+        return $this->hasMany(EventTeacherAssignment::class, 'teacher_id');
+    }
+
+    /** @return BelongsToMany<Event, $this> */
+    public function teachingEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Event::class,
+            'event_teacher_assignments',
+            'teacher_id',
+            'event_id',
+        )->withTimestamps();
+    }
+
+    /** @return HasMany<EventSubstituteCoverage, $this> */
+    public function substituteCoverages(): HasMany
+    {
+        return $this->hasMany(EventSubstituteCoverage::class, 'substitute_teacher_id');
+    }
+
+    /** @return BelongsToMany<Event, $this> */
+    public function substituteEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Event::class,
+            'event_substitute_coverages',
+            'substitute_teacher_id',
+            'event_id',
+        )->wherePivotNotNull('substitute_teacher_id');
     }
 
     /** @return HasMany<EventSubstituteRequest, $this> */
@@ -210,9 +238,9 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(EventSubstituteRequest::class, 'teacher_id');
     }
 
-    public function forms(): HasMany
+    public function formAssignments(): MorphMany
     {
-        return $this->hasMany(FormUser::class);
+        return $this->morphMany(FormAssignment::class, 'respondent');
     }
 
     public function purchasedCourses(): BelongsToMany

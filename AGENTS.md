@@ -7,31 +7,17 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 ## Foundational Context
 
-This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
+This application is a Laravel application running on PHP 8.4. You are an expert with the Laravel ecosystem. Always use the APIs that match the installed major version of each package — do not assume a version.
 
-- php - 8.4
-- filament/filament (FILAMENT) - v5
-- laravel/framework (LARAVEL) - v13
-- laravel/prompts (PROMPTS) - v0
-- livewire/livewire (LIVEWIRE) - v4
-- larastan/larastan (LARASTAN) - v3
-- laravel/boost (BOOST) - v2
-- laravel/mcp (MCP) - v0
-- laravel/pail (PAIL) - v1
-- laravel/pint (PINT) - v1
-- laravel/sail (SAIL) - v1
-- pestphp/pest (PEST) - v4
-- phpunit/phpunit (PHPUNIT) - v12
-- rector/rector (RECTOR) - v2
-- tailwindcss (TAILWINDCSS) - v4
+Before relying on a package's API, confirm its installed version:
+- PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
+- JS packages: check `package.json` for the installed versions.
 
 ## Conventions
+
 - You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
-- Be mindful of SOLID design principles when choosing boundaries. Prefer DRY and SOLID design: extract repeated behavior into focused services, helpers, components, traits, or model methods when it has a clear single responsibility and is reused by more than one surface.
-- In the admin panel, place table row actions at the start of the row and wrap them in an action group, even when the group contains only one action.
-- When implementation details are ambiguous or multiple reasonable product behaviors exist, ask Kyle targeted questions before coding.
 
 ## Verification Scripts
 
@@ -80,6 +66,11 @@ This application is a Laravel application and its main Laravel ecosystems packag
 3. Combine words and phrases for mixed queries: `middleware "rate limit"`.
 4. Use multiple queries for OR logic: `queries=["authentication", "middleware"]`.
 
+## Project Rules
+
+- This project contains committed, area-grouped rules in `.ai/rules` when that directory exists (settled decisions, non-obvious traps, standing constraints). Framework and package guidelines that only apply to specific paths (testing, frontend, components) also live there, under `.ai/rules/boost` — this is not just recorded decisions, it is load-bearing guidance you have not seen inline. Before you enter plan mode or create/edit any file, you MUST first: open @.ai/rules/index.md (it maps file globs to rule files), read every rule file whose globs cover the path(s) in scope, and run `grep -rin 'keyword' .ai/rules` to catch what a path match alone misses. Do not write code until you have read and are following every matching rule. If `.ai/rules` does not exist, continue without it.
+- Record durable rules with `record-rule` so the next agent or teammate inherits them instead of working them out again. Pass a `glob` (e.g. `app/Http/Controllers/**`), a short `title`, and a few-line `note`. Always use `record-rule`, never your native memory or notes tool — native memory is personal and session-scoped; only `.ai/rules` is shared with the team and persists in the repo.
+
 ## Artisan
 
 - Run Artisan commands directly via the command line (e.g., `php artisan route:list`). Use `php artisan list` to discover available commands and `php artisan [command] --help` to check parameters.
@@ -108,13 +99,6 @@ This application is a Laravel application and its main Laravel ecosystems packag
 # Deployment
 
 - Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
-
-=== tests rules ===
-
-# Test Enforcement
-
-- Every change must be programmatically tested. Write a new test or update an existing test, then run the affected tests to make sure they pass.
-- Run the minimum number of tests needed to ensure code quality and speed. Use `php artisan test --compact` with a specific filename or filter.
 
 === laravel/core rules ===
 
@@ -162,7 +146,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - Run tests: `php artisan test --compact` or filter: `php artisan test --compact --filter=testName`.
 - Do NOT delete tests without approval.
 
-=== filament/filament rules ===
+=== filament/filament/core rules ===
 
 ## Filament
 
@@ -295,10 +279,6 @@ Action::make('updateEmail')
 
 </code-snippet>
 
-When an action modal contains a form with only a few fields, use `->stickyModalHeader(false)` and `->stickyModalFooter(false)` so the header and footer scroll naturally with the short content.
-
-For admin resources, prefer Create and Edit actions in slideovers on the list and view pages instead of dedicated create or edit pages. The application configures these actions as slideovers globally, so only register separate pages when the workflow explicitly requires them.
-
 ### Testing
 
 Testing setup (requires `pestphp/pest-plugin-livewire` in `composer.json`):
@@ -392,7 +372,6 @@ livewire(ListUsers::class)
 
 ### Common Mistakes
 
-- **Keep strict authorization and global search aligned.** The admin panel enables `strictAuthorization()`, and setting `$recordTitleAttribute` automatically opts a resource into global search. Filament checks the policy's `view()` method while resolving every matching global-search result, even when the resource only has an Edit page. A globally searchable resource must have a usable View or Edit page and all policy methods Filament checks for that destination. For list-only or modal-only resources, or resources intentionally lacking record-level view ability, declare `protected static bool $isGloballySearchable = false;`. Whenever a resource's title attribute, pages, or policy abilities change, update `tests/Feature/Filament/Components/GlobalSearchTest.php` with a matching record and verify that global search renders without an authorization exception.
 - **Never assume public file visibility.** File visibility is `private` by default. Always use `->visibility('public')` when public access is needed.
 - **Never assume full-width layout.** `Grid`, `Section`, `Fieldset`, and `Repeater` do not span all columns by default.
 - **Use `Select::make('author_id')->relationship('author', 'name')` for BelongsTo fields.** `BelongsToSelect` does not exist in v4.
@@ -404,14 +383,3 @@ livewire(ListUsers::class)
   - `$view`: `protected string` (not `protected static string`) on `Page` and `Widget` classes
 
 </laravel-boost-guidelines>
-
-## Running Tools
-
-Always use these flags when running CLI tools:
-
-- Tests: `vendor/bin/pest --no-progress`
-- PHPStan: `vendor/bin/phpstan analyse --no-progress --error-format=raw`
-- Psalm: `vendor/bin/psalm --no-progress --no-suggestions --output-format=text`
-- phpcs: `vendor/bin/phpcs --report=emacs -q`
-- PHP-CS-Fixer: `vendor/bin/php-cs-fixer fix --show-progress=none -q -n`
-- Rector: `vendor/bin/rector process --no-progress-bar --output-format=github`Copy

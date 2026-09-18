@@ -11,6 +11,7 @@ enum ReportWidgetKey: string
     case EnrollmentOverview = 'enrollment-overview';
     case EnrollmentCapacityMetrics = 'enrollment-capacity-metrics';
     case InstructorOverview = 'instructor-overview';
+    case FinanceOverview = 'finance-overview';
 
     /** @return array<string, string> */
     public static function dedicatedPermissionOptions(): array
@@ -29,6 +30,7 @@ enum ReportWidgetKey: string
             self::EnrollmentOverview,
             self::EnrollmentCapacityMetrics => ReportCategory::Enrollment,
             self::InstructorOverview => ReportCategory::Instructor,
+            self::FinanceOverview => ReportCategory::Finance,
         };
     }
 
@@ -38,6 +40,7 @@ enum ReportWidgetKey: string
             self::EnrollmentOverview => 'Enrollment Overview Widget',
             self::EnrollmentCapacityMetrics => 'Enrollment Capacity Metrics Widget',
             self::InstructorOverview => 'Instructor Overview Widget',
+            self::FinanceOverview => 'Finance Overview Widget',
         };
     }
 
@@ -47,6 +50,7 @@ enum ReportWidgetKey: string
             self::EnrollmentOverview => ReportKey::TotalEnrollmentsByClass->permission(),
             self::EnrollmentCapacityMetrics => 'EnrollmentCapacityMetricsWidget:Reports',
             self::InstructorOverview => 'InstructorOverviewWidget:Reports',
+            self::FinanceOverview => 'FinanceOverviewWidget:Reports',
         };
     }
 
@@ -62,6 +66,6 @@ enum ReportWidgetKey: string
 
     public function availableToTeachersByDefault(): bool
     {
-        return true;
+        return $this !== self::FinanceOverview;
     }
 }

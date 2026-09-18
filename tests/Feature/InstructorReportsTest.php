@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 use App\Enums\AttendanceStatus;
-use App\Enums\FormTypes;
 use App\Enums\ReportCategory;
 use App\Enums\ReportExportFormat;
 use App\Enums\ReportKey;
 use App\Enums\ReportWidgetKey;
+use App\Filament\Admin\Pages\Reports\ClassRosters;
 use App\Filament\Admin\Pages\Reports\ClassSafetyRoster;
 use App\Filament\Admin\Pages\Reports\EmergencyTextsByCourse;
 use App\Filament\Admin\Pages\Reports\InstructorClassAssignments;
@@ -28,7 +28,9 @@ use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\EventSubstituteRequest;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormResponse;
+use App\Models\FormVersion;
 use App\Models\RecurringPrivateLesson;
 use App\Models\ReportExport;
 use App\Models\Student;
@@ -38,6 +40,7 @@ use App\Services\Reports\InstructorReportService;
 use App\Services\Reports\ReportExportService;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Storage;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 
 use function Pest\Livewire\livewire;
 
@@ -183,6 +186,7 @@ it('builds class roster, safety, and emergency text reports from current waiver 
     $student = Student::factory()->for($guardian)->create([
         'first_name' => 'Avery',
         'last_name' => 'Dancer',
+        'nickname' => 'Ave',
     ]);
     Enrollment::factory()->create([
         'course_id' => $course->id,
@@ -202,11 +206,22 @@ it('builds class roster, safety, and emergency text reports from current waiver 
         'behavioral_notes' => 'Quiet space helps',
         'media_release_consent' => true,
     ]);
-    $form = Form::factory()->create([
-        'form_type' => FormTypes::StudentWaiver,
-        'valid_until' => null,
+    $form = Form::factory()->create(['key' => 'student-waiver']);
+    $version = FormVersion::factory()->for($form)->published()->create();
+    $assignment = FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $version->id,
+        'respondent_id' => $guardian->id,
+        'subject_id' => $student->id,
     ]);
-    FormUser::factory()->for($form)->for($guardian)->forStudent($student)->for($waiver, 'responseable')->create();
+    FormResponse::factory()->create([
+        'form_assignment_id' => $assignment->id,
+        'form_version_id' => $version->id,
+        'status' => FormResponseStatus::Submitted,
+        'projection_type' => $waiver->getMorphClass(),
+        'projection_id' => $waiver->id,
+        'submitted_at' => now(),
+    ]);
     EmergencyContact::factory()->for($waiver)->create([
         'name' => 'First Contact',
         'phone_number' => '555-1111',
@@ -234,7 +249,12 @@ it('builds class roster, safety, and emergency text reports from current waiver 
 
     expect($roster->rows[0])->toMatchArray([
         'dancer_name' => 'Avery Dancer',
+        'dancer_nickname' => 'Ave',
         'media_release' => 'On File — Approved',
+    ])->and($roster->headers)->toBe([
+        'dancer_name' => 'Dancer Name',
+        'dancer_nickname' => 'Dancer Nickname',
+        'media_release' => 'Media Release',
     ])->and($safety->headers)->toHaveKeys([
         'emergency_contact_1_name',
         'emergency_contact_2_name',
@@ -263,6 +283,13 @@ it('builds class roster, safety, and emergency text reports from current waiver 
         ->and($unfilteredTexts->rows[0]['dancer_name'])->toBe('Avery Dancer');
 
     $this->actingAs($owner);
+
+    livewire(ClassRosters::class)
+        ->loadTable()
+        ->filterTable('academic_term_id', $term->id)
+        ->filterTable('course_id', $course->id)
+        ->assertSee('Dancer Nickname')
+        ->assertSee('Ave');
 
     livewire(EmergencyTextsByCourse::class)
         ->loadTable()
@@ -407,7 +434,7 @@ it('reports course schedules and owner-only substitute reasons', function (): vo
             'enrollment_count' => 2,
             'additional_instructors' => 'Co Teacher',
         ])->and($subReport->rows[0])->toMatchArray([
-            'original_instructor' => 'Co Teacher, Primary Teacher',
+            'original_instructor' => 'Original teacher not recorded',
             'course_name' => 'Monday Ballet',
             'reason' => 'Primary teacher is unavailable',
             'substitute_instructor' => 'Sub Teacher',

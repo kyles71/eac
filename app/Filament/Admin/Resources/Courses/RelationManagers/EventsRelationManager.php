@@ -44,11 +44,22 @@ final class EventsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->mutateDataUsing(fn (array $data): array => $this->prepRecurringData($data))
-                    ->after(function (array $data): void {
-                        $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data): void {
+                    ->after(function (array $data, CreateAction $action): void {
+                        $rawData = $action->getRawData();
+                        $teacherIds = is_array($rawData['teacher_ids'] ?? null)
+                            ? $rawData['teacher_ids']
+                            : [];
+                        $scheduleConflictOverrideBy = EventForm::scheduleConflictOverrideActor($rawData);
+
+                        $this->createRecurring($data, $this->repeat_through, $this->repeat_frequency, function (array $data) use ($scheduleConflictOverrideBy, $teacherIds): void {
                             $record = new Event($data);
 
                             $this->course()->events()->save($record);
+                            EventForm::assignTeachers(
+                                event: $record,
+                                teacherIds: $teacherIds,
+                                scheduleConflictOverrideBy: $scheduleConflictOverrideBy,
+                            );
                         });
                     }),
             ]);

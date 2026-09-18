@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Actions;
 
+use App\Contracts\AutomaticallyFulfillsOrderItems;
+use App\Enums\FulfillmentWorkflow;
 use App\Filament\Admin\Resources\Products\ProductResource;
 use App\Filament\Admin\Resources\Products\Schemas\ProductForm;
 use App\Models\Costume;
@@ -42,6 +44,7 @@ final class ManageProductListingAction extends Action
                 $schema->model(self::product($record) ?? Product::class),
                 includeLinkedItem: false,
                 costumeContext: $record instanceof Costume ? $record : null,
+                courseContext: $record instanceof Course ? $record : null,
             ))
             ->mountUsing(function (Model $record, Schema $schema): void {
                 self::authorizeManagement($record);
@@ -55,6 +58,9 @@ final class ManageProductListingAction extends Action
                         'is_active' => true,
                         'include_productable_images' => false,
                         'send_purchase_notification' => false,
+                        'fulfillment_workflow' => $record instanceof AutomaticallyFulfillsOrderItems
+                            ? FulfillmentWorkflow::Automatic->value
+                            : FulfillmentWorkflow::Manual->value,
                     ]);
             })
             ->action(function (array $data, Model $record, Schema $schema): void {

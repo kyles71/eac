@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Products\Tables;
 
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\ProductAvailabilityStatus;
 use App\Enums\ProductType;
 use App\Filament\Admin\Resources\Products\ProductResource;
@@ -59,6 +60,11 @@ final class ProductsTable
                 TextColumn::make('productable_type')
                     ->label('Type')
                     ->formatStateUsing(fn (?string $state): string => ProductType::labelForProductableType($state)),
+                TextColumn::make('fulfillment_workflow')
+                    ->label('Fulfillment')
+                    ->state(fn (Product $record): FulfillmentWorkflow => $record->fulfillmentWorkflow())
+                    ->badge()
+                    ->toggleable(),
                 TextColumn::make('available_from')
                     ->dateTime()
                     ->placeholder('Immediately')
@@ -95,6 +101,9 @@ final class ProductsTable
 
                         return app(ProductAvailabilityService::class)->applyAdminStatusFilter($query, $status);
                     }),
+                SelectFilter::make('fulfillment_workflow')
+                    ->label('Fulfillment')
+                    ->options(FulfillmentWorkflow::class),
             ])
             ->recordActions([
                 ActionGroup::make([

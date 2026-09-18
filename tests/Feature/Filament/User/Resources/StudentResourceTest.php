@@ -454,7 +454,7 @@ it('groups recurring course events while keeping schedule exceptions separate', 
         )
         ->assertCanSeeTableRecords([$recurringEvents->first(), $rescheduledEvent, $addedEvent])
         ->assertCanNotSeeTableRecords($recurringEvents->skip(1))
-        ->assertSee('Ballet Company Class - Wednesdays (2 more)')
+        ->assertSee('Ballet Company - Wednesdays (2 more)')
         ->assertSee($firstMeeting->timezone($displayTimezone)->format('M j, Y g:i A'))
         ->assertSee('Course History')
         ->assertDontSee('Enrollment History');

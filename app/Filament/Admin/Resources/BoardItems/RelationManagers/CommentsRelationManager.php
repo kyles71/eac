@@ -70,7 +70,9 @@ final class CommentsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('id')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['author', 'media']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->reorder()
+                ->with(['author', 'media']))
             ->columns([
                 TextColumn::make('author.full_name')
                     ->label('Author')
@@ -78,6 +80,7 @@ final class CommentsRelationManager extends RelationManager
                 TextColumn::make('body')
                     ->label('Comment')
                     ->html()
+                    ->extraAttributes(['class' => 'fi-prose'])
                     ->wrap(),
                 TextColumn::make('attachments')
                     ->state(fn (BoardItemComment $record): string => $record->getMedia('attachments')
@@ -101,10 +104,13 @@ final class CommentsRelationManager extends RelationManager
                     ->placeholder('No')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('created_at')
+            ->defaultSort('created_at', 'desc')
             ->headerActions([
                 CreateAction::make()
                     ->label('Add comment')
+                    ->createAnother(false)
+                    ->stickyModalHeader(false)
+                    ->stickyModalFooter(false)
                     ->visible(fn (): bool => Gate::allows('comment', $this->getOwnerRecord()))
                     ->mutateDataUsing(function (array $data): array {
                         $data['author_id'] = auth()->id();

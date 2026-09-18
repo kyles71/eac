@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\HasCapacity;
-use App\Contracts\Productable;
 use App\Contracts\ProvidesStorefrontDetails;
 use App\Enums\CourseProgramType;
 use App\Enums\CourseSemester;
+use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Support\MediaDisks;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -33,7 +34,7 @@ use Spatie\Tags\HasTags;
  * @property-read int $reportable_enrollments_count
  * @property-read int $reportable_holds_count
  */
-final class Course extends Model implements HasCapacity, HasMedia, Productable, ProvidesStorefrontDetails
+final class Course extends Model implements AutomaticallyFulfillsOrderItems, HasCapacity, HasMedia, ProvidesStorefrontDetails
 {
     /** @use HasFactory<\Database\Factories\CourseFactory> */
     use HasFactory, HasTags, InteractsWithMedia;
@@ -48,6 +49,7 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
         'program_type' => CourseProgramType::class,
         'capacity' => 'integer',
         'is_private' => 'boolean',
+        'teacher_assignment_strategy' => CourseTeacherAssignmentStrategy::class,
         'event_reminder_processed_at' => 'datetime',
     ];
 
@@ -214,7 +216,9 @@ final class Course extends Model implements HasCapacity, HasMedia, Productable, 
     public function teachers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'course_teacher', 'course_id', 'teacher_id')
+            ->withPivot('rotation_position')
             ->withTimestamps()
+            ->orderByPivot('rotation_position')
             ->orderBy('first_name')
             ->orderBy('last_name');
     }

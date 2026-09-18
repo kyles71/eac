@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Actions\Store\FulfillGiftCard;
-use App\Contracts\Productable;
+use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\ProvidesStorefrontDetails;
 use App\Contracts\RequiresAddToCartInformation;
 use App\Enums\ProductType;
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 /**
  * @property-read Product|null $product
  */
-final class GiftCardType extends Model implements Productable, ProvidesStorefrontDetails, RequiresAddToCartInformation
+final class GiftCardType extends Model implements AutomaticallyFulfillsOrderItems, ProvidesStorefrontDetails, RequiresAddToCartInformation
 {
     /** @use HasFactory<\Database\Factories\GiftCardTypeFactory> */
     use HasFactory;

@@ -36,9 +36,14 @@ final class EventPolicy
             && $this->canManagePrivateEvent($authUser, $event);
     }
 
+    public function overrideScheduleConflicts(User $authUser): bool
+    {
+        return $authUser->can('OverrideScheduleConflicts:Event');
+    }
+
     public function viewSubstituteDetails(User $authUser, Event $event): bool
     {
-        return $event->substitute_teacher_id === $authUser->id;
+        return $event->isConfirmedSubstitute($authUser);
     }
 
     public function recordSubstituteAttendance(User $authUser, Event $event): bool
@@ -57,6 +62,11 @@ final class EventPolicy
     {
         if ($this->recordSubstituteAttendance($authUser, $event)) {
             return true;
+        }
+
+        if ($authUser->can('Update:Event') && $event->isAssignedTeacher($authUser)) {
+            return $event->course_id === null
+                || ! $event->course()->firstOrFail()->hasConcluded();
         }
 
         if (! $this->update($authUser, $event)) {
@@ -93,15 +103,18 @@ final class EventPolicy
 
     private function canAccessPrivateEvent(User $authUser, Event $event): bool
     {
-        if ($event->substitute_teacher_id === $authUser->id) {
+        if ($event->isConfirmedSubstitute($authUser)) {
             return true;
         }
 
         $event->loadMissing('course.recurringPrivateLesson');
 
         if ($event->course?->recurringPrivateLesson !== null) {
-            return $authUser->hasAnyRole(['teacher', 'owner', 'super_admin'])
-                || $event->course->recurringPrivateLesson->user_id === $authUser->id;
+            if ($authUser->hasAnyRole(['teacher', 'owner', 'super_admin'])) {
+                return true;
+            }
+
+            return $event->course->recurringPrivateLesson->user_id === $authUser->id;
         }
 
         return $event->isAccessibleToAdminUser($authUser);

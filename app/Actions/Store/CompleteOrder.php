@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Actions\Store;
 
 use App\Actions\CourseHolds\ReleaseCourseHoldOrderClaims;
+use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\HasCapacity;
-use App\Contracts\Productable;
 use App\Contracts\StripeServiceContract;
 use App\Enums\OrderStatus;
 use App\Models\CourseHoldSeat;
@@ -101,7 +101,7 @@ final readonly class CompleteOrder
 
                 $productable = $product->productable;
 
-                if (! $productable instanceof Productable) {
+                if (! $productable instanceof AutomaticallyFulfillsOrderItems) {
                     continue;
                 }
 

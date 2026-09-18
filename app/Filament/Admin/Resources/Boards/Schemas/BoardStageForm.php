@@ -19,9 +19,7 @@ final class BoardStageForm
                 ->maxLength(80),
             TextInput::make('subtitle')
                 ->maxLength(160),
-            Select::make('color')
-                ->options(BoardForm::colorOptions())
-                ->required(),
+            BoardForm::colorSelect(),
             Select::make('kind')
                 ->options(BoardStageKind::class)
                 ->enum(BoardStageKind::class)

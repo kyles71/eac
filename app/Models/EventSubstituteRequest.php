@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\EventSubstituteRequestReason;
 use App\Enums\EventSubstituteRequestStatus;
 use Database\Factories\EventSubstituteRequestFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -11,6 +12,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int|null $requested_by_user_id
+ * @property int|null $sick_instructor_id
+ */
 final class EventSubstituteRequest extends Model
 {
     /** @use HasFactory<EventSubstituteRequestFactory> */
@@ -19,10 +24,13 @@ final class EventSubstituteRequest extends Model
     /** @var array<string, string> */
     protected $casts = [
         'event_id' => 'integer',
+        'event_substitute_coverage_id' => 'integer',
         'teacher_id' => 'integer',
         'requested_by_user_id' => 'integer',
+        'sick_instructor_id' => 'integer',
         'response_recorded_by_user_id' => 'integer',
         'status' => EventSubstituteRequestStatus::class,
+        'reason_type' => EventSubstituteRequestReason::class,
         'responded_at' => 'datetime',
         'reminder_processed_at' => 'datetime',
         'release_requested_at' => 'datetime',
@@ -36,6 +44,12 @@ final class EventSubstituteRequest extends Model
         return $this->belongsTo(Event::class);
     }
 
+    /** @return BelongsTo<EventSubstituteCoverage, $this> */
+    public function coverage(): BelongsTo
+    {
+        return $this->belongsTo(EventSubstituteCoverage::class, 'event_substitute_coverage_id');
+    }
+
     /** @return BelongsTo<User, $this> */
     public function teacher(): BelongsTo
     {
@@ -46,6 +60,12 @@ final class EventSubstituteRequest extends Model
     public function requestedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function sickInstructor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sick_instructor_id');
     }
 
     /** @return BelongsTo<User, $this> */

@@ -6,11 +6,15 @@ namespace App\Observers;
 
 use App\Actions\RecurringPrivateLessons\HandleRecurringPrivateLessonEventCancellation;
 use App\Actions\RecurringPrivateLessons\SynchronizeRecurringPrivateLessonCharges;
+use App\Actions\Store\VoidOrderItemFulfillment;
 use App\Enums\RecurringPrivateLessonChargeStatus;
+use App\Jobs\ReconcileRequiredFormsForCourses;
 use App\Models\Event;
 use App\Models\RecurringPrivateLesson;
 use App\Models\RecurringPrivateLessonCharge;
+use App\Models\User;
 use App\Services\HolidayConflictService;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Validation\ValidationException;
 
 final readonly class EventObserver
@@ -19,6 +23,8 @@ final readonly class EventObserver
         private HolidayConflictService $holidayConflicts,
         private SynchronizeRecurringPrivateLessonCharges $synchronizeCharges,
         private HandleRecurringPrivateLessonEventCancellation $handleCancellation,
+        private Dispatcher $bus,
+        private VoidOrderItemFulfillment $voidOrderItemFulfillment,
     ) {}
 
     public function saving(Event $event): void
@@ -75,6 +81,33 @@ final readonly class EventObserver
             ->first();
 
         return ! $charge instanceof RecurringPrivateLessonCharge || (bool) $charge->delete();
+    }
+
+    public function saved(Event $event): void
+    {
+        $courseIds = collect([
+            $event->course_id,
+            $event->wasChanged('course_id') ? ($event->getPrevious()['course_id'] ?? null) : null,
+        ])->filter(fn (mixed $id): bool => is_numeric($id))->map(fn (mixed $id): int => (int) $id)->unique()->values()->all();
+
+        if ($courseIds !== []) {
+            $this->bus->dispatch(new ReconcileRequiredFormsForCourses($courseIds));
+        }
+    }
+
+    public function deleted(Event $event): void
+    {
+        if ($event->course_id !== null) {
+            $this->bus->dispatch(new ReconcileRequiredFormsForCourses([(int) $event->course_id]));
+        }
+
+        $user = auth()->user();
+
+        $this->voidOrderItemFulfillment->forSource(
+            source: $event,
+            voidedBy: $user instanceof User ? $user : null,
+            reason: 'The linked event was deleted.',
+        );
     }
 
     private function synchronizeRecurringPrivateLesson(Event $event): void

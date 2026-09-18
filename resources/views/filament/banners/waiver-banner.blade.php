@@ -1,7 +1,7 @@
 <div class="mt-2">
     @php
         $names = $assignments
-            ->pluck('student.first_name')
+            ->map(fn ($assignment) => $assignment->subject?->first_name)
             ->filter()
             ->unique()
             ->join(', ', ' and ');

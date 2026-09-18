@@ -31,7 +31,7 @@ final class BoardItemCommentPolicy
     {
         return ! $comment->item->isArchived()
             && ! $comment->item->board->isArchived()
-            && ($comment->author_id === $user->id || $comment->item->board->membershipRoleFor($user)?->canManage() === true);
+            && $comment->author_id === $user->id;
     }
 
     public function delete(User $user, BoardItemComment $comment): bool

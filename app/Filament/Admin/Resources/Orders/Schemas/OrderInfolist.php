@@ -7,6 +7,10 @@ namespace App\Filament\Admin\Resources\Orders\Schemas;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderStatus;
+use App\Filament\Admin\Resources\Events\EventResource;
+use App\Models\Event;
+use App\Models\OrderItem;
+use App\Models\OrderItemFulfillment;
 use App\Models\OrderRefund;
 use App\Models\ProductQuestionAnswer;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -59,7 +63,7 @@ final class OrderInfolist
                     ->schema([
                         RepeatableEntry::make('orderItems')
                             ->hiddenLabel()
-                            ->columns(5)
+                            ->columns(6)
                             ->schema([
                                 TextEntry::make('product.name')
                                     ->label('Product'),
@@ -75,8 +79,15 @@ final class OrderInfolist
                                     ->badge()
                                     ->color(fn (OrderItemStatus $state): string => match ($state) {
                                         OrderItemStatus::Fulfilled => 'success',
+                                        OrderItemStatus::PartiallyFulfilled => 'info',
                                         OrderItemStatus::Pending => 'warning',
                                     }),
+                                TextEntry::make('fulfillment_workflow')
+                                    ->label('Workflow')
+                                    ->badge(),
+                                TextEntry::make('fulfillment_progress')
+                                    ->label('Progress')
+                                    ->state(fn (OrderItem $record): string => $record->fulfilledQuantity().' of '.$record->quantity),
                                 RepeatableEntry::make('questionAnswers')
                                     ->label('Purchaser Answers')
                                     ->schema([
@@ -90,6 +101,44 @@ final class OrderInfolist
                                     ->columns(3)
                                     ->columnSpanFull()
                                     ->visible(fn ($record): bool => $record->questionAnswers->isNotEmpty()),
+                                RepeatableEntry::make('fulfillments')
+                                    ->label('Fulfillment History')
+                                    ->columns(5)
+                                    ->schema([
+                                        TextEntry::make('unit_number')
+                                            ->label('Unit'),
+                                        TextEntry::make('source_summary')
+                                            ->label('Fulfilled By')
+                                            ->state(fn (OrderItemFulfillment $record): string => $record->sourceLabel())
+                                            ->url(fn (OrderItemFulfillment $record): ?string => $record->source instanceof Event
+                                                ? EventResource::getUrl('view', ['record' => $record->source])
+                                                : null),
+                                        TextEntry::make('fulfilledBy.full_name')
+                                            ->label('Recorded By')
+                                            ->placeholder('System'),
+                                        TextEntry::make('fulfilled_at')
+                                            ->label('Recorded At')
+                                            ->dateTime(),
+                                        TextEntry::make('fulfillment_status')
+                                            ->label('Status')
+                                            ->state(fn (OrderItemFulfillment $record): string => $record->isActive() ? 'Active' : 'Reopened')
+                                            ->badge()
+                                            ->color(fn (OrderItemFulfillment $record): string => $record->isActive() ? 'success' : 'gray'),
+                                        TextEntry::make('note')
+                                            ->label('Note')
+                                            ->placeholder('None')
+                                            ->columnSpan(2),
+                                        TextEntry::make('void_reason')
+                                            ->label('Reopened Reason')
+                                            ->placeholder('N/A')
+                                            ->columnSpan(2),
+                                        TextEntry::make('voided_at')
+                                            ->label('Reopened At')
+                                            ->dateTime()
+                                            ->placeholder('N/A'),
+                                    ])
+                                    ->columnSpanFull()
+                                    ->visible(fn (OrderItem $record): bool => $record->fulfillments->isNotEmpty()),
                             ]),
                     ]),
                 Section::make('Refund History')

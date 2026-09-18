@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\CourseProgramType;
+use App\Enums\FulfillmentWorkflow;
 use App\Filament\Admin\Resources\Costumes\CostumeResource;
 use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
 use App\Filament\Admin\Resources\Costumes\Pages\ViewCostume;
@@ -118,6 +119,7 @@ it('creates and edits the single product listing from a costume', function (): v
     $product = Product::query()->where('productable_type', Costume::class)->sole();
 
     expect($product->price)->toBe(12500)
+        ->and($product->fulfillment_workflow)->toBe(FulfillmentWorkflow::Manual)
         ->and($product->assignedStudents()->pluck('students.id')->all())->toBe([$student->id]);
 
     livewire(ListCostumes::class)
@@ -159,7 +161,8 @@ it('creates and edits the single product listing from a course', function (): vo
 
     expect($product)->toBeInstanceOf(Product::class)
         ->and($product->name)->toBe('Intro to Ballet Tuition')
-        ->and($product->price)->toBe(8000);
+        ->and($product->price)->toBe(8000)
+        ->and($product->fulfillment_workflow)->toBe(FulfillmentWorkflow::Automatic);
 
     livewire(ListCourses::class)
         ->set('activeTab', 'all')

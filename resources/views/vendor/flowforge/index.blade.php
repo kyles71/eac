@@ -32,6 +32,8 @@
             collapseStorageKey: @js($collapseStorageKey),
             stageSortable: null,
             sortableRetry: null,
+            touchDragDelay: 250,
+            touchStartThreshold: 8,
 
             init() {
                 this.loadCollapsedStages()
@@ -56,11 +58,26 @@
                 this.stageSortable?.destroy()
                 this.stageSortable = window.Sortable.create(this.$refs.stageList, {
                     animation: 200,
+                    delay: this.touchDragDelay,
+                    delayOnTouchOnly: true,
                     draggable: '[data-stage-sortable-item]',
                     handle: '[data-stage-sortable-handle]',
                     ghostClass: 'fi-sortable-ghost',
+                    touchStartThreshold: this.touchStartThreshold,
                     onEnd: () => this.$wire.reorderStages(this.stageIds()),
                 })
+            },
+
+            configureCardTouchDragging(element) {
+                const sortable = element.sortable
+
+                if (! sortable) {
+                    return
+                }
+
+                sortable.option('delay', this.touchDragDelay)
+                sortable.option('delayOnTouchOnly', true)
+                sortable.option('touchStartThreshold', this.touchStartThreshold)
             },
 
             stageIds() {

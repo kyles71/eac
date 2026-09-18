@@ -19,6 +19,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Facades\FilamentColor;
+use Relaticle\Flowforge\Support\ColorResolver;
 
 final class BoardForm
 {
@@ -60,10 +61,8 @@ final class BoardForm
                             TextInput::make('subtitle')
                                 ->maxLength(160)
                                 ->columnSpanFull(),
-                            Select::make('color')
-                                ->options(self::colorOptions())
-                                ->default('gray')
-                                ->required(),
+                            self::colorSelect()
+                                ->default('gray'),
                             Select::make('kind')
                                 ->options(BoardStageKind::class)
                                 ->enum(BoardStageKind::class)
@@ -97,18 +96,57 @@ final class BoardForm
     public static function colorOptions(): array
     {
         return [
+            'white' => 'White',
             'gray' => 'Gray',
             'primary' => 'Primary',
             'info' => 'Blue',
             'warning' => 'Amber',
+            'orange' => 'Orange',
             'success' => 'Green',
+            'teal' => 'Teal',
+            'purple' => 'Purple',
+            'pink' => 'Pink',
             'danger' => 'Red',
         ];
     }
 
+    public static function colorSelect(): Select
+    {
+        return Select::make('color')
+            ->options(self::colorOptionsWithPreviews())
+            ->allowHtml()
+            ->required();
+    }
+
+    /** @return array<string, string> */
+    public static function colorOptionsWithPreviews(): array
+    {
+        $options = [];
+
+        foreach (self::colorOptions() as $color => $label) {
+            $options[$color] = sprintf(
+                '<span style="display: inline-flex; align-items: center; gap: 0.5rem;"><span aria-hidden="true" style="display: inline-block; width: 1rem; height: 1rem; flex: none; border: 1px solid rgb(0 0 0 / 0.15); border-radius: 0.25rem; background-color: %s;"></span><span>%s</span></span>',
+                e(self::previewColor($color)),
+                e($label),
+            );
+        }
+
+        return $options;
+    }
+
     public static function previewColor(string $color): string
     {
-        return (string) (FilamentColor::getColor($color)[500] ?? $color);
+        if ($color === 'white') {
+            return '#ffffff';
+        }
+
+        $resolvedColor = ColorResolver::resolve($color);
+
+        if (is_array($resolvedColor)) {
+            return (string) $resolvedColor[500];
+        }
+
+        return (string) (FilamentColor::getColor((string) $resolvedColor)[500] ?? '#71717a');
     }
 
     private static function isBlankTemplate(mixed $template): bool

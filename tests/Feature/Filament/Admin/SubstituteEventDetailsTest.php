@@ -217,7 +217,10 @@ it('lets a confirmed substitute request release while retaining the assignment',
     $this->actingAs($teacher);
 
     livewire(ViewEvent::class, ['record' => $event->id])
-        ->callAction(TestAction::make('requestRelease'), ['reason' => 'Family emergency'])
+        ->callAction(TestAction::make('requestRelease'), [
+            'coverage_id' => $request->coverage_id ?? $request->event_substitute_coverage_id,
+            'reason' => 'Family emergency',
+        ])
         ->assertNotified('Release requested');
 
     expect($request->refresh()->release_reason)->toBe('Family emergency')

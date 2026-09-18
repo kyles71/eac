@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\HasCapacity;
 use App\Contracts\Productable;
 use App\Enums\RecurringPrivateLessonChargeStatus;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use InvalidArgumentException;
 
-final class RecurringPrivateLessonCharge extends Model implements HasCapacity, Productable
+final class RecurringPrivateLessonCharge extends Model implements AutomaticallyFulfillsOrderItems, HasCapacity, Productable
 {
     /** @use HasFactory<\Database\Factories\RecurringPrivateLessonChargeFactory> */
     use HasFactory;

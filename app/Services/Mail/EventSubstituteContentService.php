@@ -16,7 +16,7 @@ final readonly class EventSubstituteContentService
     /** @return array{tokens: array<string, string>, slots: array<string, string>} */
     public function request(EventSubstituteRequest $request): array
     {
-        $request->loadMissing(['event.calendar', 'event.course', 'teacher', 'requestedBy']);
+        $request->loadMissing(['event.calendar', 'event.course', 'coverage.coveredTeacher', 'teacher', 'requestedBy']);
         $teacher = $request->teacher;
 
         return [
@@ -34,7 +34,7 @@ final readonly class EventSubstituteContentService
     /** @return array{tokens: array<string, string>, slots: array<string, string>} */
     public function reminder(EventSubstituteRequest $request, User $recipient, bool $isTeacher): array
     {
-        $request->loadMissing(['event.calendar', 'event.course', 'teacher', 'requestedBy']);
+        $request->loadMissing(['event.calendar', 'event.course', 'coverage.coveredTeacher', 'teacher', 'requestedBy']);
         $url = $isTeacher
             ? SubstituteRequest::getUrl(['request' => $request], panel: 'admin')
             : EventResource::getUrl('view', ['record' => $request->event], panel: 'admin');
@@ -55,7 +55,7 @@ final readonly class EventSubstituteContentService
     /** @return array{tokens: array<string, string>, slots: array<string, string>} */
     public function removed(EventSubstituteRequest $request, string $reason): array
     {
-        $request->loadMissing(['event.calendar', 'event.course', 'teacher', 'requestedBy']);
+        $request->loadMissing(['event.calendar', 'event.course', 'coverage.coveredTeacher', 'teacher', 'requestedBy']);
 
         return [
             'tokens' => [
@@ -79,6 +79,9 @@ final readonly class EventSubstituteContentService
             'recipient.first_name' => $recipient instanceof User ? $recipient->first_name : '',
             'recipient.full_name' => $recipient instanceof User ? $recipient->fullName : '',
             'teacher.full_name' => $request->teacher instanceof User ? $request->teacher->fullName : '',
+            'covered_teacher.full_name' => $request->event_substitute_coverage_id !== null
+                ? $request->coverage->coveredTeacherName()
+                : 'Original teacher not recorded',
             'requester.full_name' => $request->requestedBy instanceof User ? $request->requestedBy->fullName : '',
             'event.name' => $event->name,
             'event.starts_at' => $event->start_time?->setTimezone($displayTimezone)->format('F j, Y g:i A T') ?? '',

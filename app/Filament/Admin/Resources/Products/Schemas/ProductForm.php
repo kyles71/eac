@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Products\Schemas;
 
 use App\Enums\DashboardAudience;
+use App\Enums\FulfillmentWorkflow;
 use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
 use App\Models\AcademicTerm;
@@ -44,6 +45,7 @@ final class ProductForm
         Schema $schema,
         bool $includeLinkedItem = true,
         ?Costume $costumeContext = null,
+        ?Course $courseContext = null,
     ): Schema {
         return $schema
             ->components([
@@ -72,6 +74,13 @@ final class ProductForm
                                     $set('requiredCompetitionTeams', []);
                                     $set('assignedUsers', []);
                                 }
+
+                                $set(
+                                    'fulfillment_workflow',
+                                    in_array($state, [Course::class, GiftCardType::class], true)
+                                        ? FulfillmentWorkflow::Automatic->value
+                                        : FulfillmentWorkflow::Manual->value,
+                                );
                             }),
                         Select::make('productable_id')
                             ->label(fn (Get $get): string => match ($get('productable_type')) {
@@ -120,6 +129,26 @@ final class ProductForm
                                 }
                             }),
                     ])] : []),
+                Section::make('Fulfillment')
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('fulfillment_workflow')
+                            ->label('Fulfillment Workflow')
+                            ->options(fn (Get $get): array => self::usesAutomaticFulfillment($get, $courseContext)
+                                ? [FulfillmentWorkflow::Automatic->value => FulfillmentWorkflow::Automatic->getLabel()]
+                                : FulfillmentWorkflow::configurableOptions())
+                            ->searchable(false)
+                            ->default(FulfillmentWorkflow::Manual->value)
+                            ->disabled(fn (Get $get): bool => self::usesAutomaticFulfillment($get, $courseContext))
+                            ->dehydrated()
+                            ->preload()
+                            ->required()
+                            ->selectablePlaceholder(false)
+                            ->helperText(fn (Get $get): string => self::usesAutomaticFulfillment($get, $courseContext)
+                                ? 'The linked item fulfills purchases automatically.'
+                                : 'Manual items are completed by staff. Scheduled-event items are completed by creating or attaching an event. The choice is copied to future order items.'),
+                    ]),
                 Section::make('Store Details')
                     ->columns(2)
                     ->columnSpanFull()
@@ -480,6 +509,12 @@ final class ProductForm
         return $costumeContext instanceof Costume || $get('productable_type') === Costume::class;
     }
 
+    private static function usesAutomaticFulfillment(Get $get, ?Course $courseContext): bool
+    {
+        return $courseContext instanceof Course
+            || in_array($get('productable_type'), [Course::class, GiftCardType::class], true);
+    }
+
     /** @param Builder<Student> $query */
     private static function studentOptionsQuery(
         Builder $query,
@@ -564,7 +599,7 @@ final class ProductForm
                 $query->whereRaw('1 = 0');
 
                 if ($assignedStudentIds !== []) {
-                    $query->orWhereKey($assignedStudentIds);
+                    $query->orWhereIn('students.id', $assignedStudentIds);
                 }
 
                 if ($courseIds !== []) {
