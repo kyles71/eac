@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 final readonly class RequiredProductPurchaseReminderContentService
 {
     /**
-     * @param  Collection<int, array{product: Product, requirement: PurchaseRequirementRow}>  $reminders
+     * @param  Collection<int, covariant array{product: Product, requirement: PurchaseRequirementRow}>  $reminders
      * @return array{tokens: array<string, string>, slots: array<string, string>}
      */
     public function for(User $user, Collection $reminders): array

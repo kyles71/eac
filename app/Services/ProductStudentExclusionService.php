@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\AcademicTerm;
 use App\Models\Costume;
 use App\Models\Product;
 use App\Models\Student;
@@ -71,7 +72,7 @@ final readonly class ProductStudentExclusionService
             $query->whereRaw('1 = 0');
 
             if ($assignedStudentIds->isNotEmpty()) {
-                $query->orWhereKey($assignedStudentIds);
+                $query->orWhereIn('students.id', $assignedStudentIds);
             }
 
             if ($courseIds->isNotEmpty()) {
@@ -85,11 +86,14 @@ final readonly class ProductStudentExclusionService
             }
 
             if (! $hasAnyAudience) {
-                $query->orWhereHas('enrollments.course.academicTerm', fn (Builder $query): Builder => $query->current());
+                $comparisonDate = AcademicTerm::comparisonDate();
+                $query->orWhereHas('enrollments.course.academicTerm', fn (Builder $query): Builder => $query
+                    ->whereDate('starts_on', '<=', $comparisonDate)
+                    ->whereDate('ends_on', '>=', $comparisonDate));
             }
 
             if ($savedExcludedStudentIds->isNotEmpty()) {
-                $query->orWhereKey($savedExcludedStudentIds);
+                $query->orWhereIn('students.id', $savedExcludedStudentIds);
             }
         });
     }

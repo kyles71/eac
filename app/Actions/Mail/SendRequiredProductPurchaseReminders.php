@@ -11,9 +11,13 @@ use App\Services\Mail\RequiredProductPurchaseReminderContentService;
 use App\Services\ProductPurchaseRequirementService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Collection;
 
-/** @phpstan-import-type PurchaseRequirementRow from ProductPurchaseRequirementService */
+/**
+ * @phpstan-import-type PurchaseRequirementRow from ProductPurchaseRequirementService
+ *
+ * @phpstan-type PurchaseReminder array{product: Product, requirement: PurchaseRequirementRow}
+ * @phpstan-type UserPurchaseReminders array{user: User, reminders: list<PurchaseReminder>}
+ */
 final readonly class SendRequiredProductPurchaseReminders
 {
     public function __construct(
@@ -29,8 +33,8 @@ final readonly class SendRequiredProductPurchaseReminders
         $timezone = (string) config('app.display_timezone', config('app.timezone'));
         $reminderDate = $at->setTimezone($timezone)->toDateString();
 
-        /** @var Collection<int, array{user: User, reminders: Collection<int, array{product: Product, requirement: PurchaseRequirementRow}>}> $remindersByUser */
-        $remindersByUser = collect();
+        /** @var array<int, UserPurchaseReminders> $remindersByUser */
+        $remindersByUser = [];
 
         Product::query()
             ->where('is_purchase_required', true)
@@ -51,16 +55,15 @@ final readonly class SendRequiredProductPurchaseReminders
                         continue;
                     }
 
-                    /** @var array{user: User, reminders: Collection<int, array{product: Product, requirement: PurchaseRequirementRow}>} $group */
-                    $group = $remindersByUser->get($user->id, [
+                    $group = $remindersByUser[$user->id] ?? [
                         'user' => $user,
-                        'reminders' => collect(),
-                    ]);
-                    $group['reminders']->push([
+                        'reminders' => [],
+                    ];
+                    $group['reminders'][] = [
                         'product' => $product,
                         'requirement' => $requirement,
-                    ]);
-                    $remindersByUser->put($user->id, $group);
+                    ];
+                    $remindersByUser[$user->id] = $group;
                 }
             });
 
@@ -68,7 +71,7 @@ final readonly class SendRequiredProductPurchaseReminders
         $productsMarked = 0;
 
         foreach ($remindersByUser as $group) {
-            $payload = $this->content->for($group['user'], $group['reminders']);
+            $payload = $this->content->for($group['user'], collect($group['reminders']));
 
             if (! $this->managedEmail->handle(
                 recipients: $group['user']->email,

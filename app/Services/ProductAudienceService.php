@@ -12,6 +12,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
@@ -119,7 +120,12 @@ final readonly class ProductAudienceService
             });
     }
 
-    /** @param Builder<\App\Models\Student> $query */
+    /**
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
     private function applyNonExcludedStudentToQuery(Builder $query): Builder
     {
         return $query->whereNotExists(fn (QueryBuilder $query): QueryBuilder => $query

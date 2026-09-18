@@ -25,6 +25,9 @@ use Kyle\FilamentMailManager\EmailTypeRegistry;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
 use Kyle\FilamentMailManager\Repositories\ManagedTemplateRepository;
 
+use function Pest\Laravel\actingAs;
+use function Pest\Laravel\artisan;
+
 beforeEach(function (): void {
     Carbon::setTestNow('2030-09-15 12:00:00');
 });
@@ -98,6 +101,18 @@ it('lets direct household assignment survive a student exclusion', function (): 
     expect($product->canBePurchasedBy($household))->toBeTrue()
         ->and($row['required'])->toBe(1)
         ->and($row['targets'])->toBe(['Direct household assignment']);
+});
+
+it('allows a directly assigned student to be excluded', function (): void {
+    $household = User::factory()->create();
+    $student = Student::factory()->for($household)->create();
+    $product = Product::factory()->purchaseRequired()->create();
+    $product->assignedStudents()->attach($student);
+
+    app(ProductStudentExclusionService::class)->sync($product, [$student->id]);
+
+    expect($product->excludedStudents()->whereKey($student->id)->exists())->toBeTrue()
+        ->and($product->refresh()->canBePurchasedBy($household))->toBeFalse();
 });
 
 it('counts one required unit per ordinary household and completed orders only', function (): void {
@@ -207,7 +222,7 @@ it('shows portal reminders only from the reminder date through the purchase dead
         'available_until' => now()->addWeek(),
     ]);
     $product->assignedUsers()->attach($household);
-    $this->actingAs($household);
+    actingAs($household);
 
     expect(collect(app(NeedsAttention::class)->tasks())->pluck('title'))
         ->not->toContain('Required purchase: Required Leotard');
@@ -231,7 +246,7 @@ it('runs purchase reminders through the scheduled command', function (): void {
     ]);
     $product->assignedUsers()->attach($household);
 
-    $this->artisan('products:send-purchase-reminders')
+    artisan('products:send-purchase-reminders')
         ->expectsOutput('Reminded 1 user about 1 required product.')
         ->assertSuccessful();
 
