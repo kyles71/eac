@@ -34,6 +34,9 @@ final class CostumeInfolist
                         TextEntry::make('vendor_number')
                             ->label('Vendor Number')
                             ->placeholder('None'),
+                        TextEntry::make('costume_color')
+                            ->label('Costume Color')
+                            ->placeholder('None'),
                         TextEntry::make('notes')
                             ->placeholder('None')
                             ->columnSpanFull(),

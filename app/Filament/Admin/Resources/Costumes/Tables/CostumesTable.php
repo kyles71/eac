@@ -51,6 +51,10 @@ final class CostumesTable
                     ->label('Vendor Number')
                     ->searchable()
                     ->toggleable(),
+                TextColumn::make('costume_color')
+                    ->label('Costume Color')
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('product.name')
                     ->label('Product Listing')
                     ->placeholder('No product'),

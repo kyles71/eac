@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('vendor')->nullable();
             $table->string('vendor_number')->nullable();
+            $table->string('costume_color')->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
         });

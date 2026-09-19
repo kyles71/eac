@@ -32,3 +32,6 @@ Course-restricted staff, private courses/events, households, and board membershi
 ## Normalize mixed Filament datetime validation state
 
 A DateTimePicker custom validation rule can receive its own `$value` in the display timezone while sibling values read through `Get` are already dehydrated to the storage timezone. Normalize all datetime inputs to storage instants before comparing or combining them, and assert the displayed local interval in regression tests.
+
+## Prefer Filament components over native controls
+When Filament provides a component for an input or UI control, use the Filament implementation instead of the browser-native element. For Select fields, prefer the enhanced Filament Select (`native(false)`) unless there is a specific documented reason to use native rendering.

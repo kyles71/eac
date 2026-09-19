@@ -18,6 +18,14 @@ final class ListCostumes extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('viewProductsNotOrdered')
+                ->label('View Products Not Ordered')
+                ->icon(Heroicon::OutlinedClipboardDocumentList)
+                ->url(CostumeResource::getUrl('products-not-ordered')),
+            Action::make('downloadProductsNotOrdered')
+                ->label('Download Products Not Ordered')
+                ->icon(Heroicon::OutlinedArrowDownTray)
+                ->action(fn () => app(CostumePurchaseReportService::class)->downloadNotOrdered()),
             Action::make('downloadPurchaseReport')
                 ->label('Download Purchase Report')
                 ->icon(Heroicon::OutlinedArrowDownTray)

@@ -40,6 +40,7 @@ it('creates and lists costumes with required course data', function (): void {
             'course_id' => $course->id,
             'vendor' => 'Costume Vendor',
             'vendor_number' => 'CV-42',
+            'costume_color' => 'Midnight Blue',
         ])
         ->assertHasNoActionErrors()
         ->assertNotified();
@@ -48,6 +49,7 @@ it('creates and lists costumes with required course data', function (): void {
         'name' => 'New Lyrical Costume',
         'course_id' => $course->id,
         'vendor_number' => 'CV-42',
+        'costume_color' => 'Midnight Blue',
     ]);
 
     livewire(ListCostumes::class)
