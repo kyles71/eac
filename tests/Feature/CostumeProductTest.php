@@ -22,11 +22,13 @@ it('maps costumes to their own product type and stores course metadata', functio
         'name' => 'Blue Ballet Costume',
         'vendor' => 'Curtain Call',
         'vendor_number' => 'CC-100',
+        'costume_color' => 'Royal Blue',
         'notes' => 'Order tights separately.',
     ]);
 
     expect($costume->course->is($course))->toBeTrue()
         ->and($costume->course->program_type)->toBe(CourseProgramType::Competition)
+        ->and($costume->costume_color)->toBe('Royal Blue')
         ->and(ProductType::fromProductableType(Costume::class))->toBe(ProductType::Costume)
         ->and(ProductType::Costume->toProductableClass())->toBe(Costume::class);
 });

@@ -22,6 +22,7 @@ use App\Models\Student;
 use App\Services\UserBannerRenderHookRegistrarService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -391,6 +392,12 @@ it('stores digit-only select answers from the table add to cart modal', function
 
     livewire(Store::class)
         ->mountAction(TestAction::make('addToCart')->table($this->product->refresh()))
+        ->assertSchemaComponentExists(
+            "question_answers.1.question_{$question->id}",
+            'mountedActionSchema0',
+            checkComponentUsing: fn (Select $select): bool => ! $select->isNative()
+                && ! $select->canSelectPlaceholder(),
+        )
         ->fillForm([
             'question_answers' => [
                 1 => ["question_{$question->id}" => '6'],

@@ -73,6 +73,9 @@ final class CostumeForm
                         TextInput::make('vendor_number')
                             ->label('Vendor Number')
                             ->maxLength(255),
+                        TextInput::make('costume_color')
+                            ->label('Costume Color')
+                            ->maxLength(255),
                         Textarea::make('notes')
                             ->rows(5)
                             ->columnSpanFull(),

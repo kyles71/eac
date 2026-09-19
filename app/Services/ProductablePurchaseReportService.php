@@ -17,22 +17,34 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final readonly class ProductablePurchaseReportService
 {
-    /** @param class-string<Model> $productableClass */
-    public function downloadAll(string $productableClass, string $subjectHeader, string $filenamePrefix): StreamedResponse
-    {
+    /**
+     * @param  class-string<Model>  $productableClass
+     * @param  array<string, string>  $subjectAttributes
+     */
+    public function downloadAll(
+        string $productableClass,
+        string $subjectHeader,
+        string $filenamePrefix,
+        array $subjectAttributes = [],
+    ): StreamedResponse {
         return $this->download(
             productableClass: $productableClass,
             subjectHeader: $subjectHeader,
             filename: "{$filenamePrefix}-purchases-".now()->format('Y-m-d').'.csv',
+            subjectAttributes: $subjectAttributes,
         );
     }
 
-    /** @param class-string<Model> $productableClass */
+    /**
+     * @param  class-string<Model>  $productableClass
+     * @param  array<string, string>  $subjectAttributes
+     */
     public function downloadForProductable(
         Model $productable,
         string $productableClass,
         string $subjectHeader,
         string $filenamePrefix,
+        array $subjectAttributes = [],
     ): StreamedResponse {
         if (! $productable instanceof $productableClass) {
             throw new InvalidArgumentException("Purchase reports are only available for {$subjectHeader} records.");
@@ -43,12 +55,20 @@ final readonly class ProductablePurchaseReportService
             subjectHeader: $subjectHeader,
             filename: "{$filenamePrefix}-{$productable->getKey()}-purchases-".now()->format('Y-m-d').'.csv',
             productable: $productable,
+            subjectAttributes: $subjectAttributes,
         );
     }
 
-    /** @param class-string<Model> $productableClass */
-    public function downloadForProduct(Product $product, string $productableClass, string $subjectHeader): StreamedResponse
-    {
+    /**
+     * @param  class-string<Model>  $productableClass
+     * @param  array<string, string>  $subjectAttributes
+     */
+    public function downloadForProduct(
+        Product $product,
+        string $productableClass,
+        string $subjectHeader,
+        array $subjectAttributes = [],
+    ): StreamedResponse {
         $morphClass = (new $productableClass)->getMorphClass();
 
         if ($product->productable_type !== $morphClass) {
@@ -60,21 +80,26 @@ final readonly class ProductablePurchaseReportService
             subjectHeader: $subjectHeader,
             filename: "product-{$product->getKey()}-purchases-".now()->format('Y-m-d').'.csv',
             product: $product,
+            subjectAttributes: $subjectAttributes,
         );
     }
 
-    /** @param class-string<Model> $productableClass */
+    /**
+     * @param  class-string<Model>  $productableClass
+     * @param  array<string, string>  $subjectAttributes
+     */
     private function download(
         string $productableClass,
         string $subjectHeader,
         string $filename,
         ?Model $productable = null,
         ?Product $product = null,
+        array $subjectAttributes = [],
     ): StreamedResponse {
-        $fixedHeaders = $this->fixedHeaders($subjectHeader);
+        $fixedHeaders = $this->fixedHeaders($subjectHeader, array_keys($subjectAttributes));
         $questionColumns = $this->questionColumns($productableClass, $fixedHeaders, $productable, $product);
 
-        return response()->streamDownload(function () use ($fixedHeaders, $productableClass, $productable, $product, $questionColumns): void {
+        return response()->streamDownload(function () use ($fixedHeaders, $productableClass, $productable, $product, $questionColumns, $subjectAttributes): void {
             $output = fopen('php://output', 'wb');
 
             if ($output === false) {
@@ -108,6 +133,7 @@ final readonly class ProductablePurchaseReportService
                         $orderItem->order->user->fullName,
                         $orderItem->order->user->email,
                         (string) $subject->getAttribute('name'),
+                        ...$this->subjectAttributeValues($subject, $subjectAttributes),
                         $orderItem->product_name ?? $orderItem->product->name,
                         $unitNumber,
                         1,
@@ -124,8 +150,11 @@ final readonly class ProductablePurchaseReportService
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    /** @return list<string> */
-    private function fixedHeaders(string $subjectHeader): array
+    /**
+     * @param  list<string>  $subjectAttributeHeaders
+     * @return list<string>
+     */
+    private function fixedHeaders(string $subjectHeader, array $subjectAttributeHeaders): array
     {
         return [
             'Order Number',
@@ -133,12 +162,25 @@ final readonly class ProductablePurchaseReportService
             'Purchaser Name',
             'Purchaser Email',
             $subjectHeader,
+            ...$subjectAttributeHeaders,
             'Product Listing',
             'Unit Number',
             'Quantity',
             'Original Line Quantity',
             'Unit Price',
         ];
+    }
+
+    /**
+     * @param  array<string, string>  $subjectAttributes
+     * @return list<string>
+     */
+    private function subjectAttributeValues(Model $subject, array $subjectAttributes): array
+    {
+        return collect($subjectAttributes)
+            ->map(fn (string $attribute): string => (string) ($subject->getAttribute($attribute) ?? ''))
+            ->values()
+            ->all();
     }
 
     /**

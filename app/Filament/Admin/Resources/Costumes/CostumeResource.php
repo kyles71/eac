@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Costumes;
 
 use App\Filament\Admin\Resources\Costumes\Pages\ListCostumes;
+use App\Filament\Admin\Resources\Costumes\Pages\ProductsNotOrdered;
 use App\Filament\Admin\Resources\Costumes\Pages\ViewCostume;
 use App\Filament\Admin\Resources\Costumes\Schemas\CostumeForm;
 use App\Filament\Admin\Resources\Costumes\Schemas\CostumeInfolist;
@@ -32,7 +33,7 @@ final class CostumeResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['name', 'vendor', 'vendor_number', 'course.name'];
+        return ['name', 'vendor', 'vendor_number', 'costume_color', 'course.name'];
     }
 
     public static function form(Schema $schema): Schema
@@ -59,6 +60,7 @@ final class CostumeResource extends Resource
     {
         return [
             'index' => ListCostumes::route('/'),
+            'products-not-ordered' => ProductsNotOrdered::route('/products-not-ordered'),
             'view' => ViewCostume::route('/{record}'),
         ];
     }

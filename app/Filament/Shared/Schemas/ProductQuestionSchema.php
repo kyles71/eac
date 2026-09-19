@@ -103,6 +103,7 @@ final class ProductQuestionSchema
                     ->selectablePlaceholder(! $question->is_required)
                     ->required($question->is_required)
                     ->searchable(false)
+                    ->native(false)
                     ->afterStateUpdatedJs(fn (): ?string => $question->allows_other
                         ? <<<JS
                             if (\$state !== 'Other') {

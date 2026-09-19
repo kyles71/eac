@@ -25,6 +25,7 @@ final class CostumeFactory extends Factory
             'name' => fake()->words(2, true).' costume',
             'vendor' => fake()->optional()->company(),
             'vendor_number' => fake()->optional()->bothify('CST-####'),
+            'costume_color' => fake()->optional()->safeColorName(),
             'notes' => fake()->optional()->sentence(),
         ];
     }
