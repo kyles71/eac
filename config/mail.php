@@ -28,8 +28,8 @@ return [
         'eacdance@outlook.com',
     ),
 
-    'recurring_private_lesson_billing_summary_recipient' => env(
-        'MAIL_RECURRING_PRIVATE_LESSON_BILLING_SUMMARY_RECIPIENT',
+    'recurring_private_lesson_recipient' => env(
+        'MAIL_RECURRING_PRIVATE_LESSON_RECIPIENT',
         'eacdance@outlook.com',
     ),
 

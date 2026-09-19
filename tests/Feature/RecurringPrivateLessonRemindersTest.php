@@ -27,7 +27,9 @@ use function Pest\Laravel\assertDatabaseMissing;
 beforeEach(function (): void {
     Mail::fake();
     $this->travelTo(CarbonImmutable::parse('2026-08-01 08:00', 'America/New_York'));
+    config()->set('mail.recurring_private_lesson_recipient', 'private-lessons@example.com');
     $this->owner = User::factory()->isOwner()->create(['email' => 'owner@example.com']);
+    User::factory()->isSuperAdmin()->create(['email' => 'super-admin@example.com']);
     $this->household = User::factory()->create(['email' => 'household@example.com']);
     $this->student = Student::factory()->for($this->household)->create();
     $this->teacher = User::factory()->isTeacher()->create(['email' => 'teacher@example.com']);
@@ -42,10 +44,12 @@ it('sends staff-only scheduled reminders and includes the household after a char
     expect($scheduledResult['charges_processed'])->toBe(1)
         ->and($scheduledCharge->refresh()->seven_day_reminder_sent_at)->not->toBeNull();
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-payment-reminder'
-        && $mail->hasTo('owner@example.com'));
+        && $mail->hasTo('private-lessons@example.com'));
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-payment-reminder'
         && $mail->hasTo('teacher@example.com'));
     Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('household@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('owner@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('super-admin@example.com'));
 
     Mail::fake();
     $this->travelTo(CarbonImmutable::parse('2026-08-06 08:00', 'America/New_York'));
@@ -56,11 +60,15 @@ it('sends staff-only scheduled reminders and includes the household after a char
         ->and($scheduledCharge->refresh()->two_day_reminder_sent_at)->not->toBeNull();
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-payment-reminder'
         && $mail->hasTo('household@example.com'));
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-payment-reminder'
+        && $mail->hasTo('private-lessons@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('owner@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('super-admin@example.com'));
 });
 
 it('emails EAC seven days before month-end with only next months scheduled lessons', function (): void {
     config()->set(
-        'mail.recurring_private_lesson_billing_summary_recipient',
+        'mail.recurring_private_lesson_recipient',
         'eacdance@outlook.com',
     );
     $septemberSeries = reminderSeries(
@@ -145,6 +153,10 @@ it('automatically cancels billed or scheduled unpaid lessons at the 24 hour cuto
 
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-automatic-cancellation'
         && $mail->hasTo('household@example.com'));
+    Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'recurring-private-lesson-automatic-cancellation'
+        && $mail->hasTo('private-lessons@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('owner@example.com'));
+    Mail::assertNotQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->hasTo('super-admin@example.com'));
 });
 
 it('removes an automatically cancelled billed lesson from the household cart', function (): void {
