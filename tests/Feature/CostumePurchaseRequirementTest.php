@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Enums\PurchaseRequirementStatus;
-use App\Filament\User\Widgets\NeedsAttention;
 use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -15,6 +14,7 @@ use App\Models\User;
 use App\Services\CostumePurchaseReportService;
 use App\Services\ProductPurchaseRequirementService;
 use App\Services\ProductStudentAssignmentService;
+use App\Support\UserAttention;
 
 it('tracks sibling costume requirements as partial until the full quantity is ordered', function (): void {
     $household = User::factory()->create();
@@ -92,7 +92,7 @@ it('shows and clears costume order reminders as completed quantities are purchas
     ]);
     $this->actingAs($household);
 
-    expect(collect(app(NeedsAttention::class)->tasks())->pluck('title')->all())
+    expect(collect(app(UserAttention::class)->tasks($household))->pluck('title')->all())
         ->toContain('Required purchase: Jazz Costume');
 
     OrderItem::factory()
@@ -100,6 +100,6 @@ it('shows and clears costume order reminders as completed quantities are purchas
         ->for($product)
         ->create(['quantity' => 1]);
 
-    expect(collect(app(NeedsAttention::class)->tasks())->pluck('title')->all())
+    expect(collect(app(UserAttention::class)->tasks($household))->pluck('title')->all())
         ->not->toContain('Required purchase: Jazz Costume');
 });

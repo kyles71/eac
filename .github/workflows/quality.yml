@@ -13,7 +13,6 @@ permissions:
 jobs:
   quality:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-    environment: dev
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +23,15 @@ jobs:
         with:
           php-version: "8.4"
           coverage: none
+
+      - name: Require repository Composer credentials
+        env:
+          COMPOSER_GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
+        run: |
+          if [[ -z "$COMPOSER_GITHUB_TOKEN" ]]; then
+            echo "::error::Configure MY_PRIVATE_GH_TOKEN as a repository Actions secret with read access to the private kyle/* Composer repositories."
+            exit 1
+          fi
 
       - name: Download PHP dependencies
         env:

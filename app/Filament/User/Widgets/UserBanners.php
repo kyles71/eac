@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\User\Widgets;
 
-use App\Filament\User\Pages\MyEnrollments;
-use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
-use App\Models\FormAssignment;
 use App\Models\User;
 use App\Support\UserAttention;
 use Filament\Widgets\Widget;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 
 final class UserBanners extends Widget
@@ -22,38 +19,38 @@ final class UserBanners extends Widget
     #[On(UserAttention::UPDATED_EVENT)]
     public function refreshBanners(): void {}
 
-    public function enrollmentCount(): int
+    /**
+     * @return list<array{group: string, title: string, description: string, url: string, action: string, color: string}>
+     */
+    public function tasks(): array
     {
         $user = auth()->user();
 
         if (! $user instanceof User) {
-            return 0;
+            return [];
         }
 
-        return app(UserAttention::class)->openEnrollmentCount($user);
+        return app(UserAttention::class)->tasks($user);
     }
 
     /**
-     * @return Collection<int, FormAssignment>
+     * @param  list<array{group: string, title: string, description: string, url: string, action: string, color: string}>  $tasks
      */
-    public function pendingForms(): Collection
+    public function summary(array $tasks): string
     {
-        $user = auth()->user();
+        $tasks = collect($tasks);
 
-        if (! $user instanceof User) {
-            return collect();
-        }
+        return collect([
+            'payments' => 'urgent payment',
+            'forms' => 'form',
+            'class_assignments' => 'class seat',
+            'held_classes' => 'held seat',
+            'required_products' => 'required purchase',
+            'private_lessons' => 'private lesson',
+        ])->map(function (string $label, string $group) use ($tasks): ?string {
+            $count = $tasks->where('group', $group)->count();
 
-        return app(UserAttention::class)->pendingForms($user);
-    }
-
-    public function enrollmentsUrl(): string
-    {
-        return MyEnrollments::getUrl();
-    }
-
-    public function formsUrl(): string
-    {
-        return ListFormUsers::getUrl();
+            return $count > 0 ? $count.' '.Str::plural($label, $count) : null;
+        })->filter()->join(' · ');
     }
 }

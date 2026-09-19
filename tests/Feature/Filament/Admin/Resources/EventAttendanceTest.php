@@ -32,7 +32,7 @@ beforeEach(function (): void {
 
 it('shows assigned students as course attendance rows and omits open enrollments', function (): void {
     $course = Course::factory()->create();
-    $student = Student::factory()->create();
+    $student = Student::factory()->create(['nickname' => 'Aves']);
     $assignedEnrollment = Enrollment::factory()->withStudent($student)->create([
         'course_id' => $course->id,
         'user_id' => $student->user_id,
@@ -48,10 +48,15 @@ it('shows assigned students as course attendance rows and omits open enrollments
         'end_time' => Carbon::parse('2027-01-15 19:00:00'),
     ]);
 
-    livewire(CourseAttendance::class, ['record' => $course->id])
+    $component = livewire(CourseAttendance::class, ['record' => $course->id])
         ->loadTable()
         ->assertCanSeeTableRecords([$assignedEnrollment])
-        ->assertCanNotSeeTableRecords([$openEnrollment]);
+        ->assertCanNotSeeTableRecords([$openEnrollment])
+        ->assertTableColumnHasDescription('student.full_name', 'Aves', $assignedEnrollment);
+
+    $columnNames = array_keys($component->instance()->getTable()->getColumns());
+
+    expect($columnNames)->not->toContain('student.nickname');
 });
 
 it('shows invited users and students in standalone event attendance', function (): void {
@@ -63,6 +68,7 @@ it('shows invited users and students in standalone event attendance', function (
     $student = Student::factory()->create([
         'first_name' => 'Avery',
         'last_name' => 'Dancer',
+        'nickname' => 'Aves',
     ]);
     $user = User::factory()->create([
         'first_name' => 'Jordan',
@@ -79,11 +85,13 @@ it('shows invited users and students in standalone event attendance', function (
         'notes' => null,
     ]);
 
-    livewire(ViewEvent::class, ['record' => $event->id])
+    $component = livewire(ViewEvent::class, ['record' => $event->id])
         ->loadTable()
         ->assertCanSeeTableRecords([$studentInvitation, $userInvitation])
         ->assertTableColumnStateSet('attendance_student_name', 'Avery Dancer', $studentInvitation)
         ->assertTableColumnStateSet('attendance_student_name', 'Jordan Guardian', $userInvitation)
+        ->assertTableColumnStateSet('attendance_student_nickname', 'Aves', $studentInvitation)
+        ->assertTableColumnStateSet('attendance_student_nickname', null, $userInvitation)
         ->call(
             'updateTableColumnState',
             'attendance_status',
@@ -95,6 +103,11 @@ it('shows invited users and students in standalone event attendance', function (
             'notes' => 'Checked in at the front desk',
         ])
         ->assertHasNoActionErrors();
+
+    $columnNames = array_keys($component->instance()->getTable()->getColumns());
+
+    expect(array_search('attendance_student_nickname', $columnNames, true))
+        ->toBe(array_search('attendance_student_name', $columnNames, true) + 1);
 
     expect($userInvitation->refresh()->status)->toBe(AttendanceStatus::Present)
         ->and($userInvitation->notes)->toBe('Checked in at the front desk');

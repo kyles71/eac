@@ -13,9 +13,9 @@ use App\Filament\User\Pages\Dashboard;
 use App\Filament\User\Pages\Messages;
 use App\Filament\User\Pages\Store;
 use App\Filament\User\Widgets\ComingUp;
-use App\Filament\User\Widgets\NeedsAttention;
 use App\Filament\User\Widgets\NextPayment;
 use App\Filament\User\Widgets\RecentStudentNotes;
+use App\Filament\User\Widgets\UserBanners;
 use App\Models\Calendar;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
@@ -37,6 +37,7 @@ use App\Notifications\StudentNoteSent;
 use App\Services\DashboardAudienceService;
 use App\Settings\DashboardAppearanceSettings;
 use App\Support\MediaDisks;
+use App\Support\UserAttention;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Storage;
@@ -54,8 +55,8 @@ it('keeps the full calendar on the dashboard', function (): void {
         ->toContain(CalendarWidget::class)
         ->toContain(NextPayment::class)
         ->not->toContain('App\\Filament\\User\\Widgets\\AccountOverview')
+        ->not->toContain('App\\Filament\\User\\Widgets\\NeedsAttention')
         ->and(array_search(RecentStudentNotes::class, $widgets, true))
-        ->toBeGreaterThan(array_search(NeedsAttention::class, $widgets, true))
         ->toBeLessThan(array_search(MessagesFromEac::class, $widgets, true));
 });
 
@@ -90,12 +91,9 @@ it('shows dismissible recent student notes and marks viewed notes as read', func
     expect($viewable->refresh()->read_at)->not->toBeNull();
 });
 
-it('only shows needs attention when there are tasks', function (): void {
-    expect(NeedsAttention::canView())->toBeFalse();
-
-    $this->get(Dashboard::getUrl())
-        ->assertOk()
-        ->assertDontSeeLivewire(NeedsAttention::class);
+it('shows one global attention summary only when there are tasks', function (): void {
+    livewire(UserBanners::class)
+        ->assertDontSeeHtml('data-user-attention-summary');
 
     $course = Course::factory()->create();
     Event::factory()->create([
@@ -110,11 +108,15 @@ it('only shows needs attention when there are tasks', function (): void {
         'student_id' => null,
     ]);
 
-    expect(NeedsAttention::canView())->toBeTrue();
+    livewire(UserBanners::class)
+        ->assertSeeHtml('data-user-attention-summary')
+        ->assertSee('1 item needs attention');
 
-    $this->get(Dashboard::getUrl())
+    $response = $this->get(Dashboard::getUrl())
         ->assertOk()
-        ->assertSeeLivewire(NeedsAttention::class);
+        ->assertSeeText('1 item needs attention');
+
+    expect(mb_substr_count($response->getContent(), '1 item needs attention'))->toBe(1);
 });
 
 it('shows recurring private lesson attention times in the display timezone', function (): void {
@@ -143,7 +145,7 @@ it('shows recurring private lesson attention times in the display timezone', fun
         ]);
     $this->actingAs($household);
 
-    $task = collect((new NeedsAttention)->tasks())
+    $task = collect(app(UserAttention::class)->tasks($household))
         ->firstWhere('title', 'Recurring private lesson payment due');
 
     expect($task)->not->toBeNull()

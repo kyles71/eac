@@ -7,12 +7,12 @@ use App\Enums\InstallmentPaymentAttemptOrigin;
 use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\PayPaymentPlan;
-use App\Filament\User\Widgets\NeedsAttention;
 use App\Models\Installment;
 use App\Models\InstallmentPaymentAttempt;
 use App\Models\Order;
 use App\Models\PaymentPlan;
 use App\Models\User;
+use App\Support\UserAttention;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -47,7 +47,7 @@ it('shows the dedicated pay now page to the payment plan customer', function ():
         ->assertSee('Pay Now')
         ->assertSee(PayPaymentPlan::getUrl(['paymentPlan' => $paymentPlan]));
 
-    $attentionTask = collect((new NeedsAttention)->tasks())
+    $attentionTask = collect(app(UserAttention::class)->tasks($customer))
         ->firstWhere('action', 'Pay now');
 
     expect($attentionTask['url'] ?? null)->toBe(PayPaymentPlan::getUrl([

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use App\Actions\Mail\SendRequiredProductPurchaseReminders;
 use App\Enums\CourseSemester;
 use App\Enums\PurchaseRequirementStatus;
-use App\Filament\User\Widgets\NeedsAttention;
+use App\Filament\User\Widgets\UserBanners;
 use App\Models\AcademicTerm;
 use App\Models\Course;
 use App\Models\Enrollment;
@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\ProductPurchaseReportService;
 use App\Services\ProductPurchaseRequirementService;
 use App\Services\ProductStudentExclusionService;
+use App\Support\UserAttention;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,7 @@ use Kyle\FilamentMailManager\Repositories\ManagedTemplateRepository;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\artisan;
+use function Pest\Livewire\livewire;
 
 beforeEach(function (): void {
     Carbon::setTestNow('2030-09-15 12:00:00');
@@ -224,17 +226,22 @@ it('shows portal reminders only from the reminder date through the purchase dead
     $product->assignedUsers()->attach($household);
     actingAs($household);
 
-    expect(collect(app(NeedsAttention::class)->tasks())->pluck('title'))
+    expect(collect(app(UserAttention::class)->tasks($household))->pluck('title'))
         ->not->toContain('Required purchase: Required Leotard');
 
     $product->update(['purchase_reminder_on' => today()->subDay()]);
 
-    expect(collect(app(NeedsAttention::class)->tasks())->pluck('title'))
+    expect(collect(app(UserAttention::class)->tasks($household))->pluck('title'))
         ->toContain('Required purchase: Required Leotard');
+
+    livewire(UserBanners::class)
+        ->assertSee('1 required purchase')
+        ->assertSee('Required Purchases')
+        ->assertSee('Required purchase: Required Leotard');
 
     $product->update(['available_until' => now()->subHour()]);
 
-    expect(collect(app(NeedsAttention::class)->tasks())->pluck('title'))
+    expect(collect(app(UserAttention::class)->tasks($household))->pluck('title'))
         ->not->toContain('Required purchase: Required Leotard');
 });
 
