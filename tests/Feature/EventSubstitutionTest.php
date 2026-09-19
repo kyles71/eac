@@ -341,6 +341,7 @@ it('filters events by any of the selected substitute coverage statuses', functio
     }
 
     $component = livewire(ListEvents::class)
+        ->set('activeTab', 'all')
         ->loadTable()
         ->assertTableColumnExists(
             'name',
@@ -509,6 +510,7 @@ it('manages substitute coverage through explicit admin event actions and table s
         ->and($event->pendingSubstituteRequest()?->request_reason)->toBe('Please cover this class.');
 
     livewire(ListEvents::class)
+        ->set('activeTab', 'all')
         ->loadTable()
         ->assertActionDoesNotExist(TestAction::make('markSubstituteNeeded')->table($event))
         ->assertTableColumnStateSet(

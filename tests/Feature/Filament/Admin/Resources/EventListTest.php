@@ -53,6 +53,11 @@ it('sorts events chronologically and filters future, past, and my events', funct
         ->assertSee('Future Events')
         ->assertSee('Past Events')
         ->assertSee('My Events')
+        ->assertSet('activeTab', 'mine')
+        ->loadTable()
+        ->assertCanSeeTableRecords([$myFutureEvent])
+        ->assertCanNotSeeTableRecords([$earlierPastEvent, $myPastEvent, $laterFutureEvent])
+        ->set('activeTab', 'all')
         ->loadTable()
         ->assertCanSeeTableRecords([
             $earlierPastEvent,
@@ -68,8 +73,5 @@ it('sorts events chronologically and filters future, past, and my events', funct
         ->loadTable()
         ->assertCanSeeTableRecords([$earlierPastEvent, $myPastEvent], inOrder: true)
         ->assertCanNotSeeTableRecords([$myFutureEvent, $laterFutureEvent])
-        ->set('activeTab', 'mine')
-        ->loadTable()
-        ->assertCanSeeTableRecords([$myFutureEvent])
-        ->assertCanNotSeeTableRecords([$earlierPastEvent, $myPastEvent, $laterFutureEvent]);
+        ->set('activeTab', 'mine');
 });

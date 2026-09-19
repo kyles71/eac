@@ -57,6 +57,15 @@ final class ListEvents extends ListRecords
         ];
     }
 
+    public function getDefaultActiveTab(): ?string
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && ! $user->hasCourseRestrictedAdminAccess()
+            ? 'mine'
+            : null;
+    }
+
     protected function getHeaderActions(): array
     {
         return [

@@ -126,12 +126,13 @@ it('allows owners to view and update every event', function (): void {
     livewire(ListEvents::class)
         ->assertSee('All Events')
         ->assertSee('My Events')
-        ->loadTable()
-        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $attendingEvent, $otherEvent, $standaloneEvent])
-        ->set('activeTab', 'mine')
+        ->assertSet('activeTab', 'mine')
         ->loadTable()
         ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $attendingEvent])
-        ->assertCanNotSeeTableRecords([$otherEvent, $standaloneEvent]);
+        ->assertCanNotSeeTableRecords([$otherEvent, $standaloneEvent])
+        ->set('activeTab', 'all')
+        ->loadTable()
+        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $attendingEvent, $otherEvent, $standaloneEvent]);
 });
 
 it('prevents teachers from assigning an event to a course they do not teach', function (): void {

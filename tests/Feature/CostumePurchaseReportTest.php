@@ -14,6 +14,8 @@ use App\Models\Product;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\CostumePurchaseReportService;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -145,9 +147,20 @@ it('combines only active costume requirements with a Not Ordered status', functi
         ->searchTable('Nora')
         ->assertSee('Not Ordered Household');
 
-    livewire(ListCostumes::class)
+    $listCostumes = livewire(ListCostumes::class)
         ->assertActionVisible('viewProductsNotOrdered')
         ->assertActionVisible('downloadProductsNotOrdered');
+
+    $headerActions = $listCostumes->instance()->getCachedHeaderActions();
+
+    expect($headerActions)->toHaveCount(2)
+        ->and($headerActions[0])->toBeInstanceOf(ActionGroup::class)
+        ->and(array_keys($headerActions[0]->getFlatActions()))->toBe([
+            'viewProductsNotOrdered',
+            'downloadProductsNotOrdered',
+            'downloadPurchaseReport',
+        ])
+        ->and($headerActions[1])->toBeInstanceOf(CreateAction::class);
 
     expect(CostumeResource::getUrl('products-not-ordered'))
         ->toContain('/admin/costumes/products-not-ordered');
