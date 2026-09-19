@@ -25,7 +25,10 @@ use Relaticle\Flowforge\Services\DecimalPosition;
 
 final class BoardItemWorkflowService
 {
-    public function __construct(private readonly BoardNotificationService $notifications) {}
+    public function __construct(
+        private readonly BoardNotificationService $notifications,
+        private readonly BoardPositionService $positions,
+    ) {}
 
     /** @param array<string, mixed> $attributes */
     public function create(Board $board, BoardStage $requestedStage, User $actor, array $attributes): BoardItem
@@ -104,6 +107,40 @@ final class BoardItemWorkflowService
             'Board card moved',
             $actor->getFilamentName().' moved “'.$item->title.'” to '.$to->name.'.',
         );
+    }
+
+    public function move(
+        BoardItem $item,
+        BoardStage $targetStage,
+        User $actor,
+        ?string $afterCardId = null,
+        ?string $beforeCardId = null,
+    ): string {
+        Gate::forUser($actor)->authorize('move', $item);
+
+        if ($targetStage->board_id !== $item->board_id || $targetStage->archived_at !== null) {
+            throw new InvalidArgumentException('The selected stage is not available on this board.');
+        }
+
+        return DB::transaction(function () use ($item, $targetStage, $actor, $afterCardId, $beforeCardId): string {
+            $lockedItem = BoardItem::query()
+                ->whereKey($item->id)
+                ->where('board_id', $item->board_id)
+                ->whereNull('archived_at')
+                ->lockForUpdate()
+                ->firstOrFail();
+            $fromStage = $lockedItem->stage;
+            $newPosition = $this->positions->move(
+                $lockedItem,
+                $targetStage,
+                $afterCardId,
+                $beforeCardId,
+            );
+
+            $this->recordStageChange($lockedItem->refresh(), $fromStage, $targetStage, $actor);
+
+            return $newPosition;
+        }, attempts: 3);
     }
 
     /** @param list<int> $assigneeIds */

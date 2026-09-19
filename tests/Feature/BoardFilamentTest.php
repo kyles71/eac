@@ -491,6 +491,65 @@ it('moves cards for collaborative contributors and records the activity', functi
         ->and($item->activities()->where('type', 'stage_changed')->exists())->toBeTrue();
 });
 
+it('moves a card safely when the submitted neighbor order is stale', function (): void {
+    $board = Board::factory()->create();
+    $backlog = BoardStage::factory()->for($board)->default()->create(['sort_order' => 10]);
+    $done = BoardStage::factory()->for($board)->create(['sort_order' => 20]);
+    $contributor = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($contributor)->create();
+    $item = BoardItem::factory()->for($board)->for($backlog, 'stage')->create(['position' => '65535']);
+    $lowerNeighbor = BoardItem::factory()->for($board)->for($done, 'stage')->create(['position' => '80464.2755810727']);
+    $upperNeighbor = BoardItem::factory()->for($board)->for($done, 'stage')->create(['position' => '98696.1531640537']);
+    $this->actingAs($contributor);
+
+    livewire(BoardKanban::class, ['record' => $board->slug])
+        ->call(
+            'moveCard',
+            (string) $item->id,
+            (string) $done->id,
+            (string) $upperNeighbor->id,
+            (string) $lowerNeighbor->id,
+        )
+        ->assertHasNoErrors();
+
+    $position = (string) $item->refresh()->position;
+
+    expect($item->board_stage_id)->toBe($done->id)
+        ->and(bccomp($position, (string) $lowerNeighbor->position, 10))->toBe(1)
+        ->and(bccomp($position, (string) $upperNeighbor->position, 10))->toBe(-1);
+});
+
+it('moves a card around positions occupied by archived cards', function (): void {
+    $board = Board::factory()->create();
+    $backlog = BoardStage::factory()->for($board)->default()->create(['sort_order' => 10]);
+    $done = BoardStage::factory()->for($board)->create(['sort_order' => 20]);
+    $contributor = User::factory()->isTeacher()->create();
+    BoardMembership::factory()->for($board)->for($contributor)->create();
+    $item = BoardItem::factory()->for($board)->for($backlog, 'stage')->create(['position' => '65535']);
+    BoardItem::factory()->for($board)->for($done, 'stage')->create([
+        'position' => '0',
+        'archived_at' => now(),
+    ]);
+    $firstVisibleItem = BoardItem::factory()->for($board)->for($done, 'stage')->create(['position' => '65535']);
+    $this->actingAs($contributor);
+
+    livewire(BoardKanban::class, ['record' => $board->slug])
+        ->call(
+            'moveCard',
+            (string) $item->id,
+            (string) $done->id,
+            null,
+            (string) $firstVisibleItem->id,
+        )
+        ->assertHasNoErrors();
+
+    $position = (string) $item->refresh()->position;
+
+    expect($item->board_stage_id)->toBe($done->id)
+        ->and(bccomp($position, '0', 10))->toBe(1)
+        ->and(bccomp($position, (string) $firstVisibleItem->position, 10))->toBe(-1);
+});
+
 it('creates moderated submissions through the board toolbar', function (): void {
     $board = Board::factory()->moderated()->create();
     $intake = BoardStage::factory()->for($board)->default()->create(['name' => 'Future Ideas']);
