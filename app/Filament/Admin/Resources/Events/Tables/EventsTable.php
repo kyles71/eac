@@ -101,6 +101,7 @@ final class EventsTable
                     DeleteBulkAction::make()
                         ->authorizeIndividualRecords('delete'),
                 ]),
-            ]);
+            ])
+            ->defaultSort('start_time');
     }
 }

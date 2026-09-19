@@ -169,6 +169,7 @@ final class FilamentUiServiceProvider extends ServiceProvider
                 ->striped()
                 ->deferLoading()
                 ->reorderableColumns()
+                ->stackedOnMobile()
                 // ->columnManagerColumns(2)
                 ->defaultDateDisplayFormat(self::DATE_DISPLAY_FORMAT)
                 ->defaultDateTimeDisplayFormat(self::DATE_TIME_DISPLAY_FORMAT)

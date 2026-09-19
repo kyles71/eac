@@ -57,6 +57,7 @@ final class CourseAttendance extends ViewRecord implements HasTable
             ->columns([
                 TextColumn::make('student.full_name')
                     ->label('Student')
+                    ->description(fn (Enrollment $record): ?string => $record->student?->nickname)
                     ->searchable(['students.first_name', 'students.last_name'])
                     ->toggleable(false)
                     ->sortable(false),

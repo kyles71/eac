@@ -9,6 +9,8 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Filament/Admin/Resources/Boards/** | .ai/rules/boards.md |
 | app/Filament/Admin/Resources/{Costumes,Courses,Products}/**/*.php | .ai/rules/costumes-courses-products.md |
 | app/Filament/Admin/Resources/Costumes/**/*.php | .ai/rules/costumes.md |
+| app/Filament/Admin/Resources/{Courses,Events}/** | .ai/rules/courses-events.md |
+| app/Filament/Admin/Resources/Events/** | .ai/rules/events.md |
 | app/Filament/** | .ai/rules/filament.md |
 | app/Forms/** | .ai/rules/forms.md |
 | ** | .ai/rules/general.md |
@@ -17,4 +19,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Filament/User/Pages/PayPaymentPlan.php | .ai/rules/pages.md |
 | app/Services/Reports/** | .ai/rules/reports.md |
 | tests/** | .ai/rules/tests.md |
+| app/Filament/User/** | .ai/rules/user.md |
 | resources/views/** | .ai/rules/views.md |
