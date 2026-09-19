@@ -52,7 +52,7 @@ final class StudentsRelationManager extends RelationManager
                     ->multiple()
                     ->stickyModalHeader(false)
                     ->stickyModalFooter(false)
-                    ->recordSelectSearchColumns(['first_name', 'last_name']),
+                    ->recordSelectSearchColumns(['first_name', 'last_name', 'nickname']),
             ])
             ->recordActions([
                 ActionGroup::make([

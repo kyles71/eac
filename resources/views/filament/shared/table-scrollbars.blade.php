@@ -1,5 +1,94 @@
 <script>
     (() => {
+        const initializeTableSearch = () => {
+            if (window.eacTableSearchInitialized || ! window.Livewire) {
+                return
+            }
+
+            window.eacTableSearchInitialized = true
+
+            let searchSelection = null
+
+            const rememberSearchSelection = (input) => {
+                if (! (input instanceof HTMLInputElement) || ! input.matches('.fi-ta-search-field input[type="search"]')) {
+                    return
+                }
+
+                searchSelection = {
+                    direction: input.selectionDirection,
+                    end: input.selectionEnd,
+                    input,
+                    key: input.getAttribute('wire:key'),
+                    start: input.selectionStart,
+                }
+            }
+
+            document.addEventListener('focusin', (event) => rememberSearchSelection(event.target), true)
+            document.addEventListener('focusout', (event) => {
+                const input = event.target
+
+                if (! (input instanceof HTMLInputElement) || ! input.matches('.fi-ta-search-field input[type="search"]')) {
+                    return
+                }
+
+                window.setTimeout(() => {
+                    if (document.activeElement !== input && input.isConnected) {
+                        searchSelection = null
+                    }
+                })
+            }, true)
+            document.addEventListener('input', (event) => rememberSearchSelection(event.target), true)
+            document.addEventListener('keyup', (event) => rememberSearchSelection(event.target), true)
+            document.addEventListener('pointerup', (event) => rememberSearchSelection(event.target), true)
+
+            const restoreSearchSelection = () => {
+                if (! searchSelection) {
+                    return
+                }
+
+                const selection = searchSelection
+
+                window.requestAnimationFrame(() => {
+                    const input = selection.input.isConnected
+                        ? selection.input
+                        : document.querySelector(`[wire\\:key="${CSS.escape(selection.key ?? '')}"]`)
+
+                    if (! (input instanceof HTMLInputElement)) {
+                        return
+                    }
+
+                    input.focus({ preventScroll: true })
+                    input.setSelectionRange(selection.start, selection.end, selection.direction ?? 'none')
+                    rememberSearchSelection(input)
+                })
+            }
+
+            window.Livewire.hook('morph.updating', ({ el, skip }) => {
+                if (
+                    el instanceof HTMLInputElement
+                    && el.matches('.fi-ta-search-field input[type="search"]')
+                    && document.activeElement === el
+                ) {
+                    skip()
+                }
+            })
+
+            window.Livewire.hook('morph', () => {
+                rememberSearchSelection(document.activeElement)
+            })
+
+            window.Livewire.hook('morphed', restoreSearchSelection)
+
+            window.Livewire.hook('partial.morph', () => {
+                rememberSearchSelection(document.activeElement)
+            })
+
+            window.Livewire.hook('partial.morphed', restoreSearchSelection)
+        }
+
+        initializeTableSearch()
+        document.addEventListener('livewire:init', initializeTableSearch, { once: true })
+
         if (window.eacTableScrollbarInitialized) {
             return
         }
@@ -67,8 +156,11 @@
             ].join(', ')),
         ).filter((table) => {
             const bounds = table.getBoundingClientRect()
+            const isStacked = window.matchMedia('(max-width: 639px)').matches
+                && table.querySelector('.fi-ta-table-stacked-on-mobile') !== null
 
-            return table.scrollWidth > table.clientWidth + 1
+            return ! isStacked
+                && table.scrollWidth > table.clientWidth + 1
                 && bounds.top < window.innerHeight
                 && bounds.bottom > window.innerHeight
                 && bounds.width > 0

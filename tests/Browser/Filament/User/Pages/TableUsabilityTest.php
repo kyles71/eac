@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Filament\User\Resources\Students\Pages\ListStudents;
+use App\Models\Course;
 use App\Models\Enrollment;
+use App\Models\Event;
 use App\Models\Student;
 use App\Models\User;
 
@@ -91,6 +93,227 @@ it('persists user table columns and their order across browser sessions', functi
         'createdAtIndex' => 1,
         'createdAtIsToggled' => true,
     ]);
+});
+
+it('keeps live table search text in entry order across server updates', function (): void {
+    Student::factory()->create([
+        'user_id' => auth()->id(),
+        'first_name' => 'Avery',
+    ]);
+
+    $search = '.fi-ta-header-toolbar .fi-ta-search-field input';
+    $page = visit('/dancefam/students', [
+        'viewport' => [
+            'width' => 390,
+            'height' => 844,
+        ],
+    ])
+        ->click($search)
+        ->typeSlowly($search, '1', 20)
+        ->wait(0.7);
+
+    expect($page->script(<<<'JS'
+        (() => {
+            const input = document.querySelector('.fi-ta-header-toolbar .fi-ta-search-field input')
+
+            return {
+                active: document.activeElement === input,
+                initialized: window.eacTableSearchInitialized ?? false,
+                selectionStart: input.selectionStart,
+                value: input.value,
+            }
+        })()
+        JS))->toBe([
+        'active' => true,
+        'initialized' => true,
+        'selectionStart' => 1,
+        'value' => '1',
+    ]);
+
+    $page
+        ->typeSlowly($search, '2', 20)
+        ->wait(0.7)
+        ->typeSlowly($search, '3', 20)
+        ->wait(0.7)
+        ->assertSee('Search: 123')
+        ->assertNoJavaScriptErrors();
+
+    expect($page->script("document.querySelector('{$search}').value"))->toBe('123');
+
+    $page
+        ->keys($search, ['Home', 'ArrowRight'])
+        ->typeSlowly($search, '0', 20)
+        ->wait(0.7)
+        ->assertSee('Search: 1023');
+
+    expect($page->script("document.querySelector('{$search}').value"))->toBe('1023');
+
+    $page
+        ->keys($search, ['End', 'Backspace'])
+        ->wait(0.7)
+        ->assertSee('Search: 102')
+        ->type($search, 'Avery')
+        ->keys($search, 'Enter')
+        ->wait(0.2)
+        ->assertSee('Avery')
+        ->type($search, '')
+        ->wait(0.7)
+        ->assertDontSee('Search:')
+        ->assertNoJavaScriptErrors();
+});
+
+it('stacks both panel tables below the small breakpoint', function (): void {
+    Student::factory()->create([
+        'user_id' => auth()->id(),
+        'first_name' => 'Avery',
+        'last_name' => 'A very long student name that should wrap on a phone',
+    ]);
+    User::factory()->create([
+        'first_name' => 'Mobile',
+        'last_name' => 'Table User',
+    ]);
+
+    foreach (['/dancefam/students' => 'Avery', '/admin/users' => 'Mobile'] as $url => $visibleRecord) {
+        foreach ([360, 390, 639] as $width) {
+            $mobile = visit($url, [
+                'viewport' => [
+                    'width' => $width,
+                    'height' => 844,
+                ],
+            ])
+                ->assertSee($visibleRecord)
+                ->assertNoJavaScriptErrors();
+
+            $mobileMetrics = $mobile->script(<<<'JS'
+                (() => {
+                    const table = document.querySelector('.fi-ta-table')
+                    const row = table?.querySelector('tbody > tr:has(.fi-ta-cell-content)')
+                    const dataCell = row?.querySelector('.fi-ta-cell:not(.fi-ta-selection-cell):not(:has(> .fi-ta-actions))')
+                    const actionCell = row?.querySelector('.fi-ta-cell:has(> .fi-ta-actions)')
+                    const selectionCell = row?.querySelector('.fi-ta-selection-cell')
+                    const search = document.querySelector('.fi-ta-header-toolbar .fi-ta-search-field')
+                    const rail = document.querySelector('.eac-table-scrollbar')
+                    const actionBounds = actionCell?.getBoundingClientRect()
+                    const dataBounds = dataCell?.getBoundingClientRect()
+                    const rowStyles = row ? getComputedStyle(row) : null
+                    const selectionBounds = selectionCell?.getBoundingClientRect()
+                    const dataCellStyles = dataCell ? getComputedStyle(dataCell) : null
+                    const actionCellStyles = actionCell ? getComputedStyle(actionCell) : null
+                    const selectionCellStyles = selectionCell ? getComputedStyle(selectionCell) : null
+
+                    return {
+                        actionBackground: actionCellStyles?.backgroundColor ?? null,
+                        actionBottom: actionBounds?.bottom ?? null,
+                        actionLeft: actionBounds?.left ?? null,
+                        actionPosition: actionCellStyles?.position ?? null,
+                        actionTop: actionBounds?.top ?? null,
+                        cellDisplay: dataCell ? getComputedStyle(dataCell).display : null,
+                        dataBackground: dataCellStyles?.backgroundColor ?? null,
+                        dataTop: dataBounds?.top ?? null,
+                        dividerColor: rowStyles?.borderBottomColor ?? null,
+                        dividerWidth: rowStyles?.borderBottomWidth ?? null,
+                        railHidden: rail?.hidden ?? null,
+                        rowDisplay: row ? getComputedStyle(row).display : null,
+                        searchWidth: search?.getBoundingClientRect().width ?? 0,
+                        selectionBackground: selectionCellStyles?.backgroundColor ?? null,
+                        selectionBottom: selectionBounds?.bottom ?? null,
+                        selectionLeft: selectionBounds?.left ?? null,
+                        selectionPosition: selectionCellStyles?.position ?? null,
+                        selectionTop: selectionBounds?.top ?? null,
+                        stacked: table?.classList.contains('fi-ta-table-stacked-on-mobile') ?? false,
+                        tableDisplay: table ? getComputedStyle(table).display : null,
+                    }
+                })()
+                JS);
+
+            expect($mobileMetrics['stacked'])->toBeTrue()
+                ->and($mobileMetrics['tableDisplay'])->toBe('block')
+                ->and($mobileMetrics['rowDisplay'])->toBe('grid')
+                ->and($mobileMetrics['cellDisplay'])->toBe('grid')
+                ->and($mobileMetrics['dividerWidth'])->toBe('2px')
+                ->and($mobileMetrics['dividerColor'])->toBe('rgb(156, 163, 175)')
+                ->and($mobileMetrics['searchWidth'])->toBeGreaterThan(250)
+                ->and($mobileMetrics['dataTop'])->toBeGreaterThanOrEqual($mobileMetrics['actionBottom'])
+                ->and($mobileMetrics['railHidden'])->toBeTrue();
+
+            if ($url === '/admin/users') {
+                expect($mobileMetrics['selectionPosition'])->toBe('static')
+                    ->and($mobileMetrics['actionPosition'])->toBe('static')
+                    ->and($mobileMetrics['selectionBackground'])->toBe($mobileMetrics['dataBackground'])
+                    ->and($mobileMetrics['actionBackground'])->toBe($mobileMetrics['dataBackground'])
+                    ->and($mobileMetrics['selectionLeft'])->toBeLessThan($mobileMetrics['actionLeft'])
+                    ->and(abs($mobileMetrics['selectionTop'] - $mobileMetrics['actionTop']))->toBeLessThan(1)
+                    ->and($mobileMetrics['actionTop'])->toBeLessThan($mobileMetrics['dataTop'])
+                    ->and($mobileMetrics['dataTop'])->toBeGreaterThanOrEqual($mobileMetrics['selectionBottom']);
+            }
+        }
+
+        $desktop = visit($url, [
+            'viewport' => [
+                'width' => 640,
+                'height' => 844,
+            ],
+        ])
+            ->assertSee($visibleRecord)
+            ->assertNoJavaScriptErrors();
+
+        $desktopMetrics = $desktop->script(<<<'JS'
+            (() => {
+                const table = document.querySelector('.fi-ta-table')
+                const row = table?.querySelector('tbody > tr:has(.fi-ta-cell-content)')
+                const actionCell = row?.querySelector('.fi-ta-cell:has(> .fi-ta-actions)')
+
+                return {
+                    actionPosition: actionCell ? getComputedStyle(actionCell).position : null,
+                    rowDisplay: row ? getComputedStyle(row).display : null,
+                    tableDisplay: table ? getComputedStyle(table).display : null,
+                }
+            })()
+            JS);
+
+        expect($desktopMetrics['tableDisplay'])->toBe('table')
+            ->and($desktopMetrics['rowDisplay'])->toBe('table-row');
+
+        if ($url === '/admin/users') {
+            expect($desktopMetrics['actionPosition'])->toBe('sticky');
+        }
+    }
+});
+
+it('shows the compact attention summary and review slide-over at mobile and desktop widths', function (): void {
+    $course = Course::factory()->create(['name' => 'Mobile Ballet']);
+    Event::factory()->for($course)->create([
+        'start_time' => now()->addWeek(),
+        'end_time' => now()->addWeek()->addHour(),
+    ]);
+    Enrollment::factory()->create([
+        'course_id' => $course->id,
+        'student_id' => null,
+        'user_id' => auth()->id(),
+    ]);
+
+    foreach ([390, 1280] as $width) {
+        $page = visit('/dancefam', [
+            'viewport' => [
+                'width' => $width,
+                'height' => 844,
+            ],
+        ])
+            ->assertSee('1 item needs attention')
+            ->assertSee('1 class seat')
+            ->click('Review')
+            ->assertSee('Items Needing Attention')
+            ->assertSee('Class Assignments')
+            ->assertSee('Mobile Ballet')
+            ->assertSee('Assign student')
+            ->assertNoJavaScriptErrors();
+
+        $summaryDirection = $page->script(<<<'JS'
+            getComputedStyle(document.querySelector('[data-user-attention-summary]')).flexDirection
+            JS);
+
+        expect($summaryDirection)->toBe($width < 640 ? 'column' : 'row');
+    }
 });
 
 it('shows a floating scrollbar while a wide user table extends below the viewport', function (): void {

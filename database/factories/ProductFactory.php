@@ -6,6 +6,7 @@ namespace Database\Factories;
 
 use App\Enums\DashboardAudience;
 use App\Enums\FulfillmentWorkflow;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Gear;
 use App\Models\GiftCardType;
@@ -38,9 +39,27 @@ final class ProductFactory extends Factory
             'fulfillment_workflow' => FulfillmentWorkflow::Manual,
             'available_from' => null,
             'available_until' => null,
+            'is_purchase_required' => false,
+            'purchase_reminder_on' => null,
             'productable_type' => null,
             'productable_id' => null,
         ];
+    }
+
+    /**
+     * Create a product linked to a Costume.
+     */
+    public function forCostume(?Costume $costume = null): static
+    {
+        return $this->state(function () use ($costume): array {
+            $costume ??= Costume::factory()->create();
+
+            return [
+                'name' => $costume->name,
+                'productable_type' => Costume::class,
+                'productable_id' => $costume->id,
+            ];
+        });
     }
 
     /**
@@ -99,6 +118,14 @@ final class ProductFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'available_until' => $availableUntil,
+        ]);
+    }
+
+    public function purchaseRequired(?CarbonInterface $availableUntil = null): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'is_purchase_required' => true,
+            'available_until' => $availableUntil ?? now()->addMonth(),
         ]);
     }
 

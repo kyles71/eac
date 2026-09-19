@@ -206,6 +206,7 @@ it('exposes the cancellation action on the events resource', function (): void {
     ]);
 
     livewire(ListEvents::class)
+        ->set('activeTab', 'all')
         ->callAction(
             TestAction::make('cancelEvent')
                 ->table($event)
@@ -226,6 +227,7 @@ it('requires a reason and presents the three cancellation choices', function ():
     ]);
 
     livewire(ListEvents::class)
+        ->set('activeTab', 'all')
         ->callAction(
             TestAction::make('cancelEvent')->table($event),
             [],
@@ -287,6 +289,7 @@ it('hides cancellation for completed events on event and course tables', functio
     ]);
 
     livewire(ListEvents::class)
+        ->set('activeTab', 'all')
         ->assertActionHidden(TestAction::make('cancelEvent')->table($event));
 
     livewire(EventsRelationManager::class, [

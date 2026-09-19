@@ -22,6 +22,7 @@ use App\Models\Student;
 use App\Services\UserBannerRenderHookRegistrarService;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -60,6 +61,7 @@ it('defaults new users to card view', function () {
     $component = livewire(Store::class);
 
     expect($component->instance()->storeView)->toBe(StoreView::Cards)
+        ->and($component->instance()->getTable()->isStackedOnMobile())->toBeFalse()
         ->and($component->instance()->getTable()->getContentGrid())->toBe([
             'default' => 1,
             'md' => 2,
@@ -99,6 +101,7 @@ it('switches back to list view and persists the preference', function () {
         ->callAction(TestAction::make('listView')->table());
 
     expect($component->instance()->storeView)->toBe(StoreView::List)
+        ->and($component->instance()->getTable()->isStackedOnMobile())->toBeTrue()
         ->and($component->instance()->getTable()->getContentGrid())->toBeNull()
         ->and(auth()->user()->refresh()->store_view)->toBe(StoreView::List);
 });
@@ -391,6 +394,12 @@ it('stores digit-only select answers from the table add to cart modal', function
 
     livewire(Store::class)
         ->mountAction(TestAction::make('addToCart')->table($this->product->refresh()))
+        ->assertSchemaComponentExists(
+            "question_answers.1.question_{$question->id}",
+            'mountedActionSchema0',
+            checkComponentUsing: fn (Select $select): bool => ! $select->isNative()
+                && ! $select->canSelectPlaceholder(),
+        )
         ->fillForm([
             'question_answers' => [
                 1 => ["question_{$question->id}" => '6'],

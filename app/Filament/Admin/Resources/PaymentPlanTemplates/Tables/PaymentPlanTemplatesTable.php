@@ -35,6 +35,12 @@ final class PaymentPlanTemplatesTable
                         ? 'All'
                         : implode(', ', $record->allowedCourseSemesters()))
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('costume_program_types')
+                    ->label('Costume Programs')
+                    ->state(fn (PaymentPlanTemplate $record): string => $record->allowedCostumeProgramTypes() === []
+                        ? 'All'
+                        : implode(', ', $record->allowedCostumeProgramTypes()))
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('min_price')
                     ->label('Min Price')
                     ->moneyCents()

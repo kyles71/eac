@@ -62,6 +62,7 @@ final class StudentContactForm
                                             'relationship',
                                             $state === 'Other' ? null : $state,
                                         ))
+                                        ->selectablePlaceholder(false)
                                         ->required(),
                                     TextInput::make('relationship')
                                         ->label('Other Relationship')

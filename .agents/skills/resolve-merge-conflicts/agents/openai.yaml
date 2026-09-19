@@ -1,0 +1,4 @@
+interface:
+  display_name: "Resolve Merge Conflicts"
+  short_description: "Resolve and audit semantic merge conflicts"
+  default_prompt: "Use $resolve-merge-conflicts to resolve this merge and audit for silent semantic regressions."

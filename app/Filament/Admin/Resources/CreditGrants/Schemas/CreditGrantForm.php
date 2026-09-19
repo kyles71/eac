@@ -31,6 +31,7 @@ final class CreditGrantForm
                         Select::make('user_id')
                             ->label('Recipient')
                             ->userRelationship('user')
+                            ->selectablePlaceholder(false)
                             ->required(),
                     ] : []),
                     TextInput::make('initial_amount')

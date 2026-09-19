@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Admin\Resources\Courses\Tables;
 
+use App\Enums\CourseProgramType;
 use App\Filament\Actions\DeleteProductableAction;
 use App\Filament\Actions\DeleteProductableBulkAction;
+use App\Filament\Actions\ManageProductListingAction;
 use App\Filament\Actions\SendEmailAction;
 use App\Models\Course;
 use App\Services\CourseEmailRecipientsService;
@@ -13,6 +15,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Tables\Columns\SpatieTagsColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 final class CoursesTable
@@ -32,6 +35,10 @@ final class CoursesTable
                     ->state(fn (Course $record): ?string => $record->academicTerm?->display_name)
                     ->badge()
                     ->color(fn (Course $record): ?string => $record->academicTerm?->semester->getColor()),
+                TextColumn::make('program_type')
+                    ->label('Program Type')
+                    ->badge()
+                    ->sortable(),
                 TextColumn::make('capacity')
                     ->numeric()
                     ->sortable(),
@@ -72,10 +79,13 @@ final class CoursesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('program_type')
+                    ->label('Program Type')
+                    ->options(CourseProgramType::class),
             ])
             ->recordActions([
                 ActionGroup::make([
+                    ManageProductListingAction::make(),
                     SendEmailAction::make()
                         ->to(fn (Course $record): array => app(CourseEmailRecipientsService::class)->forCourse($record)),
                     DeleteProductableAction::make(),

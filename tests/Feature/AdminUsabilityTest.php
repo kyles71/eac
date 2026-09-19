@@ -94,7 +94,8 @@ it('groups admin table record actions at the left and closes configuration modal
         ->getFiltersTriggerAction()
         ->getExtraModalFooterActions()['applyFilters'];
 
-    expect($table->getRecordActionsPosition())->toBe(RecordActionsPosition::BeforeCells)
+    expect($table->isStackedOnMobile())->toBeTrue()
+        ->and($table->getRecordActionsPosition())->toBe(RecordActionsPosition::BeforeCells)
         ->and($table->getRecordActions())->toHaveCount(1)
         ->and($table->getRecordActions()[0])->toBeInstanceOf(ActionGroup::class)
         ->and($table->getColumnManagerApplyAction()->getAlpineClickHandler())

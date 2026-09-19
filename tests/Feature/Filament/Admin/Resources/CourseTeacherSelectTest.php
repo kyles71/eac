@@ -371,6 +371,29 @@ it('searches students by partial full name terms', function () {
         ->toBe('First Last');
 });
 
+it('searches students by nickname', function (): void {
+    $student = Student::factory()->create([
+        'first_name' => 'Alexandra',
+        'last_name' => 'Dancer',
+        'nickname' => 'Xandy',
+    ]);
+
+    $otherStudent = Student::factory()->create([
+        'first_name' => 'Lexington',
+        'last_name' => 'Other',
+        'nickname' => null,
+    ]);
+
+    $results = Select::make('student_id')
+        ->model(Enrollment::class)
+        ->studentRelationship()
+        ->getSearchResults('Xandy');
+
+    expect($results)
+        ->toHaveKey($student->id)
+        ->not->toHaveKey($otherStudent->id);
+});
+
 it('searches non user models by split terms', function () {
     $course = Course::factory()->create(['name' => 'Ballet 1']);
     $otherCourse = Course::factory()->create(['name' => 'Ballet 2']);

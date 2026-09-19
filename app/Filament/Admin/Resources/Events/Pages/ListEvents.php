@@ -35,13 +35,35 @@ final class ListEvents extends ListRecords
             return [];
         }
 
+        $now = now();
+
         return [
             'all' => Tab::make('All Events'),
+            'future' => Tab::make('Future Events')
+                ->modifyQueryUsing(
+                    fn (Builder $query): Builder => Event::applyNotPassedConstraint($query, $now),
+                ),
+            'past' => Tab::make('Past Events')
+                ->modifyQueryUsing(
+                    fn (Builder $query): Builder => Event::applyPassedConstraint($query, $now),
+                ),
             'mine' => Tab::make('My Events')
                 ->modifyQueryUsing(
-                    fn (Builder $query): Builder => Event::applyPersonalScheduleConstraint($query, $user),
+                    fn (Builder $query): Builder => Event::applyNotPassedConstraint(
+                        Event::applyPersonalScheduleConstraint($query, $user),
+                        $now,
+                    ),
                 ),
         ];
+    }
+
+    public function getDefaultActiveTab(): ?string
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && ! $user->hasCourseRestrictedAdminAccess()
+            ? 'mine'
+            : null;
     }
 
     protected function getHeaderActions(): array

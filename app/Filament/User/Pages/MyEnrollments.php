@@ -139,6 +139,7 @@ final class MyEnrollments extends TablePage
                                 ->label('Student')
                                 ->options(fn (): array => $this->studentOptions())
                                 ->default(fn (Enrollment $record): ?int => $record->student_id)
+                                ->selectablePlaceholder(false)
                                 ->required()
                                 ->searchable()
                                 ->createOptionForm(fn (ComponentSchema $schema): ComponentSchema => StudentForm::configure($schema))

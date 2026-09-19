@@ -36,6 +36,7 @@ use App\Mail\Types\RecurringPrivateLessonBillingSummaryEmailType;
 use App\Mail\Types\RecurringPrivateLessonPaymentReminderEmailType;
 use App\Mail\Types\RecurringPrivateLessonRemovedEmailType;
 use App\Mail\Types\RecurringPrivateLessonRescheduledEmailType;
+use App\Mail\Types\RequiredProductPurchaseReminderEmailType;
 use App\Mail\Types\StudentFirstAidNoteEmailType;
 use App\Mail\Types\StudentStopLightMessageEmailType;
 use App\Mail\Types\VerifyEmailType;
@@ -89,6 +90,7 @@ final class MailManagerServiceProvider extends ServiceProvider
             RecurringPrivateLessonPaymentReminderEmailType::class,
             RecurringPrivateLessonRemovedEmailType::class,
             RecurringPrivateLessonRescheduledEmailType::class,
+            RequiredProductPurchaseReminderEmailType::class,
             StudentFirstAidNoteEmailType::class,
             StudentStopLightMessageEmailType::class,
             PasswordResetEmailType::class,

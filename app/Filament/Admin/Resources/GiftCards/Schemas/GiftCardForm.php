@@ -59,6 +59,7 @@ final class GiftCardForm
                         Select::make('purchased_by_user_id')
                             ->label('Purchased By')
                             ->userRelationship('purchasedBy')
+                            ->selectablePlaceholder(false)
                             ->required(),
                     ]),
             ]);

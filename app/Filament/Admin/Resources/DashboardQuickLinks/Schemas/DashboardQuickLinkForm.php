@@ -31,12 +31,14 @@ final class DashboardQuickLinkForm
                             ->options(DashboardAudience::class)
                             ->enum(DashboardAudience::class)
                             ->default(DashboardAudience::Eac->value)
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Select::make('destination')
                             ->options(fn (): array => app(DashboardQuickLinkDestinationService::class)->options())
                             ->default(Store::class)
                             ->searchable()
                             ->preload()
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->live(),
                         TextInput::make('external_url')
