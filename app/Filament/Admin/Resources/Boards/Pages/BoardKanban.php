@@ -180,16 +180,23 @@ final class BoardKanban extends BoardResourcePage
         ?string $beforeCardId = null,
     ): void {
         $item = $this->getEloquentQuery()->findOrFail($cardId);
-        Gate::authorize('move', $item);
-        $fromStage = $item->stage;
         $toStage = $this->boardRecord()->activeStages()->findOrFail((int) $targetColumnId);
         $user = auth()->user();
         abort_unless($user instanceof User, 403);
 
-        DB::transaction(function () use ($cardId, $targetColumnId, $afterCardId, $beforeCardId, $item, $fromStage, $toStage, $user): void {
-            parent::moveCard($cardId, $targetColumnId, $afterCardId, $beforeCardId);
-            app(BoardItemWorkflowService::class)->recordStageChange($item->refresh(), $fromStage, $toStage, $user);
-        });
+        $newPosition = app(BoardItemWorkflowService::class)->move(
+            $item,
+            $toStage,
+            $user,
+            $afterCardId,
+            $beforeCardId,
+        );
+
+        $this->dispatch('kanban-card-moved', [
+            'cardId' => $cardId,
+            'columnId' => $targetColumnId,
+            'position' => $newPosition,
+        ]);
     }
 
     /** @param array<int, int|string> $stageIds */
