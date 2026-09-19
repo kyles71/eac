@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\Store\IssueOrderRefundAction;
 use App\Contracts\StripeServiceContract;
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderRefundStatus;
@@ -13,6 +14,7 @@ use App\Models\CreditGrant;
 use App\Models\CreditTransaction;
 use App\Models\Enrollment;
 use App\Models\Installment;
+use App\Models\InstallmentPaymentAttempt;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderRefundPayment;
@@ -210,6 +212,84 @@ it('allocates a payment plan refund newest first and optionally cancels future i
         ->and($order->refresh()->status)->toBe(OrderStatus::Refunded);
 });
 
+it('rejects cancellation of remaining installments while a payment is active', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 6000,
+        'total' => 6000,
+        'stripe_payment_intent_id' => 'pi_active_refund_source',
+    ]);
+    $paymentPlan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'total_amount' => 6000,
+        'number_of_installments' => 2,
+    ]);
+    $installment = Installment::factory()->failed()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 2,
+        'amount' => 3000,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::Processing,
+        'total_amount' => 3000,
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => 3000,
+    ]);
+    $this->app->instance(StripeServiceContract::class, Mockery::mock(StripeServiceContract::class));
+
+    expect(fn () => app(IssueOrderRefundAction::class)->handle(
+        order: $order,
+        processedBy: User::factory()->create(),
+        amount: 1000,
+        reason: 'Attempt to cancel while collection is processing.',
+        cancelRemainingInstallments: true,
+    ))->toThrow(InvalidArgumentException::class, 'payment is in progress');
+
+    expect($order->refunds()->exists())->toBeFalse()
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Failed);
+});
+
+it('allows a refund without installment cancellation while a payment is active', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 6000,
+        'total' => 6000,
+        'stripe_payment_intent_id' => 'pi_active_regular_refund',
+    ]);
+    $paymentPlan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'total_amount' => 6000,
+        'number_of_installments' => 2,
+    ]);
+    $installment = Installment::factory()->failed()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'installment_number' => 2,
+        'amount' => 3000,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $paymentPlan->id,
+        'status' => InstallmentPaymentAttemptStatus::Processing,
+        'total_amount' => 3000,
+    ]);
+    $paymentAttempt->allocations()->create([
+        'installment_id' => $installment->id,
+        'amount' => 3000,
+    ]);
+    bindSuccessfulOrderRefundStripe('re_active_regular_refund');
+
+    $refund = app(IssueOrderRefundAction::class)->handle(
+        order: $order,
+        processedBy: User::factory()->create(),
+        amount: 1000,
+        reason: 'Refund captured funds without cancelling future payments.',
+    );
+
+    expect($refund->status)->toBe(OrderRefundStatus::Succeeded)
+        ->and($paymentAttempt->refresh()->status)->toBe(InstallmentPaymentAttemptStatus::Processing)
+        ->and($installment->refresh()->status)->toBe(InstallmentStatus::Failed);
+});
+
 it('shows refund status for fully and partially refunded installments', function (): void {
     $order = Order::factory()->completed()->create([
         'subtotal' => 6000,
@@ -256,6 +336,58 @@ it('shows refund status for fully and partially refunded installments', function
         ->and($secondInstallment->paymentStatusLabel())->toBe('Refund')
         ->and($firstInstallment->status)->toBe(InstallmentStatus::Paid)
         ->and($secondInstallment->status)->toBe(InstallmentStatus::Paid);
+});
+
+it('groups combined installment payments into one refundable source and allocates refunds newest first', function (): void {
+    $order = Order::factory()->completed()->create([
+        'subtotal' => 6000,
+        'total' => 6000,
+        'stripe_payment_intent_id' => null,
+    ]);
+    $plan = PaymentPlan::factory()->create([
+        'order_id' => $order->id,
+        'total_amount' => 6000,
+        'number_of_installments' => 2,
+    ]);
+    $older = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'amount' => 3000,
+        'stripe_payment_intent_id' => 'pi_combined_installments',
+        'paid_at' => now()->subMinute(),
+    ]);
+    $newer = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 3,
+        'amount' => 3000,
+        'stripe_payment_intent_id' => 'pi_combined_installments',
+        'paid_at' => now(),
+    ]);
+
+    expect($order->refundablePaymentSources())->toBe([
+        ['payment_intent_id' => 'pi_combined_installments', 'amount' => 6000],
+    ]);
+
+    $refund = App\Models\OrderRefund::factory()->create([
+        'order_id' => $order->id,
+        'amount' => 4000,
+        'status' => OrderRefundStatus::Succeeded,
+        'completed_at' => now(),
+    ]);
+    OrderRefundPayment::factory()->create([
+        'order_refund_id' => $refund->id,
+        'stripe_payment_intent_id' => 'pi_combined_installments',
+        'amount' => 4000,
+        'status' => OrderRefundPaymentStatus::Succeeded,
+    ]);
+
+    expect($newer->refundedAmount())->toBe(3000)
+        ->and($newer->paymentStatusLabel())->toBe('Refund')
+        ->and($older->refundedAmount())->toBe(1000)
+        ->and($older->paymentStatusLabel())->toBe('Partial Refund')
+        ->and($order->refundablePaymentSources())->toBe([
+            ['payment_intent_id' => 'pi_combined_installments', 'amount' => 2000],
+        ]);
 });
 
 it('optionally restores applied store credit after a full Stripe refund', function (): void {

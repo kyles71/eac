@@ -10,6 +10,12 @@ Schedule::command('installments:process')
     ->name('process-installments')
     ->description('Process due and retryable payment plan installments');
 
+Schedule::command('installments:reconcile-payment-attempts')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->name('reconcile-installment-payment-attempts')
+    ->description('Reconcile interrupted and asynchronous installment payment attempts');
+
 Schedule::command('orders:cancel-abandoned')
     ->dailyAt('00:01')
     ->timezone('America/New_York')

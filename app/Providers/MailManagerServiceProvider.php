@@ -17,6 +17,8 @@ use App\Mail\Types\EventSubstituteRequestReminderEmailType;
 use App\Mail\Types\GiftCardAssignedRedemptionEmailType;
 use App\Mail\Types\GiftCardDeliveryEmailType;
 use App\Mail\Types\HandcraftedEmailType;
+use App\Mail\Types\InstallmentPaymentAttemptFailedEmailType;
+use App\Mail\Types\InstallmentPaymentAttemptSucceededEmailType;
 use App\Mail\Types\InstallmentPaymentFailedEmailType;
 use App\Mail\Types\InstallmentPaymentSucceededEmailType;
 use App\Mail\Types\OpenEnrollmentReminderEmailType;
@@ -25,6 +27,7 @@ use App\Mail\Types\OrderFulfillmentScheduledEmailType;
 use App\Mail\Types\OrderReceiptEmailType;
 use App\Mail\Types\PasswordResetEmailType;
 use App\Mail\Types\PastDueInstallmentEmailType;
+use App\Mail\Types\PaymentPlanPayNowLinkEmailType;
 use App\Mail\Types\PaymentPlanScheduleAdjustedEmailType;
 use App\Mail\Types\ProductPurchaseNotificationEmailType;
 use App\Mail\Types\RecurringPrivateLessonAutomaticCancellationEmailType;
@@ -69,12 +72,15 @@ final class MailManagerServiceProvider extends ServiceProvider
             GiftCardDeliveryEmailType::class,
             HandcraftedEmailType::class,
             InstallmentPaymentFailedEmailType::class,
+            InstallmentPaymentAttemptFailedEmailType::class,
+            InstallmentPaymentAttemptSucceededEmailType::class,
             InstallmentPaymentSucceededEmailType::class,
             OrderFulfillmentReopenedEmailType::class,
             OrderFulfillmentScheduledEmailType::class,
             OrderReceiptEmailType::class,
             OpenEnrollmentReminderEmailType::class,
             PastDueInstallmentEmailType::class,
+            PaymentPlanPayNowLinkEmailType::class,
             PaymentPlanScheduleAdjustedEmailType::class,
             ProductPurchaseNotificationEmailType::class,
             RecurringPrivateLessonAutomaticCancellationEmailType::class,

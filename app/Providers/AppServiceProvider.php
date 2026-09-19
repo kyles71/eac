@@ -42,7 +42,11 @@ final class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(StripeServiceContract::class, function (): StripeService {
             return new StripeService(
-                new StripeClient(config('services.stripe.secret')),
+                new StripeClient([
+                    'api_key' => config('services.stripe.secret'),
+                    'stripe_version' => config('services.stripe.api_version'),
+                    'max_network_retries' => config('services.stripe.max_network_retries'),
+                ]),
             );
         });
     }
