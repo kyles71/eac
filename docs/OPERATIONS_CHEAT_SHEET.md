@@ -38,7 +38,7 @@ Location: **Repository → Settings → Environments → `dev` or `production` �
 | `DEPLOY_HOST` | SSH hostname or IP only; no scheme, username, or path |
 | `DEPLOY_USER` | Linux deployment account, normally `deployer` |
 | `PRIVATE_KEY` | Complete unencrypted private SSH key with BEGIN/END lines |
-| `MY_PRIVATE_GH_TOKEN` | Fine-grained token with read access to both private Composer repositories |
+| `MY_PRIVATE_GH_TOKEN` | Fine-grained token with read access to the private `kyle/*` Composer repositories |
 
 `DEPLOY_PASSWORD` is not required.
 
@@ -53,6 +53,12 @@ More detail:
 
 - [Production activation — Deployment access](PRODUCTION_ACTIVATION_RUNBOOK.md#4-deployment-access-and-cicd)
 - [Release workflow — GitHub Environments](RELEASE_WORKFLOW.md#github-environments)
+
+### Pull-request quality secret
+
+Location: **Repository → Settings → Secrets and variables → Actions → Repository secrets**
+
+Add `MY_PRIVATE_GH_TOKEN` here with the same read-only private-repository access. Pull-request quality checks do not select a deployment environment, so they cannot read the `dev` or `production` environment secrets. Keep the environment-scoped copies for deployments.
 
 ## Rotate an SSH deployment key
 

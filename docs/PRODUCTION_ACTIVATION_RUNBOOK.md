@@ -248,7 +248,9 @@ The production workflow runs on pushes to `master` and selects the `production` 
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `PRIVATE_KEY`
-- `MY_PRIVATE_GH_TOKEN`, a scoped GitHub token that can read both private `kyle/*` Composer repositories
+- `MY_PRIVATE_GH_TOKEN`, a scoped GitHub token that can read the private `kyle/*` Composer repositories
+
+Also configure `MY_PRIVATE_GH_TOKEN` under the repository's Actions secrets for pull-request quality checks. The repository-scoped copy is intentionally separate from the `dev` and `production` environment secrets because quality checks do not target a deployment environment.
 
 The deploy user needs:
 
