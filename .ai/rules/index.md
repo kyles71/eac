@@ -7,6 +7,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/** | .ai/rules/app.md |
 | app/Filament/Admin/Resources/BoardItems/** | .ai/rules/board-items.md |
 | app/Filament/Admin/Resources/Boards/** | .ai/rules/boards.md |
+| app/Filament/Admin/Resources/{Courses,Events}/** | .ai/rules/courses-events.md |
 | app/Filament/Admin/Resources/Events/** | .ai/rules/events.md |
 | app/Filament/** | .ai/rules/filament.md |
 | app/Forms/** | .ai/rules/forms.md |

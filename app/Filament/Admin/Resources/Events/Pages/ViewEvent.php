@@ -59,6 +59,11 @@ final class ViewEvent extends ViewRecord implements HasTable
                 TextColumn::make('attendance_student_name')
                     ->label('Attendee')
                     ->state(fn (Model $record): string => $this->attendance()->recordAttendeeName($record)),
+                TextColumn::make('attendance_student_nickname')
+                    ->label('Nickname')
+                    ->state(fn (Model $record): ?string => $this->attendance()
+                        ->studentForAttendanceRecord($record)?->nickname)
+                    ->placeholder('-'),
                 AttendanceRadioColumn::make('attendance_status')
                     ->label('Attendance')
                     ->disabled(fn (): bool => Gate::denies('updateAttendance', $this->event()))
