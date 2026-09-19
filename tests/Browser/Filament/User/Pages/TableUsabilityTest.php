@@ -197,22 +197,28 @@ it('stacks both panel tables below the small breakpoint', function (): void {
                     const dataBounds = dataCell?.getBoundingClientRect()
                     const rowStyles = row ? getComputedStyle(row) : null
                     const selectionBounds = selectionCell?.getBoundingClientRect()
+                    const dataCellStyles = dataCell ? getComputedStyle(dataCell) : null
+                    const actionCellStyles = actionCell ? getComputedStyle(actionCell) : null
+                    const selectionCellStyles = selectionCell ? getComputedStyle(selectionCell) : null
 
                     return {
+                        actionBackground: actionCellStyles?.backgroundColor ?? null,
                         actionBottom: actionBounds?.bottom ?? null,
                         actionLeft: actionBounds?.left ?? null,
-                        actionPosition: actionCell ? getComputedStyle(actionCell).position : null,
+                        actionPosition: actionCellStyles?.position ?? null,
                         actionTop: actionBounds?.top ?? null,
                         cellDisplay: dataCell ? getComputedStyle(dataCell).display : null,
+                        dataBackground: dataCellStyles?.backgroundColor ?? null,
                         dataTop: dataBounds?.top ?? null,
                         dividerColor: rowStyles?.borderBottomColor ?? null,
                         dividerWidth: rowStyles?.borderBottomWidth ?? null,
                         railHidden: rail?.hidden ?? null,
                         rowDisplay: row ? getComputedStyle(row).display : null,
                         searchWidth: search?.getBoundingClientRect().width ?? 0,
+                        selectionBackground: selectionCellStyles?.backgroundColor ?? null,
                         selectionBottom: selectionBounds?.bottom ?? null,
                         selectionLeft: selectionBounds?.left ?? null,
-                        selectionPosition: selectionCell ? getComputedStyle(selectionCell).position : null,
+                        selectionPosition: selectionCellStyles?.position ?? null,
                         selectionTop: selectionBounds?.top ?? null,
                         stacked: table?.classList.contains('fi-ta-table-stacked-on-mobile') ?? false,
                         tableDisplay: table ? getComputedStyle(table).display : null,
@@ -233,8 +239,11 @@ it('stacks both panel tables below the small breakpoint', function (): void {
             if ($url === '/admin/users') {
                 expect($mobileMetrics['selectionPosition'])->toBe('static')
                     ->and($mobileMetrics['actionPosition'])->toBe('static')
+                    ->and($mobileMetrics['selectionBackground'])->toBe($mobileMetrics['dataBackground'])
+                    ->and($mobileMetrics['actionBackground'])->toBe($mobileMetrics['dataBackground'])
                     ->and($mobileMetrics['selectionLeft'])->toBeLessThan($mobileMetrics['actionLeft'])
                     ->and(abs($mobileMetrics['selectionTop'] - $mobileMetrics['actionTop']))->toBeLessThan(1)
+                    ->and($mobileMetrics['actionTop'])->toBeLessThan($mobileMetrics['dataTop'])
                     ->and($mobileMetrics['dataTop'])->toBeGreaterThanOrEqual($mobileMetrics['selectionBottom']);
             }
         }
