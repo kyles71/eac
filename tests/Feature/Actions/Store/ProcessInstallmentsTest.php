@@ -12,6 +12,7 @@ use App\Models\OrderRefund;
 use App\Models\PaymentPlan;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Stripe\Exception\CardException;
 use Stripe\PaymentIntent;
 
 beforeEach(function () {
@@ -39,8 +40,6 @@ it('processes due installments using the payment method assigned to the plan', f
         'amount' => 3333,
     ]);
 
-    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_result_123', 'status' => 'succeeded']);
-
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->once()
@@ -51,7 +50,7 @@ it('processes due installments using the payment method assigned to the plan', f
         ): bool => $customerId === 'cus_account_default'
             && $paymentMethodId === 'pm_plan'
             && $amount === 3333)
-        ->andReturn($paymentIntent);
+        ->andReturnUsing(successfulInstallmentPaymentIntent('pi_result_123'));
 
     $action = app(ProcessInstallments::class);
     $result = $action->handle();
@@ -88,8 +87,6 @@ it('uses the account default when a legacy plan has no assigned payment method',
         'amount' => 3333,
     ]);
 
-    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_legacy_123', 'status' => 'succeeded']);
-
     $this->mockStripe
         ->shouldReceive('getDefaultPaymentMethodId')
         ->once()
@@ -103,7 +100,7 @@ it('uses the account default when a legacy plan has no assigned payment method',
             string $customerId,
             string $paymentMethodId,
         ): bool => $customerId === 'cus_test_123' && $paymentMethodId === 'pm_default')
-        ->andReturn($paymentIntent);
+        ->andReturnUsing(successfulInstallmentPaymentIntent('pi_legacy_123'));
 
     $result = app(ProcessInstallments::class)->handle();
 
@@ -128,7 +125,7 @@ it('retrieves each customer default only once for legacy plans without assignmen
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->twice()
-        ->andReturn(PaymentIntent::constructFrom(['id' => 'pi_result', 'status' => 'succeeded']));
+        ->andReturnUsing(successfulInstallmentPaymentIntent('pi_result'));
 
     $result = app(ProcessInstallments::class)->handle();
 
@@ -149,7 +146,13 @@ it('marks installment as failed when auto-charge fails', function () {
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->once()
-        ->andThrow(new Exception('Card declined'));
+        ->andThrow(CardException::factory(
+            message: 'Card declined',
+            httpStatus: 402,
+            jsonBody: ['error' => ['message' => 'Card declined', 'type' => 'card_error']],
+            stripeCode: 'card_declined',
+            declineCode: 'insufficient_funds',
+        ));
 
     $action = app(ProcessInstallments::class);
     $result = $action->handle();
@@ -160,19 +163,20 @@ it('marks installment as failed when auto-charge fails', function () {
 
     $installment->refresh();
     expect($installment->status)->toBe(InstallmentStatus::Failed)
-        ->and($installment->retry_count)->toBe(1);
+        ->and($installment->retry_count)->toBe(1)
+        ->and($installment->last_failure_reason)->toBe('Card declined')
+        ->and($installment->last_failure_code)->toBe('insufficient_funds');
 
     Mail::assertQueued(ManagedMail::class, function (ManagedMail $mail): bool {
         $rendered = $mail->getRenderedEmail();
 
         return $mail->emailTypeKey === 'payment-plan-installment-failed'
             && $mail->usesMailer('transactional')
-            && str_contains($rendered->html, 'We could not process this payment')
-            && ! str_contains($rendered->html, 'Card declined');
+            && str_contains($rendered->html, 'Card declined');
     });
 });
 
-it('continues processing installments when a charge throws a runtime throwable', function () {
+it('continues processing installments without consuming a retry when a charge throws a runtime throwable', function () {
     $plans = PaymentPlan::factory()->count(2)->create([
         'stripe_customer_id' => 'cus_runtime_throwable',
         'stripe_payment_method_id' => 'pm_runtime_throwable',
@@ -186,20 +190,31 @@ it('continues processing installments when a charge throws a runtime throwable',
         'payment_plan_id' => $plans[1]->id,
     ]);
 
-    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_runtime_recovered', 'status' => 'succeeded']);
     $attempts = 0;
 
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->twice()
-        ->andReturnUsing(function () use (&$attempts, $paymentIntent): PaymentIntent {
+        ->andReturnUsing(function (
+            string $customerId,
+            string $paymentMethodId,
+            int $amount,
+            string $description,
+            array $metadata,
+        ) use (&$attempts): PaymentIntent {
             $attempts++;
 
             if ($attempts === 1) {
                 throw new TypeError('Stripe SDK returned an unexpected shape.');
             }
 
-            return $paymentIntent;
+            return successfulInstallmentPaymentIntent('pi_runtime_recovered')(
+                $customerId,
+                $paymentMethodId,
+                $amount,
+                $description,
+                $metadata,
+            );
         });
 
     $result = app(ProcessInstallments::class)->handle();
@@ -207,8 +222,8 @@ it('continues processing installments when a charge throws a runtime throwable',
     expect($result['processed'])->toBe(2)
         ->and($result['succeeded'])->toBe(1)
         ->and($result['failed'])->toBe(1)
-        ->and($firstInstallment->refresh()->status)->toBe(InstallmentStatus::Failed)
-        ->and($firstInstallment->retry_count)->toBe(1)
+        ->and($firstInstallment->refresh()->status)->toBe(InstallmentStatus::Pending)
+        ->and($firstInstallment->retry_count)->toBe(0)
         ->and($secondInstallment->refresh()->status)->toBe(InstallmentStatus::Paid)
         ->and($secondInstallment->stripe_payment_intent_id)->toBe('pi_runtime_recovered');
 });
@@ -227,12 +242,10 @@ it('retries failed installments', function () {
             ->toDateString(),
     ]);
 
-    $paymentIntent = PaymentIntent::constructFrom(['id' => 'pi_retry_123', 'status' => 'succeeded']);
-
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->once()
-        ->andReturn($paymentIntent);
+        ->andReturnUsing(successfulInstallmentPaymentIntent('pi_retry_123'));
 
     $action = app(ProcessInstallments::class);
     $result = $action->handle();
@@ -258,7 +271,13 @@ it('does not consume more than one failed retry per eastern calendar day', funct
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->twice()
-        ->andThrow(new Exception('Card declined'));
+        ->andThrow(CardException::factory(
+            message: 'Card declined',
+            httpStatus: 402,
+            jsonBody: ['error' => ['message' => 'Card declined', 'type' => 'card_error']],
+            stripeCode: 'card_declined',
+            declineCode: 'insufficient_funds',
+        ));
 
     expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(1)
         ->and($installment->refresh()->retry_count)->toBe(2)
@@ -318,10 +337,7 @@ it('does not retry a failed installment before its rescheduled due date', functi
     $this->mockStripe
         ->shouldReceive('chargePaymentMethod')
         ->once()
-        ->andReturn(PaymentIntent::constructFrom([
-            'id' => 'pi_rescheduled_retry',
-            'status' => 'succeeded',
-        ]));
+        ->andReturnUsing(successfulInstallmentPaymentIntent('pi_rescheduled_retry'));
 
     expect(app(ProcessInstallments::class)->handle()['succeeded'])->toBe(1)
         ->and($installment->refresh()->status)->toBe(InstallmentStatus::Paid);
@@ -364,3 +380,22 @@ it('does not charge installments while their cancellation refund is in flight', 
     expect(app(ProcessInstallments::class)->handle()['processed'])->toBe(0)
         ->and($installment->refresh()->status)->toBe(InstallmentStatus::Pending);
 });
+
+function successfulInstallmentPaymentIntent(string $id): Closure
+{
+    return fn (
+        string $customerId,
+        string $paymentMethodId,
+        int $amount,
+        string $description,
+        array $metadata,
+    ): PaymentIntent => PaymentIntent::constructFrom([
+        'id' => $id === 'pi_result' ? $id.'_'.$metadata['payment_attempt_id'] : $id,
+        'status' => 'succeeded',
+        'amount' => $amount,
+        'currency' => 'usd',
+        'customer' => $customerId,
+        'payment_method' => $paymentMethodId,
+        'metadata' => $metadata,
+    ]);
+}

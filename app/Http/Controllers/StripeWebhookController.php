@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Store\CompleteOrder;
 use App\Actions\Store\CreatePaymentPlan;
+use App\Actions\Store\FinalizeInstallmentPaymentAttempt;
 use App\Actions\Store\ReconcileOrderRefundAction;
 use App\Actions\Store\SendGiftCardDeliveryEmails;
 use App\Actions\Store\SendInstallmentPaymentEmail;
@@ -16,6 +17,7 @@ use App\Enums\InstallmentStatus;
 use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Installment;
+use App\Models\InstallmentPaymentAttempt;
 use App\Models\Order;
 use App\Models\OrderRefundPayment;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +35,7 @@ final class StripeWebhookController
         private readonly SendProductPurchaseNotification $sendProductPurchaseNotification,
         private readonly SendInstallmentPaymentEmail $sendInstallmentPaymentEmail,
         private readonly ReconcileOrderRefundAction $reconcileOrderRefund,
+        private readonly FinalizeInstallmentPaymentAttempt $finalizeInstallmentPaymentAttempt,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -99,6 +102,12 @@ final class StripeWebhookController
     private function handlePaymentIntentFailed(\Stripe\Event $event): JsonResponse
     {
         $paymentIntent = $event->data->object;
+        $paymentAttemptId = $paymentIntent->metadata->payment_attempt_id ?? null;
+
+        if ($paymentAttemptId !== null) {
+            return $this->handleInstallmentPaymentAttempt($paymentIntent, (string) $paymentAttemptId);
+        }
+
         $installmentId = $paymentIntent->metadata->installment_id ?? null;
 
         if ($installmentId !== null) {
@@ -127,6 +136,12 @@ final class StripeWebhookController
     private function handlePaymentIntentSucceeded(\Stripe\Event $event): JsonResponse
     {
         $paymentIntent = $event->data->object;
+
+        $paymentAttemptId = $paymentIntent->metadata->payment_attempt_id ?? null;
+
+        if ($paymentAttemptId !== null) {
+            return $this->handleInstallmentPaymentAttempt($paymentIntent, (string) $paymentAttemptId);
+        }
 
         // Installment PaymentIntents also carry order metadata. Handle the
         // more specific installment lifecycle before checkout completion.
@@ -291,6 +306,36 @@ final class StripeWebhookController
         }
 
         return response()->json(['message' => 'Installment payment failure processed']);
+    }
+
+    private function handleInstallmentPaymentAttempt(object $paymentIntent, string $paymentAttemptId): JsonResponse
+    {
+        $paymentAttempt = InstallmentPaymentAttempt::query()->find($paymentAttemptId);
+
+        if ($paymentAttempt === null) {
+            Log::warning("Payment attempt #{$paymentAttemptId} not found for Stripe webhook.", [
+                'payment_intent_id' => $paymentIntent->id ?? null,
+            ]);
+
+            return response()->json(['error' => 'Payment attempt not found'], 404);
+        }
+
+        if (! $paymentIntent instanceof \Stripe\PaymentIntent) {
+            Log::error('Stripe payment attempt webhook did not contain a PaymentIntent object.', [
+                'payment_attempt_id' => $paymentAttempt->id,
+            ]);
+
+            return response()->json(['error' => 'Invalid payment intent'], 422);
+        }
+
+        $paymentAttempt = $this->finalizeInstallmentPaymentAttempt->handle($paymentAttempt, $paymentIntent);
+
+        Log::info("Payment attempt #{$paymentAttempt->id} reconciled via webhook.", [
+            'payment_intent_id' => $paymentIntent->id,
+            'status' => $paymentAttempt->status->value,
+        ]);
+
+        return response()->json(['message' => 'Payment attempt processed']);
     }
 
     private function stringValue(mixed $value): ?string

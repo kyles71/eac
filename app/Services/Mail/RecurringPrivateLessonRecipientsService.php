@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Mail;
 
 use App\Models\RecurringPrivateLesson;
-use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 
 final class RecurringPrivateLessonRecipientsService
 {
@@ -30,12 +28,11 @@ final class RecurringPrivateLessonRecipientsService
     {
         $recurringPrivateLesson->loadMissing('course.teachers');
         $emails = [];
-        $owners = User::query()
-            ->whereHas('roles', fn (Builder $query): Builder => $query->whereIn('name', ['owner', 'super_admin']))
-            ->get();
 
-        foreach ($owners->concat($recurringPrivateLesson->course->teachers) as $user) {
-            $this->add($emails, $user->email);
+        $this->add($emails, config('mail.recurring_private_lesson_recipient'));
+
+        foreach ($recurringPrivateLesson->course->teachers as $teacher) {
+            $this->add($emails, $teacher->email);
         }
 
         return array_values($emails);

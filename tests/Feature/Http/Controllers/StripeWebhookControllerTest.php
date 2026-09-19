@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Contracts\StripeServiceContract;
+use App\Enums\InstallmentPaymentAttemptOrigin;
+use App\Enums\InstallmentPaymentAttemptStatus;
 use App\Enums\InstallmentStatus;
 use App\Enums\OrderItemStatus;
 use App\Enums\OrderRefundPaymentStatus;
@@ -16,6 +18,7 @@ use App\Models\CourseHoldSeat;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
 use App\Models\Installment;
+use App\Models\InstallmentPaymentAttempt;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderRefund;
@@ -27,6 +30,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Kyle\FilamentMailManager\Mail\ManagedMail;
+use Stripe\PaymentIntent;
 
 beforeEach(function () {
     Mail::fake();
@@ -551,6 +555,61 @@ it('handles payment_intent.succeeded webhook for installment', function () {
     Mail::assertQueued(ManagedMail::class, fn (ManagedMail $mail): bool => $mail->emailTypeKey === 'payment-plan-installment-succeeded'
         && $mail->hasTo($plan->order->user->email)
         && $mail->usesMailer('transactional'));
+});
+
+it('reconciles a combined installment payment attempt webhook', function (): void {
+    $plan = PaymentPlan::factory()->create(['stripe_customer_id' => 'cus_combined_webhook']);
+    $first = Installment::factory()->overdue()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'amount' => 2000,
+    ]);
+    $second = Installment::factory()->overdue()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 3,
+        'amount' => 3000,
+    ]);
+    $paymentAttempt = InstallmentPaymentAttempt::factory()->create([
+        'payment_plan_id' => $plan->id,
+        'origin' => InstallmentPaymentAttemptOrigin::Customer,
+        'status' => InstallmentPaymentAttemptStatus::Processing,
+        'total_amount' => 5000,
+        'stripe_customer_id' => 'cus_combined_webhook',
+        'stripe_payment_intent_id' => 'pi_combined_webhook',
+    ]);
+    $paymentAttempt->allocations()->createMany([
+        ['installment_id' => $first->id, 'amount' => 2000],
+        ['installment_id' => $second->id, 'amount' => 3000],
+    ]);
+
+    $event = new Stripe\Event;
+    $event->type = 'payment_intent.succeeded';
+    $event->data = (object) [
+        'object' => PaymentIntent::constructFrom([
+            'id' => 'pi_combined_webhook',
+            'status' => 'succeeded',
+            'amount' => 5000,
+            'currency' => 'usd',
+            'customer' => 'cus_combined_webhook',
+            'payment_method' => 'pm_combined_webhook',
+            'metadata' => ['payment_attempt_id' => (string) $paymentAttempt->id],
+        ]),
+    ];
+
+    $stripe = Mockery::mock(StripeServiceContract::class);
+    $stripe->shouldReceive('constructWebhookEvent')->once()->andReturn($event);
+    $this->app->instance(StripeServiceContract::class, $stripe);
+    $request = Request::create('/stripe/webhook', 'POST', [], [], [], [
+        'HTTP_STRIPE_SIGNATURE' => 'test_signature',
+    ]);
+
+    expect(app(StripeWebhookController::class)($request)->getData(true))
+        ->toBe(['message' => 'Payment attempt processed'])
+        ->and($paymentAttempt->refresh()->status)->toBe(InstallmentPaymentAttemptStatus::Succeeded)
+        ->and($first->refresh()->status)->toBe(InstallmentStatus::Paid)
+        ->and($second->refresh()->status)->toBe(InstallmentStatus::Paid)
+        ->and($first->stripe_payment_intent_id)->toBe('pi_combined_webhook')
+        ->and($second->stripe_payment_intent_id)->toBe('pi_combined_webhook');
 });
 
 it('handles payment_intent.payment_failed webhook for an installment', function () {

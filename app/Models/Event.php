@@ -149,6 +149,49 @@ final class Event extends Model implements HasMedia
         });
     }
 
+    public static function applyPersonalScheduleConstraint(Builder $query, User $user): Builder
+    {
+        $studentIds = $user->students()->pluck('students.id');
+        $userMorphClass = $user->getMorphClass();
+        $studentMorphClass = (new Student())->getMorphClass();
+
+        return $query->where(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
+            $query
+                ->whereHas(
+                    'substituteCoverages',
+                    fn (Builder $query): Builder => $query->where('substitute_teacher_id', $user->id),
+                )
+                ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                    $query
+                        ->whereDoesntHave(
+                            'excludedUsers',
+                            fn (Builder $query): Builder => $query->whereKey($user->id),
+                        )
+                        ->where(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                            $query
+                                ->whereHas(
+                                    'teacherAssignments',
+                                    fn (Builder $query): Builder => $query->where('teacher_id', $user->id),
+                                )
+                                ->orWhereHas('course.students', fn (Builder $query): Builder => $query->whereIn('students.id', $studentIds))
+                                ->orWhereHas('attendees', function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
+                                    $query
+                                        ->where(function (Builder $query) use ($user, $userMorphClass): void {
+                                            $query
+                                                ->where('attendee_type', $userMorphClass)
+                                                ->where('attendee_id', $user->id);
+                                        })
+                                        ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass): void {
+                                            $query
+                                                ->where('attendee_type', $studentMorphClass)
+                                                ->whereIn('attendee_id', $studentIds);
+                                        });
+                                });
+                        });
+                });
+        });
+    }
+
     /** @return BelongsTo<Course, $this> */
     public function course(): BelongsTo
     {
@@ -511,72 +554,7 @@ final class Event extends Model implements HasMedia
             return $this->scopeAppliedToCalendar($query, $calendar);
         }
 
-        $studentIds = $user->students()->pluck('id');
-        $userMorphClass = $user->getMorphClass();
-        $studentMorphClass = (new Student())->getMorphClass();
-        $visibleCalendarIds = Calendar::query()
-            ->visibleTo($user)
-            ->whereNotIn('slug', [Calendar::SLUG_MY, Calendar::SLUG_EAC])
-            ->pluck('id');
-        $visibleCourseCalendarTagIds = Calendar::query()
-            ->visibleTo($user)
-            ->whereNotIn('slug', [Calendar::SLUG_MY, Calendar::SLUG_EAC])
-            ->pluck('slug')
-            ->map(fn (string $slug): ?int => Tag::findFromString($slug, Course::CALENDAR_TAG_TYPE)?->id)
-            ->filter()
-            ->values();
-
-        return $query
-            ->where(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass, $visibleCalendarIds, $visibleCourseCalendarTagIds): void {
-                $query
-                    ->whereHas(
-                        'substituteCoverages',
-                        fn (Builder $query): Builder => $query->where('substitute_teacher_id', $user->id),
-                    )
-                    ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass, $visibleCalendarIds, $visibleCourseCalendarTagIds): void {
-                        $query
-                            ->whereDoesntHave(
-                                'excludedUsers',
-                                fn (Builder $query): Builder => $query->whereKey($user->id)
-                            )
-                            ->where(function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass, $visibleCalendarIds, $visibleCourseCalendarTagIds): void {
-                                $query
-                                    ->where(function (Builder $query) use ($visibleCalendarIds, $visibleCourseCalendarTagIds): void {
-                                        $query
-                                            ->whereIn('calendar_id', $visibleCalendarIds)
-                                            ->where(function (Builder $query) use ($visibleCourseCalendarTagIds): void {
-                                                $query
-                                                    ->whereNull('course_id')
-                                                    ->orWhereDoesntHave('course.tags', fn (Builder $query): Builder => $query->where('type', Course::CALENDAR_TAG_TYPE))
-                                                    ->orWhereHas('course.tags', fn (Builder $query): Builder => $query
-                                                        ->where('type', Course::CALENDAR_TAG_TYPE)
-                                                        ->whereIn('tags.id', $visibleCourseCalendarTagIds));
-                                            });
-                                    })
-                                    ->orWhereHas('course.tags', fn (Builder $query): Builder => $query
-                                        ->where('type', Course::CALENDAR_TAG_TYPE)
-                                        ->whereIn('tags.id', $visibleCourseCalendarTagIds))
-                                    ->orWhereHas(
-                                        'teacherAssignments',
-                                        fn (Builder $query): Builder => $query->where('teacher_id', $user->id),
-                                    )
-                                    ->orWhereHas('course.students', fn (Builder $query): Builder => $query->whereIn('students.id', $studentIds))
-                                    ->orWhereHas('attendees', function (Builder $query) use ($studentIds, $studentMorphClass, $user, $userMorphClass): void {
-                                        $query
-                                            ->where(function (Builder $query) use ($user, $userMorphClass): void {
-                                                $query
-                                                    ->where('attendee_type', $userMorphClass)
-                                                    ->where('attendee_id', $user->id);
-                                            })
-                                            ->orWhere(function (Builder $query) use ($studentIds, $studentMorphClass): void {
-                                                $query
-                                                    ->where('attendee_type', $studentMorphClass)
-                                                    ->whereIn('attendee_id', $studentIds);
-                                            });
-                                    });
-                            });
-                    });
-            });
+        return self::applyPersonalScheduleConstraint($query, $user);
     }
 
     public function scopeAppliedToCalendar(Builder $query, Calendar $calendar): Builder
