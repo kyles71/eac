@@ -17,7 +17,8 @@ use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\EventAttendee;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormResponse;
 use App\Models\Gear;
 use App\Models\GiftCard;
 use App\Models\GiftCardType;
@@ -48,16 +49,21 @@ use App\Support\LegalDocuments\TextMessageUpdatesPolicy;
 use App\Support\MediaDisks;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Kyle\FilamentFormBuilder\Enums\FormResponseStatus;
 use Spatie\Permission\Models\Role;
 use Spatie\Tags\Tag;
 
 it('seeds the development database with all models', function (): void {
+    config(['app.seed_demo_data' => true]);
     Storage::fake(MediaDisks::public());
 
     $this->seed();
 
     $seededProductImageCounts = Product::all()
         ->map(fn (Product $product): int => $product->getMedia('images')->count());
+    $seededPaymentPlans = PaymentPlan::query()
+        ->withSum('installments', 'amount')
+        ->get();
 
     expect(User::count())->toBeGreaterThanOrEqual(16)
         ->and(Student::count())->toBeGreaterThanOrEqual(15)
@@ -107,16 +113,23 @@ it('seeds the development database with all models', function (): void {
         ->and(CartItem::query()->where('custom_gift_card_amount', '>', 0)->exists())->toBeTrue()
         ->and(GiftCard::count())->toBe(7)
         ->and(PaymentPlan::count())->toBe(3)
+        ->and($seededPaymentPlans->every(
+            fn (PaymentPlan $paymentPlan): bool => $paymentPlan->total_amount === (int) $paymentPlan->getAttribute('installments_sum_amount')
+        ))->toBeTrue()
         ->and(Installment::count())->toBeGreaterThanOrEqual(9)
         ->and(EventAttendee::count())->toBeGreaterThanOrEqual(20)
         ->and(CreditGrant::count())->toBe(11)
         ->and(ProductQuestion::count())->toBe(2)
         ->and(ProductQuestionAnswer::count())->toBe(2)
         ->and(StudentWaiver::count())->toBeGreaterThanOrEqual(1)
-        ->and(ShowcaseParticipation::count())->toBeGreaterThanOrEqual(1)
+        ->and(ShowcaseParticipation::count())->toBe(0)
         ->and(StudentEmail::count())->toBe(10)
         ->and(EmergencyContact::count())->toBeGreaterThanOrEqual(2)
-        ->and(FormUser::count())->toBeGreaterThanOrEqual(2)
+        ->and(FormAssignment::count())->toBeGreaterThanOrEqual(2)
+        ->and(FormResponse::query()
+            ->where('status', FormResponseStatus::Submitted)
+            ->where(fn ($query) => $query->whereNull('signature')->orWhereNull('date_signed'))
+            ->exists())->toBeFalse()
         ->and(CreditTransaction::count())->toBeGreaterThanOrEqual(11)
         ->and(Role::findByName('super_admin')->hasPermissionTo('ViewAny:Holiday'))->toBeTrue()
         ->and(Role::findByName('super_admin')->hasPermissionTo('Create:Holiday'))->toBeTrue()

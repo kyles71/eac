@@ -6,6 +6,7 @@ namespace App\Filament\Admin\Resources\PaymentPlans\Schemas;
 
 use App\Models\Installment;
 use App\Models\InstallmentDueDateAdjustment;
+use App\Models\InstallmentPaymentAttempt;
 use App\Models\PaymentPlan;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
@@ -76,6 +77,61 @@ final class PaymentPlanInfolist
                             ])
                             ->columns(3),
                     ]),
+                Section::make('Payment Attempt History')
+                    ->columnSpanFull()
+                    ->schema([
+                        RepeatableEntry::make('paymentAttempts')
+                            ->hiddenLabel()
+                            ->table([
+                                TableColumn::make('Attempt'),
+                                TableColumn::make('Origin'),
+                                TableColumn::make('Status'),
+                                TableColumn::make('Amount'),
+                                TableColumn::make('Installments'),
+                                TableColumn::make('Initiated By'),
+                                TableColumn::make('Stripe Payment'),
+                                TableColumn::make('Success Email'),
+                                TableColumn::make('Failure Email'),
+                                TableColumn::make('Created'),
+                            ])
+                            ->schema([
+                                TextEntry::make('id')
+                                    ->label('Attempt')
+                                    ->formatStateUsing(fn (int $state): string => "#{$state}"),
+                                TextEntry::make('origin')
+                                    ->badge(),
+                                TextEntry::make('status')
+                                    ->badge()
+                                    ->color(fn (InstallmentPaymentAttempt $record): string => $record->status->getColor()),
+                                TextEntry::make('total_amount')
+                                    ->label('Amount')
+                                    ->moneyCents(),
+                                TextEntry::make('installments_summary')
+                                    ->label('Installments')
+                                    ->state(fn (InstallmentPaymentAttempt $record): string => $record->allocations
+                                        ->map(fn ($allocation): string => '#'.$allocation->installment->installment_number)
+                                        ->join(', ')),
+                                TextEntry::make('initiatedBy.full_name')
+                                    ->label('Initiated By')
+                                    ->placeholder('System'),
+                                TextEntry::make('stripe_payment_intent_id')
+                                    ->label('Stripe Payment')
+                                    ->placeholder('—')
+                                    ->copyable(),
+                                TextEntry::make('success_email_status')
+                                    ->label('Success Email')
+                                    ->badge()
+                                    ->placeholder('—'),
+                                TextEntry::make('failure_email_status')
+                                    ->label('Failure Email')
+                                    ->badge()
+                                    ->placeholder('—'),
+                                TextEntry::make('created_at')
+                                    ->label('Created')
+                                    ->dateTime(),
+                            ]),
+                    ])
+                    ->visible(fn (?PaymentPlan $record): bool => $record?->paymentAttempts()->exists() ?? false),
                 Section::make('Due Date Adjustment History')
                     ->columnSpanFull()
                     ->extraAttributes(['style' => 'min-width: 0;'])

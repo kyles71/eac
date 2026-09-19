@@ -22,19 +22,22 @@ final readonly class StripeService implements StripeServiceContract
         private StripeClient $client,
     ) {}
 
-    public function createOrGetCustomer(User $user): Customer
+    public function createOrGetCustomer(User $user, ?string $idempotencyKey = null): Customer
     {
         if ($user->stripe_id !== null) {
             return $this->client->customers->retrieve($user->stripe_id);
         }
 
-        $customer = $this->client->customers->create([
-            'email' => $user->email,
-            'name' => $user->displayName(),
-            'metadata' => [
-                'user_id' => (string) $user->id,
+        $customer = $this->client->customers->create(
+            [
+                'email' => $user->email,
+                'name' => $user->displayName(),
+                'metadata' => [
+                    'user_id' => (string) $user->id,
+                ],
             ],
-        ]);
+            $this->requestOptions($idempotencyKey),
+        );
 
         $user->update(['stripe_id' => $customer->id]);
 
@@ -49,8 +52,12 @@ final readonly class StripeService implements StripeServiceContract
         int $amount,
         array $metadata = [],
         bool $setupFutureUsage = false,
+        ?string $idempotencyKey = null,
     ): PaymentIntent {
-        $customer = $this->createOrGetCustomer($user);
+        $customer = $this->createOrGetCustomer(
+            $user,
+            $idempotencyKey === null ? null : "{$idempotencyKey}-customer",
+        );
 
         $params = [
             'customer' => $customer->id,
@@ -66,7 +73,10 @@ final readonly class StripeService implements StripeServiceContract
             $params['setup_future_usage'] = 'off_session';
         }
 
-        return $this->client->paymentIntents->create($params);
+        return $this->client->paymentIntents->create(
+            $params,
+            $this->requestOptions($idempotencyKey),
+        );
     }
 
     public function createCustomerSession(
@@ -206,6 +216,15 @@ final readonly class StripeService implements StripeServiceContract
         return $this->client->paymentIntents->retrieve($paymentIntentId);
     }
 
+    public function updatePaymentIntentSetupFutureUsage(
+        string $paymentIntentId,
+        bool $setupFutureUsage,
+    ): PaymentIntent {
+        return $this->client->paymentIntents->update($paymentIntentId, [
+            'setup_future_usage' => $setupFutureUsage ? 'off_session' : '',
+        ]);
+    }
+
     /**
      * @param  array<string, string>  $metadata
      */
@@ -215,21 +234,39 @@ final readonly class StripeService implements StripeServiceContract
         int $amount,
         string $description = '',
         array $metadata = [],
+        ?string $idempotencyKey = null,
     ): PaymentIntent {
-        return $this->client->paymentIntents->create([
-            'customer' => $customerId,
-            'payment_method' => $paymentMethodId,
-            'amount' => $amount,
-            'currency' => 'usd',
-            'description' => $description,
-            'metadata' => $metadata,
-            'off_session' => true,
-            'confirm' => true,
-        ]);
+        return $this->client->paymentIntents->create(
+            [
+                'customer' => $customerId,
+                'payment_method' => $paymentMethodId,
+                'amount' => $amount,
+                'currency' => 'usd',
+                'description' => $description,
+                'metadata' => $metadata,
+                'off_session' => true,
+                'confirm' => true,
+            ],
+            $this->requestOptions($idempotencyKey),
+        );
     }
 
     public function cancelPaymentIntent(string $paymentIntentId): PaymentIntent
     {
         return $this->client->paymentIntents->cancel($paymentIntentId);
+    }
+
+    /** @return array{stripe_version: string, idempotency_key?: string} */
+    private function requestOptions(?string $idempotencyKey): array
+    {
+        $options = [
+            'stripe_version' => (string) config('services.stripe.api_version'),
+        ];
+
+        if ($idempotencyKey !== null) {
+            $options['idempotency_key'] = $idempotencyKey;
+        }
+
+        return $options;
     }
 }

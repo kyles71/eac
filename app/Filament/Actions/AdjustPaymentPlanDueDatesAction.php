@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Actions;
 
 use App\Actions\Store\AdjustPaymentPlanDueDates;
-use App\Enums\InstallmentStatus;
 use App\Models\Installment;
 use App\Models\PaymentPlan;
 use App\Models\User;
@@ -38,12 +37,9 @@ final class AdjustPaymentPlanDueDatesAction extends Action
             ->label('Adjust Due Dates')
             ->icon(Heroicon::OutlinedCalendarDays)
             ->authorize('adjustDueDates')
-            ->visible(fn (?PaymentPlan $record): bool => $record instanceof PaymentPlan
-                && $record->installments()
-                    ->where('status', '!=', InstallmentStatus::Paid->value)
-                    ->exists())
+            ->visible(fn (?PaymentPlan $record): bool => $record?->hasReschedulableInstallments() ?? false)
             ->modalHeading('Adjust Payment Plan Due Dates')
-            ->modalDescription('Automatic payments are attempted at 10:00 AM Eastern on each due date. Paid installments cannot be changed.')
+            ->modalDescription('Automatic payments are attempted at 10:00 AM Eastern on each due date. Paid, cancelled, and actively processing installments cannot be changed.')
             ->modalWidth(Width::FiveExtraLarge)
             ->modalSubmitActionLabel('Save Due Dates')
             ->fillForm(function (PaymentPlan $record): array {
@@ -52,7 +48,8 @@ final class AdjustPaymentPlanDueDatesAction extends Action
 
                 return [
                     'installments' => $record->installments()
-                        ->where('status', '!=', InstallmentStatus::Paid->value)
+                        ->reschedulable()
+                        ->notBlockedByRefundCancellation()
                         ->orderBy('installment_number')
                         ->get()
                         ->map(fn (Installment $installment): array => [
@@ -60,6 +57,7 @@ final class AdjustPaymentPlanDueDatesAction extends Action
                             'summary' => "Installment #{$installment->installment_number} — ".format_money($installment->amount)." — {$installment->status->value}",
                             'current_due_date' => $installment->due_date->toDateString(),
                             'due_date' => $installment->due_date->toDateString(),
+                            'has_active_payment_attempt' => $installment->hasActivePaymentAttempt(),
                         ])
                         ->all(),
                     'notification_unavailable_reason' => $availability['reason'],
@@ -71,6 +69,7 @@ final class AdjustPaymentPlanDueDatesAction extends Action
                     ->label('Unpaid Installments')
                     ->schema([
                         Hidden::make('installment_id'),
+                        Hidden::make('has_active_payment_attempt'),
                         Grid::make(2)
                             ->schema([
                                 Group::make([
@@ -84,6 +83,11 @@ final class AdjustPaymentPlanDueDatesAction extends Action
                                     ->label('New Due Date')
                                     ->native(false)
                                     ->required()
+                                    ->disabled(fn (Get $get): bool => (bool) $get('has_active_payment_attempt'))
+                                    ->dehydrated()
+                                    ->helperText(fn (Get $get): ?string => $get('has_active_payment_attempt')
+                                        ? 'A payment is in progress for this installment.'
+                                        : null)
                                     ->minDate(fn (): string => self::earliestDueDate())
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function (DatePicker $component, Component $livewire, ?string $state): void {

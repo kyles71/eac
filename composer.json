@@ -1,14 +1,11 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "codewithdennis/larament",
+    "name": "kyles71/eac",
     "type": "project",
-    "description": "Larament is a time-saving starter kit to quickly launch Laravel 12.x projects. It includes FilamentPHP 4.x pre-installed and configured, along with additional tools and features to streamline your development workflow.",
+    "description": "The EAC Plié Portal application.",
     "keywords": [
         "laravel",
-        "framework",
-        "filamentphp",
-        "starter-kit",
-        "larament"
+        "filamentphp"
     ],
     "license": "MIT",
     "require": {
@@ -20,8 +17,9 @@
         "filament/spatie-laravel-settings-plugin": "^5.0",
         "filament/spatie-laravel-tags-plugin": "^5.0",
         "guava/filament-icon-picker": "^4.0",
-        "kyle/filament-mail-manager": "*",
-        "kyle/filament-theme-builder": "*",
+        "kyle/filament-form-builder": "^0.2",
+        "kyle/filament-mail-manager": "^0.1.5",
+        "kyle/filament-theme-builder": "^0.2",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.34",
@@ -56,6 +54,10 @@
     "repositories": [
         {
             "type": "vcs",
+            "url": "git@github.com:kyles71/filament-form-builder.git"
+        },
+        {
+            "type": "vcs",
             "url": "git@github.com:kyles71/filament-mail-manager.git"
         },
         {
@@ -86,21 +88,6 @@
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
-        ],
-        "post-root-package-install": [
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
-        ],
-        "post-create-project-cmd": [
-            "@php artisan app:welcome",
-            "@php artisan key:generate --ansi",
-            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
-            "@php artisan migrate --graceful --ansi",
-            "@php artisan db:seed --ansi",
-            "npm install",
-            "npm install playwright@latest",
-            "npx playwright install",
-            "npm run build",
-            "@php cleanup.php"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",

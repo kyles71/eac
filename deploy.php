@@ -45,7 +45,13 @@ task('npm:build', function () {
     run('cd {{release_path}} && npm ci && npm run build');
 });
 
+desc('Ensure default dynamic forms after migrations');
+task('forms:ensure-defaults', function () {
+    run('cd {{release_path}} && php artisan forms:ensure-defaults --no-interaction');
+});
+
 // Hooks
 after('deploy:vendors', 'npm:build');
+after('artisan:migrate', 'forms:ensure-defaults');
 after('deploy:symlink', 'artisan:queue:restart');
 after('deploy:failed', 'deploy:unlock');

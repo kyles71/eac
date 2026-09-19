@@ -8,9 +8,11 @@ use App\Contracts\StripeServiceContract;
 use App\Enums\OrderRefundPaymentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Enrollment;
+use App\Models\Installment;
 use App\Models\Order;
 use App\Models\OrderRefund;
 use App\Models\OrderRefundPayment;
+use App\Models\PaymentPlan;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -67,6 +69,33 @@ final readonly class IssueOrderRefundAction
 
             if ($amount < 1 || $amount > $refundableAmount) {
                 throw new InvalidArgumentException('The refund amount exceeds the remaining refundable balance.');
+            }
+
+            if ($cancelRemainingInstallments) {
+                /** @var PaymentPlan|null $lockedPaymentPlan */
+                $lockedPaymentPlan = PaymentPlan::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($lockedPaymentPlan instanceof PaymentPlan) {
+                    /** @var \Illuminate\Database\Eloquent\Collection<int, Installment> $remainingInstallments */
+                    $remainingInstallments = $lockedPaymentPlan->installments()
+                        ->reschedulable()
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->get();
+                    $remainingInstallmentIds = $remainingInstallments->modelKeys();
+                    $hasActiveAttempt = $remainingInstallmentIds !== []
+                        && Installment::query()
+                            ->whereKey($remainingInstallmentIds)
+                            ->withoutActivePaymentAttempt()
+                            ->count() !== count($remainingInstallmentIds);
+
+                    if ($hasActiveAttempt) {
+                        throw new InvalidArgumentException('A payment is in progress for one or more remaining installments. Wait for it to finish before cancelling the payment plan.');
+                    }
+                }
             }
 
             $validatedEnrollments = $this->validatedEnrollments($lockedOrder, $enrollmentIds);

@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 use App\Actions\Store\CreatePaymentPlan;
-use App\Enums\FormTypes;
 use App\Enums\OrderStatus;
 use App\Filament\User\Pages\CheckoutSuccess;
 use App\Models\CartItem;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormVersion;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentPlanTemplate;
@@ -26,6 +26,21 @@ use Livewire\Livewire;
 beforeEach(function () {
     Filament::setCurrentPanel('user');
 });
+
+function createCheckoutPublishedForm(string $name, string $key): Form
+{
+    $form = Form::factory()->create([
+        'name' => $name,
+        'key' => $key,
+    ]);
+
+    FormVersion::factory()
+        ->for($form)
+        ->published()
+        ->create();
+
+    return $form->refresh();
+}
 
 it('shows completed orders as confirmed', function () {
     $product = Product::factory()->create(['price' => 5000]);
@@ -211,10 +226,7 @@ it('keeps order details full width when the order has no course enrollment', fun
 
 it('assigns course enrollments from the confirmation page and shows required forms', function () {
     $student = Student::factory()->create(['user_id' => auth()->id(), 'first_name' => 'Avery']);
-    $form = Form::factory()->create([
-        'name' => 'Student Waiver',
-        'form_type' => FormTypes::StudentWaiver,
-    ]);
+    $form = createCheckoutPublishedForm('Student Waiver', 'student-waiver');
     $course = Course::factory()->create(['name' => 'Tap Basics']);
     $course->forms()->attach($form);
     $product = Product::factory()->forCourse($course)->create(['price' => 5000]);
@@ -248,23 +260,17 @@ it('assigns course enrollments from the confirmation page and shows required for
 
     expect($enrollment->refresh()->student_id)->toBe($student->id);
 
-    expect(FormUser::query()
+    expect(FormAssignment::query()
         ->where('form_id', $form->id)
-        ->where('student_id', $student->id)
+        ->whereMorphedTo('subject', $student)
         ->pending()
         ->exists())->toBeTrue();
 });
 
 it('only shows pending forms required by courses in the current order', function () {
     $student = Student::factory()->create(['user_id' => auth()->id(), 'first_name' => 'Avery']);
-    $orderForm = Form::factory()->create([
-        'name' => 'Current Course Waiver',
-        'form_type' => FormTypes::StudentWaiver,
-    ]);
-    $unrelatedForm = Form::factory()->create([
-        'name' => 'Other Course Form',
-        'form_type' => FormTypes::ShowcaseParticipation,
-    ]);
+    $orderForm = createCheckoutPublishedForm('Current Course Waiver', 'student-waiver');
+    $unrelatedForm = createCheckoutPublishedForm('Other Course Form', 'showcase-participation');
     $course = Course::factory()->create(['name' => 'Tap Basics']);
     $otherCourse = Course::factory()->create(['name' => 'Jazz Basics']);
     $course->forms()->attach($orderForm);
@@ -304,14 +310,8 @@ it('only shows pending forms required by courses in the current order', function
 it('does not cross apply one order enrollment course requirements to another order student', function () {
     $avery = Student::factory()->create(['user_id' => auth()->id(), 'first_name' => 'Avery']);
     $blake = Student::factory()->create(['user_id' => auth()->id(), 'first_name' => 'Blake']);
-    $waiver = Form::factory()->create([
-        'name' => 'Student Waiver',
-        'form_type' => FormTypes::StudentWaiver,
-    ]);
-    $showcase = Form::factory()->create([
-        'name' => 'Showcase Participation',
-        'form_type' => FormTypes::ShowcaseParticipation,
-    ]);
+    $waiver = createCheckoutPublishedForm('Student Waiver', 'student-waiver');
+    $showcase = createCheckoutPublishedForm('Showcase Participation', 'showcase-participation');
     $ballet = Course::factory()->create(['name' => 'Ballet 4']);
     $tap = Course::factory()->create(['name' => 'Tap 3']);
     $ballet->forms()->attach($waiver);

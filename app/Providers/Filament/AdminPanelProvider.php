@@ -15,6 +15,7 @@ use Filament\Support\Enums\Platform;
 use Filament\Support\Icons\Heroicon;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Support\Facades\Blade;
+use Kyle\FilamentFormBuilder\FilamentFormBuilderPlugin;
 use Kyle\FilamentMailManager\FilamentMailManagerPlugin;
 use Kyle\FilamentThemeBuilder\ThemeBuilderPlugin;
 
@@ -70,6 +71,7 @@ final class AdminPanelProvider extends BasePanelProvider
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\Filament\Clusters')
             ->plugins([
+                FilamentFormBuilderPlugin::make()->formResource(false),
                 FilamentShieldPlugin::make()
                     ->navigationGroup(AdminNavigation::PeopleAndAccess)
                     ->gridColumns([

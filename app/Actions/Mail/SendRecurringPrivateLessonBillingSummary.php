@@ -60,7 +60,7 @@ final readonly class SendRecurringPrivateLessonBillingSummary
             return ['lessons' => 0, 'email_queued' => false];
         }
 
-        $recipient = (string) config('mail.recurring_private_lesson_billing_summary_recipient');
+        $recipient = (string) config('mail.recurring_private_lesson_recipient');
 
         if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             return ['lessons' => $charges->count(), 'email_queued' => false];

@@ -2,19 +2,35 @@
 
 declare(strict_types=1);
 
-use App\Enums\FormTypes;
 use App\Filament\User\Resources\FormUsers\Pages\EditFormUser;
 use App\Filament\User\Resources\FormUsers\Pages\ListFormUsers;
 use App\Models\Form;
-use App\Models\FormUser;
+use App\Models\FormAssignment;
+use App\Models\FormVersion;
 use App\Models\Student;
+use App\Models\User;
 use Filament\Facades\Filament;
+use Kyle\FilamentFormBuilder\Actions\SubmitFormResponse;
 
 use function Pest\Livewire\livewire;
 
 beforeEach(function (): void {
     Filament::setCurrentPanel('user');
 });
+
+function createMyFormsTestAssignment(Form $form, FormVersion $version, User $user, ?Student $student = null): FormAssignment
+{
+    $student ??= Student::factory()->create(['user_id' => $user->id]);
+
+    return FormAssignment::factory()->create([
+        'form_id' => $form->id,
+        'form_version_id' => $version->id,
+        'respondent_type' => $user->getMorphClass(),
+        'respondent_id' => $user->id,
+        'subject_type' => $student->getMorphClass(),
+        'subject_id' => $student->id,
+    ]);
+}
 
 it('defaults new accounts to the pending forms tab with a contextual empty state', function (): void {
     livewire(ListFormUsers::class)
@@ -24,24 +40,33 @@ it('defaults new accounts to the pending forms tab with a contextual empty state
         ->assertDontSee('No My Forms');
 });
 
-it('defaults to the first populated forms tab in attention order', function (string $expectedTab, array $formAttributes, bool $isUnsigned): void {
-    $form = Form::factory()->create($formAttributes);
-    $formUser = FormUser::factory()
+it('defaults to the first populated forms tab in attention order', function (string $expectedTab, bool $isCompleted, bool $isExpired): void {
+    /** @var User $user */
+    $user = auth()->user();
+    $form = Form::factory()->create();
+    $version = FormVersion::factory()
         ->for($form)
-        ->for(auth()->user());
+        ->published()
+        ->create();
+    $assignment = createMyFormsTestAssignment($form, $version, $user);
 
-    if ($isUnsigned) {
-        $formUser = $formUser->unsigned();
+    if ($isCompleted) {
+        app(SubmitFormResponse::class)->handle($assignment, ['answers' => []]);
     }
 
-    $formUser->create();
+    if ($isExpired) {
+        FormVersion::factory()
+            ->for($form)
+            ->published()
+            ->create(['version' => 2]);
+    }
 
     livewire(ListFormUsers::class)
         ->assertSet('activeTab', $expectedTab);
 })->with([
-    'pending' => ['pending', ['valid_until' => now()->addMonth()], true],
-    'completed' => ['completed', ['valid_until' => now()->addMonth()], false],
-    'expired' => ['expired', ['valid_until' => now()->subDay()], false],
+    'pending' => ['pending', false, false],
+    'completed' => ['completed', true, false],
+    'expired' => ['expired', false, true],
 ]);
 
 it('uses tab-specific empty-state copy', function (string $tab, string $heading): void {
@@ -56,58 +81,54 @@ it('uses tab-specific empty-state copy', function (string $tab, string $heading)
 ]);
 
 it('can search forms by the assigned student name', function (string $search): void {
-    $form = Form::factory()->create([
-        'valid_until' => now()->addMonth(),
-    ]);
-    $matchingStudent = Student::factory()->for(auth()->user())->create([
+    /** @var User $user */
+    $user = auth()->user();
+    $form = Form::factory()->create();
+    $version = FormVersion::factory()
+        ->for($form)
+        ->published()
+        ->create();
+    $matchingStudent = Student::factory()->create([
+        'user_id' => $user->id,
         'first_name' => 'Avery',
         'last_name' => 'Stone',
     ]);
-    $otherStudent = Student::factory()->for(auth()->user())->create([
+    $otherStudent = Student::factory()->create([
+        'user_id' => $user->id,
         'first_name' => 'Jordan',
         'last_name' => 'River',
     ]);
-    $matchingForm = FormUser::factory()
-        ->for($form)
-        ->for(auth()->user())
-        ->forStudent($matchingStudent)
-        ->unsigned()
-        ->create();
-    $otherForm = FormUser::factory()
-        ->for($form)
-        ->for(auth()->user())
-        ->forStudent($otherStudent)
-        ->unsigned()
-        ->create();
+    $matchingAssignment = createMyFormsTestAssignment($form, $version, $user, $matchingStudent);
+    $otherAssignment = createMyFormsTestAssignment($form, $version, $user, $otherStudent);
 
     livewire(ListFormUsers::class)
         ->loadTable()
         ->searchTable($search)
-        ->assertCanSeeTableRecords([$matchingForm])
-        ->assertCanNotSeeTableRecords([$otherForm]);
+        ->assertCanSeeTableRecords([$matchingAssignment])
+        ->assertCanNotSeeTableRecords([$otherAssignment]);
 })->with(['Avery', 'Stone']);
 
-it('uses the form name and response state in the edit-page title', function (bool $isUnsigned, string $expectedTitle): void {
+it('uses the form name and response state in the edit-page title', function (bool $isCompleted, string $expectedTitle): void {
+    /** @var User $user */
+    $user = auth()->user();
     $form = Form::factory()->create([
         'name' => 'Showcase Participation Form',
-        'form_type' => FormTypes::ShowcaseParticipation,
-        'can_update' => true,
-        'valid_until' => now()->addMonth(),
+        'updates_allowed' => true,
     ]);
-    $formUser = FormUser::factory()
+    $version = FormVersion::factory()
         ->for($form)
-        ->for(auth()->user());
+        ->published()
+        ->create();
+    $assignment = createMyFormsTestAssignment($form, $version, $user);
 
-    if ($isUnsigned) {
-        $formUser = $formUser->unsigned();
+    if ($isCompleted) {
+        app(SubmitFormResponse::class)->handle($assignment, ['answers' => []]);
     }
 
-    $formUser = $formUser->create();
-
-    livewire(EditFormUser::class, ['record' => $formUser->id])
+    livewire(EditFormUser::class, ['record' => $assignment->id])
         ->assertSee($expectedTitle)
         ->assertDontSee('Edit My Form');
 })->with([
-    'pending response' => [true, 'Complete Showcase Participation Form'],
-    'existing response' => [false, 'Update Showcase Participation Form'],
+    'pending response' => [false, 'Complete Showcase Participation Form'],
+    'existing response' => [true, 'Update Showcase Participation Form'],
 ]);

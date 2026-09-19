@@ -171,7 +171,7 @@ final class OrderItem extends Model
     protected static function booted(): void
     {
         self::creating(function (OrderItem $orderItem): void {
-            if (filled($orderItem->product_name) || $orderItem->product_id === null) {
+            if (filled($orderItem->product_name) || blank($orderItem->product_id)) {
                 return;
             }
 

@@ -10,6 +10,12 @@ Schedule::command('installments:process')
     ->name('process-installments')
     ->description('Process due and retryable payment plan installments');
 
+Schedule::command('installments:reconcile-payment-attempts')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->name('reconcile-installment-payment-attempts')
+    ->description('Reconcile interrupted and asynchronous installment payment attempts');
+
 Schedule::command('orders:cancel-abandoned')
     ->dailyAt('00:01')
     ->timezone('America/New_York')
@@ -82,6 +88,13 @@ Schedule::command('cart:send-abandoned-reminders')
     ->withoutOverlapping()
     ->name('send-abandoned-cart-reminders')
     ->description('Remind users about available cart items left for at least 24 hours');
+
+Schedule::command('forms:reconcile-required')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->onOneServer()
+    ->name('reconcile-required-forms')
+    ->description('Reconcile course-required form assignments as event windows pass');
 
 Schedule::command('private-lessons:send-payment-reminders')
     ->dailyAt('08:00')
