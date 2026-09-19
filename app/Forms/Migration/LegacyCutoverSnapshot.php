@@ -42,7 +42,7 @@ final readonly class LegacyCutoverSnapshot
         $manifestPath = $this->manifestPath();
 
         if (! File::isFile($manifestPath)) {
-            throw new RuntimeException('No legacy form cutover snapshot manifest exists. Run forms:legacy-snapshot during maintenance mode.');
+            throw new RuntimeException('No legacy form cutover snapshot manifest exists.');
         }
 
         $manifest = json_decode(File::get($manifestPath), true, flags: JSON_THROW_ON_ERROR);

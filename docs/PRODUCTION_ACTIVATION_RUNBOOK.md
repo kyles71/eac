@@ -120,6 +120,7 @@ MAIL_FROM_NAME="${APP_NAME}"
 MAIL_HANDCRAFTED_ARCHIVE_TO=<optional-archive-address>
 MAIL_PAYMENT_PLAN_PAST_DUE_RECIPIENT=<staff-address>
 MAIL_PRODUCT_PURCHASE_RECIPIENT=<staff-address>
+MAIL_RECURRING_PRIVATE_LESSON_RECIPIENT=<staff-address>
 
 TEXTMAGIC_USERNAME=<secret>
 TEXTMAGIC_API_KEY=<secret>
@@ -131,7 +132,7 @@ TEXTMAGIC_HANDCRAFTED_FROM_NAME=<display-name>
 TEXTMAGIC_HANDCRAFTED_REPLY_TO=<reply-address>
 ```
 
-Set `MAIL_PAYMENT_PLAN_PAST_DUE_RECIPIENT` explicitly so operational notices do not fall back to the code default.
+Set the operational recipient variables explicitly so notices do not fall back to their code defaults.
 
 ### Stripe
 

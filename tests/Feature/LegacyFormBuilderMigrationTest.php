@@ -102,9 +102,8 @@ it('performs the production-shaped waiver cutover once and creates clean default
     $service = app(LegacyFormMigration::class);
     $report = $service->preflight();
 
-    expect($this->artisan('forms:legacy-cutover-required --quiet'))->assertSuccessful();
-
-    expect($report['required'])->toBeTrue()
+    expect($service->isRequired())->toBeTrue()
+        ->and($report['required'])->toBeTrue()
         ->and($report['source_present'])->toBeTrue()
         ->and($report['counts']['forms'])->toBe(3)
         ->and($report['counts']['form_users'])->toBe(3)
@@ -186,9 +185,8 @@ it('performs the production-shaped waiver cutover once and creates clean default
 
     expect($postCutoverForm->fresh())->not->toBeNull()
         ->and(FormResponse::query()->count())->toBe(3)
-        ->and($this->artisan('forms:legacy-cutover-required --quiet'))->assertFailed()
-        ->and($this->artisan('forms:legacy-preflight'))->assertSuccessful()
-        ->and($this->artisan('forms:legacy-snapshot'))->assertSuccessful()
+        ->and($service->isRequired())->toBeFalse()
+        ->and($service->preflight()['required'])->toBeFalse()
         ->and(fn () => $migration->down())
         ->toThrow(RuntimeException::class, 'Restore the mandatory pre-deployment database snapshot');
 });
@@ -352,29 +350,21 @@ it('requires an unchanged fresh snapshot before writing destination data', funct
         ->and(FormResponse::query()->count())->toBe(0);
 });
 
-it('creates a private checksummed cutover snapshot manifest', function (): void {
+it('records a private checksummed cutover snapshot manifest', function (): void {
     Carbon::setTestNow('2026-07-15 12:00:00 UTC');
     createProductionLegacyFormFixture();
-    $driver = DB::connection()->getDriverName();
-
-    if ($driver === 'sqlite') {
-        $sourcePath = storage_path('framework/testing/legacy-form-snapshot-source.sqlite');
-        File::ensureDirectoryExists(dirname($sourcePath));
-        File::put($sourcePath, 'non-empty sqlite snapshot source');
-        config(['database.connections.sqlite.database' => $sourcePath]);
-    }
-
-    $this->artisan('forms:legacy-snapshot')->assertSuccessful();
-
     $snapshot = app(LegacyCutoverSnapshot::class);
+    $report = app(LegacyFormMigration::class)->preflight();
+    $snapshotPath = storage_path('app/private/backups/test-form-builder-snapshot.sql');
+    File::ensureDirectoryExists(dirname($snapshotPath));
+    File::put($snapshotPath, 'non-empty cutover snapshot');
+    $snapshot->record($snapshotPath, $report['source_fingerprint'], $report['source_manifest']);
     $manifest = json_decode(File::get($snapshot->manifestPath()), true, flags: JSON_THROW_ON_ERROR);
-    $snapshotExtension = $driver === 'sqlite' ? 'sqlite' : 'sql';
-    $snapshotPath = storage_path("app/private/backups/pre-form-builder-20260715-120000.{$snapshotExtension}");
 
     expect($manifest)->toBeArray()
         ->and($manifest['snapshot_path'])->toBe($snapshotPath)
         ->and($manifest['snapshot_sha256'])->toBe(hash_file('sha256', $snapshotPath))
-        ->and($manifest['source_fingerprint'])->toBe(app(LegacyFormMigration::class)->preflight()['source_fingerprint'])
+        ->and($manifest['source_fingerprint'])->toBe($report['source_fingerprint'])
         ->and(fileperms($snapshotPath) & 0777)->toBe(0600)
         ->and(fileperms($snapshot->manifestPath()) & 0777)->toBe(0600);
 });
