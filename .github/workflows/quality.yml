@@ -1,0 +1,61 @@
+name: Pull request quality
+
+on:
+  pull_request:
+
+concurrency:
+  group: pull-request-quality-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    environment: dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Download PHP dependencies
+        env:
+          COMPOSER_AUTH: >-
+            {"github-oauth":{"github.com":"${{ secrets.MY_PRIVATE_GH_TOKEN }}"}}
+        run: composer install --download-only --no-plugins --no-scripts --no-interaction --prefer-dist --no-progress
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Run Pest unit and feature tests
+        run: vendor/bin/pest --no-progress --parallel --processes=4 --exclude-testsuite=Browser
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress --error-format=raw --memory-limit=2G
+
+      - name: Check PHP formatting
+        run: vendor/bin/pint --test --format agent
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Validate workflow configuration
+        run: npm run test:workflows
+
+      - name: Build frontend assets
+        run: npm run build

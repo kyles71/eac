@@ -247,9 +247,13 @@ it('includes events near a calendar boundary after converting the range to the d
 
 it('uses the routed calendar color for visible course events on my calendar', function (): void {
     $user = User::factory()->create();
-    assignStudentToCurrentCompetition($user);
+    $student = assignStudentToCurrentCompetition($user);
     $course = Course::factory()->create(['name' => 'Competition Line']);
     $course->syncTagsWithType([Calendar::SLUG_COMP], Course::CALENDAR_TAG_TYPE);
+    Enrollment::factory()->withStudent($student)->create([
+        'user_id' => $user->id,
+        'course_id' => $course->id,
+    ]);
     $storedCalendar = calendarBySlug(Calendar::SLUG_EAC);
     $routedCalendar = calendarBySlug(Calendar::SLUG_COMP);
     $event = Event::factory()->create([
@@ -370,20 +374,25 @@ it('grants admin panel access to teachers and users with admin permissions', fun
         ->and($customCalendarUser->canAccessPanel(Filament::getPanel('admin')))->toBeFalse();
 });
 
-it('shows staff calendar but not owners or comp calendar to teachers by default', function (): void {
+it('shows the full staff calendar without adding unassigned staff events to my calendar', function (): void {
     $teacher = User::factory()->isTeacher()->create();
     $staffCalendar = calendarBySlug(Calendar::SLUG_STAFF);
     $ownersCalendar = calendarBySlug(Calendar::SLUG_OWNERS);
     $compCalendar = calendarBySlug(Calendar::SLUG_COMP);
     $staffEvent = standaloneEvent('Staff Meeting', $staffCalendar);
+    $assignedStaffEvent = standaloneEvent('Assigned Staff Meeting', $staffCalendar);
     $ownersEvent = standaloneEvent('Owner Meeting', $ownersCalendar);
     $compEvent = standaloneEvent('Comp Planning', $compCalendar);
+    $assignedStaffEvent->teachers()->attach($teacher);
 
     $this->actingAs($teacher);
 
-    expect(fetchCalendarEvents($staffCalendar)->pluck('id')->all())->toContain($staffEvent->id)
+    expect(fetchCalendarEvents($staffCalendar)->pluck('id')->all())->toContain($staffEvent->id, $assignedStaffEvent->id)
         ->and(fetchCalendarEvents($ownersCalendar)->pluck('id')->all())->not->toContain($ownersEvent->id)
-        ->and(fetchCalendarEvents($compCalendar)->pluck('id')->all())->not->toContain($compEvent->id);
+        ->and(fetchCalendarEvents($compCalendar)->pluck('id')->all())->not->toContain($compEvent->id)
+        ->and(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all())
+        ->toContain($assignedStaffEvent->id)
+        ->not->toContain($staffEvent->id);
 });
 
 it('limits event calendar assignment to visible calendars without calendar policy access', function (): void {
@@ -491,7 +500,7 @@ it('requires an audience for restricted custom calendars but not public calendar
         ->and(Calendar::query()->where('name', 'Public Community Calendar')->value('access'))->toBe(CalendarAccess::Public);
 });
 
-it('routes course events to calendars through course calendar tags', function (): void {
+it('routes course events to calendars without treating calendar access as an assignment', function (): void {
     $user = User::factory()->create();
     $course = Course::factory()->create(['name' => 'Competition Team']);
     $course->syncTagsWithType([Calendar::SLUG_COMP], Course::CALENDAR_TAG_TYPE);
@@ -508,7 +517,7 @@ it('routes course events to calendars through course calendar tags', function ()
 
     expect(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_EAC))->pluck('id')->all())->not->toContain($event->id)
         ->and(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_COMP))->pluck('id')->all())->toContain($event->id)
-        ->and(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all())->toContain($event->id);
+        ->and(fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all())->not->toContain($event->id);
 });
 
 it('defaults new courses to the eac calendar tag', function (): void {
@@ -517,17 +526,22 @@ it('defaults new courses to the eac calendar tag', function (): void {
     expect($course->tagsWithType(Course::CALENDAR_TAG_TYPE)->pluck('name')->all())->toContain(Calendar::SLUG_EAC);
 });
 
-it('shows comp calendar when an owned student is on a current competition team', function (): void {
+it('shows the full comp calendar without adding uninvited events to my calendar', function (): void {
     $user = User::factory()->create();
-    assignStudentToCurrentCompetition($user);
+    $student = assignStudentToCurrentCompetition($user);
     $calendar = calendarBySlug(Calendar::SLUG_COMP);
-    $event = standaloneEvent('Comp Rehearsal', $calendar);
+    $assignedEvent = standaloneEvent('Assigned Comp Rehearsal', $calendar);
+    $unassignedEvent = standaloneEvent('Unassigned Comp Rehearsal', $calendar);
+    EventAttendee::factory()->forStudent($student)->create(['event_id' => $assignedEvent->id]);
 
     $this->actingAs($user);
 
-    $events = fetchCalendarEvents($calendar);
+    $competitionEvents = fetchCalendarEvents($calendar)->pluck('id')->all();
+    $personalEvents = fetchCalendarEvents(calendarBySlug(Calendar::SLUG_MY))->pluck('id')->all();
 
-    expect($events->pluck('id')->all())->toContain($event->id);
+    expect($competitionEvents)->toContain($assignedEvent->id, $unassignedEvent->id)
+        ->and($personalEvents)->toContain($assignedEvent->id)
+        ->not->toContain($unassignedEvent->id);
 });
 
 it('shows comp calendar when staff is on a current competition team', function (): void {

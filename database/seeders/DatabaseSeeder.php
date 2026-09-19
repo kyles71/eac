@@ -575,13 +575,13 @@ final class DatabaseSeeder extends Seeder
 
         // Installments for each payment plan
         $paymentPlans->each(function (PaymentPlan $plan): void {
-            $installmentAmount = (int) ($plan->total_amount / $plan->number_of_installments);
+            $installmentAmounts = $plan->template->installmentAmounts($plan->total_amount);
 
-            collect(range(1, $plan->number_of_installments))->each(function (int $num) use ($plan, $installmentAmount): void {
+            collect(range(1, $plan->number_of_installments))->each(function (int $num) use ($plan, $installmentAmounts): void {
                 $factory = Installment::factory()->state([
                     'payment_plan_id' => $plan->id,
                     'installment_number' => $num,
-                    'amount' => $installmentAmount,
+                    'amount' => $num === 1 ? $installmentAmounts['first'] : $installmentAmounts['remaining'],
                     'due_date' => now()->addMonths($num),
                 ]);
 

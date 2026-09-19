@@ -11,6 +11,7 @@ use App\Models\Calendar;
 use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
+use App\Models\EventAttendee;
 use App\Models\Role;
 use App\Models\Student;
 use App\Models\User;
@@ -106,8 +107,14 @@ it('allows owners to view and update every event', function (): void {
         'start_time' => now()->addDays(2),
         'end_time' => now()->addDays(2)->addHour(),
     ]);
+    $attendingEvent = Event::factory()->create([
+        'course_id' => null,
+        'start_time' => now()->addDays(3),
+        'end_time' => now()->addDays(3)->addHour(),
+    ]);
     $otherEvent = Event::factory()->create();
     $standaloneEvent = Event::factory()->create(['course_id' => null]);
+    EventAttendee::factory()->forUser($owner)->create(['event_id' => $attendingEvent->id]);
 
     $this->actingAs($owner);
 
@@ -120,10 +127,10 @@ it('allows owners to view and update every event', function (): void {
         ->assertSee('All Events')
         ->assertSee('My Events')
         ->loadTable()
-        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $otherEvent, $standaloneEvent])
+        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $attendingEvent, $otherEvent, $standaloneEvent])
         ->set('activeTab', 'mine')
         ->loadTable()
-        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent])
+        ->assertCanSeeTableRecords([$courseEvent, $substituteEvent, $attendingEvent])
         ->assertCanNotSeeTableRecords([$otherEvent, $standaloneEvent]);
 });
 

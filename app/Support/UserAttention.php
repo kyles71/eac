@@ -11,6 +11,7 @@ use App\Enums\RecurringPrivateLessonStatus;
 use App\Filament\User\Pages\Billing;
 use App\Filament\User\Pages\HeldClasses;
 use App\Filament\User\Pages\MyEnrollments;
+use App\Filament\User\Pages\PayPaymentPlan;
 use App\Filament\User\Resources\FormUsers\FormUserResource;
 use App\Models\CourseHold;
 use App\Models\CourseHoldSeat;
@@ -74,8 +75,8 @@ final readonly class UserAttention
                 'group' => 'payments',
                 'title' => "{$installment->status->getLabel()} payment",
                 'description' => format_money($installment->amount).' due '.$installment->due_date->format('M j, Y'),
-                'url' => Billing::getUrl(['tab' => 'payment-plans']),
-                'action' => 'Review payment',
+                'url' => PayPaymentPlan::getUrl(['paymentPlan' => $installment->payment_plan_id]),
+                'action' => 'Pay now',
                 'color' => 'danger',
             ]);
 

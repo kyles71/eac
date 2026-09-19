@@ -50,7 +50,7 @@ final class ListEvents extends ListRecords
             'mine' => Tab::make('My Events')
                 ->modifyQueryUsing(
                     fn (Builder $query): Builder => Event::applyNotPassedConstraint(
-                        Event::applyAdminUserViewConstraint($query, $user),
+                        Event::applyPersonalScheduleConstraint($query, $user),
                         $now,
                     ),
                 ),

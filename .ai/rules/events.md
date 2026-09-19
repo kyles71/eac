@@ -6,4 +6,4 @@ paths:
 # Events
 
 ## Keep event list tabs chronological and time-aware
-The Events index defaults to start_time ascending. Its Future and My Events tabs use Event's not-passed constraint (end_time when present), Past Events uses the passed constraint, and My Events also applies the current admin user's event-view constraint.
+The Events index defaults to start_time ascending. Its Future and My Events tabs use Event's not-passed constraint (end_time when present), Past Events uses the passed constraint, and My Events also applies the current user's personal-schedule constraint.
