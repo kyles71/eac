@@ -58,7 +58,7 @@ test('links public storage before running browser tests', () => {
 test('runs quality checks for pull requests instead of deployments', () => {
     assert.match(qualityWorkflow, /on:\n\s+pull_request:/);
     assert.match(qualityWorkflow, /quality:\n\s+if: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/);
-    assert.match(qualityWorkflow, /environment: dev/);
+    assert.doesNotMatch(qualityWorkflow, /^\s+environment:/m);
     assert.doesNotMatch(workflow, /^\s+quality:$/m);
 
     const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
@@ -69,6 +69,8 @@ test('runs quality checks for pull requests instead of deployments', () => {
 });
 
 test('limits private Composer credentials to dependency downloads for trusted branches', () => {
+    assert.match(qualityWorkflow, /Require repository Composer credentials/);
+    assert.match(qualityWorkflow, /Configure MY_PRIVATE_GH_TOKEN as a repository Actions secret/);
     assert.match(qualityWorkflow, /COMPOSER_AUTH:[\s\S]*secrets\.MY_PRIVATE_GH_TOKEN/);
     assert.match(
         qualityWorkflow,
