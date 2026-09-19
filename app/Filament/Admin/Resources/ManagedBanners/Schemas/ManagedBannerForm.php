@@ -71,6 +71,7 @@ final class ManagedBannerForm
                                         ->enum(ManagedBannerRenderLocation::class)
                                         ->default(ManagedBannerRenderLocation::ContentStart->value)
                                         ->live()
+                                        ->selectablePlaceholder(false)
                                         ->required(),
                                     Select::make('target_scopes')
                                         ->label('Panel pages')

@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Contracts\StripeServiceContract;
 use App\Listeners\Forms\ReconcileRequiredFormsForPublishedVersion;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CourseForm;
 use App\Models\Enrollment;
@@ -56,6 +57,7 @@ final class AppServiceProvider extends ServiceProvider
         Password::defaults(fn (): Password => PasswordRequirements::rule());
 
         Course::observe(ProductableObserver::class);
+        Costume::observe(ProductableObserver::class);
         CourseForm::observe(CourseFormObserver::class);
         Enrollment::observe(EnrollmentObserver::class);
         Event::observe(EventObserver::class);

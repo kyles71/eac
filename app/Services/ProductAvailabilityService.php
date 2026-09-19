@@ -15,7 +15,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 final readonly class ProductAvailabilityService
 {
-    public function __construct(private ProductAudienceService $audienceService) {}
+    public function __construct(
+        private ProductAudienceService $audienceService,
+        private CostumeProductAudienceService $costumeAudienceService,
+    ) {}
 
     public function resultFor(Product $product, ?User $user = null, ?CarbonInterface $at = null): ProductAvailabilityStatus
     {
@@ -38,14 +41,14 @@ final readonly class ProductAvailabilityService
                 return ProductAvailabilityStatus::Scheduled;
             }
 
-            if (! $this->audienceService->includes($product, $user, $at)) {
+            if (! $this->includesAudience($product, $user, $at)) {
                 return ProductAvailabilityStatus::EligibilityRequired;
             }
 
             return ProductAvailabilityStatus::EarlyAccess;
         }
 
-        if ($user !== null && ! $this->audienceService->includes($product, $user, $at)) {
+        if ($user !== null && ! $this->includesAudience($product, $user, $at)) {
             return ProductAvailabilityStatus::EligibilityRequired;
         }
 
@@ -122,7 +125,9 @@ final readonly class ProductAvailabilityService
                     });
             });
 
-        return $this->audienceService->applyToQuery($query, $user, $at);
+        $this->audienceService->applyToQuery($query, $user, $at);
+
+        return $this->costumeAudienceService->applyToQuery($query, $user);
     }
 
     /**
@@ -292,6 +297,12 @@ final readonly class ProductAvailabilityService
                 $this->activeWindowQuery($query, $at);
             })
             ->exists();
+    }
+
+    private function includesAudience(Product $product, User $user, CarbonInterface $at): bool
+    {
+        return $this->audienceService->includes($product, $user, $at)
+            && $this->costumeAudienceService->includes($product, $user);
     }
 
     /**

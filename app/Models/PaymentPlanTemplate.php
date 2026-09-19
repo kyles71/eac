@@ -20,6 +20,7 @@ final class PaymentPlanTemplate extends Model
         'id' => 'integer',
         'product_type' => ProductType::class,
         'course_semesters' => 'array',
+        'costume_program_types' => 'array',
         'min_price' => 'integer',
         'max_price' => 'integer',
         'number_of_installments' => 'integer',
@@ -105,6 +106,18 @@ final class PaymentPlanTemplate extends Model
     }
 
     /**
+     * @return list<string>
+     */
+    public function allowedCostumeProgramTypes(): array
+    {
+        if ($this->product_type !== ProductType::Costume) {
+            return [];
+        }
+
+        return array_values(array_filter($this->costume_program_types ?? []));
+    }
+
+    /**
      * Calculate the installment amount (in cents) for a given total.
      * First installment absorbs the rounding remainder.
      *
@@ -123,22 +136,34 @@ final class PaymentPlanTemplate extends Model
 
     private function matchesTypeSpecificRestrictions(Product $product): bool
     {
-        if ($this->product_type !== ProductType::Course) {
-            return true;
+        if ($this->product_type === ProductType::Course) {
+            $allowedSemesters = $this->allowedCourseSemesters();
+
+            if ($allowedSemesters === []) {
+                return true;
+            }
+
+            if (! $product->productable instanceof Course) {
+                return false;
+            }
+
+            return in_array($product->productable->academicTerm->semester->value, $allowedSemesters, true);
         }
 
-        $allowedSemesters = $this->allowedCourseSemesters();
+        if ($this->product_type === ProductType::Costume) {
+            $allowedProgramTypes = $this->allowedCostumeProgramTypes();
 
-        if ($allowedSemesters === []) {
-            return true;
+            if ($allowedProgramTypes === []) {
+                return true;
+            }
+
+            if (! $product->productable instanceof Costume) {
+                return false;
+            }
+
+            return in_array($product->productable->course->program_type->value, $allowedProgramTypes, true);
         }
 
-        if (! $product->productable instanceof Course) {
-            return false;
-        }
-
-        $semester = $product->productable->academicTerm->semester->value;
-
-        return in_array($semester, $allowedSemesters, true);
+        return true;
     }
 }

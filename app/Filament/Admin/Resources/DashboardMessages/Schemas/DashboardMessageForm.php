@@ -30,6 +30,7 @@ final class DashboardMessageForm
                             ->options(DashboardAudience::class)
                             ->enum(DashboardAudience::class)
                             ->default(DashboardAudience::Eac->value)
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->helperText('Higher audiences automatically also see messages for lower audiences.'),
                         DateTimePicker::make('published_at')

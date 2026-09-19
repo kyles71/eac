@@ -9,16 +9,19 @@ use App\Filament\Admin\Resources\Products\Pages\ListProducts;
 use App\Filament\Admin\Resources\Products\Pages\ViewProduct;
 use App\Models\CompetitionSeason;
 use App\Models\CompetitionTeam;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\Gear;
 use App\Models\GiftCardType;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
+use App\Models\Student;
 use App\Models\User;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Filament\Infolists\Components\TextEntry;
 use Illuminate\Support\Carbon;
 
 use function Pest\Laravel\assertDatabaseHas;
@@ -64,7 +67,50 @@ it('can list products', function () {
 it('has required columns', function (string $column) {
     livewire(ListProducts::class)
         ->assertTableColumnExists($column);
-})->with(['name', 'price', 'is_active', 'availability_status', 'productable_type', 'fulfillment_workflow', 'available_from', 'available_until', 'created_at', 'updated_at']);
+})->with(['name', 'price', 'is_active', 'is_purchase_required', 'availability_status', 'productable_type', 'fulfillment_workflow', 'available_from', 'available_until', 'created_at', 'updated_at']);
+
+it('configures required purchase fields and requires a purchase deadline', function (): void {
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->assertSchemaComponentExists('is_purchase_required')
+        ->assertSchemaComponentHidden('purchase_reminder_on')
+        ->fillForm([
+            'name' => 'Required Shoes',
+            'price' => '45.00',
+            'is_active' => true,
+            'is_purchase_required' => true,
+        ])
+        ->assertSchemaComponentVisible('purchase_reminder_on')
+        ->callMountedAction()
+        ->assertHasActionErrors(['available_until' => 'required']);
+});
+
+it('offers purchase status actions only for required products', function (): void {
+    $requiredProduct = Product::factory()->purchaseRequired()->create();
+    $optionalProduct = Product::factory()->create();
+
+    livewire(ViewProduct::class, ['record' => $requiredProduct->id])
+        ->assertActionVisible('viewPurchaseStatus')
+        ->assertActionVisible('downloadRequirementReport');
+
+    livewire(ViewProduct::class, ['record' => $optionalProduct->id])
+        ->assertActionHidden('viewPurchaseStatus')
+        ->assertActionHidden('downloadRequirementReport');
+});
+
+it('keeps the purchase reminder inside the availability window', function (): void {
+    livewire(ListProducts::class)
+        ->callAction(CreateAction::class, data: [
+            'name' => 'Required Tights',
+            'price' => '20.00',
+            'is_active' => true,
+            'is_purchase_required' => true,
+            'available_from' => '2030-09-10 09:00:00',
+            'available_until' => '2030-09-30 17:00:00',
+            'purchase_reminder_on' => '2030-09-09',
+        ])
+        ->assertHasActionErrors(['purchase_reminder_on' => 'after_or_equal']);
+});
 
 it('has an include linked item images field on the product form', function () {
     livewire(ListProducts::class)
@@ -103,6 +149,25 @@ it('shows linked item controls before store details on the product form', functi
         ->assertSeeInOrder(['Linked Item', 'Store Details']);
 });
 
+it('uses the linked item name as the store name only while the store name is blank', function (): void {
+    $course = Course::factory()->create(['name' => 'Beginning Jazz']);
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm(['productable_type' => Course::class])
+        ->fillForm(['productable_id' => $course->id])
+        ->assertSchemaComponentStateSet('name', 'Beginning Jazz');
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'name' => 'Custom Store Name',
+            'productable_type' => Course::class,
+        ])
+        ->fillForm(['productable_id' => $course->id])
+        ->assertSchemaComponentStateSet('name', 'Custom Store Name');
+});
+
 it('shows purchase eligibility controls for every product type', function (?string $productableType) {
     $component = livewire(ListProducts::class)
         ->mountAction(CreateAction::class);
@@ -114,7 +179,8 @@ it('shows purchase eligibility controls for every product type', function (?stri
     $component
         ->assertSchemaComponentVisible('requiredCourses')
         ->assertSchemaComponentVisible('requiredCompetitionTeams')
-        ->assertSchemaComponentVisible('assignedUsers');
+        ->assertSchemaComponentVisible('assignedUsers')
+        ->assertSchemaComponentVisible('assignedStudents');
 })->with([
     'standalone' => null,
     'course' => Course::class,
@@ -122,11 +188,12 @@ it('shows purchase eligibility controls for every product type', function (?stri
     'gift card' => GiftCardType::class,
 ]);
 
-it('can configure multiple required courses and competition teams', function () {
+it('can configure course team user and student purchase audiences', function () {
     $courses = Course::factory(2)->create();
     $season = CompetitionSeason::factory()->current()->create(['name' => '2026 Competition Season']);
     $teams = CompetitionTeam::factory(2)->for($season, 'season')->create();
     $specificUsers = User::factory(2)->create();
+    $specificStudents = Student::factory(2)->create();
 
     livewire(ListProducts::class)
         ->mountAction(CreateAction::class)
@@ -140,6 +207,7 @@ it('can configure multiple required courses and competition teams', function () 
             'requiredCourses' => $courses->modelKeys(),
             'requiredCompetitionTeams' => $teams->modelKeys(),
             'assignedUsers' => $specificUsers->modelKeys(),
+            'assignedStudents' => $specificStudents->modelKeys(),
         ])
         ->callMountedAction()
         ->assertHasNoActionErrors()
@@ -152,14 +220,36 @@ it('can configure multiple required courses and competition teams', function () 
         ->and($product->requiredCompetitionTeams()->pluck('competition_teams.id')->sort()->values()->all())
         ->toBe($teams->modelKeys())
         ->and($product->assignedUsers()->pluck('users.id')->sort()->values()->all())
-        ->toBe($specificUsers->modelKeys());
+        ->toBe($specificUsers->modelKeys())
+        ->and($product->assignedStudents()->pluck('students.id')->sort()->values()->all())
+        ->toBe($specificStudents->modelKeys());
 
     livewire(ViewProduct::class, ['record' => $product->id])
         ->assertSee($courses->first()->name)
         ->assertSee($courses->last()->name)
         ->assertSee('2026 Competition Season')
         ->assertSee($specificUsers->first()->fullName)
-        ->assertSee($specificUsers->last()->fullName);
+        ->assertSee($specificUsers->last()->fullName)
+        ->assertSee($specificStudents->first()->fullName)
+        ->assertSee($specificStudents->last()->fullName);
+});
+
+it('uses the linked costume course as read only purchase audience context', function () {
+    $course = Course::factory()->create(['name' => 'Junior Lyrical']);
+    $costume = Costume::factory()->for($course)->create();
+
+    livewire(ListProducts::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm(['productable_type' => Costume::class])
+        ->fillForm(['productable_id' => $costume->id])
+        ->assertSchemaComponentHidden('requiredCourses')
+        ->assertSchemaComponentHidden('requiredCompetitionTeams')
+        ->assertSchemaComponentHidden('assignedUsers')
+        ->assertSchemaComponentVisible('assignedStudents')
+        ->assertSchemaComponentExists(
+            'costume_course',
+            checkComponentUsing: fn (TextEntry $entry): bool => $entry->getState() === 'Junior Lyrical',
+        );
 });
 
 it('offers current and future teams while retaining a selected ended team on edit', function () {
@@ -521,7 +611,13 @@ it('can edit product early access windows', function () {
     ])
         ->mountAction(EditAction::class);
 
-    $windowStateKey = array_key_first($component->instance()->mountedActions[0]['data']['earlyAccessWindows']);
+    $instance = $component->instance();
+
+    if (! $instance instanceof ViewProduct) {
+        throw new LogicException('Expected the Product view component.');
+    }
+
+    $windowStateKey = array_key_first($instance->mountedActions[0]['data']['earlyAccessWindows']);
 
     expect($windowStateKey)->toBe("record-{$window->id}");
 

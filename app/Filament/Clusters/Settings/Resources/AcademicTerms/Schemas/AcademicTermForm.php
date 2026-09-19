@@ -30,6 +30,7 @@ final class AcademicTermForm
                             ->options(CourseSemester::class)
                             ->enum(CourseSemester::class)
                             ->disabledOn('edit')
+                            ->selectablePlaceholder(false)
                             ->required(),
                         TextInput::make('year')
                             ->label('Calendar Year')

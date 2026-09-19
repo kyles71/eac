@@ -9,6 +9,7 @@ use App\Actions\Store\AddToCart;
 use App\Contracts\HasCapacity;
 use App\Enums\StoreView;
 use App\Filament\Shared\Schemas\ProductQuestionSchema;
+use App\Models\Costume;
 use App\Models\Course;
 use App\Models\CourseHold;
 use App\Models\CourseHoldSeat;
@@ -81,6 +82,7 @@ final class Store extends TablePage
 
                         $relation->morphWith([
                             Course::class => ['media'],
+                            Costume::class => ['course', 'media'],
                             Gear::class => ['media'],
                         ]);
                     },

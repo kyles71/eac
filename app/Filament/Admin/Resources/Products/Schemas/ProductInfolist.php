@@ -9,9 +9,11 @@ use App\Enums\ProductAvailabilityStatus;
 use App\Enums\ProductQuestionType;
 use App\Enums\ProductType;
 use App\Models\CompetitionTeam;
+use App\Models\Costume;
 use App\Models\Product;
 use App\Models\ProductEarlyAccessWindow;
 use App\Models\ProductQuestion;
+use App\Models\Student;
 use App\Models\User;
 use App\Support\MediaDisks;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -50,7 +52,7 @@ final class ProductInfolist
                             ->placeholder('None'),
                     ]),
                 Section::make('Availability')
-                    ->columns(2)
+                    ->columns(3)
                     ->schema([
                         TextEntry::make('available_from')
                             ->dateTime()
@@ -58,6 +60,16 @@ final class ProductInfolist
                         TextEntry::make('available_until')
                             ->dateTime()
                             ->placeholder('Never'),
+                        TextEntry::make('is_purchase_required')
+                            ->label('Purchase Required')
+                            ->badge()
+                            ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')
+                            ->color(fn (bool $state): string => $state ? 'warning' : 'gray'),
+                        TextEntry::make('purchase_reminder_on')
+                            ->label('Reminder Date')
+                            ->date()
+                            ->placeholder('None')
+                            ->visible(fn (Product $record): bool => $record->is_purchase_required),
                         RepeatableEntry::make('earlyAccessWindows')
                             ->label('Early Access Windows')
                             ->schema([
@@ -77,9 +89,20 @@ final class ProductInfolist
                             ->columnSpanFull(),
                     ]),
                 Section::make('Purchase Audience')
-                    ->description('Customers must meet each configured group requirement. Specific Users qualify as overrides. An empty audience is available to everyone while its store schedule is open.')
-                    ->columns(3)
+                    ->description(fn (Product $record): string => $record->productable instanceof Costume
+                        ? 'The costume course determines eligible households; specific students narrow the audience and exclusions remove students.'
+                        : ($record->is_purchase_required
+                            ? 'Customers must meet each configured group requirement. With no audience, current-term student households qualify.'
+                            : 'Customers must meet each configured group requirement. An empty audience is available to everyone.'))
+                    ->columns(2)
                     ->schema([
+                        TextEntry::make('costume_course')
+                            ->label('Costume Course')
+                            ->state(fn (Product $record): ?string => $record->productable instanceof Costume
+                                ? $record->productable->course->name
+                                : null)
+                            ->visible(fn (Product $record): bool => $record->productable instanceof Costume)
+                            ->columnSpanFull(),
                         TextEntry::make('required_courses')
                             ->label('Courses')
                             ->state(fn (Product $record): array => $record->requiredCourses()
@@ -88,7 +111,8 @@ final class ProductInfolist
                                 ->all())
                             ->listWithLineBreaks()
                             ->bulleted()
-                            ->placeholder('None'),
+                            ->placeholder('None')
+                            ->hidden(fn (Product $record): bool => $record->productable instanceof Costume),
                         TextEntry::make('required_competition_teams')
                             ->label('Competition Teams')
                             ->state(fn (Product $record): array => $record->requiredCompetitionTeams()
@@ -100,7 +124,8 @@ final class ProductInfolist
                                 ->all())
                             ->listWithLineBreaks()
                             ->bulleted()
-                            ->placeholder('None'),
+                            ->placeholder('None')
+                            ->hidden(fn (Product $record): bool => $record->productable instanceof Costume),
                         TextEntry::make('assigned_users')
                             ->label('Specific Users')
                             ->state(fn (Product $record): array => $record->assignedUsers()
@@ -113,7 +138,34 @@ final class ProductInfolist
                                 ->all())
                             ->listWithLineBreaks()
                             ->bulleted()
-                            ->placeholder('None'),
+                            ->placeholder('None')
+                            ->hidden(fn (Product $record): bool => $record->productable instanceof Costume),
+                        TextEntry::make('assigned_students')
+                            ->label('Specific Students')
+                            ->state(fn (Product $record): array => $record->assignedStudents()
+                                ->orderBy('last_name')
+                                ->orderBy('first_name')
+                                ->get()
+                                ->map(fn (Student $student): string => $student->fullName)
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder(fn (Product $record): string => $record->productable instanceof Costume
+                                ? 'All course enrollments'
+                                : 'None'),
+                        TextEntry::make('excluded_students')
+                            ->label('Excluded Students')
+                            ->state(fn (Product $record): array => $record->excludedStudents()
+                                ->orderBy('last_name')
+                                ->orderBy('first_name')
+                                ->get()
+                                ->map(fn (Student $student): string => $student->fullName)
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->placeholder('None')
+                            ->visible(fn (Product $record): bool => $record->is_purchase_required)
+                            ->columnSpanFull(),
                     ]),
                 Section::make('Linked Item')
                     ->columns(2)

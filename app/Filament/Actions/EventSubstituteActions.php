@@ -113,6 +113,7 @@ final class EventSubstituteActions
                     ->options(fn (Event $record): array => self::substituteOptions($record))
                     ->searchable()
                     ->preload()
+                    ->selectablePlaceholder(false)
                     ->required(),
                 Select::make('reason_type')
                     ->label('Reason')

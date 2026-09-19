@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Contracts\AutomaticallyFulfillsOrderItems;
 use App\Contracts\HasCapacity;
 use App\Contracts\ProvidesStorefrontDetails;
+use App\Enums\CourseProgramType;
 use App\Enums\CourseSemester;
 use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Support\MediaDisks;
@@ -45,6 +46,7 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
     protected $casts = [
         'id' => 'integer',
         'academic_term_id' => 'integer',
+        'program_type' => CourseProgramType::class,
         'capacity' => 'integer',
         'is_private' => 'boolean',
         'teacher_assignment_strategy' => CourseTeacherAssignmentStrategy::class,
@@ -236,6 +238,12 @@ final class Course extends Model implements AutomaticallyFulfillsOrderItems, Has
     public function product(): MorphOne
     {
         return $this->morphOne(Product::class, 'productable');
+    }
+
+    /** @return HasMany<Costume, $this> */
+    public function costumes(): HasMany
+    {
+        return $this->hasMany(Costume::class);
     }
 
     /** @return HasMany<Enrollment, $this> */

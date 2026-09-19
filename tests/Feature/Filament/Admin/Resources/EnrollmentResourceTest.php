@@ -9,12 +9,16 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\Event;
 use App\Models\Product;
+use App\Models\Student;
+use App\Models\User;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 
 use function Pest\Livewire\livewire;
 
@@ -25,6 +29,77 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     Carbon::setTestNow();
+});
+
+it('synchronizes and scopes the household and student fields when creating an enrollment', function (): void {
+    $household = User::factory()->create();
+    $firstStudent = Student::factory()->for($household)->create();
+    $secondStudent = Student::factory()->for($household)->create();
+    $otherHousehold = User::factory()->create();
+    $otherStudent = Student::factory()->for($otherHousehold)->create(['nickname' => 'Scout']);
+
+    $createPage = livewire(ListEnrollments::class)
+        ->assertActionVisible(TestAction::make('create'))
+        ->mountAction(TestAction::make('create'));
+    $component = $createPage->instance();
+
+    if (! $component instanceof ListEnrollments) {
+        throw new LogicException('Expected the enrollment list component.');
+    }
+
+    $schemaName = $component->getMountedActionSchemaName();
+    $schema = $schemaName === null ? null : $component->getSchema($schemaName);
+
+    if ($schema === null) {
+        throw new LogicException('Expected a mounted enrollment action schema.');
+    }
+
+    $statePath = $schema->getStatePath();
+    $studentSelect = $schema->getFlatComponents()['student_id'];
+
+    if (! $studentSelect instanceof Select) {
+        throw new LogicException('Expected the Student field to be a Select.');
+    }
+
+    expect($studentSelect->isPreloaded())->toBeTrue()
+        ->and($studentSelect->hasDynamicOptions())->toBeTrue()
+        ->and($studentSelect->getOptions())
+        ->toHaveKeys([$firstStudent->id, $secondStudent->id, $otherStudent->id])
+        ->and($studentSelect->getSearchResults('Scout'))->toHaveKey($otherStudent->id);
+
+    $createPage->set("{$statePath}.user_id", $household->id);
+    $updatedComponent = $createPage->instance();
+
+    if (! $updatedComponent instanceof ListEnrollments) {
+        throw new LogicException('Expected the updated enrollment list component.');
+    }
+
+    $updatedSchema = $updatedComponent->getSchema($schemaName);
+    $studentSelect = $updatedSchema->getFlatComponents()['student_id'];
+
+    if (! $studentSelect instanceof Select) {
+        throw new LogicException('Expected the updated Student field to be a Select.');
+    }
+
+    expect($studentSelect->getOptions())
+        ->toHaveKeys([$firstStudent->id, $secondStudent->id]);
+    expect(array_key_exists($otherStudent->id, $studentSelect->getOptions()))->toBeFalse();
+    expect(array_key_exists($otherStudent->id, $studentSelect->getSearchResults('Scout')))->toBeFalse();
+
+    expect(Validator::make(
+        ['student_id' => $otherStudent->id],
+        ['student_id' => $studentSelect->getValidationRules()],
+    )->fails())->toBeTrue();
+
+    $createPage
+        ->set("{$statePath}.student_id", $firstStudent->id)
+        ->set("{$statePath}.user_id", $otherHousehold->id)
+        ->assertActionDataSet(['student_id' => null]);
+
+    $createPage
+        ->set("{$statePath}.user_id", null)
+        ->set("{$statePath}.student_id", $secondStudent->id)
+        ->assertActionDataSet(['user_id' => $household->id]);
 });
 
 it('only offers deletion when removing enrollments from a course', function (): void {

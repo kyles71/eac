@@ -409,6 +409,7 @@ final class CheckoutSuccess extends Page
             ->label($this->assignmentLabel($enrollment))
             ->helperText($enrollment->course?->firstMeetingStartsAt()?->format('M j, Y g:i A'))
             ->options(fn (): array => $this->studentOptions())
+            ->selectablePlaceholder(false)
             ->required()
             ->searchable()
             ->live()

@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\Courses\RelationManagers\EnrollmentsRelationMan
 use App\Filament\Admin\Resources\Students\Schemas\StudentForm;
 use App\Models\Student;
 use App\Models\User;
+use App\Support\Filament\HouseholdStudentSelect;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -38,32 +39,20 @@ final class EnrollmentForm
                                     });
                                 }
                             })
+                            ->selectablePlaceholder(false)
                             ->required(),
-                        Select::make('user_id')
+                        HouseholdStudentSelect::user()
                             ->label('Parent / User')
-                            ->live()
-                            ->required()
-                            ->userRelationship(
-                                'user',
-                                fn (Builder $query, Get $get): Builder => $query->when($get('student_id'), function (Builder $query) use ($get): void {
-                                    $query->select('users.*')
-                                        ->join('students', 'students.user_id', '=', 'users.id')
-                                        ->where('students.id', $get('student_id'));
-                                }),
-                            ),
+                            ->selectablePlaceholder(false)
+                            ->required(),
                     ]),
                 Section::make('Student Assignment')
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema([
-                        Select::make('student_id')
+                        HouseholdStudentSelect::student()
                             ->label('Student')
                             ->helperText('Only students belonging to the selected parent / user are shown.')
-                            ->live()
-                            ->studentRelationship(
-                                'student',
-                                fn (Builder $query, Get $get): Builder => $query->when($get('user_id'), fn (Builder $query, mixed $userId): Builder => $query->where('user_id', $userId)),
-                            )
                             ->createOptionForm(fn (Schema $schema, Get $get): Schema => StudentForm::configure($schema, $get('user_id')))
                             ->createOptionUsing(function (array $data, Get $get): int {
                                 $data['user_id'] = $get('user_id');

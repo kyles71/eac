@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Support\MediaDisks;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Vite;
@@ -253,6 +254,27 @@ it('stores digit-only select answers from product details', function (): void {
     expect($cartItem->storedQuestionAnswers())->toBe([
         1 => ["question_{$question->id}" => '6'],
     ]);
+});
+
+it('leaves required select questions unselected until the purchaser chooses an option', function (): void {
+    $question = ProductQuestion::factory()
+        ->for($this->product)
+        ->required()
+        ->select(['Youth Small', 'Youth Medium'])
+        ->create([
+            'question' => 'Costume size',
+        ]);
+
+    livewire(ProductDetails::class, ['product' => $this->product->refresh()])
+        ->mountAction('addToCart')
+        ->assertSchemaComponentExists(
+            "question_answers.1.question_{$question->id}",
+            'mountedActionSchema0',
+            checkComponentUsing: fn (Select $select): bool => ! $select->isNative()
+                && ! $select->canSelectPlaceholder(),
+        )
+        ->callMountedAction()
+        ->assertHasFormErrors(["question_answers.1.question_{$question->id}" => 'required']);
 });
 
 it('disables adding to cart when capacity is sold out', function () {

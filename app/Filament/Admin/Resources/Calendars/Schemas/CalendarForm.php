@@ -32,6 +32,7 @@ final class CalendarForm
                             ->label('Availability')
                             ->options(CalendarAccess::class)
                             ->default(CalendarAccess::Public->value)
+                            ->selectablePlaceholder(false)
                             ->required(fn (?Calendar $record): bool => ! ($record?->isSystemCalendar() ?? false))
                             ->live()
                             ->dehydrated(fn (?Calendar $record): bool => ! ($record?->isSystemCalendar() ?? false))

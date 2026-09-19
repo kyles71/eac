@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Admin\Resources\Courses\Schemas;
 
 use App\Actions\Events\ManageEventTeacherAssignments;
+use App\Enums\CourseProgramType;
 use App\Enums\CourseTeacherAssignmentStrategy;
 use App\Enums\ScheduleFrequency;
 use App\Models\AcademicTerm;
@@ -53,6 +54,14 @@ final class CourseForm
                             ->getOptionLabelFromRecordUsing(fn (AcademicTerm $record): string => $record->display_name)
                             ->searchable(['semester', 'year'])
                             ->preload()
+                            ->selectablePlaceholder(false)
+                            ->required(),
+                        Select::make('program_type')
+                            ->label('Program Type')
+                            ->options(CourseProgramType::class)
+                            ->default(CourseProgramType::Standard->value)
+                            ->searchable(false)
+                            ->selectablePlaceholder(false)
                             ->required(),
                         TextInput::make('capacity')
                             ->required()

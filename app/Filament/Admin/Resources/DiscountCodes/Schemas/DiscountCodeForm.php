@@ -30,6 +30,7 @@ final class DiscountCodeForm
                             ->placeholder('e.g., SUMMER20'),
                         Select::make('type')
                             ->options(DiscountType::class)
+                            ->selectablePlaceholder(false)
                             ->required()
                             ->reactive(),
                         TextInput::make('value')
