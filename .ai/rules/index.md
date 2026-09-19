@@ -4,13 +4,14 @@ Before planning or editing, find the row whose globs match the file's path and r
 
 | Applies to | Rule file |
 | --- | --- |
+| ** | .ai/rules/general.md |
 | app/** | .ai/rules/app.md |
 | app/Filament/Admin/Resources/BoardItems/** | .ai/rules/board-items.md |
 | app/Filament/Admin/Resources/Boards/** | .ai/rules/boards.md |
 | app/Filament/** | .ai/rules/filament.md |
-| app/Forms/** | .ai/rules/forms.md |
-| ** | .ai/rules/general.md |
 | app/Filament/User/Pages/PayPaymentPlan.php | .ai/rules/pages.md |
+| app/Forms/** | .ai/rules/forms.md |
+| app/Models/Event.php | .ai/rules/models.md |
 | app/Services/Mail/** | .ai/rules/mail.md |
 | app/Services/Reports/** | .ai/rules/reports.md |
 | tests/** | .ai/rules/tests.md |

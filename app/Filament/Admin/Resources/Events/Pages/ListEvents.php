@@ -39,7 +39,7 @@ final class ListEvents extends ListRecords
             'all' => Tab::make('All Events'),
             'mine' => Tab::make('My Events')
                 ->modifyQueryUsing(
-                    fn (Builder $query): Builder => Event::applyAdminUserViewConstraint($query, $user),
+                    fn (Builder $query): Builder => Event::applyPersonalScheduleConstraint($query, $user),
                 ),
         ];
     }
