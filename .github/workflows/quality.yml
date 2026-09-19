@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   quality:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    environment: dev
     runs-on: ubuntu-latest
 
     steps:
@@ -23,10 +25,11 @@ jobs:
           php-version: "8.4"
           coverage: none
 
-      - name: Configure Composer GitHub auth
+      - name: Download PHP dependencies
         env:
-          GITHUB_TOKEN: ${{ secrets.MY_PRIVATE_GH_TOKEN }}
-        run: composer config --global github-oauth.github.com "$GITHUB_TOKEN"
+          COMPOSER_AUTH: >-
+            {"github-oauth":{"github.com":"${{ secrets.MY_PRIVATE_GH_TOKEN }}"}}
+        run: composer install --download-only --no-plugins --no-scripts --no-interaction --prefer-dist --no-progress
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress

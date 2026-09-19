@@ -57,7 +57,8 @@ test('links public storage before running browser tests', () => {
 
 test('runs quality checks for pull requests instead of deployments', () => {
     assert.match(qualityWorkflow, /on:\n\s+pull_request:/);
-    assert.match(qualityWorkflow, /jobs:\n\s+quality:/);
+    assert.match(qualityWorkflow, /quality:\n\s+if: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/);
+    assert.match(qualityWorkflow, /environment: dev/);
     assert.doesNotMatch(workflow, /^\s+quality:$/m);
 
     const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
@@ -65,6 +66,15 @@ test('runs quality checks for pull requests instead of deployments', () => {
     assert.doesNotMatch(deployJob, /^\s+- quality$/m);
     assert.match(deployJob, /^\s+- mysql$/m);
     assert.match(deployJob, /^\s+- browser$/m);
+});
+
+test('limits private Composer credentials to dependency downloads for trusted branches', () => {
+    assert.match(qualityWorkflow, /COMPOSER_AUTH:[\s\S]*secrets\.MY_PRIVATE_GH_TOKEN/);
+    assert.match(
+        qualityWorkflow,
+        /composer install --download-only --no-plugins --no-scripts --no-interaction --prefer-dist --no-progress/,
+    );
+    assert.doesNotMatch(qualityWorkflow, /composer config --global/);
 });
 
 test('keeps legacy cutover checks out of routine deployments', () => {
