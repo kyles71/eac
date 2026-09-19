@@ -137,15 +137,21 @@
     }
 
     .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr:not(.fi-ta-group-header-row):not(.fi-ta-summary-row) {
-        display: flex;
-        flex-direction: column;
+        border-bottom: 2px solid rgb(156 163 175);
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
         padding-block: 0.625rem;
+    }
+
+    .dark .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr:not(.fi-ta-group-header-row):not(.fi-ta-summary-row) {
+        border-bottom-color: rgb(82 82 91);
     }
 
     .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:not(.fi-ta-selection-cell):not(:has(> .fi-ta-actions)) {
         align-items: start;
         column-gap: 0.75rem;
         display: grid;
+        grid-column: 1 / -1;
         grid-template-columns: minmax(6.5rem, 35%) minmax(0, 1fr);
         padding-block: 0.25rem;
     }
@@ -163,22 +169,45 @@
         grid-column: 1 / -1;
     }
 
-    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-selection-cell+.fi-ta-cell {
-        padding-inline-end: 3rem;
-    }
-
-    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions) {
-        border-top: 1px solid rgb(229 231 235);
-        margin: 0.5rem 1rem 0;
-        order: 2;
-        padding: 0.625rem 0 0;
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-selection-cell {
+        align-items: center;
+        background-color: rgb(249 250 251);
+        border-bottom: 1px solid rgb(229 231 235);
+        display: flex;
+        grid-column: 1;
+        grid-row: 1;
+        inset: auto;
+        padding: 0.5rem 0.25rem 0.5rem 1rem;
         position: static;
         width: auto;
         z-index: auto;
     }
 
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions) {
+        background-color: rgb(249 250 251);
+        border-bottom: 1px solid rgb(229 231 235);
+        grid-column: 2;
+        grid-row: 1;
+        margin: 0;
+        padding: 0.5rem 1rem 0.5rem 0.5rem;
+        position: static;
+        width: auto;
+        z-index: auto;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions)>.fi-ta-actions {
+        justify-content: flex-start;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr:not(:has(> .fi-ta-selection-cell))>.fi-ta-cell:has(> .fi-ta-actions),
+    .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr:not(:has(> .fi-ta-cell > .fi-ta-actions))>.fi-ta-selection-cell {
+        grid-column: 1 / -1;
+    }
+
+    .dark .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-selection-cell,
     .dark .fi-ta-table.fi-ta-table-stacked-on-mobile>tbody>tr>.fi-ta-cell:has(> .fi-ta-actions) {
-        border-top-color: rgb(255 255 255 / 0.1);
+        background-color: rgb(255 255 255 / 0.05);
+        border-bottom-color: rgb(255 255 255 / 0.1);
     }
 }
 

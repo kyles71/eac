@@ -190,15 +190,30 @@ it('stacks both panel tables below the small breakpoint', function (): void {
                     const row = table?.querySelector('tbody > tr:has(.fi-ta-cell-content)')
                     const dataCell = row?.querySelector('.fi-ta-cell:not(.fi-ta-selection-cell):not(:has(> .fi-ta-actions))')
                     const actionCell = row?.querySelector('.fi-ta-cell:has(> .fi-ta-actions)')
+                    const selectionCell = row?.querySelector('.fi-ta-selection-cell')
                     const search = document.querySelector('.fi-ta-header-toolbar .fi-ta-search-field')
                     const rail = document.querySelector('.eac-table-scrollbar')
+                    const actionBounds = actionCell?.getBoundingClientRect()
+                    const dataBounds = dataCell?.getBoundingClientRect()
+                    const rowStyles = row ? getComputedStyle(row) : null
+                    const selectionBounds = selectionCell?.getBoundingClientRect()
 
                     return {
+                        actionBottom: actionBounds?.bottom ?? null,
+                        actionLeft: actionBounds?.left ?? null,
                         actionPosition: actionCell ? getComputedStyle(actionCell).position : null,
+                        actionTop: actionBounds?.top ?? null,
                         cellDisplay: dataCell ? getComputedStyle(dataCell).display : null,
+                        dataTop: dataBounds?.top ?? null,
+                        dividerColor: rowStyles?.borderBottomColor ?? null,
+                        dividerWidth: rowStyles?.borderBottomWidth ?? null,
                         railHidden: rail?.hidden ?? null,
                         rowDisplay: row ? getComputedStyle(row).display : null,
                         searchWidth: search?.getBoundingClientRect().width ?? 0,
+                        selectionBottom: selectionBounds?.bottom ?? null,
+                        selectionLeft: selectionBounds?.left ?? null,
+                        selectionPosition: selectionCell ? getComputedStyle(selectionCell).position : null,
+                        selectionTop: selectionBounds?.top ?? null,
                         stacked: table?.classList.contains('fi-ta-table-stacked-on-mobile') ?? false,
                         tableDisplay: table ? getComputedStyle(table).display : null,
                     }
@@ -207,13 +222,20 @@ it('stacks both panel tables below the small breakpoint', function (): void {
 
             expect($mobileMetrics['stacked'])->toBeTrue()
                 ->and($mobileMetrics['tableDisplay'])->toBe('block')
-                ->and($mobileMetrics['rowDisplay'])->toBe('flex')
+                ->and($mobileMetrics['rowDisplay'])->toBe('grid')
                 ->and($mobileMetrics['cellDisplay'])->toBe('grid')
+                ->and($mobileMetrics['dividerWidth'])->toBe('2px')
+                ->and($mobileMetrics['dividerColor'])->toBe('rgb(156, 163, 175)')
                 ->and($mobileMetrics['searchWidth'])->toBeGreaterThan(250)
+                ->and($mobileMetrics['dataTop'])->toBeGreaterThanOrEqual($mobileMetrics['actionBottom'])
                 ->and($mobileMetrics['railHidden'])->toBeTrue();
 
             if ($url === '/admin/users') {
-                expect($mobileMetrics['actionPosition'])->toBe('static');
+                expect($mobileMetrics['selectionPosition'])->toBe('static')
+                    ->and($mobileMetrics['actionPosition'])->toBe('static')
+                    ->and($mobileMetrics['selectionLeft'])->toBeLessThan($mobileMetrics['actionLeft'])
+                    ->and(abs($mobileMetrics['selectionTop'] - $mobileMetrics['actionTop']))->toBeLessThan(1)
+                    ->and($mobileMetrics['dataTop'])->toBeGreaterThanOrEqual($mobileMetrics['selectionBottom']);
             }
         }
 

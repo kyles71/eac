@@ -25,3 +25,6 @@ A DateTimePicker custom validation rule can receive its own `$value` in the disp
 
 ## Keep Filament tables stacked and searchable on phones
 Shared Filament tables stack below 640px; preserve intentional custom card layouts by opting those tables out. Mobile table-search inputs must retain focus and selection across full and partial Livewire morphs so delayed live-search responses cannot reverse subsequent typing. Keep sticky record-action cells at 640px and above.
+
+## Keep mobile record controls together
+In stacked mobile tables, render the record checkbox at the top left and place record actions immediately after it in the same control row. Keep record data below that row and use a strong two-pixel divider between mobile records; desktop action positioning remains unchanged.
