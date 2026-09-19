@@ -96,8 +96,16 @@ it('allows owners to view and update every event', function (): void {
     $owner = User::factory()->isOwner()->create();
     $assignedCourse = Course::factory()->create();
     $assignedCourse->teachers()->sync([$owner->id]);
-    $courseEvent = Event::factory()->create(['course_id' => $assignedCourse->id]);
-    $substituteEvent = Event::factory()->create(['substitute_teacher_id' => $owner->id]);
+    $courseEvent = Event::factory()->create([
+        'course_id' => $assignedCourse->id,
+        'start_time' => now()->addDay(),
+        'end_time' => now()->addDay()->addHour(),
+    ]);
+    $substituteEvent = Event::factory()->create([
+        'substitute_teacher_id' => $owner->id,
+        'start_time' => now()->addDays(2),
+        'end_time' => now()->addDays(2)->addHour(),
+    ]);
     $otherEvent = Event::factory()->create();
     $standaloneEvent = Event::factory()->create(['course_id' => null]);
 
