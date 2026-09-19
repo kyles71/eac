@@ -200,6 +200,10 @@ final class Installment extends Model
 
     public function refundedAmount(): int
     {
+        if ($this->status !== InstallmentStatus::Paid || $this->paid_at === null) {
+            return 0;
+        }
+
         $paymentIntentId = $this->stripe_payment_intent_id;
 
         if ($paymentIntentId === null && $this->installment_number === 1) {

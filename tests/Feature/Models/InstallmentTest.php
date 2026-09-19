@@ -52,6 +52,25 @@ it('increments retry count on failure', function () {
         ->and($installment->retry_count)->toBe(1);
 });
 
+it('does not calculate refunds for installments without a completed payment', function (): void {
+    $plan = PaymentPlan::factory()->create();
+    $failedInstallment = Installment::factory()->failed()->create([
+        'payment_plan_id' => $plan->id,
+        'stripe_payment_intent_id' => 'pi_failed_installment',
+    ]);
+    $paidInstallmentWithoutTimestamp = Installment::factory()->paid()->create([
+        'payment_plan_id' => $plan->id,
+        'installment_number' => 2,
+        'stripe_payment_intent_id' => 'pi_paid_without_timestamp',
+        'paid_at' => null,
+    ]);
+
+    expect($failedInstallment->refundedAmount())->toBe(0)
+        ->and($failedInstallment->paymentStatusLabel())->toBe('Failed')
+        ->and($paidInstallmentWithoutTimestamp->refundedAmount())->toBe(0)
+        ->and($paidInstallmentWithoutTimestamp->paymentStatusLabel())->toBe('Paid');
+});
+
 it('marks as overdue after 3 retries', function () {
     $installment = Installment::factory()->create(['retry_count' => 2]);
 
